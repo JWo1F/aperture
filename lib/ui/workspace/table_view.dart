@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/db_object.dart';
 import '../../models/order_term.dart';
 import '../../models/value_format.dart';
 import '../../state/app_state.dart';
@@ -65,6 +66,7 @@ class TableView extends StatelessWidget {
                           foreignKeys: state.foreignKeysFor(tab.table),
                           onFollowForeignKey: (fk, value) =>
                               state.followForeignKey(fk, value),
+                          columnMeta: _columnMeta(state),
                         ),
                         if (tab.loading)
                           const Positioned(
@@ -79,6 +81,12 @@ class TableView extends StatelessWidget {
         _PaginationBar(tab: tab, state: state),
       ],
     );
+  }
+
+  Map<String, DbColumn>? _columnMeta(AppState state) {
+    final cols = state.columnsFor(tab.table);
+    if (cols == null) return null;
+    return {for (final c in cols) c.name: c};
   }
 
   void _addFilter(AppState state, String column, dynamic value, bool not) {

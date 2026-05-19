@@ -53,10 +53,12 @@ class DbColumn {
     required this.dataType,
     required this.nullable,
     required this.isPrimaryKey,
+    required this.hasDefault,
   });
 
   final String name;
   final String dataType;
   final bool nullable;
   final bool isPrimaryKey;
+  final bool hasDefault;
 }

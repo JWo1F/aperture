@@ -7,7 +7,7 @@ import 'package:postgres/postgres.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import 'common.dart';
-import 'json_spans.dart';
+import 'json_highlight_controller.dart';
 
 /// What the editor produced. `null` means the dialog was dismissed without
 /// committing anything (Cancel, click outside, Esc).
@@ -32,6 +32,8 @@ Future<EditorOutcome?> showValueEditor(
   required dynamic rawValue,
   required bool editable,
   CellEditValue? pendingEdit,
+  bool canBeNull = true,
+  bool hasDefault = false,
 }) {
   return showDialog<EditorOutcome>(
     context: context,
@@ -50,6 +52,8 @@ Future<EditorOutcome?> showValueEditor(
           rawValue: rawValue,
           editable: editable,
           pendingEdit: pendingEdit,
+          canBeNull: canBeNull,
+          hasDefault: hasDefault,
         ),
       ),
     ),
@@ -107,22 +111,6 @@ String _initialText(dynamic raw, CellEditValue? pending) {
   return raw.toString();
 }
 
-// --- JSON highlight controller ----------------------------------------
-
-class _JsonHighlightController extends TextEditingController {
-  _JsonHighlightController({super.text});
-
-  @override
-  TextSpan buildTextSpan({
-    required BuildContext context,
-    TextStyle? style,
-    required bool withComposing,
-  }) {
-    final base = style ?? const TextStyle();
-    return TextSpan(style: base, children: jsonSpans(text, base));
-  }
-}
-
 // --- Editor body -------------------------------------------------------
 
 class _Editor extends StatefulWidget {
@@ -131,12 +119,16 @@ class _Editor extends StatefulWidget {
     required this.rawValue,
     required this.editable,
     required this.pendingEdit,
+    required this.canBeNull,
+    required this.hasDefault,
   });
 
   final String columnName;
   final dynamic rawValue;
   final bool editable;
   final CellEditValue? pendingEdit;
+  final bool canBeNull;
+  final bool hasDefault;
 
   @override
   State<_Editor> createState() => _EditorState();
@@ -154,7 +146,7 @@ class _EditorState extends State<_Editor> {
     _type = _typeOf(widget.rawValue);
     _initial = _initialText(widget.rawValue, widget.pendingEdit);
     _controller = _type.isJson
-        ? _JsonHighlightController(text: _initial)
+        ? JsonHighlightController(text: _initial)
         : TextEditingController(text: _initial);
     _focus = FocusNode();
     if (widget.editable) {
@@ -228,6 +220,8 @@ class _EditorState extends State<_Editor> {
             editable: widget.editable,
             hasPending: _hasPending,
             isDirty: _isDirty,
+            canBeNull: widget.canBeNull,
+            hasDefault: widget.hasDefault,
             onSave: _save,
             onCancel: () => Navigator.of(context).pop(),
             onSetNull: _setNull,
@@ -370,6 +364,8 @@ class _Footer extends StatelessWidget {
     required this.editable,
     required this.hasPending,
     required this.isDirty,
+    required this.canBeNull,
+    required this.hasDefault,
     required this.onSave,
     required this.onCancel,
     required this.onSetNull,
@@ -380,6 +376,8 @@ class _Footer extends StatelessWidget {
   final bool editable;
   final bool hasPending;
   final bool isDirty;
+  final bool canBeNull;
+  final bool hasDefault;
   final VoidCallback onSave;
   final VoidCallback onCancel;
   final VoidCallback onSetNull;
@@ -415,13 +413,13 @@ class _Footer extends StatelessWidget {
           AppButton(
             label: 'Set NULL',
             icon: Icons.not_interested,
-            onPressed: onSetNull,
+            onPressed: canBeNull ? onSetNull : null,
           ),
           const SizedBox(width: Insets.sm),
           AppButton(
             label: 'Set DEFAULT',
             icon: Icons.settings_backup_restore,
-            onPressed: onSetDefault,
+            onPressed: hasDefault ? onSetDefault : null,
           ),
           const Spacer(),
           AppButton(label: 'Cancel', onPressed: onCancel),

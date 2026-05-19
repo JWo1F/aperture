@@ -79,7 +79,8 @@ class PostgresService {
     final result = await _conn.execute(
       Sql.named(
         'SELECT c.column_name, c.data_type, c.is_nullable, '
-        'COALESCE(pk.is_pk, false) AS is_primary_key '
+        '       c.column_default IS NOT NULL AS has_default, '
+        '       COALESCE(pk.is_pk, false) AS is_primary_key '
         'FROM information_schema.columns c '
         'LEFT JOIN ('
         '  SELECT kcu.column_name, true AS is_pk '
@@ -102,7 +103,8 @@ class PostgresService {
             name: row[0] as String,
             dataType: row[1] as String,
             nullable: (row[2] as String) == 'YES',
-            isPrimaryKey: row[3] as bool,
+            hasDefault: row[3] as bool,
+            isPrimaryKey: row[4] as bool,
           ),
         )
         .toList();

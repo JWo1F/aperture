@@ -10,6 +10,7 @@ import '../../models/query_result.dart';
 import '../../models/value_format.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../cell_picker/cell_picker.dart';
 import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
 import '../widgets/json_spans.dart';
@@ -32,6 +33,7 @@ class ResultsGrid extends StatefulWidget {
     this.widths,
     this.foreignKeys,
     this.onFollowForeignKey,
+    this.columnMeta,
   });
 
   final QueryResult result;
@@ -44,15 +46,17 @@ class ResultsGrid extends StatefulWidget {
   final void Function(String column, bool descending)? onSetSort;
   final void Function(String column, dynamic value, bool not)? onAddFilter;
 
-  /// Optional caller-owned width store, keyed by column name. The grid reads
-  /// initial widths from this map and writes back on resize, letting widths
-  /// survive grid rebuilds (pagination, filter changes, tab switches).
+  /// Optional caller-owned width store, keyed by column name.
   final Map<String, double>? widths;
 
-  /// Single-column foreign keys keyed by local column name. Powers the
-  /// "Follow →" context-menu item and the FK header indicator.
+  /// Single-column foreign keys keyed by local column name.
   final Map<String, DbForeignKey>? foreignKeys;
   final void Function(DbForeignKey fk, dynamic value)? onFollowForeignKey;
+
+  /// Column catalog metadata keyed by column name. Used to disable
+  /// Set NULL / Set DEFAULT in the cell picker + context menu when the
+  /// column's schema forbids those values.
+  final Map<String, DbColumn>? columnMeta;
 
   @override
   State<ResultsGrid> createState() => _ResultsGridState();
@@ -70,10 +74,6 @@ class _ResultsGridState extends State<ResultsGrid> {
 
   List<double> _widths = [];
   List<String> _widthKeys = [];
-
-  CellEdit? _editing;
-  final TextEditingController _editController = TextEditingController();
-  final FocusNode _editFocus = FocusNode();
 
   final TextStyle _baseText = AppTheme.mono(size: 11.5);
   final TextStyle _nullText = AppTheme.mono(
@@ -97,19 +97,12 @@ class _ResultsGridState extends State<ResultsGrid> {
     _hHeader = _hGroup.addAndGet();
     _hBody = _hGroup.addAndGet();
     _syncWidths();
-    _editFocus.addListener(() {
-      if (!_editFocus.hasFocus) _commitEdit();
-    });
   }
 
   @override
   void didUpdateWidget(ResultsGrid old) {
     super.didUpdateWidget(old);
-    // Re-derive widths whenever the data changes — new rows might justify
-    // wider/narrower auto-sizing. User-resized columns (present in the
-    // owner-supplied widths map) are preserved.
     if (!_sameColumns(widget.result.columns, _widthKeys)) {
-      _editing = null;
       _syncWidths();
     } else if (!identical(old.result, widget.result)) {
       _syncWidths();
@@ -168,39 +161,44 @@ class _ResultsGridState extends State<ResultsGrid> {
     _hHeader.dispose();
     _hBody.dispose();
     _vBody.dispose();
-    _editController.dispose();
-    _editFocus.dispose();
     _measurer.dispose();
     super.dispose();
   }
 
-  // --- editing ---------------------------------------------------------
+  // --- cell picker -----------------------------------------------------
 
-  void _startEdit(int row, int column, String current) {
-    setState(() {
-      _editing = CellEdit(row, column);
-      _editController.text = current;
-      _editController.selection = TextSelection(
-        baseOffset: 0,
-        extentOffset: current.length,
-      );
-    });
-    _editFocus.requestFocus();
-  }
+  void _openCellPicker(
+    BuildContext cellCtx,
+    int row,
+    int column,
+    dynamic original,
+  ) {
+    if (widget.onEditCell == null) return;
+    final renderObject = cellCtx.findRenderObject();
+    if (renderObject is! RenderBox) return;
+    final origin = renderObject.localToGlobal(Offset.zero);
+    final size = renderObject.size;
+    final rect =
+        Rect.fromLTWH(origin.dx, origin.dy, size.width, size.height);
 
-  void _commitEdit() {
-    final editing = _editing;
-    if (editing == null) return;
-    final value = _editController.text;
-    setState(() => _editing = null);
-    widget.onEditCell?.call(editing.row, editing.column, CellLiteral(value));
-  }
+    final columnName = widget.result.columns[column];
+    final key = CellEdit(row, column);
+    final pending = widget.edits?[key];
+    final meta = widget.columnMeta?[columnName];
 
-  void _cancelEdit() => setState(() => _editing = null);
-
-  String _editStartTextFor(CellEditValue? pending, dynamic original) {
-    if (pending is CellLiteral) return pending.value ?? '';
-    return formatCellValue(original) ?? '';
+    showCellPicker(
+      cellCtx,
+      anchorRect: rect,
+      columnName: columnName,
+      originalValue: original,
+      pendingEdit: pending,
+      canBeNull: meta?.nullable ?? true,
+      hasDefault: meta?.hasDefault ?? false,
+      onCommit: (value) => widget.onEditCell!(row, column, value),
+      onRevert: pending == null
+          ? null
+          : () => widget.onRevertEdit?.call(row, column),
+    );
   }
 
   // --- sort lookup -----------------------------------------------------
@@ -244,12 +242,15 @@ class _ResultsGridState extends State<ResultsGrid> {
     CellEditValue? pending,
   ) async {
     final columnName = widget.result.columns[column];
+    final meta = widget.columnMeta?[columnName];
     final outcome = await showValueEditor(
       context,
       columnName: columnName,
       rawValue: original,
       editable: widget.editable && widget.onEditCell != null,
       pendingEdit: pending,
+      canBeNull: meta?.nullable ?? true,
+      hasDefault: meta?.hasDefault ?? false,
     );
     if (!mounted || outcome == null) return;
     switch (outcome) {
@@ -263,6 +264,7 @@ class _ResultsGridState extends State<ResultsGrid> {
   // --- context menu ----------------------------------------------------
 
   void _openCellMenu(
+    BuildContext cellCtx,
     Offset pos,
     int row,
     int column,
@@ -272,6 +274,9 @@ class _ResultsGridState extends State<ResultsGrid> {
     final key = CellEdit(row, column);
     final pending = widget.edits?[key];
     final isEdited = pending != null;
+    final meta = widget.columnMeta?[columnName];
+    final canBeNull = meta?.nullable ?? true;
+    final hasDefault = meta?.hasDefault ?? false;
 
     final String? displayValue = pending is CellLiteral
         ? pending.value
@@ -324,16 +329,13 @@ class _ResultsGridState extends State<ResultsGrid> {
         CmItem(
           icon: Icons.edit_outlined,
           label: 'Edit cell',
-          shortcut: '⏎',
-          onTap: () => _startEdit(
-            row,
-            column,
-            _editStartTextFor(pending, original),
-          ),
+          shortcut: '⏎⏎',
+          onTap: () => _openCellPicker(cellCtx, row, column, original),
         ),
         CmItem(
           icon: Icons.not_interested,
-          label: 'Set NULL',
+          label: canBeNull ? 'Set NULL' : 'Set NULL (column is NOT NULL)',
+          enabled: canBeNull,
           onTap: () => widget.onEditCell!(
             row,
             column,
@@ -342,7 +344,10 @@ class _ResultsGridState extends State<ResultsGrid> {
         ),
         CmItem(
           icon: Icons.settings_backup_restore,
-          label: 'Set DEFAULT',
+          label: hasDefault
+              ? 'Set DEFAULT'
+              : 'Set DEFAULT (no default value)',
+          enabled: hasDefault,
           onTap: () => widget.onEditCell!(
             row,
             column,
@@ -536,45 +541,6 @@ class _ResultsGridState extends State<ResultsGrid> {
     final key = CellEdit(row, column);
     final pending = widget.edits?[key];
     final isEdited = pending != null;
-    final isEditing = _editing == key;
-
-    if (isEditing) {
-      return SizedBox(
-        width: _widths[column],
-        child: Focus(
-          onKeyEvent: (_, event) {
-            if (event is KeyDownEvent &&
-                event.logicalKey == LogicalKeyboardKey.escape) {
-              _cancelEdit();
-              return KeyEventResult.handled;
-            }
-            return KeyEventResult.ignored;
-          },
-          child: TextField(
-            controller: _editController,
-            focusNode: _editFocus,
-            onSubmitted: (_) => _commitEdit(),
-            cursorColor: AppColors.accent,
-            style: AppTheme.mono(size: 11.5),
-            decoration: const InputDecoration(
-              isCollapsed: true,
-              filled: true,
-              fillColor: AppColors.bg,
-              contentPadding:
-                  EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.zero,
-                borderSide: BorderSide(color: AppColors.accent),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.zero,
-                borderSide: BorderSide(color: AppColors.accent),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
 
     // Decide content based on the cell's effective state.
     final Widget content;
@@ -654,22 +620,25 @@ class _ResultsGridState extends State<ResultsGrid> {
       child: rendered,
     );
 
-    return MouseRegion(
-      cursor: widget.editable
-          ? SystemMouseCursors.text
-          : SystemMouseCursors.basic,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onDoubleTap: widget.editable
-            ? () => _startEdit(
-                  row,
-                  column,
-                  _editStartTextFor(pending, original),
-                )
-            : null,
-        onSecondaryTapDown: (d) =>
-            _openCellMenu(d.globalPosition, row, column, original),
-        child: cell,
+    return Builder(
+      builder: (cellCtx) => MouseRegion(
+        cursor: widget.editable
+            ? SystemMouseCursors.text
+            : SystemMouseCursors.basic,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onDoubleTap: widget.editable
+              ? () => _openCellPicker(cellCtx, row, column, original)
+              : null,
+          onSecondaryTapDown: (d) => _openCellMenu(
+            cellCtx,
+            d.globalPosition,
+            row,
+            column,
+            original,
+          ),
+          child: cell,
+        ),
       ),
     );
   }
