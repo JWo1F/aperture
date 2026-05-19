@@ -9,6 +9,7 @@ class ConnectionConfig {
     required this.username,
     required this.password,
     this.useSsl = false,
+    this.lastConnectedAt,
   });
 
   final String id;
@@ -19,6 +20,7 @@ class ConnectionConfig {
   final String username;
   final String password;
   final bool useSsl;
+  final DateTime? lastConnectedAt;
 
   String get summary => '$username@$host:$port/$database';
 
@@ -31,6 +33,8 @@ class ConnectionConfig {
         'username': username,
         'password': password,
         'useSsl': useSsl,
+        if (lastConnectedAt != null)
+          'lastConnectedAt': lastConnectedAt!.toIso8601String(),
       };
 
   factory ConnectionConfig.fromJson(Map<String, dynamic> j) => ConnectionConfig(
@@ -42,6 +46,9 @@ class ConnectionConfig {
         username: j['username'] as String? ?? 'postgres',
         password: j['password'] as String? ?? '',
         useSsl: j['useSsl'] as bool? ?? false,
+        lastConnectedAt: j['lastConnectedAt'] is String
+            ? DateTime.tryParse(j['lastConnectedAt'] as String)
+            : null,
       );
 
   ConnectionConfig copyWith({
@@ -52,6 +59,7 @@ class ConnectionConfig {
     String? username,
     String? password,
     bool? useSsl,
+    DateTime? lastConnectedAt,
   }) {
     return ConnectionConfig(
       id: id,
@@ -62,6 +70,7 @@ class ConnectionConfig {
       username: username ?? this.username,
       password: password ?? this.password,
       useSsl: useSsl ?? this.useSsl,
+      lastConnectedAt: lastConnectedAt ?? this.lastConnectedAt,
     );
   }
 }

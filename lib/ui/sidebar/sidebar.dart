@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/connection_config.dart';
 import '../../models/db_object.dart';
+import '../../models/time_ago.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../connection/connection_dialog.dart';
 import '../widgets/common.dart';
 
 /// Sidebar v2.
@@ -37,7 +40,7 @@ class Sidebar extends StatelessWidget {
             const Divider(height: 1, color: AppColors.border),
             Expanded(child: _Body(state: state)),
           ] else
-            const Expanded(child: _DisconnectedHint()),
+            Expanded(child: _AllConnectionsList(state: state)),
         ],
       ),
     );
@@ -318,43 +321,178 @@ class _Empty extends StatelessWidget {
   }
 }
 
-class _DisconnectedHint extends StatelessWidget {
-  const _DisconnectedHint();
+/// Sidebar contents when no connection is live — list of every saved
+/// connection, click to connect, plus a New-connection action at the bottom.
+class _AllConnectionsList extends StatelessWidget {
+  const _AllConnectionsList({required this.state});
+  final AppState state;
+
+  Future<void> _newConnection(BuildContext context) async {
+    final config = await showConnectionDialog(context);
+    if (config == null) return;
+    state.addConnection(config);
+    await state.connect(config);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.bg.withValues(alpha: 0.45),
-                borderRadius: Radii.brMd,
-                border: Border.all(color: AppColors.border),
+    final list = state.connections;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 12, 6),
+          child: Row(
+            children: [
+              Text('Saved'.toUpperCase(), style: AppTheme.eyebrow()),
+              const Spacer(),
+              Text(
+                '${list.length}',
+                style: AppTheme.mono(size: 10, color: AppColors.textMuted),
               ),
-              child: const Icon(
-                Icons.storage_outlined,
-                size: 20,
-                color: AppColors.textMuted,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Pick a connection from the toolbar to load the schema.',
-              textAlign: TextAlign.center,
-              style: AppTheme.ui(
-                size: 11.5,
-                color: AppColors.textMuted,
-                weight: FontWeight.w400,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
+        Expanded(
+          child: list.isEmpty
+              ? _Empty(text: 'No saved connections yet.')
+              : ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  itemCount: list.length,
+                  itemBuilder: (_, i) => _SavedConnectionRow(
+                    config: list[i],
+                    state: state,
+                  ),
+                ),
+        ),
+        const Divider(height: 1, color: AppColors.border),
+        MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            onTap: () => _newConnection(context),
+            child: Container(
+              height: 32,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              alignment: Alignment.centerLeft,
+              child: Row(
+                children: [
+                  const Icon(Icons.add, size: 13, color: AppColors.accent),
+                  const SizedBox(width: 8),
+                  Text(
+                    'New connection…',
+                    style: AppTheme.ui(
+                      size: 12,
+                      color: AppColors.accent,
+                      weight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SavedConnectionRow extends StatefulWidget {
+  const _SavedConnectionRow({required this.config, required this.state});
+  final ConnectionConfig config;
+  final AppState state;
+
+  @override
+  State<_SavedConnectionRow> createState() => _SavedConnectionRowState();
+}
+
+class _SavedConnectionRowState extends State<_SavedConnectionRow> {
+  bool _hover = false;
+
+  Future<void> _edit() async {
+    final updated = await showConnectionDialog(
+      context,
+      existing: widget.config,
+    );
+    if (updated != null) widget.state.updateConnection(updated);
+  }
+
+  void _delete() => widget.state.removeConnection(widget.config.id);
+
+  @override
+  Widget build(BuildContext context) {
+    final ts = widget.config.lastConnectedAt;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: () => widget.state.connect(widget.config),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          color: _hover ? AppColors.sidebarRowHover : Colors.transparent,
+          child: Row(
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  color: AppColors.borderStrong,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.config.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.ui(
+                        size: 12.5,
+                        weight: FontWeight.w500,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      ts == null ? widget.config.summary : timeAgo(ts),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.mono(
+                        size: 10,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_hover) ...[
+                _MiniIcon(icon: Icons.edit_outlined, onTap: _edit),
+                _MiniIcon(icon: Icons.delete_outline, onTap: _delete),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniIcon extends StatelessWidget {
+  const _MiniIcon({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: Icon(icon, size: 12, color: AppColors.textMuted),
       ),
     );
   }

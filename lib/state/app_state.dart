@@ -25,6 +25,18 @@ class AppState extends ChangeNotifier {
   final List<ConnectionConfig> _connections = [];
   List<ConnectionConfig> get connections => List.unmodifiable(_connections);
 
+  /// Top-3 most recently used connections, freshest first. Used to populate
+  /// the welcome screen quick-launch cards.
+  List<ConnectionConfig> get recentConnections {
+    final stamped = _connections
+        .where((c) => c.lastConnectedAt != null)
+        .toList()
+      ..sort(
+        (a, b) => b.lastConnectedAt!.compareTo(a.lastConnectedAt!),
+      );
+    return stamped.take(3).toList();
+  }
+
   Future<void> _hydrate() async {
     final saved = await _store.load();
     if (saved.isEmpty) return;
@@ -131,6 +143,12 @@ class AppState extends ChangeNotifier {
       _schemas = await _service!.loadSchemas();
       if (_schemas.length == 1) _expandedSchemas.add(_schemas.first.name);
       _status = ConnectionStatus.connected;
+      // Stamp the connection time so the welcome screen can surface recents.
+      final stamped = config.copyWith(lastConnectedAt: DateTime.now());
+      final idx = _connections.indexWhere((c) => c.id == config.id);
+      if (idx != -1) _connections[idx] = stamped;
+      _activeConnection = stamped;
+      _persist();
     } catch (e) {
       _status = ConnectionStatus.error;
       _connectionError = e.toString();
