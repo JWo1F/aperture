@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
-import 'package:postgres/postgres.dart';
 
 import '../../models/db_object.dart';
 import '../../models/order_term.dart';
@@ -227,7 +226,6 @@ class _ResultsGridState extends State<ResultsGrid> {
     if (value is num || value is BigInt) return AppColors.sqlNumber;
     if (value is DateTime) return AppColors.info;
     if (value is Map || value is List) return AppColors.sqlString;
-    if (value is UndecodedBytes) return AppColors.textMuted;
     return AppColors.textPrimary;
   }
 
