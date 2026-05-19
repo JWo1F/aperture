@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../export/export_dialog.dart';
 import '../widgets/common.dart';
 import 'results_grid.dart';
 
@@ -60,6 +61,23 @@ class _QueryEditorState extends State<QueryEditor> {
     context.read<AppState>().runQuery(widget.tab);
   }
 
+  void _openExport() {
+    final result = widget.tab.result;
+    if (result == null) return;
+    final timestamp = DateTime.now()
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .split('.')
+        .first;
+    showExportDialog(
+      context,
+      target: ExportTarget(
+        suggestedFilename: 'query_$timestamp.csv',
+        currentResult: result,
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _controller.removeListener(_onTextChanged);
@@ -75,7 +93,11 @@ class _QueryEditorState extends State<QueryEditor> {
 
     return Column(
       children: [
-        _Toolbar(tab: tab, onRun: tab.running ? null : _run),
+        _Toolbar(
+          tab: tab,
+          onRun: tab.running ? null : _run,
+          onExport: tab.result == null ? null : _openExport,
+        ),
         Expanded(
           flex: 2,
           child: CallbackShortcuts(
@@ -161,10 +183,15 @@ class _QueryEditorState extends State<QueryEditor> {
 }
 
 class _Toolbar extends StatelessWidget {
-  const _Toolbar({required this.tab, required this.onRun});
+  const _Toolbar({
+    required this.tab,
+    required this.onRun,
+    required this.onExport,
+  });
 
   final QueryTab tab;
   final VoidCallback? onRun;
+  final VoidCallback? onExport;
 
   @override
   Widget build(BuildContext context) {
@@ -189,7 +216,7 @@ class _Toolbar extends StatelessWidget {
             style: AppTheme.mono(size: 11, color: AppColors.textMuted),
           ),
           const Spacer(),
-          if (tab.running)
+          if (tab.running) ...[
             const SizedBox(
               width: 14,
               height: 14,
@@ -198,6 +225,13 @@ class _Toolbar extends StatelessWidget {
                 color: AppColors.accent,
               ),
             ),
+            const SizedBox(width: Insets.sm),
+          ],
+          IconAction(
+            icon: Icons.ios_share,
+            tooltip: 'Export…',
+            onPressed: onExport,
+          ),
         ],
       ),
     );

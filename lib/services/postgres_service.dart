@@ -170,6 +170,32 @@ class PostgresService {
     }
   }
 
+  /// Fetches every row of a relation under the active filter/order, with no
+  /// pagination. Used by exporters; callers are expected to be aware that
+  /// this materialises the entire result in memory.
+  Future<QueryResult> fetchAllTableRows(
+    DbTable table, {
+    String filter = '',
+    String orderBy = '',
+  }) async {
+    final order =
+        orderBy.trim().isEmpty ? '' : ' ORDER BY ${orderBy.trim()}';
+    final watch = Stopwatch()..start();
+    final result = await _conn.execute(
+      'SELECT * FROM ${table.qualifiedName}${_whereClause(filter)}$order',
+    );
+    watch.stop();
+    final columns = result.schema.columns
+        .map((c) => c.columnName ?? 'column')
+        .toList();
+    final rows = result.map((r) => r.toList()).toList();
+    return QueryResult.rows(
+      columns: columns,
+      rows: rows,
+      elapsed: watch.elapsed,
+    );
+  }
+
   /// Executes an arbitrary statement, capturing timing and errors so the UI
   /// never has to deal with raised exceptions directly.
   Future<QueryResult> runQuery(String sql) async {

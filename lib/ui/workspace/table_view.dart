@@ -7,6 +7,7 @@ import '../../models/value_format.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../export/export_dialog.dart';
 import '../widgets/common.dart';
 import '../widgets/sql_highlight_controller.dart';
 import 'results_grid.dart';
@@ -146,6 +147,26 @@ class _TableToolbarState extends State<_TableToolbar> {
   void _applyOrder() =>
       widget.state.setTableOrder(widget.tab, _order.text.trim());
 
+  void _openExport() {
+    final tab = widget.tab;
+    final result = tab.result;
+    if (result == null) return;
+    final timestamp = DateTime.now()
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .split('.')
+        .first;
+    showExportDialog(
+      context,
+      target: ExportTarget(
+        suggestedFilename: '${tab.table.name}_$timestamp.csv',
+        currentResult: result,
+        fetchAll: () => widget.state.fetchAllForExport(tab),
+        totalRowsForAll: tab.totalRows,
+      ),
+    );
+  }
+
   Future<void> _applyEdits() async {
     final error = await widget.state.applyTableEdits(widget.tab);
     if (error != null && mounted) {
@@ -232,6 +253,12 @@ class _TableToolbarState extends State<_TableToolbar> {
                   tab.hasEdits && !tab.applying ? _applyEdits : null,
             ),
           ],
+          const SizedBox(width: Insets.sm),
+          IconAction(
+            icon: Icons.ios_share,
+            tooltip: 'Export…',
+            onPressed: tab.result == null ? null : _openExport,
+          ),
         ],
       ),
     );

@@ -236,6 +236,20 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Fetches every row currently matching the tab's filter + sort. Used by
+  /// the exporter when the user chooses "All filtered rows".
+  Future<QueryResult> fetchAllForExport(TableTab tab) {
+    final service = _service;
+    if (service == null) {
+      throw StateError('Not connected');
+    }
+    return service.fetchAllTableRows(
+      tab.table,
+      filter: tab.filter,
+      orderBy: tab.orderBy,
+    );
+  }
+
   /// Sets the row filter and reloads from the first page.
   Future<void> setTableFilter(TableTab tab, String filter) async {
     tab.filter = filter;
