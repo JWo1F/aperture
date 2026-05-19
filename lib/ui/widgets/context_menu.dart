@@ -1,0 +1,245 @@
+import 'package:flutter/material.dart';
+
+import '../../theme/app_theme.dart';
+
+/// A line in a context menu — either an action or a separator.
+sealed class CmEntry {
+  const CmEntry();
+}
+
+class CmItem extends CmEntry {
+  const CmItem({
+    required this.label,
+    required this.onTap,
+    this.icon,
+    this.shortcut,
+    this.danger = false,
+    this.enabled = true,
+  });
+
+  final String label;
+  final IconData? icon;
+  final String? shortcut;
+  final VoidCallback onTap;
+  final bool danger;
+  final bool enabled;
+}
+
+class CmDivider extends CmEntry {
+  const CmDivider();
+}
+
+/// Shows a context menu anchored at [globalPosition]. Dismisses on outside
+/// click or Escape. Entries that aren't [CmItem] (dividers) are non-clickable.
+void showContextMenu(
+  BuildContext context, {
+  required Offset globalPosition,
+  required List<CmEntry> entries,
+}) {
+  final overlay = Overlay.of(context);
+  late OverlayEntry entry;
+
+  void close() {
+    if (entry.mounted) entry.remove();
+  }
+
+  entry = OverlayEntry(
+    builder: (_) => _ContextMenuOverlay(
+      position: globalPosition,
+      entries: entries,
+      onClose: close,
+    ),
+  );
+  overlay.insert(entry);
+}
+
+class _ContextMenuOverlay extends StatelessWidget {
+  const _ContextMenuOverlay({
+    required this.position,
+    required this.entries,
+    required this.onClose,
+  });
+
+  final Offset position;
+  final List<CmEntry> entries;
+  final VoidCallback onClose;
+
+  static const double _menuWidth = 240;
+  static const double _itemHeight = 28;
+  static const double _dividerHeight = 7;
+  static const double _verticalPad = 6;
+
+  double _estimatedHeight() {
+    var h = _verticalPad * 2;
+    for (final e in entries) {
+      h += e is CmDivider ? _dividerHeight : _itemHeight;
+    }
+    return h;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context).size;
+    final estimated = _estimatedHeight();
+
+    var x = position.dx;
+    var y = position.dy;
+    if (x + _menuWidth + 8 > media.width) x = media.width - _menuWidth - 8;
+    if (y + estimated + 8 > media.height) y = media.height - estimated - 8;
+    if (x < 8) x = 8;
+    if (y < 8) y = 8;
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onClose,
+            onSecondaryTap: onClose,
+          ),
+        ),
+        Positioned(
+          left: x,
+          top: y,
+          child: _Menu(
+            entries: entries,
+            onClose: onClose,
+            width: _menuWidth,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Menu extends StatelessWidget {
+  const _Menu({
+    required this.entries,
+    required this.onClose,
+    required this.width,
+  });
+
+  final List<CmEntry> entries;
+  final VoidCallback onClose;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: width,
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: Radii.brMd,
+          border: Border.all(color: AppColors.borderStrong),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x99000000),
+              blurRadius: 28,
+              offset: Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final e in entries)
+              if (e is CmDivider)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+                  child: Divider(height: 1, color: AppColors.border),
+                )
+              else if (e is CmItem)
+                _Row(item: e, onClose: onClose),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Row extends StatefulWidget {
+  const _Row({required this.item, required this.onClose});
+  final CmItem item;
+  final VoidCallback onClose;
+
+  @override
+  State<_Row> createState() => _RowState();
+}
+
+class _RowState extends State<_Row> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final disabled = !item.enabled;
+    final fg = disabled
+        ? AppColors.textMuted
+        : item.danger
+            ? AppColors.error
+            : AppColors.textPrimary;
+    final iconColor = disabled
+        ? AppColors.textMuted
+        : item.danger
+            ? AppColors.error
+            : AppColors.textSecondary;
+
+    return MouseRegion(
+      cursor: disabled ? SystemMouseCursors.basic : SystemMouseCursors.click,
+      onEnter: (_) {
+        if (!disabled) setState(() => _hover = true);
+      },
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: disabled
+            ? null
+            : () {
+                widget.onClose();
+                item.onTap();
+              },
+        child: Container(
+          height: 28,
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: _hover && !disabled
+                ? AppColors.accentSoft
+                : Colors.transparent,
+            borderRadius: Radii.brSm,
+          ),
+          child: Row(
+            children: [
+              if (item.icon != null) ...[
+                Icon(item.icon, size: 13, color: iconColor),
+                const SizedBox(width: 9),
+              ] else
+                const SizedBox(width: 22),
+              Expanded(
+                child: Text(
+                  item.label,
+                  style: AppTheme.ui(
+                    size: 12,
+                    color: fg,
+                    weight: FontWeight.w400,
+                  ),
+                ),
+              ),
+              if (item.shortcut != null)
+                Text(
+                  item.shortcut!,
+                  style: AppTheme.mono(
+                    size: 10,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
