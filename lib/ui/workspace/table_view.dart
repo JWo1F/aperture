@@ -7,6 +7,7 @@ import '../../models/value_format.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../edits/pending_edits_modal.dart';
 import '../export/export_dialog.dart';
 import '../widgets/common.dart';
 import '../widgets/sql_highlight_controller.dart';
@@ -122,6 +123,7 @@ class _TableToolbar extends StatefulWidget {
 }
 
 class _TableToolbarState extends State<_TableToolbar> {
+  late final SqlHighlightController _select;
   late final SqlHighlightController _filter;
   late final SqlHighlightController _order;
   final FocusNode _orderFocus = FocusNode();
@@ -129,23 +131,33 @@ class _TableToolbarState extends State<_TableToolbar> {
   @override
   void initState() {
     super.initState();
+    _select = SqlHighlightController(text: widget.tab.selectList);
     _filter = SqlHighlightController(text: widget.tab.filter);
     _order = SqlHighlightController(text: widget.tab.orderBy);
   }
 
   @override
   void dispose() {
+    _select.dispose();
     _filter.dispose();
     _order.dispose();
     _orderFocus.dispose();
     super.dispose();
   }
 
+  void _applySelect() =>
+      widget.state.setTableSelect(widget.tab, _select.text.trim());
+
   void _applyFilter() =>
       widget.state.setTableFilter(widget.tab, _filter.text.trim());
 
   void _applyOrder() =>
       widget.state.setTableOrder(widget.tab, _order.text.trim());
+
+  void _previewEdits() {
+    final statements = widget.state.previewEditStatements(widget.tab);
+    showPendingEditsModal(context, statements: statements);
+  }
 
   void _openExport() {
     final tab = widget.tab;
@@ -191,69 +203,86 @@ class _TableToolbarState extends State<_TableToolbar> {
       _order.text = tab.orderBy;
     }
 
+    final selectActive =
+        tab.selectList.trim().isNotEmpty && tab.selectList.trim() != '*';
+    final whereActive = tab.filter.trim().isNotEmpty;
+    final orderActive = tab.orderBy.trim().isNotEmpty;
+
     return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: Insets.md),
+      height: 40,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
+      padding: const EdgeInsets.symmetric(horizontal: Insets.md),
       child: Row(
         children: [
-          Icon(
-            tab.table.isView
-                ? Icons.visibility_outlined
-                : Icons.table_rows_outlined,
-            size: 14,
-            color: AppColors.accent,
+          // ── identity ──
+          _TableIdentity(tab: tab),
+          const _Rail(),
+          // ── clauses ──
+          Expanded(
+            flex: 2,
+            child: _Clause(
+              prefix: 'SELECT',
+              controller: _select,
+              onApply: _applySelect,
+              hint: '*  or  col_a, col_b',
+              active: selectActive,
+            ),
           ),
           const SizedBox(width: 6),
-          Text(
-            '${tab.table.schema}.${tab.table.name}',
-            style: AppTheme.mono(size: 12.5, weight: FontWeight.w600),
-          ),
-          const SizedBox(width: Insets.md),
           Expanded(
-            flex: 3,
-            child: _QueryField(
+            flex: 4,
+            child: _Clause(
               prefix: 'WHERE',
               controller: _filter,
               onApply: _applyFilter,
-              hint: 'filter rows — e.g. status = \'active\'',
+              hint: "filter — e.g. status = 'active'",
+              active: whereActive,
             ),
           ),
-          const SizedBox(width: Insets.sm),
+          const SizedBox(width: 6),
           Expanded(
-            flex: 2,
-            child: _QueryField(
+            flex: 3,
+            child: _Clause(
               prefix: 'ORDER BY',
               controller: _order,
               focusNode: _orderFocus,
               onApply: _applyOrder,
               hint: 'click a column header',
+              active: orderActive,
             ),
           ),
+          const _Rail(),
+          // ── actions ──
           if (!tab.table.isView) ...[
-            const SizedBox(width: Insets.md),
-            _EditCountBadge(count: tab.edits.length),
-            const SizedBox(width: Insets.sm),
-            AppButton(
-              label: 'Reset',
+            _EditCountBadge(
+              count: tab.edits.length,
+              onTap: tab.hasEdits ? () => _previewEdits() : null,
+            ),
+            if (tab.hasEdits) const SizedBox(width: 6),
+            IconAction(
               icon: Icons.undo,
+              tooltip: tab.hasEdits
+                  ? 'Reset pending edits'
+                  : 'No pending edits',
               onPressed: tab.hasEdits && !tab.applying
                   ? () => widget.state.resetTableEdits(tab)
                   : null,
             ),
-            const SizedBox(width: Insets.sm),
-            AppButton(
-              label: tab.applying ? 'Applying…' : 'Apply',
+            const SizedBox(width: 2),
+            IconAction(
               icon: Icons.check,
+              tooltip: tab.applying
+                  ? 'Applying…'
+                  : (tab.hasEdits ? 'Apply edits' : 'No pending edits'),
               primary: true,
-              onPressed:
-                  tab.hasEdits && !tab.applying ? _applyEdits : null,
+              busy: tab.applying,
+              onPressed: tab.hasEdits && !tab.applying ? _applyEdits : null,
             ),
+            const SizedBox(width: 4),
           ],
-          const SizedBox(width: Insets.sm),
           IconAction(
             icon: Icons.ios_share,
             tooltip: 'Export…',
@@ -265,104 +294,244 @@ class _TableToolbarState extends State<_TableToolbar> {
   }
 }
 
-/// A boxed query-fragment input with a coloured prefix label, applied on ↵.
-class _QueryField extends StatelessWidget {
-  const _QueryField({
-    required this.prefix,
-    required this.controller,
-    required this.onApply,
-    required this.hint,
-    this.focusNode,
-  });
-
-  final String prefix;
-  final TextEditingController controller;
-  final VoidCallback onApply;
-  final String hint;
-  final FocusNode? focusNode;
+/// Schema-qualified table name + relation icon. The schema renders in a quiet
+/// muted tone so the eye locks onto the table name itself.
+class _TableIdentity extends StatelessWidget {
+  const _TableIdentity({required this.tab});
+  final TableTab tab;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 30,
-      decoration: BoxDecoration(
-        color: AppColors.bg,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.border),
-      ),
+    final isView = tab.table.isView;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 240),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 9),
-            child: Text(
-              prefix,
-              style: AppTheme.mono(
-                size: 10.5,
-                color: AppColors.accent,
-                weight: FontWeight.w600,
-              ),
-            ),
+          Icon(
+            isView ? Icons.visibility_outlined : Icons.table_rows_outlined,
+            size: 14,
+            color: isView ? AppColors.info : AppColors.accent,
           ),
-          Container(width: 1, height: 30, color: AppColors.border),
-          Expanded(
-            child: CallbackShortcuts(
-              bindings: {
-                const SingleActivator(LogicalKeyboardKey.enter): onApply,
-              },
-              child: TextField(
-                controller: controller,
-                focusNode: focusNode,
-                cursorColor: AppColors.accent,
-                style: AppTheme.mono(size: 11.5),
-                decoration: InputDecoration(
-                  isCollapsed: true,
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 9,
+          const SizedBox(width: 7),
+          Flexible(
+            child: RichText(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              text: TextSpan(
+                style: AppTheme.mono(size: 12, weight: FontWeight.w600),
+                children: [
+                  TextSpan(
+                    text: '${tab.table.schema}.',
+                    style: AppTheme.mono(
+                      size: 12,
+                      color: AppColors.textMuted,
+                      weight: FontWeight.w400,
+                    ),
                   ),
-                  hintText: hint,
-                  hintStyle:
-                      AppTheme.mono(size: 11.5, color: AppColors.textMuted),
-                ),
+                  TextSpan(text: tab.table.name),
+                ],
               ),
             ),
           ),
-          IconAction(
-            icon: Icons.play_arrow,
-            tooltip: 'Apply ($prefix) — ↵',
-            onPressed: onApply,
-          ),
-          const SizedBox(width: 2),
         ],
       ),
     );
   }
 }
 
-class _EditCountBadge extends StatelessWidget {
-  const _EditCountBadge({required this.count});
-
-  final int count;
+/// A 1px vertical rail that separates toolbar sections.
+class _Rail extends StatelessWidget {
+  const _Rail();
 
   @override
   Widget build(BuildContext context) {
-    if (count == 0) return const SizedBox.shrink();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      width: 1,
+      height: 18,
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      color: AppColors.border,
+    );
+  }
+}
+
+/// A clause chip: uppercase prefix label · vertical hairline · inline value.
+/// The prefix is rendered in the accent when the clause is constraining the
+/// query, so an "empty" toolbar reads as cleanly as a maxed-out one.
+class _Clause extends StatefulWidget {
+  const _Clause({
+    required this.prefix,
+    required this.controller,
+    required this.onApply,
+    required this.hint,
+    required this.active,
+    this.focusNode,
+  });
+
+  final String prefix;
+  final SqlHighlightController controller;
+  final VoidCallback onApply;
+  final String hint;
+  final bool active;
+  final FocusNode? focusNode;
+
+  @override
+  State<_Clause> createState() => _ClauseState();
+}
+
+class _ClauseState extends State<_Clause> {
+  late final FocusNode _focus;
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus = widget.focusNode ?? FocusNode();
+    _focus.addListener(() => setState(() => _focused = _focus.hasFocus));
+  }
+
+  @override
+  void dispose() {
+    if (widget.focusNode == null) _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final prefixColor = _focused
+        ? AppColors.accent
+        : (widget.active ? AppColors.accent : AppColors.textMuted);
+    final borderColor = _focused
+        ? AppColors.accent
+        : (widget.active ? AppColors.accent.withValues(alpha: 0.5) : AppColors.border);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      height: 28,
       decoration: BoxDecoration(
-        color: AppColors.accentSoft,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.accent),
+        color: _focused ? AppColors.bg : AppColors.bg.withValues(alpha: 0.6),
+        borderRadius: Radii.brSm,
+        border: Border.all(color: borderColor),
       ),
-      child: Text(
-        '$count pending',
-        style: AppTheme.mono(size: 10.5, color: AppColors.accent),
+      child: Row(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 9, right: 9),
+            child: Text(
+              widget.prefix,
+              style: AppTheme.ui(
+                size: 9.5,
+                color: prefixColor,
+                weight: FontWeight.w700,
+                letterSpacing: 0.9,
+              ),
+            ),
+          ),
+          Container(width: 1, height: 28, color: AppColors.border),
+          Expanded(
+            child: CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.enter): widget.onApply,
+              },
+              child: TextField(
+                controller: widget.controller,
+                focusNode: _focus,
+                cursorColor: AppColors.accent,
+                cursorHeight: 13,
+                style: AppTheme.mono(size: 11.5),
+                decoration: InputDecoration(
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 8,
+                  ),
+                  hintText: widget.hint,
+                  hintStyle:
+                      AppTheme.mono(size: 11.5, color: AppColors.textMuted),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
+
+/// Tight pill that signals the count of pending cell edits. Click to preview
+/// the generated UPDATE statements.
+class _EditCountBadge extends StatefulWidget {
+  const _EditCountBadge({required this.count, this.onTap});
+
+  final int count;
+  final VoidCallback? onTap;
+
+  @override
+  State<_EditCountBadge> createState() => _EditCountBadgeState();
+}
+
+class _EditCountBadgeState extends State<_EditCountBadge> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.count == 0) return const SizedBox.shrink();
+    final clickable = widget.onTap != null;
+    final tooltip = clickable
+        ? '${widget.count} pending edit${widget.count == 1 ? '' : 's'} — click to preview'
+        : '${widget.count} pending edit${widget.count == 1 ? '' : 's'}';
+
+    return Tooltip(
+      message: tooltip,
+      child: MouseRegion(
+        cursor: clickable
+            ? SystemMouseCursors.click
+            : SystemMouseCursors.basic,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            height: 22,
+            padding: const EdgeInsets.symmetric(horizontal: 7),
+            decoration: BoxDecoration(
+              color: _hover && clickable
+                  ? AppColors.accent.withValues(alpha: 0.32)
+                  : AppColors.accentSoft,
+              borderRadius: Radii.brSm,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: const BoxDecoration(
+                    color: AppColors.accent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  '${widget.count}',
+                  style: AppTheme.mono(
+                    size: 10.5,
+                    color: AppColors.accent,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom rail: pagination affordances + a quiet row-count readout.
 class _PaginationBar extends StatelessWidget {
   const _PaginationBar({required this.tab, required this.state});
 
@@ -377,7 +546,7 @@ class _PaginationBar extends StatelessWidget {
     final last = (tab.offset + tab.pageSize).clamp(0, tab.totalRows);
 
     return Container(
-      height: 36,
+      height: 30,
       padding: const EdgeInsets.symmetric(horizontal: Insets.md),
       decoration: const BoxDecoration(
         color: AppColors.surface,
@@ -397,15 +566,39 @@ class _PaginationBar extends StatelessWidget {
             onPressed:
                 canNext ? () => state.loadTablePage(tab, tab.page + 1) : null,
           ),
-          const SizedBox(width: Insets.sm),
-          Text(
-            'Page ${tab.page + 1} of ${tab.pageCount}',
-            style: AppTheme.mono(size: 11, color: AppColors.textSecondary),
+          const SizedBox(width: 6),
+          RichText(
+            text: TextSpan(
+              style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+              children: [
+                const TextSpan(text: 'pg '),
+                TextSpan(
+                  text: '${tab.page + 1}',
+                  style: AppTheme.mono(
+                    size: 10.5,
+                    color: AppColors.textSecondary,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+                TextSpan(text: ' / ${tab.pageCount}'),
+              ],
+            ),
           ),
           const Spacer(),
-          Text(
-            '$first–$last of ${tab.totalRows} rows',
-            style: AppTheme.mono(size: 11, color: AppColors.textMuted),
+          RichText(
+            text: TextSpan(
+              style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+              children: [
+                TextSpan(
+                  text: '$first–$last',
+                  style: AppTheme.mono(
+                    size: 10.5,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                TextSpan(text: '  of  ${tab.totalRows}  rows'),
+              ],
+            ),
           ),
         ],
       ),

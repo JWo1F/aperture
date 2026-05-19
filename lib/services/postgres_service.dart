@@ -113,6 +113,15 @@ class PostgresService {
     return trimmed.isEmpty ? '' : ' WHERE $trimmed';
   }
 
+  /// Expands the user-supplied SELECT list into a projection clause. `*` and
+  /// empty become `*` (qualified to `t.*` when the table is aliased);
+  /// anything else is trusted as-is.
+  String _projection(String selectList, {bool aliased = true}) {
+    final trimmed = selectList.trim();
+    if (trimmed.isEmpty || trimmed == '*') return aliased ? 't.*' : '*';
+    return trimmed;
+  }
+
   /// Total row count for a relation under the active filter.
   Future<int> countRows(DbTable table, {String filter = ''}) async {
     final result = await _conn.execute(
@@ -130,12 +139,14 @@ class PostgresService {
     required int offset,
     String filter = '',
     String orderBy = '',
+    String selectList = '*',
   }) async {
     final watch = Stopwatch()..start();
     final order = orderBy.trim().isEmpty ? '' : ' ORDER BY ${orderBy.trim()}';
+    final projection = _projection(selectList);
     try {
       final result = await _conn.execute(
-        'SELECT t.ctid::text AS __ctid, t.* '
+        'SELECT t.ctid::text AS __ctid, $projection '
         'FROM ${table.qualifiedName} AS t'
         '${_whereClause(filter)}'
         '$order '
@@ -177,12 +188,15 @@ class PostgresService {
     DbTable table, {
     String filter = '',
     String orderBy = '',
+    String selectList = '*',
   }) async {
     final order =
         orderBy.trim().isEmpty ? '' : ' ORDER BY ${orderBy.trim()}';
     final watch = Stopwatch()..start();
+    final projection = _projection(selectList, aliased: false);
     final result = await _conn.execute(
-      'SELECT * FROM ${table.qualifiedName}${_whereClause(filter)}$order',
+      'SELECT $projection FROM ${table.qualifiedName}'
+      '${_whereClause(filter)}$order',
     );
     watch.stop();
     final columns = result.schema.columns
@@ -239,33 +253,53 @@ class PostgresService {
     Map<String, Map<String, CellEditValue>> updatesByCtid,
   ) async {
     if (updatesByCtid.isEmpty) return 0;
-
+    final statements = buildEditStatements(table, updatesByCtid);
     return _conn.runTx((session) async {
       var affected = 0;
-      for (final entry in updatesByCtid.entries) {
-        final assignments = entry.value.entries
-            .map((e) => '"${e.key}" = ${_renderAssignment(e.value)}')
-            .join(', ');
-        final result = await session.execute(
-          'UPDATE ${table.qualifiedName} SET $assignments '
-          "WHERE ctid = '${entry.key}'::tid",
-        );
+      for (final sql in statements) {
+        final result = await session.execute(sql);
         affected += result.affectedRows;
       }
       return affected;
     });
   }
+}
 
-  String _renderAssignment(CellEditValue value) => switch (value) {
-        CellLiteral(:final value) => _literal(value),
-        CellDefault() => 'DEFAULT',
-      };
+/// Pure builder for the per-ctid UPDATE statements that would be sent to the
+/// database. Lives at the top level so the preview UI can render the same
+/// SQL without holding a connection.
+List<String> buildEditStatements(
+  DbTable table,
+  Map<String, Map<String, CellEditValue>> updatesByCtid,
+) {
+  return [
+    for (final entry in updatesByCtid.entries)
+      _renderUpdate(table, entry.key, entry.value),
+  ];
+}
 
-  /// Renders a value as a SQL literal. Strings stay untyped ('unknown') so
-  /// Postgres coerces them into the target column type; single quotes are
-  /// doubled to neutralise injection.
-  String _literal(String? value) {
-    if (value == null) return 'NULL';
-    return "'${value.replaceAll("'", "''")}'";
-  }
+String _renderUpdate(
+  DbTable table,
+  String ctid,
+  Map<String, CellEditValue> assignments,
+) {
+  final lines = assignments.entries
+      .map((e) => '  "${e.key}" = ${_renderAssignment(e.value)}')
+      .join(',\n');
+  return 'UPDATE ${table.qualifiedName} SET\n'
+      '$lines\n'
+      "WHERE ctid = '$ctid'::tid";
+}
+
+String _renderAssignment(CellEditValue value) => switch (value) {
+      CellLiteral(:final value) => _literal(value),
+      CellDefault() => 'DEFAULT',
+    };
+
+/// Renders a value as a SQL literal. Strings stay untyped ('unknown') so
+/// Postgres coerces them into the target column type; single quotes are
+/// doubled to neutralise injection.
+String _literal(String? value) {
+  if (value == null) return 'NULL';
+  return "'${value.replaceAll("'", "''")}'";
 }

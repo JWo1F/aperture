@@ -74,6 +74,15 @@ class _ResultsGridState extends State<ResultsGrid> {
     color: AppColors.textMuted,
   ).copyWith(fontStyle: FontStyle.italic);
 
+  // Reused across all width measurements to avoid per-cell allocation.
+  final TextPainter _measurer =
+      TextPainter(textDirection: TextDirection.ltr, maxLines: 1);
+
+  static const double _autoMin = 64;
+  static const double _autoMax = 200;
+  static const double _cellPad = 20; // 9px each side + 2 fudge
+  static const double _headerExtra = 28; // sort icon + spacing + resize handle
+
   @override
   void initState() {
     super.initState();
@@ -89,8 +98,13 @@ class _ResultsGridState extends State<ResultsGrid> {
   @override
   void didUpdateWidget(ResultsGrid old) {
     super.didUpdateWidget(old);
+    // Re-derive widths whenever the data changes — new rows might justify
+    // wider/narrower auto-sizing. User-resized columns (present in the
+    // owner-supplied widths map) are preserved.
     if (!_sameColumns(widget.result.columns, _widthKeys)) {
       _editing = null;
+      _syncWidths();
+    } else if (!identical(old.result, widget.result)) {
       _syncWidths();
     }
   }
@@ -103,12 +117,42 @@ class _ResultsGridState extends State<ResultsGrid> {
     return true;
   }
 
+  /// Default width = widest visible cell (and the header) in this column,
+  /// clamped between [_autoMin] and [_autoMax]. Cells already ellipsize, so
+  /// we measure at most the first 200 chars of each value to keep this cheap.
+  double _autoWidth(String column, int columnIndex) {
+    final headerStyle = AppTheme.mono(
+      size: 11.5,
+      weight: FontWeight.w600,
+    );
+
+    _measurer
+      ..text = TextSpan(text: column, style: headerStyle)
+      ..layout();
+    var widest = _measurer.width + _headerExtra;
+
+    for (final row in widget.result.rows) {
+      final raw = row[columnIndex];
+      final formatted = formatCellValue(raw);
+      final text = formatted ?? 'NULL';
+      final sample = text.length > 200 ? text.substring(0, 200) : text;
+      _measurer
+        ..text = TextSpan(text: sample, style: _baseText)
+        ..layout();
+      final w = _measurer.width + _cellPad;
+      if (w > widest) widest = w;
+    }
+
+    return widest.clamp(_autoMin, _autoMax);
+  }
+
   void _syncWidths() {
     _widthKeys = List.of(widget.result.columns);
     final saved = widget.widths;
     _widths = [
-      for (final col in widget.result.columns)
-        saved?[col] ?? (col.length * 8.5 + 52).clamp(96.0, 360.0),
+      for (var i = 0; i < widget.result.columns.length; i++)
+        saved?[widget.result.columns[i]] ??
+            _autoWidth(widget.result.columns[i], i),
     ];
   }
 
@@ -119,6 +163,7 @@ class _ResultsGridState extends State<ResultsGrid> {
     _vBody.dispose();
     _editController.dispose();
     _editFocus.dispose();
+    _measurer.dispose();
     super.dispose();
   }
 

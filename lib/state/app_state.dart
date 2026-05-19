@@ -228,6 +228,7 @@ class AppState extends ChangeNotifier {
         offset: tab.offset,
         filter: tab.filter,
         orderBy: tab.orderBy,
+        selectList: tab.selectList,
       );
     } catch (e) {
       tab.result = QueryResult.failure(error: e.toString(), elapsed: Duration.zero);
@@ -247,7 +248,19 @@ class AppState extends ChangeNotifier {
       tab.table,
       filter: tab.filter,
       orderBy: tab.orderBy,
+      selectList: tab.selectList,
     );
+  }
+
+  /// Sets the column projection and reloads from the first page. Empty
+  /// resets to `*`. Edits and column widths are cleared because the column
+  /// set may change.
+  Future<void> setTableSelect(TableTab tab, String selectList) async {
+    final next = selectList.trim().isEmpty ? '*' : selectList.trim();
+    if (next == tab.selectList) return;
+    tab.selectList = next;
+    tab.columnWidths.clear();
+    await loadTablePage(tab, 0);
   }
 
   /// Sets the row filter and reloads from the first page.
@@ -314,6 +327,21 @@ class AppState extends ChangeNotifier {
   void resetTableEdits(TableTab tab) {
     tab.edits.clear();
     notifyListeners();
+  }
+
+  /// Renders the SQL UPDATE statements that would be sent if the user clicked
+  /// Apply. Pure — does not touch the database.
+  List<String> previewEditStatements(TableTab tab) {
+    final result = tab.result;
+    if (result?.rowIds == null || tab.edits.isEmpty) return const [];
+
+    final updates = <String, Map<String, CellEditValue>>{};
+    for (final entry in tab.edits.entries) {
+      final ctid = result!.rowIds![entry.key.row];
+      final column = result.columns[entry.key.column];
+      updates.putIfAbsent(ctid, () => {})[column] = entry.value;
+    }
+    return buildEditStatements(tab.table, updates);
   }
 
   /// Adds a WHERE fragment via AND.

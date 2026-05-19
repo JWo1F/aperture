@@ -87,18 +87,23 @@ class _AppButtonState extends State<AppButton> {
   }
 }
 
-/// Square icon-only button for toolbar affordances.
+/// Square icon-only button for toolbar affordances. `primary` colours the
+/// icon in the accent (so it can stand in for a labelled primary button).
 class IconAction extends StatefulWidget {
   const IconAction({
     super.key,
     required this.icon,
     required this.onPressed,
     this.tooltip,
+    this.primary = false,
+    this.busy = false,
   });
 
   final IconData icon;
   final VoidCallback? onPressed;
   final String? tooltip;
+  final bool primary;
+  final bool busy;
 
   @override
   State<IconAction> createState() => _IconActionState();
@@ -109,7 +114,33 @@ class _IconActionState extends State<IconAction> {
 
   @override
   Widget build(BuildContext context) {
-    final enabled = widget.onPressed != null;
+    final enabled = widget.onPressed != null && !widget.busy;
+
+    Color iconColor;
+    Color hoverBg;
+    if (widget.primary) {
+      iconColor = enabled
+          ? (_hover ? AppColors.accentHover : AppColors.accent)
+          : AppColors.textMuted;
+      hoverBg = AppColors.accentSoft;
+    } else {
+      iconColor = enabled
+          ? (_hover ? AppColors.textPrimary : AppColors.textSecondary)
+          : AppColors.textMuted;
+      hoverBg = AppColors.surfaceHover;
+    }
+
+    final Widget glyph = widget.busy
+        ? const SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.6,
+              color: AppColors.accent,
+            ),
+          )
+        : Icon(widget.icon, size: 16, color: iconColor);
+
     final button = MouseRegion(
       cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _hover = true),
@@ -120,19 +151,12 @@ class _IconActionState extends State<IconAction> {
           duration: const Duration(milliseconds: 120),
           width: 30,
           height: 30,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: _hover && enabled
-                ? AppColors.surfaceHover
-                : Colors.transparent,
+            color: _hover && enabled ? hoverBg : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
           ),
-          child: Icon(
-            widget.icon,
-            size: 16,
-            color: enabled
-                ? (_hover ? AppColors.textPrimary : AppColors.textSecondary)
-                : AppColors.textMuted,
-          ),
+          child: glyph,
         ),
       ),
     );

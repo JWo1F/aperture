@@ -68,6 +68,9 @@ class TableTab extends WorkspaceTab {
   int pageSize = 100;
   int totalRows = 0;
 
+  /// Column projection — a raw SQL select list. Defaults to `*` (all columns).
+  String selectList = '*';
+
   /// Active row filter — a raw SQL `WHERE` fragment typed by the user.
   String filter = '';
 
