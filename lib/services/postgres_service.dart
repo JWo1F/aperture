@@ -210,6 +210,142 @@ class PostgresService {
     );
   }
 
+  /// Reconstructs a readable DDL for [table]: `CREATE TABLE` with columns,
+  /// table-level constraints (PK / FK / UNIQUE / CHECK) and trailing
+  /// `CREATE INDEX` statements. Uses pg_catalog so the column types come back
+  /// in canonical form (e.g. `numeric(8,2)`, `timestamp with time zone`).
+  Future<String> loadTableDdl(DbTable table) async {
+    final regclass =
+        "'${_quoteIdent(table.schema)}.${_quoteIdent(table.name)}'::regclass";
+
+    // pg_catalog columns of type `name` (OID 19) have no built-in codec in
+    // the postgres driver, so they come back as UndecodedBytes — explicit
+    // `::text` casts force textual output and a clean String in Dart.
+    final columns = await _conn.execute(
+      'SELECT a.attname::text, format_type(a.atttypid, a.atttypmod), '
+      'NOT a.attnotnull, '
+      'pg_get_expr(d.adbin, d.adrelid), '
+      'col_description(a.attrelid, a.attnum) '
+      'FROM pg_attribute a '
+      'LEFT JOIN pg_attrdef d '
+      '  ON d.adrelid = a.attrelid AND d.adnum = a.attnum '
+      'WHERE a.attrelid = $regclass AND a.attnum > 0 AND NOT a.attisdropped '
+      'ORDER BY a.attnum',
+    );
+
+    final constraints = await _conn.execute(
+      'SELECT conname::text, contype::text, pg_get_constraintdef(oid) '
+      'FROM pg_constraint '
+      "WHERE conrelid = $regclass AND contype IN ('p', 'f', 'u', 'c') "
+      'ORDER BY CASE contype '
+      "WHEN 'p' THEN 1 WHEN 'u' THEN 2 WHEN 'f' THEN 3 ELSE 4 END, "
+      'conname',
+    );
+
+    final indexes = await _conn.execute(
+      Sql.named(
+        'SELECT indexname::text, indexdef FROM pg_indexes '
+        'WHERE schemaname = @schema AND tablename = @table '
+        '  AND indexname NOT IN ('
+        '    SELECT conname::text FROM pg_constraint '
+        "    WHERE conrelid = (quote_ident(@schema) || '.' || quote_ident(@table))::regclass "
+        "      AND contype IN ('p', 'u')"
+        '  ) '
+        'ORDER BY indexname',
+      ),
+      parameters: {'schema': table.schema, 'table': table.name},
+    );
+
+    final comment = await _conn.execute(
+      'SELECT obj_description($regclass, \'pg_class\')',
+    );
+
+    // Build the column lines with aligned columns for readability.
+    final colNames = [for (final r in columns) '"${r[0] as String}"'];
+    final colTypes = [for (final r in columns) r[1] as String];
+    final nameWidth =
+        colNames.fold<int>(0, (m, s) => s.length > m ? s.length : m);
+    final typeWidth =
+        colTypes.fold<int>(0, (m, s) => s.length > m ? s.length : m);
+
+    final colLines = <String>[];
+    for (var i = 0; i < columns.length; i++) {
+      final row = columns[i];
+      final nullable = row[2] as bool;
+      final defaultExpr = row[3] as String?;
+      final tail = StringBuffer()
+        ..write(nullable ? 'NULL' : 'NOT NULL');
+      if (defaultExpr != null) {
+        tail.write(' DEFAULT $defaultExpr');
+      }
+      colLines.add(
+        '  ${colNames[i].padRight(nameWidth)}  '
+        '${colTypes[i].padRight(typeWidth)}  '
+        '$tail',
+      );
+    }
+
+    final constraintLines = <String>[
+      for (final r in constraints)
+        '  CONSTRAINT "${r[0] as String}" ${r[2] as String}',
+    ];
+
+    final buf = StringBuffer();
+    buf.writeln(
+      '-- Table: "${table.schema}"."${table.name}"',
+    );
+    buf.writeln(
+      '-- ${columns.length} columns · '
+      '${constraints.where((r) => r[1] as String == 'f').length} foreign keys · '
+      '${indexes.length} indexes',
+    );
+    buf.writeln();
+    buf.writeln(
+      'CREATE TABLE "${table.schema}"."${table.name}" (',
+    );
+    final allLines = [...colLines, ...constraintLines];
+    buf.writeln(allLines.join(',\n'));
+    buf.writeln(');');
+
+    // Column comments
+    var hasComments = false;
+    for (var i = 0; i < columns.length; i++) {
+      final c = columns[i][4] as String?;
+      if (c == null) continue;
+      if (!hasComments) {
+        buf.writeln();
+        hasComments = true;
+      }
+      final escaped = c.replaceAll("'", "''");
+      buf.writeln(
+        'COMMENT ON COLUMN "${table.schema}"."${table.name}"."${columns[i][0]}" '
+        "IS '$escaped';",
+      );
+    }
+    final tableComment = comment.isEmpty ? null : comment.first.first as String?;
+    if (tableComment != null) {
+      buf.writeln();
+      final escaped = tableComment.replaceAll("'", "''");
+      buf.writeln(
+        'COMMENT ON TABLE "${table.schema}"."${table.name}" '
+        "IS '$escaped';",
+      );
+    }
+
+    if (indexes.isNotEmpty) {
+      buf.writeln();
+      buf.writeln('-- Indexes');
+      for (final r in indexes) {
+        buf.writeln('${r[1] as String};');
+      }
+    }
+
+    return buf.toString();
+  }
+
+  /// Doubles any embedded double-quotes for use inside a quoted identifier.
+  String _quoteIdent(String name) => name.replaceAll('"', '""');
+
   /// Executes an arbitrary statement, capturing timing and errors so the UI
   /// never has to deal with raised exceptions directly.
   Future<QueryResult> runQuery(String sql) async {

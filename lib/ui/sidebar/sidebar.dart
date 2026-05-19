@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/connection_config.dart';
@@ -9,6 +10,8 @@ import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../connection/connection_dialog.dart';
 import '../widgets/common.dart';
+import '../widgets/context_menu.dart';
+import '../widgets/table_glyph.dart';
 
 /// Sidebar v2.
 ///
@@ -260,12 +263,29 @@ class _Body extends StatelessWidget {
     final singleSchema = filteredSchemas.length == 1;
     final activeId = _activeTableQualifiedName(state);
 
+    final favorites = state.favoriteTables;
+    final favKeys = {for (final t in favorites) t.qualifiedKey};
+    final recents = state.recents
+        .where((t) => !favKeys.contains(t.qualifiedKey))
+        .toList();
+
     return ListView(
       padding: const EdgeInsets.only(bottom: 8),
       children: [
-        if (state.recents.isNotEmpty && !filtering) ...[
-          _SectionLabel(label: 'Recent', count: state.recents.length),
-          for (final t in state.recents.take(6))
+        if (favorites.isNotEmpty && !filtering) ...[
+          _SectionLabel(label: 'Favourites', count: favorites.length),
+          for (final t in favorites)
+            _TableRow(
+              table: t,
+              active: t.qualifiedName == activeId,
+              onTap: () => state.openTable(t),
+              indent: 12,
+            ),
+          const SizedBox(height: 10),
+        ],
+        if (recents.isNotEmpty && !filtering) ...[
+          _SectionLabel(label: 'Recent', count: recents.length),
+          for (final t in recents.take(6))
             _TableRow(
               table: t,
               active: t.qualifiedName == activeId,
@@ -649,17 +669,78 @@ class _TableRow extends StatefulWidget {
 class _TableRowState extends State<_TableRow> {
   bool _hover = false;
 
+  AppState get _state => context.read<AppState>();
+
+  void _openContextMenu(Offset position) {
+    final table = widget.table;
+    final qualified = '"${table.schema}"."${table.name}"';
+    final isFav = _state.isFavorite(table);
+
+    void copy(String value) =>
+        Clipboard.setData(ClipboardData(text: value));
+
+    showContextMenu(
+      context,
+      globalPosition: position,
+      entries: [
+        CmItem(
+          icon: Icons.north_east,
+          label: 'Open data',
+          onTap: () => _state.openTable(table),
+        ),
+        CmItem(
+          icon: Icons.data_object,
+          label: 'Show schema (CREATE TABLE)',
+          onTap: () => _state.openSchema(table),
+        ),
+        const CmDivider(),
+        CmItem(
+          icon: isFav ? Icons.star : Icons.star_outline,
+          label: isFav ? 'Remove from favourites' : 'Add to favourites',
+          onTap: () => _state.toggleFavorite(table),
+        ),
+        const CmDivider(),
+        CmItem(
+          icon: Icons.label_outline,
+          label: 'Copy name',
+          onTap: () => copy(table.name),
+        ),
+        CmItem(
+          icon: Icons.tag,
+          label: 'Copy qualified name',
+          onTap: () => copy(qualified),
+        ),
+        CmItem(
+          icon: Icons.code,
+          label: 'Copy SELECT *',
+          onTap: () => copy('SELECT * FROM $qualified;'),
+        ),
+        const CmDivider(),
+        CmItem(
+          icon: Icons.refresh,
+          label: 'Refresh schema list',
+          onTap: () => _state.refreshSchemas(),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isView = widget.table.isView;
+    final glyphColor = widget.active
+        ? AppColors.accent
+        : (isView ? AppColors.info : AppColors.textMuted);
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
         onTap: widget.onTap,
+        onSecondaryTapDown: (d) => _openContextMenu(d.globalPosition),
         child: Container(
-          height: 26,
+          height: 28,
           decoration: BoxDecoration(
             color: widget.active
                 ? AppColors.sidebarRowActive
@@ -671,24 +752,30 @@ class _TableRowState extends State<_TableRow> {
               ),
             ),
           ),
-          padding: EdgeInsets.only(left: widget.indent - 2, right: 12),
+          padding: EdgeInsets.only(left: widget.indent - 2, right: 8),
           child: Row(
             children: [
-              Icon(
-                isView ? Icons.visibility_outlined : Icons.table_rows_outlined,
-                size: 12,
-                color: widget.active
-                    ? AppColors.accent
-                    : (isView ? AppColors.info : AppColors.textMuted),
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: Center(
+                  child: isView
+                      ? Icon(
+                          Icons.visibility_outlined,
+                          size: 12,
+                          color: glyphColor,
+                        )
+                      : TableGlyph(size: 12, color: glyphColor),
+                ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 9),
               Expanded(
                 child: Text(
                   widget.table.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTheme.mono(
-                    size: 11.5,
+                  style: AppTheme.ui(
+                    size: 12.5,
                     color: widget.active
                         ? AppColors.textPrimary
                         : AppColors.textSecondary,
@@ -696,6 +783,18 @@ class _TableRowState extends State<_TableRow> {
                   ),
                 ),
               ),
+              if (_hover && !widget.active)
+                GestureDetector(
+                  onTapDown: (d) => _openContextMenu(d.globalPosition),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(
+                      Icons.more_horiz,
+                      size: 13,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
               if (widget.active)
                 const Icon(
                   Icons.circle,

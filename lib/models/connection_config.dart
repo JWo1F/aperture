@@ -10,7 +10,8 @@ class ConnectionConfig {
     required this.password,
     this.useSsl = false,
     this.lastConnectedAt,
-  });
+    Set<String>? favoriteTables,
+  }) : favoriteTables = favoriteTables ?? const {};
 
   final String id;
   final String name;
@@ -21,6 +22,9 @@ class ConnectionConfig {
   final String password;
   final bool useSsl;
   final DateTime? lastConnectedAt;
+
+  /// Per-connection favourite tables, stored as unquoted `schema.table` keys.
+  final Set<String> favoriteTables;
 
   String get summary => '$username@$host:$port/$database';
 
@@ -35,6 +39,8 @@ class ConnectionConfig {
         'useSsl': useSsl,
         if (lastConnectedAt != null)
           'lastConnectedAt': lastConnectedAt!.toIso8601String(),
+        if (favoriteTables.isNotEmpty)
+          'favorites': favoriteTables.toList()..sort(),
       };
 
   factory ConnectionConfig.fromJson(Map<String, dynamic> j) => ConnectionConfig(
@@ -49,6 +55,9 @@ class ConnectionConfig {
         lastConnectedAt: j['lastConnectedAt'] is String
             ? DateTime.tryParse(j['lastConnectedAt'] as String)
             : null,
+        favoriteTables: j['favorites'] is List
+            ? {for (final v in j['favorites'] as List) v as String}
+            : null,
       );
 
   ConnectionConfig copyWith({
@@ -60,6 +69,7 @@ class ConnectionConfig {
     String? password,
     bool? useSsl,
     DateTime? lastConnectedAt,
+    Set<String>? favoriteTables,
   }) {
     return ConnectionConfig(
       id: id,
@@ -71,6 +81,7 @@ class ConnectionConfig {
       password: password ?? this.password,
       useSsl: useSsl ?? this.useSsl,
       lastConnectedAt: lastConnectedAt ?? this.lastConnectedAt,
+      favoriteTables: favoriteTables ?? this.favoriteTables,
     );
   }
 }

@@ -5,7 +5,9 @@ import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/context_menu.dart';
 import 'query_editor.dart';
+import 'schema_view.dart';
 import 'table_view.dart';
 
 /// Center pane: a refined underline-style tab strip over the active tab's
@@ -41,17 +43,19 @@ class Workspace extends StatelessWidget {
       child: Column(
         children: [
           _TabStrip(state: state),
-          Expanded(
-            child: tab is QueryTab
-                ? QueryEditor(key: ValueKey(tab.id), tab: tab)
-                : TableView(
-                    key: ValueKey(tab.id),
-                    tab: tab as TableTab,
-                  ),
-          ),
+          Expanded(child: _content(tab)),
         ],
       ),
     );
+  }
+
+  Widget _content(WorkspaceTab tab) {
+    final key = ValueKey(tab.id);
+    return switch (tab) {
+      QueryTab() => QueryEditor(key: key, tab: tab),
+      TableTab() => TableView(key: key, tab: tab),
+      SchemaTab() => SchemaView(key: key, tab: tab),
+    };
   }
 }
 
@@ -74,12 +78,23 @@ class _TabStrip extends StatelessWidget {
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: state.tabs.length,
-              itemBuilder: (context, i) => _Tab(
-                tab: state.tabs[i],
-                active: i == state.activeTabIndex,
-                onTap: () => state.selectTab(i),
-                onClose: () => state.closeTab(state.tabs[i].id),
-              ),
+              itemBuilder: (context, i) {
+                final t = state.tabs[i];
+                final canCloseRight = i < state.tabs.length - 1;
+                return _Tab(
+                  tab: t,
+                  active: i == state.activeTabIndex,
+                  onTap: () => state.selectTab(i),
+                  onClose: () => state.closeTab(t.id),
+                  onContextMenu: (pos) => _showTabMenu(
+                    context,
+                    state: state,
+                    tab: t,
+                    position: pos,
+                    canCloseRight: canCloseRight,
+                  ),
+                );
+              },
             ),
           ),
           Padding(
@@ -96,18 +111,61 @@ class _TabStrip extends StatelessWidget {
   }
 }
 
+void _showTabMenu(
+  BuildContext context, {
+  required AppState state,
+  required WorkspaceTab tab,
+  required Offset position,
+  required bool canCloseRight,
+}) {
+  showContextMenu(
+    context,
+    globalPosition: position,
+    entries: [
+      CmItem(
+        icon: Icons.close,
+        label: 'Close',
+        shortcut: '⌘W',
+        onTap: () => state.closeTab(tab.id),
+      ),
+      CmItem(
+        icon: Icons.layers_clear_outlined,
+        label: 'Close others',
+        enabled: state.tabs.length > 1,
+        onTap: () => state.closeOtherTabs(tab.id),
+      ),
+      CmItem(
+        icon: Icons.last_page,
+        label: 'Close tabs to the right',
+        enabled: canCloseRight,
+        onTap: () => state.closeTabsToRight(tab.id),
+      ),
+      const CmDivider(),
+      CmItem(
+        icon: Icons.delete_sweep_outlined,
+        label: 'Close all',
+        enabled: state.tabs.isNotEmpty,
+        danger: true,
+        onTap: state.closeAllTabs,
+      ),
+    ],
+  );
+}
+
 class _Tab extends StatefulWidget {
   const _Tab({
     required this.tab,
     required this.active,
     required this.onTap,
     required this.onClose,
+    required this.onContextMenu,
   });
 
   final WorkspaceTab tab;
   final bool active;
   final VoidCallback onTap;
   final VoidCallback onClose;
+  final void Function(Offset globalPosition) onContextMenu;
 
   @override
   State<_Tab> createState() => _TabState();
@@ -116,9 +174,14 @@ class _Tab extends StatefulWidget {
 class _TabState extends State<_Tab> {
   bool _hover = false;
 
+  IconData get _tabIcon => switch (widget.tab) {
+        QueryTab() => Icons.terminal,
+        SchemaTab() => Icons.data_object,
+        _ => Icons.table_rows_outlined,
+      };
+
   @override
   Widget build(BuildContext context) {
-    final isQuery = widget.tab is QueryTab;
     final accentTrack = widget.active
         ? AppColors.accent
         : (_hover ? AppColors.borderStrong : Colors.transparent);
@@ -129,6 +192,8 @@ class _TabState extends State<_Tab> {
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
         onTap: widget.onTap,
+        onSecondaryTapDown: (d) => widget.onContextMenu(d.globalPosition),
+        onTertiaryTapUp: (_) => widget.onClose(),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: Insets.md),
           decoration: BoxDecoration(
@@ -142,7 +207,7 @@ class _TabState extends State<_Tab> {
           child: Row(
             children: [
               Icon(
-                isQuery ? Icons.terminal : Icons.table_rows_outlined,
+                _tabIcon,
                 size: 13,
                 color: widget.active
                     ? AppColors.accent

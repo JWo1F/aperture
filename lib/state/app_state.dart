@@ -214,6 +214,115 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Closes everything except [keepId], leaving that tab active.
+  void closeOtherTabs(String keepId) {
+    final keep = _tabs.firstWhere(
+      (t) => t.id == keepId,
+      orElse: () => throw StateError('Tab not found'),
+    );
+    _tabs
+      ..clear()
+      ..add(keep);
+    _activeTabIndex = 0;
+    notifyListeners();
+  }
+
+  /// Closes every tab to the right of [anchorId] (inclusive of its right).
+  void closeTabsToRight(String anchorId) {
+    final i = _tabs.indexWhere((t) => t.id == anchorId);
+    if (i == -1 || i == _tabs.length - 1) return;
+    _tabs.removeRange(i + 1, _tabs.length);
+    if (_activeTabIndex >= _tabs.length) {
+      _activeTabIndex = _tabs.length - 1;
+    }
+    notifyListeners();
+  }
+
+  void closeAllTabs() {
+    _tabs.clear();
+    _activeTabIndex = 0;
+    notifyListeners();
+  }
+
+  /// Opens (or focuses) a SchemaTab showing the table's DDL.
+  Future<void> openSchema(DbTable table) async {
+    final existing = _tabs.indexWhere(
+      (t) =>
+          t is SchemaTab && t.table.qualifiedName == table.qualifiedName,
+    );
+    if (existing != -1) {
+      _selectTab(existing);
+      return;
+    }
+
+    final tab = SchemaTab(_nextId(), table);
+    _tabs.add(tab);
+    _selectTab(_tabs.length - 1);
+
+    if (_service == null) return;
+    tab.loading = true;
+    notifyListeners();
+    try {
+      tab.ddl = await _service!.loadTableDdl(table);
+    } catch (e) {
+      tab.error = e.toString();
+    }
+    tab.loading = false;
+    notifyListeners();
+  }
+
+  // --- favorites -------------------------------------------------------
+
+  bool isFavorite(DbTable table) {
+    final keys = _activeConnection?.favoriteTables ?? const <String>{};
+    return keys.contains(table.qualifiedKey);
+  }
+
+  /// Toggles a table in the active connection's favourites and persists.
+  void toggleFavorite(DbTable table) {
+    final conn = _activeConnection;
+    if (conn == null) return;
+    final key = table.qualifiedKey;
+    final next = Set<String>.of(conn.favoriteTables);
+    if (!next.add(key)) next.remove(key);
+    final updated = conn.copyWith(favoriteTables: next);
+    final i = _connections.indexWhere((c) => c.id == conn.id);
+    if (i != -1) _connections[i] = updated;
+    _activeConnection = updated;
+    _persist();
+    notifyListeners();
+  }
+
+  /// Materialises the active connection's favourite keys back into [DbTable]s
+  /// that exist in the currently-loaded catalog.
+  List<DbTable> get favoriteTables {
+    final keys = _activeConnection?.favoriteTables;
+    if (keys == null || keys.isEmpty) return const [];
+    final lookup = <String, DbTable>{
+      for (final s in _schemas)
+        for (final t in s.tables) t.qualifiedKey: t,
+    };
+    return [
+      for (final key in keys)
+        if (lookup[key] != null) lookup[key]!,
+    ];
+  }
+
+  /// Re-runs the DDL fetch for an open SchemaTab.
+  Future<void> reloadSchema(SchemaTab tab) async {
+    if (_service == null) return;
+    tab.loading = true;
+    tab.error = null;
+    notifyListeners();
+    try {
+      tab.ddl = await _service!.loadTableDdl(tab.table);
+    } catch (e) {
+      tab.error = e.toString();
+    }
+    tab.loading = false;
+    notifyListeners();
+  }
+
   Future<void> openTable(DbTable table) async {
     _trackRecent(table);
     final existing = _tabs.indexWhere(

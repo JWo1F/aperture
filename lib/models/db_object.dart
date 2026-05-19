@@ -20,6 +20,11 @@ class DbTable {
   final DbRelationKind kind;
 
   String get qualifiedName => '"$schema"."$name"';
+
+  /// Stable, unquoted identifier used as a key in persisted maps/sets
+  /// (e.g. favorites). Distinct from `qualifiedName` which is SQL-safe.
+  String get qualifiedKey => '$schema.$name';
+
   bool get isView => kind == DbRelationKind.view;
 }
 

@@ -1,9 +1,9 @@
 import '../models/db_object.dart';
 import '../models/query_result.dart';
 
-/// A tab in the center workspace. Either a free-form SQL editor or a
-/// read-only data view bound to one relation.
-abstract class WorkspaceTab {
+/// A tab in the center workspace. Either a free-form SQL editor, a data
+/// view bound to one relation, or a schema viewer.
+sealed class WorkspaceTab {
   WorkspaceTab(this.id);
 
   final String id;
@@ -24,6 +24,19 @@ class QueryTab extends WorkspaceTab {
 
   @override
   String get title => 'Query';
+}
+
+/// Read-only view of a table's DDL (CREATE TABLE, indexes, FKs).
+class SchemaTab extends WorkspaceTab {
+  SchemaTab(super.id, this.table);
+
+  final DbTable table;
+  String? ddl;
+  String? error;
+  bool loading = false;
+
+  @override
+  String get title => '${table.name} · schema';
 }
 
 /// One pending cell edit, keyed by grid row and column index.
