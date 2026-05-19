@@ -137,6 +137,8 @@ class _TableToolbarState extends State<_TableToolbar> {
   late final SqlHighlightController _select;
   late final SqlHighlightController _filter;
   late final SqlHighlightController _order;
+  final FocusNode _selectFocus = FocusNode();
+  final FocusNode _filterFocus = FocusNode();
   final FocusNode _orderFocus = FocusNode();
 
   @override
@@ -152,6 +154,8 @@ class _TableToolbarState extends State<_TableToolbar> {
     _select.dispose();
     _filter.dispose();
     _order.dispose();
+    _selectFocus.dispose();
+    _filterFocus.dispose();
     _orderFocus.dispose();
     super.dispose();
   }
@@ -209,7 +213,15 @@ class _TableToolbarState extends State<_TableToolbar> {
   Widget build(BuildContext context) {
     final tab = widget.tab;
 
-    // Header clicks mutate orderBy directly — mirror it into the field.
+    // Tab-state changes (FK follow → setTableFilter, header click → setOrder,
+    // etc.) need to flow back into the input controllers, but only when the
+    // user isn't actively typing in that field.
+    if (!_selectFocus.hasFocus && _select.text != tab.selectList) {
+      _select.text = tab.selectList;
+    }
+    if (!_filterFocus.hasFocus && _filter.text != tab.filter) {
+      _filter.text = tab.filter;
+    }
     if (!_orderFocus.hasFocus && _order.text != tab.orderBy) {
       _order.text = tab.orderBy;
     }
@@ -237,6 +249,7 @@ class _TableToolbarState extends State<_TableToolbar> {
             child: _Clause(
               prefix: 'SELECT',
               controller: _select,
+              focusNode: _selectFocus,
               onApply: _applySelect,
               hint: '*  or  col_a, col_b',
               active: selectActive,
@@ -248,6 +261,7 @@ class _TableToolbarState extends State<_TableToolbar> {
             child: _Clause(
               prefix: 'WHERE',
               controller: _filter,
+              focusNode: _filterFocus,
               onApply: _applyFilter,
               hint: "filter — e.g. status = 'active'",
               active: whereActive,

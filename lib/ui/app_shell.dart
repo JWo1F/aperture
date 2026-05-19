@@ -35,6 +35,10 @@ class AppShell extends StatelessWidget {
         bindings: {
           const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
               showCommandPalette(context, state),
+          const SingleActivator(LogicalKeyboardKey.bracketLeft, meta: true):
+              state.historyBack,
+          const SingleActivator(LogicalKeyboardKey.bracketRight, meta: true):
+              state.historyForward,
         },
         child: FocusScope(
           autofocus: true,

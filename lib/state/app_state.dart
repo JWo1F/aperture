@@ -105,6 +105,68 @@ class AppState extends ChangeNotifier {
   int _idCounter = 0;
   String _nextId() => 'id${_idCounter++}';
 
+  // --- tab history (browser-style back/forward) ------------------------
+
+  final List<String> _tabHistory = [];
+  int _historyIndex = -1;
+  bool _navigatingHistory = false;
+
+  bool get canGoBack {
+    for (var i = _historyIndex - 1; i >= 0; i--) {
+      if (_tabs.any((t) => t.id == _tabHistory[i])) return true;
+    }
+    return false;
+  }
+
+  bool get canGoForward {
+    for (var i = _historyIndex + 1; i < _tabHistory.length; i++) {
+      if (_tabs.any((t) => t.id == _tabHistory[i])) return true;
+    }
+    return false;
+  }
+
+  void _pushHistory(String id) {
+    if (_navigatingHistory) return;
+    if (_historyIndex < _tabHistory.length - 1) {
+      _tabHistory.removeRange(_historyIndex + 1, _tabHistory.length);
+    }
+    if (_tabHistory.isEmpty || _tabHistory.last != id) {
+      _tabHistory.add(id);
+      if (_tabHistory.length > 50) {
+        _tabHistory.removeAt(0);
+      }
+      _historyIndex = _tabHistory.length - 1;
+    }
+  }
+
+  void historyBack() {
+    while (_historyIndex > 0) {
+      _historyIndex--;
+      final id = _tabHistory[_historyIndex];
+      final i = _tabs.indexWhere((t) => t.id == id);
+      if (i == -1) continue;
+      _navigatingHistory = true;
+      _activeTabIndex = i;
+      _navigatingHistory = false;
+      notifyListeners();
+      return;
+    }
+  }
+
+  void historyForward() {
+    while (_historyIndex < _tabHistory.length - 1) {
+      _historyIndex++;
+      final id = _tabHistory[_historyIndex];
+      final i = _tabs.indexWhere((t) => t.id == id);
+      if (i == -1) continue;
+      _navigatingHistory = true;
+      _activeTabIndex = i;
+      _navigatingHistory = false;
+      notifyListeners();
+      return;
+    }
+  }
+
   // --- Saved connections -----------------------------------------------
 
   void addConnection(ConnectionConfig config) {
@@ -205,6 +267,9 @@ class AppState extends ChangeNotifier {
 
   void _selectTab(int index) {
     _activeTabIndex = index;
+    if (index >= 0 && index < _tabs.length) {
+      _pushHistory(_tabs[index].id);
+    }
     notifyListeners();
   }
 

@@ -88,7 +88,9 @@ class _PaletteState extends State<_Palette> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+    // Intercept navigation keys *before* the TextField's own actions get a
+    // turn — FocusNode.onKeyEvent runs first in the key event chain.
+    _focus.onKeyEvent = _onKey;
     _controller.addListener(() => setState(() => _selected = 0));
   }
 
@@ -212,25 +214,22 @@ class _PaletteState extends State<_Palette> {
     final filtered = _filtered();
     final selected = filtered.isEmpty ? 0 : _selected.clamp(0, filtered.length - 1);
 
-    return Focus(
-      focusNode: _focus,
-      onKeyEvent: _onKey,
-      child: Container(
-        width: 580,
-        constraints: const BoxConstraints(maxHeight: 460),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: Radii.brLg,
-          border: Border.all(color: AppColors.borderStrong),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x99000000),
-              blurRadius: 40,
-              offset: Offset(0, 12),
-            ),
-          ],
-        ),
-        child: Column(
+    return Container(
+      width: 580,
+      constraints: const BoxConstraints(maxHeight: 460),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: Radii.brLg,
+        border: Border.all(color: AppColors.borderStrong),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x99000000),
+            blurRadius: 40,
+            offset: Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _SearchInput(controller: _controller, focusNode: _focus),
@@ -260,8 +259,7 @@ class _PaletteState extends State<_Palette> {
             _Footer(count: filtered.length),
           ],
         ),
-      ),
-    );
+      );
   }
 }
 
@@ -281,6 +279,7 @@ class _SearchInput extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
+              focusNode: focusNode,
               autofocus: true,
               cursorColor: AppColors.accent,
               cursorHeight: 16,
