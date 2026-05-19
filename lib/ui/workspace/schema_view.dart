@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/code_theme.dart';
 import '../widgets/common.dart';
-import '../widgets/sql_spans.dart';
 
 /// Renders a [SchemaTab] — the reconstructed CREATE TABLE DDL with indexes
-/// and constraints, syntax-highlighted and selectable.
+/// and constraints. Tokenisation comes from the `highlight` package's pgsql
+/// grammar via `flutter_highlight`, so the full SQL vocabulary is coloured.
 class SchemaView extends StatelessWidget {
   const SchemaView({super.key, required this.tab});
 
@@ -22,9 +24,7 @@ class SchemaView extends StatelessWidget {
     return Column(
       children: [
         _Toolbar(tab: tab, state: state),
-        Expanded(
-          child: _Body(tab: tab),
-        ),
+        Expanded(child: _Body(tab: tab)),
       ],
     );
   }
@@ -149,7 +149,7 @@ class _Body extends StatelessWidget {
       );
     }
 
-    final base = AppTheme.mono(size: 12, color: AppColors.textPrimary);
+    final textStyle = AppTheme.mono(size: 12, color: AppColors.textPrimary);
     final lines = tab.ddl!.split('\n');
 
     return Container(
@@ -160,18 +160,23 @@ class _Body extends StatelessWidget {
             horizontal: Insets.lg,
             vertical: Insets.md,
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _LineNumbers(count: lines.length),
-              const SizedBox(width: 14),
-              Expanded(
-                child: SelectableText.rich(
-                  TextSpan(children: sqlSpans(tab.ddl!, base)),
-                  style: base,
+          child: SelectionArea(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _LineNumbers(count: lines.length),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: HighlightView(
+                    tab.ddl!,
+                    language: 'pgsql',
+                    theme: apertureCodeStyles,
+                    textStyle: textStyle,
+                    padding: EdgeInsets.zero,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -190,8 +195,7 @@ class _LineNumbers extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          for (var i = 1; i <= count; i++)
-            Text('$i', style: style),
+          for (var i = 1; i <= count; i++) Text('$i', style: style),
         ],
       ),
     );

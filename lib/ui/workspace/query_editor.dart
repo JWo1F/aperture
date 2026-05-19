@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/code_theme.dart';
 import '../export/export_dialog.dart';
 import '../widgets/common.dart';
 import 'results_grid.dart';
@@ -108,7 +109,7 @@ class _QueryEditorState extends State<QueryEditor> {
             child: Container(
               color: AppColors.bg,
               child: CodeTheme(
-                data: _codeTheme,
+                data: CodeThemeData(styles: apertureCodeStyles),
                 child: CodeField(
                   controller: _controller,
                   expands: true,
@@ -160,26 +161,6 @@ class _QueryEditorState extends State<QueryEditor> {
     );
   }
 
-  static final CodeThemeData _codeTheme = CodeThemeData(styles: {
-    'root': const TextStyle(color: AppColors.textPrimary),
-    'keyword': const TextStyle(
-      color: AppColors.sqlKeyword,
-      fontWeight: FontWeight.w500,
-    ),
-    'built_in': const TextStyle(color: AppColors.sqlFunction),
-    'type': const TextStyle(color: AppColors.sqlKeyword),
-    'literal': const TextStyle(color: AppColors.sqlNumber),
-    'number': const TextStyle(color: AppColors.sqlNumber),
-    'string': const TextStyle(color: AppColors.sqlString),
-    'symbol': const TextStyle(color: AppColors.sqlString),
-    'comment': const TextStyle(
-      color: AppColors.sqlComment,
-      fontStyle: FontStyle.italic,
-    ),
-    'meta': const TextStyle(color: AppColors.sqlComment),
-    'operator': const TextStyle(color: AppColors.textSecondary),
-    'punctuation': const TextStyle(color: AppColors.textSecondary),
-  });
 }
 
 class _Toolbar extends StatelessWidget {

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_highlight/flutter_highlight.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/code_theme.dart';
 import '../widgets/common.dart';
-import '../widgets/sql_spans.dart';
 
 /// Read-only preview of the UPDATE statements that pending edits would
 /// produce. Lets the user verify the SQL before pressing Apply.
@@ -215,9 +216,14 @@ class _StatementCard extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.all(12),
-            child: SelectableText.rich(
-              TextSpan(children: sqlSpans(sql, monoStyle)),
-              style: monoStyle,
+            child: SelectionArea(
+              child: HighlightView(
+                sql,
+                language: 'pgsql',
+                theme: apertureCodeStyles,
+                textStyle: monoStyle,
+                padding: EdgeInsets.zero,
+              ),
             ),
           ),
         ],
