@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 import 'package:postgres/postgres.dart';
 
+import '../../models/db_object.dart';
 import '../../models/order_term.dart';
 import '../../models/query_result.dart';
 import '../../models/value_format.dart';
@@ -30,6 +31,8 @@ class ResultsGrid extends StatefulWidget {
     this.onSetSort,
     this.onAddFilter,
     this.widths,
+    this.foreignKeys,
+    this.onFollowForeignKey,
   });
 
   final QueryResult result;
@@ -46,6 +49,11 @@ class ResultsGrid extends StatefulWidget {
   /// initial widths from this map and writes back on resize, letting widths
   /// survive grid rebuilds (pagination, filter changes, tab switches).
   final Map<String, double>? widths;
+
+  /// Single-column foreign keys keyed by local column name. Powers the
+  /// "Follow →" context-menu item and the FK header indicator.
+  final Map<String, DbForeignKey>? foreignKeys;
+  final void Function(DbForeignKey fk, dynamic value)? onFollowForeignKey;
 
   @override
   State<ResultsGrid> createState() => _ResultsGridState();
@@ -302,6 +310,18 @@ class _ResultsGridState extends State<ResultsGrid> {
         onTap: () => copy('$columnName = ${displayValue ?? 'NULL'}'),
       ),
       const CmDivider(),
+      if (widget.foreignKeys?[columnName] != null &&
+          widget.onFollowForeignKey != null) ...[
+        CmItem(
+          icon: Icons.north_east,
+          label: 'Follow → ${widget.foreignKeys![columnName]!.refQualified}',
+          onTap: () => widget.onFollowForeignKey!(
+            widget.foreignKeys![columnName]!,
+            original,
+          ),
+        ),
+        const CmDivider(),
+      ],
       if (widget.editable && widget.onEditCell != null) ...[
         CmItem(
           icon: Icons.edit_outlined,
@@ -443,6 +463,8 @@ class _ResultsGridState extends State<ResultsGrid> {
                   handleWidth: _handleWidth,
                   sort: _sortFor(columns[i]),
                   sortPriority: _sortPriority(columns[i]),
+                  isForeignKey:
+                      widget.foreignKeys?.containsKey(columns[i]) ?? false,
                   onSort: widget.onSortColumn == null
                       ? null
                       : () => widget.onSortColumn!(columns[i]),
@@ -679,6 +701,7 @@ class _HeaderCell extends StatefulWidget {
     required this.sort,
     required this.sortPriority,
     this.onSort,
+    this.isForeignKey = false,
   });
 
   final String label;
@@ -688,6 +711,7 @@ class _HeaderCell extends StatefulWidget {
   final OrderTerm? sort;
   final int sortPriority;
   final VoidCallback? onSort;
+  final bool isForeignKey;
 
   @override
   State<_HeaderCell> createState() => _HeaderCellState();
@@ -736,6 +760,14 @@ class _HeaderCellState extends State<_HeaderCell> {
                         ),
                       ),
                     ),
+                    if (widget.isForeignKey) ...[
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.north_east,
+                        size: 10,
+                        color: AppColors.info,
+                      ),
+                    ],
                     if (sort != null) ...[
                       const SizedBox(width: 4),
                       Icon(

@@ -108,6 +108,40 @@ class PostgresService {
         .toList();
   }
 
+  /// Single-column foreign keys keyed by local column name. Multi-column FKs
+  /// (rare) are filtered out via `cardinality(conkey) = 1`.
+  Future<Map<String, DbForeignKey>> loadForeignKeys(DbTable table) async {
+    final regclass =
+        "'${_quoteIdent(table.schema)}.${_quoteIdent(table.name)}'::regclass";
+
+    final result = await _conn.execute(
+      'SELECT a.attname::text, ns.nspname::text, '
+      '       refcls.relname::text, refa.attname::text '
+      'FROM pg_constraint c '
+      'JOIN pg_attribute a ON a.attrelid = c.conrelid '
+      '  AND a.attnum = c.conkey[1] '
+      'JOIN pg_class refcls ON refcls.oid = c.confrelid '
+      'JOIN pg_namespace ns ON ns.oid = refcls.relnamespace '
+      'JOIN pg_attribute refa ON refa.attrelid = c.confrelid '
+      '  AND refa.attnum = c.confkey[1] '
+      "WHERE c.conrelid = $regclass "
+      "  AND c.contype = 'f' "
+      '  AND cardinality(c.conkey) = 1',
+    );
+
+    final map = <String, DbForeignKey>{};
+    for (final r in result) {
+      final column = r[0] as String;
+      map[column] = DbForeignKey(
+        column: column,
+        refSchema: r[1] as String,
+        refTable: r[2] as String,
+        refColumn: r[3] as String,
+      );
+    }
+    return map;
+  }
+
   String _whereClause(String filter) {
     final trimmed = filter.trim();
     return trimmed.isEmpty ? '' : ' WHERE $trimmed';

@@ -28,6 +28,25 @@ class DbTable {
   bool get isView => kind == DbRelationKind.view;
 }
 
+/// A single-column foreign key from this table to another. Multi-column FKs
+/// are ignored for v1 — they're rare in app schemas and the UX would need
+/// per-column value selection.
+class DbForeignKey {
+  DbForeignKey({
+    required this.column,
+    required this.refSchema,
+    required this.refTable,
+    required this.refColumn,
+  });
+
+  final String column;
+  final String refSchema;
+  final String refTable;
+  final String refColumn;
+
+  String get refQualified => '$refSchema.$refTable';
+}
+
 class DbColumn {
   DbColumn({
     required this.name,

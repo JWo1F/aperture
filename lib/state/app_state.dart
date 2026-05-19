@@ -68,6 +68,10 @@ class AppState extends ChangeNotifier {
   List<DbColumn>? columnsFor(DbTable table) =>
       _columnCache[table.qualifiedName];
 
+  final Map<String, Map<String, DbForeignKey>> _fkCache = {};
+  Map<String, DbForeignKey>? foreignKeysFor(DbTable table) =>
+      _fkCache[table.qualifiedName];
+
   /// Every column name we've ever loaded — fed into SQL editor autocomplete.
   Iterable<String> get loadedColumnNames =>
       _columnCache.values.expand((cols) => cols.map((c) => c.name));
@@ -183,10 +187,17 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> ensureColumns(DbTable table) async {
-    if (_service == null || _columnCache.containsKey(table.qualifiedName)) {
-      return;
+    if (_service == null) return;
+    final key = table.qualifiedName;
+    final needCols = !_columnCache.containsKey(key);
+    final needFks = !_fkCache.containsKey(key);
+    if (!needCols && !needFks) return;
+    if (needCols) {
+      _columnCache[key] = await _service!.loadColumns(table);
     }
-    _columnCache[table.qualifiedName] = await _service!.loadColumns(table);
+    if (needFks) {
+      _fkCache[key] = await _service!.loadForeignKeys(table);
+    }
     notifyListeners();
   }
 
@@ -337,6 +348,46 @@ class AppState extends ChangeNotifier {
     _tabs.add(tab);
     _selectTab(_tabs.length - 1);
     await loadTablePage(tab, 0);
+    // Load columns + FK metadata in the background so the grid can show
+    // FK indicators / context-menu items without blocking the first page.
+    unawaited(ensureColumns(table));
+  }
+
+  /// Opens (or focuses) the referenced table and filters it down to the row
+  /// pointed at by [value]. Used by the cell context menu's "Follow →" item.
+  Future<void> followForeignKey(DbForeignKey fk, dynamic value) async {
+    final ref = _findTable(fk.refSchema, fk.refTable) ??
+        DbTable(
+          schema: fk.refSchema,
+          name: fk.refTable,
+          kind: DbRelationKind.table,
+        );
+    await openTable(ref);
+    final tab = _tabs.lastWhere(
+      (t) =>
+          t is TableTab && t.table.qualifiedName == ref.qualifiedName,
+    ) as TableTab;
+    await setTableFilter(tab, _equalityFragment(fk.refColumn, value));
+  }
+
+  DbTable? _findTable(String schema, String name) {
+    for (final s in _schemas) {
+      if (s.name != schema) continue;
+      for (final t in s.tables) {
+        if (t.name == name) return t;
+      }
+    }
+    return null;
+  }
+
+  String _equalityFragment(String column, dynamic value) {
+    if (value == null) return '"$column" IS NULL';
+    if (value is num || value is BigInt || value is bool) {
+      return '"$column" = $value';
+    }
+    final text = formatCellValue(value) ?? '';
+    final escaped = text.replaceAll("'", "''");
+    return '"$column" = \'$escaped\'';
   }
 
   Future<void> loadTablePage(TableTab tab, int page) async {

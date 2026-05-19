@@ -62,6 +62,9 @@ class TableView extends StatelessWidget {
                               state.setColumnSort(tab, column, desc),
                           onAddFilter: (column, value, not) =>
                               _addFilter(state, column, value, not),
+                          foreignKeys: state.foreignKeysFor(tab.table),
+                          onFollowForeignKey: (fk, value) =>
+                              state.followForeignKey(fk, value),
                         ),
                         if (tab.loading)
                           const Positioned(
