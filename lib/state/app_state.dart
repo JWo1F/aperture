@@ -355,6 +355,7 @@ class AppState extends ChangeNotifier {
 
   void removeConnection(String id) {
     _connections.removeWhere((c) => c.id == id);
+    unawaited(_store.deletePassword(id));
     _persist();
     notifyListeners();
   }
