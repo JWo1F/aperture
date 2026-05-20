@@ -135,66 +135,76 @@ class AppState extends ChangeNotifier {
   int _idCounter = 0;
   String _nextId() => 'id${_idCounter++}';
 
-  // --- tab history (browser-style back/forward) ------------------------
+  // --- navigation history (tabs + per-table filter/sort) --------------
 
-  final List<String> _tabHistory = [];
+  final List<_NavSnapshot> _navHistory = [];
   int _historyIndex = -1;
   bool _navigatingHistory = false;
 
-  bool get canGoBack {
-    for (var i = _historyIndex - 1; i >= 0; i--) {
-      if (_tabs.any((t) => t.id == _tabHistory[i])) return true;
-    }
-    return false;
-  }
+  bool get canGoBack => _historyIndex > 0;
+  bool get canGoForward => _historyIndex < _navHistory.length - 1;
 
-  bool get canGoForward {
-    for (var i = _historyIndex + 1; i < _tabHistory.length; i++) {
-      if (_tabs.any((t) => t.id == _tabHistory[i])) return true;
-    }
-    return false;
-  }
-
-  void _pushHistory(String id) {
+  void _pushSnapshot(_NavSnapshot snap) {
     if (_navigatingHistory) return;
-    if (_historyIndex < _tabHistory.length - 1) {
-      _tabHistory.removeRange(_historyIndex + 1, _tabHistory.length);
+    if (_historyIndex < _navHistory.length - 1) {
+      _navHistory.removeRange(_historyIndex + 1, _navHistory.length);
     }
-    if (_tabHistory.isEmpty || _tabHistory.last != id) {
-      _tabHistory.add(id);
-      if (_tabHistory.length > 50) {
-        _tabHistory.removeAt(0);
-      }
-      _historyIndex = _tabHistory.length - 1;
+    if (_navHistory.isEmpty || _navHistory.last != snap) {
+      _navHistory.add(snap);
+      if (_navHistory.length > 80) _navHistory.removeAt(0);
+      _historyIndex = _navHistory.length - 1;
+    }
+  }
+
+  /// Captures the current state of [tab] (or a plain tab focus) and pushes it.
+  void _pushCurrentTab(WorkspaceTab tab) {
+    if (tab is TableTab) {
+      _pushSnapshot(_NavSnapshot.table(
+        tab.id,
+        filter: tab.filter,
+        selectList: tab.selectList,
+        orderBy: tab.orderBy,
+      ));
+    } else {
+      _pushSnapshot(_NavSnapshot.focus(tab.id));
     }
   }
 
   void historyBack() {
     while (_historyIndex > 0) {
       _historyIndex--;
-      final id = _tabHistory[_historyIndex];
-      final i = _tabs.indexWhere((t) => t.id == id);
-      if (i == -1) continue;
-      _navigatingHistory = true;
-      _activeTabIndex = i;
-      _navigatingHistory = false;
-      notifyListeners();
-      return;
+      if (_applySnapshot(_navHistory[_historyIndex])) return;
     }
   }
 
   void historyForward() {
-    while (_historyIndex < _tabHistory.length - 1) {
+    while (_historyIndex < _navHistory.length - 1) {
       _historyIndex++;
-      final id = _tabHistory[_historyIndex];
-      final i = _tabs.indexWhere((t) => t.id == id);
-      if (i == -1) continue;
-      _navigatingHistory = true;
-      _activeTabIndex = i;
-      _navigatingHistory = false;
-      notifyListeners();
-      return;
+      if (_applySnapshot(_navHistory[_historyIndex])) return;
     }
+  }
+
+  bool _applySnapshot(_NavSnapshot snap) {
+    final i = _tabs.indexWhere((t) => t.id == snap.tabId);
+    if (i == -1) return false;
+    _navigatingHistory = true;
+    _activeTabIndex = i;
+    final tab = _tabs[i];
+    if (tab is TableTab && snap.hasTableState) {
+      final reload = tab.filter != snap.filter ||
+          tab.selectList != snap.selectList ||
+          tab.orderBy != snap.orderBy;
+      tab.filter = snap.filter!;
+      tab.selectList = snap.selectList!;
+      tab.orderBy = snap.orderBy!;
+      if (reload) {
+        // Fire-and-forget; loadTablePage doesn't push to history.
+        unawaited(loadTablePage(tab, 0));
+      }
+    }
+    _navigatingHistory = false;
+    notifyListeners();
+    return true;
   }
 
   // --- Saved connections -----------------------------------------------
@@ -231,6 +241,8 @@ class AppState extends ChangeNotifier {
     _connectionError = null;
     _schemas = [];
     _tabs.clear();
+    _navHistory.clear();
+    _historyIndex = -1;
     _columnCache.clear();
     notifyListeners();
 
@@ -263,6 +275,8 @@ class AppState extends ChangeNotifier {
     _expandedSchemas.clear();
     _columnCache.clear();
     _tabs.clear();
+    _navHistory.clear();
+    _historyIndex = -1;
     notifyListeners();
   }
 
@@ -299,7 +313,7 @@ class AppState extends ChangeNotifier {
   void _selectTab(int index) {
     _activeTabIndex = index;
     if (index >= 0 && index < _tabs.length) {
-      _pushHistory(_tabs[index].id);
+      _pushCurrentTab(_tabs[index]);
     }
     notifyListeners();
   }
@@ -650,18 +664,23 @@ class AppState extends ChangeNotifier {
     if (next == tab.selectList) return;
     tab.selectList = next;
     tab.columnWidths.clear();
+    _pushCurrentTab(tab);
     await loadTablePage(tab, 0);
   }
 
   /// Sets the row filter and reloads from the first page.
   Future<void> setTableFilter(TableTab tab, String filter) async {
+    if (filter == tab.filter) return;
     tab.filter = filter;
+    _pushCurrentTab(tab);
     await loadTablePage(tab, 0);
   }
 
   /// Sets the sort and reloads from the first page.
   Future<void> setTableOrder(TableTab tab, String orderBy) async {
+    if (orderBy == tab.orderBy) return;
     tab.orderBy = orderBy;
+    _pushCurrentTab(tab);
     await loadTablePage(tab, 0);
   }
 
@@ -795,4 +814,40 @@ class AppState extends ChangeNotifier {
     _service?.close();
     super.dispose();
   }
+}
+
+/// One entry in the navigation history. A snapshot records either a plain
+/// tab focus or, for [TableTab]s, the full triple (filter, selectList,
+/// orderBy) so ⌘[ undoes filter / sort changes as well as tab switches.
+class _NavSnapshot {
+  const _NavSnapshot.focus(this.tabId)
+      : filter = null,
+        selectList = null,
+        orderBy = null;
+
+  const _NavSnapshot.table(
+    this.tabId, {
+    required this.filter,
+    required this.selectList,
+    required this.orderBy,
+  });
+
+  final String tabId;
+  final String? filter;
+  final String? selectList;
+  final String? orderBy;
+
+  bool get hasTableState =>
+      filter != null && selectList != null && orderBy != null;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _NavSnapshot &&
+      other.tabId == tabId &&
+      other.filter == filter &&
+      other.selectList == selectList &&
+      other.orderBy == orderBy;
+
+  @override
+  int get hashCode => Object.hash(tabId, filter, selectList, orderBy);
 }
