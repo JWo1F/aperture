@@ -23,8 +23,32 @@ class PreferencesController extends ChangeNotifier {
   bool _sidebarVisible = true;
   bool get sidebarVisible => _sidebarVisible;
 
+  // Pane geometry. Fractions are clamped at the call site; widths are clamped
+  // here so an out-of-range disk value can't push a pane off-screen.
+  static const double sidebarWidthMin = 180;
+  static const double sidebarWidthMax = 520;
+  static const double sidebarWidthDefault = 248;
+
+  static const double logPanelWidthMin = 240;
+  static const double logPanelWidthMax = 720;
+  static const double logPanelWidthDefault = 380;
+
+  static const double queryResultsFractionMin = 0.15;
+  static const double queryResultsFractionMax = 0.85;
+  static const double queryResultsFractionDefault = 0.6;
+
+  double _sidebarWidth = sidebarWidthDefault;
+  double get sidebarWidth => _sidebarWidth;
+
+  double _logPanelWidth = logPanelWidthDefault;
+  double get logPanelWidth => _logPanelWidth;
+
+  double _queryResultsFraction = queryResultsFractionDefault;
+  double get queryResultsFraction => _queryResultsFraction;
+
   Map<String, double>? _frame;
   Timer? _frameSaveTimer;
+  Timer? _paneSaveTimer;
 
   /// Hydrate from disk and restore the native window frame. Called once
   /// at startup; failures fall back to defaults so a corrupt prefs file
@@ -46,6 +70,21 @@ class PreferencesController extends ChangeNotifier {
 
     final sidebar = prefs['sidebarVisible'];
     if (sidebar is bool) _sidebarVisible = sidebar;
+
+    final sw = prefs['sidebarWidth'];
+    if (sw is num) {
+      _sidebarWidth = sw.toDouble().clamp(sidebarWidthMin, sidebarWidthMax);
+    }
+    final lw = prefs['logPanelWidth'];
+    if (lw is num) {
+      _logPanelWidth = lw.toDouble().clamp(logPanelWidthMin, logPanelWidthMax);
+    }
+    final qf = prefs['queryResultsFraction'];
+    if (qf is num) {
+      _queryResultsFraction = qf
+          .toDouble()
+          .clamp(queryResultsFractionMin, queryResultsFractionMax);
+    }
 
     final frame = prefs['windowFrame'];
     if (frame is Map) {
@@ -85,6 +124,36 @@ class PreferencesController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setSidebarWidth(double width) {
+    final clamped = width.clamp(sidebarWidthMin, sidebarWidthMax);
+    if (clamped == _sidebarWidth) return;
+    _sidebarWidth = clamped;
+    _schedulePaneSave();
+    notifyListeners();
+  }
+
+  void setLogPanelWidth(double width) {
+    final clamped = width.clamp(logPanelWidthMin, logPanelWidthMax);
+    if (clamped == _logPanelWidth) return;
+    _logPanelWidth = clamped;
+    _schedulePaneSave();
+    notifyListeners();
+  }
+
+  void setQueryResultsFraction(double fraction) {
+    final clamped = fraction
+        .clamp(queryResultsFractionMin, queryResultsFractionMax);
+    if (clamped == _queryResultsFraction) return;
+    _queryResultsFraction = clamped;
+    _schedulePaneSave();
+    notifyListeners();
+  }
+
+  void _schedulePaneSave() {
+    _paneSaveTimer?.cancel();
+    _paneSaveTimer = Timer(const Duration(milliseconds: 400), _persist);
+  }
+
   /// Read the current native window frame and schedule a debounced save.
   /// Called from a resize / move listener on the AppLifecycleState.
   Future<void> captureWindowFrame() async {
@@ -99,6 +168,9 @@ class PreferencesController extends ChangeNotifier {
     await _store.save({
       'brightness': _brightness.name,
       'sidebarVisible': _sidebarVisible,
+      'sidebarWidth': _sidebarWidth,
+      'logPanelWidth': _logPanelWidth,
+      'queryResultsFraction': _queryResultsFraction,
       if (_frame != null) 'windowFrame': _frame,
     });
   }
@@ -106,6 +178,7 @@ class PreferencesController extends ChangeNotifier {
   @override
   void dispose() {
     _frameSaveTimer?.cancel();
+    _paneSaveTimer?.cancel();
     super.dispose();
   }
 }

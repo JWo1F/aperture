@@ -15,6 +15,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/pagebar.dart';
+import '../widgets/resize_handle.dart';
 import 'query_messages_view.dart';
 import 'query_plan_view.dart';
 import 'results_grid.dart';
@@ -229,6 +230,28 @@ class _QueryEditorState extends State<QueryEditor> {
     final state = context.watch<AppState>();
     final tab = widget.tab;
 
+    final editor = CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.enter, meta: true):
+            _runAtCursor,
+        const SingleActivator(
+          LogicalKeyboardKey.enter,
+          meta: true,
+          shift: true,
+        ): _runAll,
+      },
+      child: _SqlCodeEditor(
+        controller: _controller,
+        focusNode: _focusNode,
+        bodyScroll: _bodyScroll,
+        scrollOffset: _scrollOffset,
+        lineCount: _lineCount,
+        statements: _statements,
+        cursorStmt: _cursorStmt,
+        onRunStatement: _runStatement,
+      ),
+    );
+
     return Column(
       children: [
         _Toolbar(
@@ -238,35 +261,44 @@ class _QueryEditorState extends State<QueryEditor> {
           onRunAll: tab.running ? null : _runAll,
         ),
         Expanded(
-          flex: 2,
-          child: CallbackShortcuts(
-            bindings: {
-              const SingleActivator(LogicalKeyboardKey.enter, meta: true):
-                  _runAtCursor,
-              const SingleActivator(
-                LogicalKeyboardKey.enter,
-                meta: true,
-                shift: true,
-              ): _runAll,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Reserve space for the fixed-height tab strip + the drag
+              // handle above it; the fraction governs the *split-able*
+              // remainder so neither chrome row steals height from either
+              // side.
+              const dividerHeight = 24.0;
+              const handleHeight = 6.0;
+              final available =
+                  (constraints.maxHeight - dividerHeight - handleHeight)
+                      .clamp(0.0, double.infinity);
+              final fraction = state.preferences.queryResultsFraction;
+              final resultsHeight = available * fraction;
+              final editorHeight = available - resultsHeight;
+              return Column(
+                children: [
+                  SizedBox(height: editorHeight, child: editor),
+                  ResizeHandle(
+                    axis: Axis.horizontal,
+                    thickness: handleHeight,
+                    onDrag: (dy) {
+                      if (available <= 0) return;
+                      state.preferences.setQueryResultsFraction(
+                        fraction - dy / available,
+                      );
+                    },
+                  ),
+                  _ResultsDivider(tab: tab),
+                  SizedBox(
+                    height: resultsHeight,
+                    child: Container(
+                      color: AppColors.bg,
+                      child: _buildContent(state, tab),
+                    ),
+                  ),
+                ],
+              );
             },
-            child: _SqlCodeEditor(
-              controller: _controller,
-              focusNode: _focusNode,
-              bodyScroll: _bodyScroll,
-              scrollOffset: _scrollOffset,
-              lineCount: _lineCount,
-              statements: _statements,
-              cursorStmt: _cursorStmt,
-              onRunStatement: _runStatement,
-            ),
-          ),
-        ),
-        _ResultsDivider(tab: tab),
-        Expanded(
-          flex: 3,
-          child: Container(
-            color: AppColors.bg,
-            child: _buildContent(state, tab),
           ),
         ),
         _QueryPagebar(tab: tab),
@@ -274,6 +306,7 @@ class _QueryEditorState extends State<QueryEditor> {
     );
   }
 }
+
 
 /// Query editor toolbar — matches the design's two-action primary cluster
 /// (Run statement / Run all) with inline kbd chips, an Export action, and a
@@ -500,7 +533,6 @@ class _ResultsDivider extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.bgDeep,
         border: Border(
-          top: BorderSide(color: AppColors.border, width: 1),
           bottom: BorderSide(color: AppColors.border, width: 1),
         ),
       ),

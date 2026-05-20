@@ -19,6 +19,7 @@ import 'export/export_dialog.dart';
 import 'log/log_panel.dart';
 import 'sidebar/sidebar.dart';
 import 'widgets/common.dart';
+import 'widgets/resize_handle.dart';
 import 'workspace/workspace.dart';
 
 const _windowChannel = MethodChannel('dbv/window');
@@ -183,7 +184,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     // versa.
                     if (state.sidebarVisible) ...[
                       const RepaintBoundary(child: Sidebar()),
-                      VerticalDivider(width: 1, color: AppColors.hairline),
+                      ResizeHandle(
+                        axis: Axis.vertical,
+                        onDrag: (dx) => state.preferences.setSidebarWidth(
+                          state.preferences.sidebarWidth + dx,
+                        ),
+                      ),
                     ],
                     Expanded(
                       child: RepaintBoundary(
@@ -195,6 +201,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                         ),
                       ),
                     ),
+                    if (state.eventLog.isVisible)
+                      ResizeHandle(
+                        axis: Axis.vertical,
+                        onDrag: (dx) => state.preferences.setLogPanelWidth(
+                          state.preferences.logPanelWidth - dx,
+                        ),
+                      ),
                     const RepaintBoundary(child: LogPanel()),
                   ],
                 ),

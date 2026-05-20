@@ -30,7 +30,7 @@ class Sidebar extends StatelessWidget {
     final connected = state.status == ConnectionStatus.connected;
 
     return Container(
-      width: 248,
+      width: state.preferences.sidebarWidth,
       // Match `var(--sidebar)` — sidebarTint at 86% alpha so the app's accent
       // halo and the workspace deep bg both bleed through slightly.
       color: AppColors.sidebarTint.withValues(alpha: 0.86),

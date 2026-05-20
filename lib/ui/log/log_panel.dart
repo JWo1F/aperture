@@ -22,7 +22,7 @@ class LogPanel extends StatelessWidget {
     if (!log.isVisible) return const SizedBox.shrink();
 
     return Container(
-      width: 380,
+      width: state.preferences.logPanelWidth,
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(left: BorderSide(color: AppColors.border)),
