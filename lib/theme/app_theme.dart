@@ -12,38 +12,59 @@ enum AppBrightness { dark, light }
 class Palette {
   const Palette({
     required this.brightness,
+    required this.bgDeep,
     required this.bg,
     required this.surface,
     required this.surfaceAlt,
+    required this.surface2,
     required this.surfaceHover,
     required this.sidebarTint,
     required this.sidebarRowHover,
     required this.sidebarRowActive,
     required this.border,
+    required this.borderSoft,
     required this.borderStrong,
+    required this.hairline,
     required this.textPrimary,
     required this.textSecondary,
     required this.textMuted,
+    required this.text4,
     required this.accent,
     required this.accentHover,
     required this.accentSoft,
+    required this.accentRing,
     required this.success,
     required this.error,
+    required this.dangerSoft,
     required this.warning,
+    required this.warn,
     required this.info,
+    required this.tNull,
+    required this.tNum,
+    required this.tStr,
+    required this.tBool,
+    required this.tUuid,
+    required this.tDate,
+    required this.tJson,
+    required this.tFk,
     required this.sqlKeyword,
     required this.sqlString,
     required this.sqlNumber,
     required this.sqlComment,
     required this.sqlFunction,
     required this.sqlIdentifier,
+    required this.sqlOperator,
   });
 
   final AppBrightness brightness;
 
+  /// Deepest background — toolbar, tab strip, grid headers, page bar.
+  final Color bgDeep;
   final Color bg;
   final Color surface;
+  /// Alias for surface2; kept for backward compatibility.
   final Color surfaceAlt;
+  final Color surface2;
   final Color surfaceHover;
 
   final Color sidebarTint;
@@ -51,20 +72,40 @@ class Palette {
   final Color sidebarRowActive;
 
   final Color border;
+  /// Softer hairline — subtler than border, used for per-tab right dividers.
+  final Color borderSoft;
   final Color borderStrong;
+  /// Very subtle white/black hairline for internal dividers.
+  final Color hairline;
 
   final Color textPrimary;
   final Color textSecondary;
   final Color textMuted;
+  /// Fourth text tier — dimmer than textMuted, for de-emphasised annotations.
+  final Color text4;
 
   final Color accent;
   final Color accentHover;
   final Color accentSoft;
+  final Color accentRing;
 
   final Color success;
   final Color error;
+  final Color dangerSoft;
+  /// Kept for backward compat; same as warn.
   final Color warning;
+  final Color warn;
   final Color info;
+
+  // Type colors — used to tint data cells by column type.
+  final Color tNull;
+  final Color tNum;
+  final Color tStr;
+  final Color tBool;
+  final Color tUuid;
+  final Color tDate;
+  final Color tJson;
+  final Color tFk;
 
   final Color sqlKeyword;
   final Color sqlString;
@@ -72,35 +113,53 @@ class Palette {
   final Color sqlComment;
   final Color sqlFunction;
   final Color sqlIdentifier;
+  final Color sqlOperator;
 }
 
 const Palette darkPalette = Palette(
   brightness: AppBrightness.dark,
+  bgDeep: Color(0xFF0A0C10),
   bg: Color(0xFF0E1014),
   surface: Color(0xFF16181C),
-  surfaceAlt: Color(0xFF1B1E23),
-  surfaceHover: Color(0xFF22262C),
+  surfaceAlt: Color(0xFF1A1D23),
+  surface2: Color(0xFF1A1D23),
+  surfaceHover: Color(0xFF1F232A),
   sidebarTint: Color(0xFF13151A),
-  sidebarRowHover: Color(0xFF1D2027),
-  sidebarRowActive: Color(0x335B7CFA),
-  border: Color(0xFF24272D),
-  borderStrong: Color(0xFF2F333B),
-  textPrimary: Color(0xFFE9EAEC),
-  textSecondary: Color(0xFF9BA1AB),
-  textMuted: Color(0xFF5C636E),
+  sidebarRowHover: Color(0x06FFFFFF),
+  sidebarRowActive: Color(0x1A5B7CFA),
+  border: Color(0xFF21252D),
+  borderSoft: Color(0xFF1B1E25),
+  borderStrong: Color(0xFF2B2F38),
+  hairline: Color(0x0FFFFFFF),
+  textPrimary: Color(0xFFE6E8EC),
+  textSecondary: Color(0xFFB0B6C2),
+  textMuted: Color(0xFF757C8A),
+  text4: Color(0xFF4D5462),
   accent: Color(0xFF5B7CFA),
-  accentHover: Color(0xFF7D97FF),
-  accentSoft: Color(0x335B7CFA),
-  success: Color(0xFF34D399),
-  error: Color(0xFFFB7185),
-  warning: Color(0xFFFBBF24),
+  accentHover: Color(0xFF6E8BFA),
+  accentSoft: Color(0x245B7CFA),
+  accentRing: Color(0x595B7CFA),
+  success: Color(0xFF57B07A),
+  error: Color(0xFFE5484D),
+  dangerSoft: Color(0x1FE5484D),
+  warning: Color(0xFFC9933C),
+  warn: Color(0xFFC9933C),
   info: Color(0xFF60A5FA),
-  sqlKeyword: Color(0xFF93B4FF),
-  sqlString: Color(0xFFA3E1B0),
-  sqlNumber: Color(0xFFE8B583),
-  sqlComment: Color(0xFF5C636E),
-  sqlFunction: Color(0xFFC4A7FF),
-  sqlIdentifier: Color(0xFFE9EAEC),
+  tNull: Color(0xFF6B7180),
+  tNum: Color(0xFFD6C68F),
+  tStr: Color(0xFFBFD1E7),
+  tBool: Color(0xFF93C9A3),
+  tUuid: Color(0xFF8FA9CB),
+  tDate: Color(0xFFC9A3D1),
+  tJson: Color(0xFFD8B58B),
+  tFk: Color(0xFF87A0DA),
+  sqlKeyword: Color(0xFF8FA9F6),
+  sqlString: Color(0xFF93C9A3),
+  sqlNumber: Color(0xFFD6C68F),
+  sqlComment: Color(0xFF5F6672),
+  sqlFunction: Color(0xFFC9A3D1),
+  sqlIdentifier: Color(0xFFE6E8EC),
+  sqlOperator: Color(0xFF9097A3),
 );
 
 /// Off-white "paper" surface with the same indigo accent. The bg is a touch
@@ -108,25 +167,41 @@ const Palette darkPalette = Palette(
 /// rather than identical, the way Linear and Things layer their light mode.
 const Palette lightPalette = Palette(
   brightness: AppBrightness.light,
+  bgDeep: Color(0xFFEBE6DC),
   bg: Color(0xFFF4F5F7),
   surface: Color(0xFFFFFFFF),
-  surfaceAlt: Color(0xFFF0F1F4),
+  surfaceAlt: Color(0xFFF0EBE2),
+  surface2: Color(0xFFF0EBE2),
   surfaceHover: Color(0xFFE7E9ED),
   sidebarTint: Color(0xFFFAFBFC),
   sidebarRowHover: Color(0xFFEDEFF3),
   sidebarRowActive: Color(0x224F6FE8),
   border: Color(0xFFE2E4E9),
+  borderSoft: Color(0xFFDAD4C6),
   borderStrong: Color(0xFFCBCED5),
+  hairline: Color(0x14000000),
   textPrimary: Color(0xFF15171C),
   textSecondary: Color(0xFF5A6170),
   textMuted: Color(0xFF98A0AC),
+  text4: Color(0xFFC4BFB4),
   accent: Color(0xFF4F6FE8),
   accentHover: Color(0xFF3A5BD9),
   accentSoft: Color(0x224F6FE8),
+  accentRing: Color(0x4F4F6FE8),
   success: Color(0xFF10A372),
   error: Color(0xFFE0445C),
-  warning: Color(0xFFD08700),
+  dangerSoft: Color(0x1FB0322F),
+  warning: Color(0xFF9C7228),
+  warn: Color(0xFF9C7228),
   info: Color(0xFF2F6FE5),
+  tNull: Color(0xFFA29D8E),
+  tNum: Color(0xFF6E5A1F),
+  tStr: Color(0xFF1A1815),
+  tBool: Color(0xFF2F7A4F),
+  tUuid: Color(0xFF3A4A6B),
+  tDate: Color(0xFF6B3A78),
+  tJson: Color(0xFF8A5A1F),
+  tFk: Color(0xFF2A3FAA),
   // Syntax tones tuned for dark text on light bg — slightly desaturated so a
   // long query doesn't feel like a stained-glass window.
   sqlKeyword: Color(0xFF3A5BD9),
@@ -135,6 +210,7 @@ const Palette lightPalette = Palette(
   sqlComment: Color(0xFF8A8F99),
   sqlFunction: Color(0xFF7A3FB0),
   sqlIdentifier: Color(0xFF15171C),
+  sqlOperator: Color(0xFF4F4A40),
 );
 
 /// Runtime-mutable palette pointer. Call [setPalette] before the root
@@ -152,9 +228,11 @@ class AppColors {
     _palette = p;
   }
 
+  static Color get bgDeep => _palette.bgDeep;
   static Color get bg => _palette.bg;
   static Color get surface => _palette.surface;
   static Color get surfaceAlt => _palette.surfaceAlt;
+  static Color get surface2 => _palette.surface2;
   static Color get surfaceHover => _palette.surfaceHover;
 
   static Color get sidebarTint => _palette.sidebarTint;
@@ -162,20 +240,35 @@ class AppColors {
   static Color get sidebarRowActive => _palette.sidebarRowActive;
 
   static Color get border => _palette.border;
+  static Color get borderSoft => _palette.borderSoft;
   static Color get borderStrong => _palette.borderStrong;
+  static Color get hairline => _palette.hairline;
 
   static Color get textPrimary => _palette.textPrimary;
   static Color get textSecondary => _palette.textSecondary;
   static Color get textMuted => _palette.textMuted;
+  static Color get text4 => _palette.text4;
 
   static Color get accent => _palette.accent;
   static Color get accentHover => _palette.accentHover;
   static Color get accentSoft => _palette.accentSoft;
+  static Color get accentRing => _palette.accentRing;
 
   static Color get success => _palette.success;
   static Color get error => _palette.error;
+  static Color get dangerSoft => _palette.dangerSoft;
   static Color get warning => _palette.warning;
+  static Color get warn => _palette.warn;
   static Color get info => _palette.info;
+
+  static Color get tNull => _palette.tNull;
+  static Color get tNum => _palette.tNum;
+  static Color get tStr => _palette.tStr;
+  static Color get tBool => _palette.tBool;
+  static Color get tUuid => _palette.tUuid;
+  static Color get tDate => _palette.tDate;
+  static Color get tJson => _palette.tJson;
+  static Color get tFk => _palette.tFk;
 
   static Color get sqlKeyword => _palette.sqlKeyword;
   static Color get sqlString => _palette.sqlString;
@@ -183,6 +276,18 @@ class AppColors {
   static Color get sqlComment => _palette.sqlComment;
   static Color get sqlFunction => _palette.sqlFunction;
   static Color get sqlIdentifier => _palette.sqlIdentifier;
+  static Color get sqlOperator => _palette.sqlOperator;
+}
+
+class AppLayout {
+  const AppLayout._();
+
+  static const double toolbarHeight = 36.0;
+  static const double tabHeight = 32.0;
+  static const double gridRowHeight = 26.0;
+  static const double treeRowHeight = 22.0;
+  static const double gridHeaderHeight = 28.0;
+  static const double pageBarHeight = 28.0;
 }
 
 class Insets {
@@ -280,7 +385,7 @@ class AppTheme {
     double size = 12.5,
     Color? color,
     FontWeight weight = FontWeight.w500,
-    double letterSpacing = 0,
+    double letterSpacing = -0.3,
   }) {
     return GoogleFonts.inter(
       fontSize: size,
@@ -294,10 +399,10 @@ class AppTheme {
   /// Tiny uppercase eyebrow for section headers.
   static TextStyle eyebrow({Color? color}) {
     return GoogleFonts.inter(
-      fontSize: 10.5,
+      fontSize: 10,
       color: color ?? AppColors.textMuted,
       fontWeight: FontWeight.w600,
-      letterSpacing: 1.2,
+      letterSpacing: 0.6,
     );
   }
 }

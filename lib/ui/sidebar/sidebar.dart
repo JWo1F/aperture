@@ -382,14 +382,14 @@ class _AllConnectionsList extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 12, 6),
+          padding: const EdgeInsets.fromLTRB(6, 8, 8, 4),
           child: Row(
             children: [
               Text('Saved'.toUpperCase(), style: AppTheme.eyebrow()),
               const Spacer(),
               Text(
                 '${list.length}',
-                style: AppTheme.mono(size: 10, color: AppColors.textMuted),
+                style: AppTheme.mono(size: 10, color: AppColors.text4),
               ),
             ],
           ),
@@ -535,7 +535,7 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 12, 6),
+      padding: const EdgeInsets.fromLTRB(6, 8, 8, 4),
       child: Row(
         children: [
           Text(label.toUpperCase(), style: AppTheme.eyebrow()),
@@ -543,7 +543,7 @@ class _SectionLabel extends StatelessWidget {
           if (count != null)
             Text(
               '$count',
-              style: AppTheme.mono(size: 10, color: AppColors.textMuted),
+              style: AppTheme.mono(size: 10, color: AppColors.text4),
             ),
         ],
       ),
@@ -610,9 +610,9 @@ class _SchemaHeader extends StatelessWidget {
     return Hoverable(
       onTap: onTap,
       builder: (context, hovering) => Container(
-        height: 26,
+        height: AppLayout.treeRowHeight,
         color: hovering ? AppColors.sidebarRowHover : Colors.transparent,
-        padding: const EdgeInsets.only(left: 12, right: 12),
+        padding: const EdgeInsets.only(left: 6, right: 8),
         child: Row(
           children: [
             Icon(
@@ -624,16 +624,16 @@ class _SchemaHeader extends StatelessWidget {
             Expanded(
               child: Text(
                 schema.name,
-                style: AppTheme.ui(
-                  size: 12,
+                style: AppTheme.mono(
+                  size: 11.5,
                   color: AppColors.textSecondary,
-                  weight: FontWeight.w600,
+                  weight: FontWeight.w500,
                 ),
               ),
             ),
             Text(
               '${schema.tables.length}',
-              style: AppTheme.mono(size: 10, color: AppColors.textMuted),
+              style: AppTheme.mono(size: 10.5, color: AppColors.text4),
             ),
           ],
         ),
@@ -728,71 +728,90 @@ class _TableRowState extends State<_TableRow> {
     return Hoverable(
       onTap: widget.onTap,
       onSecondaryTapDown: (d) => _openContextMenu(d.globalPosition),
-      builder: (context, hovering) => Container(
-        height: 28,
-        decoration: BoxDecoration(
-          color: widget.active
-              ? AppColors.sidebarRowActive
-              : (hovering ? AppColors.sidebarRowHover : Colors.transparent),
-          border: Border(
-            left: BorderSide(
-              color: widget.active ? AppColors.accent : Colors.transparent,
-              width: 2,
-            ),
-          ),
-        ),
-        padding: EdgeInsets.only(left: widget.indent - 2, right: 8),
-        child: Row(
+      builder: (context, hovering) {
+        final bg = widget.active
+            ? AppColors.sidebarRowActive
+            : (hovering ? AppColors.sidebarRowHover : Colors.transparent);
+        return Stack(
           children: [
-            SizedBox(
-              width: 14,
-              height: 14,
-              child: Center(
-                child: isView
-                    ? Icon(
-                        Icons.visibility_outlined,
-                        size: 12,
-                        color: glyphColor,
-                      )
-                    : TableGlyph(size: 12, color: glyphColor),
+            Container(
+              height: AppLayout.treeRowHeight,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: Radii.brSm,
+              ),
+              padding: EdgeInsets.only(
+                left: widget.indent - 4,
+                right: 8,
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: Center(
+                      child: isView
+                          ? Icon(
+                              Icons.visibility_outlined,
+                              size: 12,
+                              color: glyphColor,
+                            )
+                          : TableGlyph(size: 12, color: glyphColor),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      widget.table.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.mono(
+                        size: 11.5,
+                        color: widget.active
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
+                        weight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (hovering && !widget.active)
+                    GestureDetector(
+                      onTapDown: (d) => _openContextMenu(d.globalPosition),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Icon(
+                          Icons.more_horiz,
+                          size: 13,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ),
+                  if (widget.active)
+                    Icon(
+                      Icons.circle,
+                      size: 5,
+                      color: AppColors.accent,
+                    ),
+                ],
               ),
             ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                widget.table.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTheme.ui(
-                  size: 12.5,
-                  color: widget.active
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
-                  weight: widget.active ? FontWeight.w600 : FontWeight.w400,
-                ),
-              ),
-            ),
-            if (hovering && !widget.active)
-              GestureDetector(
-                onTapDown: (d) => _openContextMenu(d.globalPosition),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Icon(
-                    Icons.more_horiz,
-                    size: 13,
-                    color: AppColors.textMuted,
+            if (widget.active)
+              Positioned(
+                left: 4,
+                top: 4,
+                bottom: 4,
+                child: Container(
+                  width: 2,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
-            if (widget.active)
-              Icon(
-                Icons.circle,
-                size: 5,
-                color: AppColors.accent,
-              ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -941,59 +960,73 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
     return Hoverable(
       onTap: () => widget.state.openSavedQuery(widget.query),
       onSecondaryTapDown: (d) => _openMenu(d.globalPosition),
-      builder: (context, hovering) => Container(
-        height: 28,
-        decoration: BoxDecoration(
-          color: active
-              ? AppColors.sidebarRowActive
-              : (hovering
-                  ? AppColors.sidebarRowHover
-                  : Colors.transparent),
-          border: Border(
-            left: BorderSide(
-              color: active ? AppColors.accent : Colors.transparent,
-              width: 2,
-            ),
-          ),
-        ),
-        padding: const EdgeInsets.only(left: 10, right: 8),
-        child: Row(
+      builder: (context, hovering) {
+        final bg = active
+            ? AppColors.sidebarRowActive
+            : (hovering ? AppColors.sidebarRowHover : Colors.transparent);
+        return Stack(
           children: [
-            Icon(
-              Icons.terminal,
-              size: 12,
-              color: active ? AppColors.accent : AppColors.textMuted,
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                widget.query.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTheme.ui(
-                  size: 12.5,
-                  color: active
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
-                  weight: active ? FontWeight.w600 : FontWeight.w400,
-                ),
+            Container(
+              height: AppLayout.treeRowHeight,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: Radii.brSm,
+              ),
+              padding: const EdgeInsets.only(left: 8, right: 8),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.terminal,
+                    size: 12,
+                    color: active ? AppColors.accent : AppColors.textMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      widget.query.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.mono(
+                        size: 11.5,
+                        color: active
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
+                        weight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (hovering && !active)
+                    GestureDetector(
+                      onTapDown: (d) => _openMenu(d.globalPosition),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Icon(
+                          Icons.more_horiz,
+                          size: 13,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
-            if (hovering && !active)
-              GestureDetector(
-                onTapDown: (d) => _openMenu(d.globalPosition),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Icon(
-                    Icons.more_horiz,
-                    size: 13,
-                    color: AppColors.textMuted,
+            if (active)
+              Positioned(
+                left: 4,
+                top: 4,
+                bottom: 4,
+                child: Container(
+                  width: 2,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
