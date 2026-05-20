@@ -89,7 +89,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     return Dialog(
       backgroundColor: AppColors.surface,
       elevation: 0,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: Radii.brLg,
         side: BorderSide(color: AppColors.borderStrong),
       ),
@@ -115,7 +115,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
                 widget.existing == null
                     ? 'New Connection'
                     : 'Edit Connection',
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
@@ -245,11 +245,11 @@ class _Field extends StatelessWidget {
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: AppColors.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: AppColors.accent),
+                borderSide: BorderSide(color: AppColors.accent),
               ),
             ),
           ),
@@ -284,7 +284,7 @@ class _SslToggle extends StatelessWidget {
               ),
             ),
             child: value
-                ? const Icon(Icons.check, size: 13, color: AppColors.bg)
+                ? Icon(Icons.check, size: 13, color: AppColors.bg)
                 : null,
           ),
           const SizedBox(width: Insets.sm),

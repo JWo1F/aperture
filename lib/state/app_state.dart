@@ -11,6 +11,8 @@ import '../models/saved_query.dart';
 import '../models/value_format.dart';
 import '../services/connection_store.dart';
 import '../services/postgres_service.dart';
+import '../services/preferences_store.dart';
+import '../theme/app_theme.dart';
 import 'workspace_tab.dart';
 
 enum ConnectionStatus { disconnected, connecting, connected, error }
@@ -23,6 +25,35 @@ class AppState extends ChangeNotifier {
   }
 
   final ConnectionStore _store = ConnectionStore();
+  final PreferencesStore _prefs = PreferencesStore();
+
+  /// Active palette brightness. Swapping it mutates [AppColors] before
+  /// notifying listeners, so the root `MaterialApp` rebuilds with both the
+  /// new `ThemeData` and the new palette in a single frame.
+  AppBrightness _brightness = AppBrightness.dark;
+  AppBrightness get brightness => _brightness;
+
+  void setBrightness(AppBrightness value) {
+    if (_brightness == value) return;
+    _brightness = value;
+    AppColors.setPalette(
+      value == AppBrightness.dark ? darkPalette : lightPalette,
+    );
+    unawaited(_persistPrefs());
+    notifyListeners();
+  }
+
+  void toggleBrightness() {
+    setBrightness(
+      _brightness == AppBrightness.dark
+          ? AppBrightness.light
+          : AppBrightness.dark,
+    );
+  }
+
+  Future<void> _persistPrefs() async {
+    await _prefs.save({'brightness': _brightness.name});
+  }
 
   final List<ConnectionConfig> _connections = [];
   List<ConnectionConfig> get connections => List.unmodifiable(_connections);
@@ -40,8 +71,21 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _hydrate() async {
+    final prefs = await _prefs.load();
+    final brightnessName = prefs['brightness'];
+    if (brightnessName is String) {
+      for (final b in AppBrightness.values) {
+        if (b.name == brightnessName && b != _brightness) {
+          _brightness = b;
+          AppColors.setPalette(
+            b == AppBrightness.dark ? darkPalette : lightPalette,
+          );
+          break;
+        }
+      }
+    }
+
     final saved = await _store.load();
-    if (saved.isEmpty) return;
     _connections
       ..clear()
       ..addAll(saved);

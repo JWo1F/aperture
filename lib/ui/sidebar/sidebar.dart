@@ -41,7 +41,7 @@ class Sidebar extends StatelessWidget {
           _ConnectionRow(state: state),
           if (state.status == ConnectionStatus.connected) ...[
             _SearchField(state: state),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.border),
             Expanded(child: _Body(state: state)),
           ] else
             Expanded(child: _AllConnectionsList(state: state)),
@@ -209,7 +209,7 @@ class _SearchFieldState extends State<_SearchField> {
                   widget.state.setSidebarSearch('');
                   setState(() {});
                 },
-                child: const Icon(
+                child: Icon(
                   Icons.close,
                   size: 12,
                   color: AppColors.textMuted,
@@ -401,7 +401,7 @@ class _AllConnectionsList extends StatelessWidget {
                   ),
                 ),
         ),
-        const Divider(height: 1, color: AppColors.border),
+        Divider(height: 1, color: AppColors.border),
         MouseRegion(
           cursor: SystemMouseCursors.click,
           child: GestureDetector(
@@ -412,7 +412,7 @@ class _AllConnectionsList extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Row(
                 children: [
-                  const Icon(Icons.add, size: 13, color: AppColors.accent),
+                  Icon(Icons.add, size: 13, color: AppColors.accent),
                   const SizedBox(width: 8),
                   Text(
                     'New connection…',
@@ -472,7 +472,7 @@ class _SavedConnectionRowState extends State<_SavedConnectionRow> {
               Container(
                 width: 7,
                 height: 7,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: AppColors.borderStrong,
                   shape: BoxShape.circle,
                 ),
@@ -801,8 +801,8 @@ class _TableRowState extends State<_TableRow> {
               if (_hover && !widget.active)
                 GestureDetector(
                   onTapDown: (d) => _openContextMenu(d.globalPosition),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Icon(
                       Icons.more_horiz,
                       size: 13,
@@ -811,7 +811,7 @@ class _TableRowState extends State<_TableRow> {
                   ),
                 ),
               if (widget.active)
-                const Icon(
+                Icon(
                   Icons.circle,
                   size: 5,
                   color: AppColors.accent,
@@ -893,7 +893,7 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
       builder: (ctx) => Dialog(
         backgroundColor: AppColors.surface,
         elevation: 0,
-        shape: const RoundedRectangleBorder(
+        shape: RoundedRectangleBorder(
           borderRadius: Radii.brLg,
           side: BorderSide(color: AppColors.borderStrong),
         ),
@@ -926,11 +926,11 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: Radii.brSm,
-                      borderSide: const BorderSide(color: AppColors.border),
+                      borderSide: BorderSide(color: AppColors.border),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: Radii.brSm,
-                      borderSide: const BorderSide(color: AppColors.accent),
+                      borderSide: BorderSide(color: AppColors.accent),
                     ),
                   ),
                 ),
@@ -1015,8 +1015,8 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
               if (_hover && !active)
                 GestureDetector(
                   onTapDown: (d) => _openMenu(d.globalPosition),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Icon(
                       Icons.more_horiz,
                       size: 13,

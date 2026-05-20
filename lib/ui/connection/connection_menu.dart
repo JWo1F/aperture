@@ -116,7 +116,7 @@ class _ConnectionMenuState extends State<ConnectionMenu> {
                   ),
                 ),
                 const SizedBox(width: 4),
-                const Icon(
+                Icon(
                   Icons.unfold_more,
                   size: 13,
                   color: AppColors.textMuted,
@@ -182,8 +182,8 @@ class _Panel extends StatelessWidget {
             ),
             Flexible(
               child: state.connections.isEmpty
-                  ? const Padding(
-                      padding: EdgeInsets.symmetric(
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 14,
                       ),
@@ -224,7 +224,7 @@ class _Panel extends StatelessWidget {
                       },
                     ),
             ),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.border),
             InkWell(
               onTap: () => _newConnection(context),
               child: Padding(
@@ -234,7 +234,7 @@ class _Panel extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.add,
                       size: 14,
                       color: AppColors.accent,

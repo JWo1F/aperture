@@ -22,11 +22,15 @@ class DbvApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AppState(),
-      child: MaterialApp(
-        title: 'DBV',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.build(),
-        home: const AppShell(),
+      child: Consumer<AppState>(
+        builder: (context, state, _) {
+          return MaterialApp(
+            title: 'DBV',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.build(state.brightness),
+            home: const AppShell(),
+          );
+        },
       ),
     );
   }

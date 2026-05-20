@@ -171,7 +171,7 @@ class _IconActionState extends State<IconAction> {
     }
 
     final Widget glyph = widget.busy
-        ? const SizedBox(
+        ? SizedBox(
             width: 12,
             height: 12,
             child: CircularProgressIndicator(
@@ -242,7 +242,7 @@ class EmptyState extends StatelessWidget {
             const SizedBox(height: Insets.lg),
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
@@ -253,7 +253,7 @@ class EmptyState extends StatelessWidget {
               Text(
                 message!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 12.5,
                   height: 1.5,

@@ -96,24 +96,24 @@ final _intFilter =
 final _numberFilter =
     FilteringTextInputFormatter.allow(RegExp(r'[0-9\-+.eE]'));
 
-const _kBool = _Kind(
+final _kBool = _Kind(
   id: _KindId.bool,
   label: 'bool',
   color: AppColors.sqlFunction,
-  size: Size(240, 130),
+  size: const Size(240, 130),
 );
-const _kJson = _Kind(
+final _kJson = _Kind(
   id: _KindId.json,
   label: 'json',
   color: AppColors.sqlString,
-  size: Size(540, 340),
+  size: const Size(540, 340),
   multiline: true,
 );
-const _kArray = _Kind(
+final _kArray = _Kind(
   id: _KindId.json,
   label: 'array',
   color: AppColors.sqlString,
-  size: Size(540, 340),
+  size: const Size(540, 340),
   multiline: true,
 );
 final _kInt = _Kind(
@@ -130,50 +130,50 @@ final _kNumber = _Kind(
   size: const Size(260, 132),
   inputFormatters: [_numberFilter],
 );
-const _kDate = _Kind(
+final _kDate = _Kind(
   id: _KindId.date,
   label: 'date',
   color: AppColors.info,
-  size: Size(252, 296),
+  size: const Size(252, 296),
 );
-const _kTime = _Kind(
+final _kTime = _Kind(
   id: _KindId.time,
   label: 'time',
   color: AppColors.info,
-  size: Size(252, 126),
+  size: const Size(252, 126),
 );
-const _kTimeTz = _Kind(
+final _kTimeTz = _Kind(
   id: _KindId.time,
   label: 'timetz',
   color: AppColors.info,
-  size: Size(252, 168),
+  size: const Size(252, 168),
   withTimezone: true,
 );
-const _kDatetime = _Kind(
+final _kDatetime = _Kind(
   id: _KindId.datetime,
   label: 'timestamp',
   color: AppColors.info,
-  size: Size(252, 360),
+  size: const Size(252, 360),
 );
-const _kDatetimeTz = _Kind(
+final _kDatetimeTz = _Kind(
   id: _KindId.datetime,
   label: 'timestamptz',
   color: AppColors.info,
-  size: Size(252, 400),
+  size: const Size(252, 400),
   withTimezone: true,
 );
-const _kBytes = _Kind(
+final _kBytes = _Kind(
   id: _KindId.text,
   label: 'bytes',
   color: AppColors.textMuted,
-  size: Size(380, 220),
+  size: const Size(380, 220),
   multiline: true,
 );
-const _kString = _Kind(
+final _kString = _Kind(
   id: _KindId.text,
   label: 'string',
   color: AppColors.textSecondary,
-  size: Size(380, 220),
+  size: const Size(380, 220),
   multiline: true,
 );
 
@@ -574,9 +574,9 @@ class _PanelState extends State<_Panel> {
                 pendingEdit: widget.pendingEdit,
                 onClose: widget.onClose,
               ),
-              const Divider(height: 1, color: AppColors.border),
+              Divider(height: 1, color: AppColors.border),
               Expanded(child: _buildBody()),
-              const Divider(height: 1, color: AppColors.border),
+              Divider(height: 1, color: AppColors.border),
               _Footer(
                 hasPending: widget.pendingEdit != null,
                 canSave: _isDirty,
@@ -713,8 +713,8 @@ class _Header extends StatelessWidget {
           ],
           GestureDetector(
             onTap: onClose,
-            child: const Padding(
-              padding: EdgeInsets.all(6),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
               child: Icon(Icons.close, size: 13, color: AppColors.textMuted),
             ),
           ),
@@ -887,15 +887,15 @@ class _TextBody extends StatelessWidget {
                 horizontal: 12,
                 vertical: 7,
               ),
-              decoration: const BoxDecoration(
-                color: Color(0x33FB7185),
+              decoration: BoxDecoration(
+                color: const Color(0x33FB7185),
                 border: Border(
                   top: BorderSide(color: AppColors.error),
                 ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline,
+                  Icon(Icons.error_outline,
                       size: 13, color: AppColors.error),
                   const SizedBox(width: 6),
                   Expanded(
@@ -1106,7 +1106,7 @@ class _CalendarThemed extends StatelessWidget {
         if (states.contains(WidgetState.selected)) return AppColors.bg;
         return AppColors.accent;
       }),
-      todayBorder: const BorderSide(color: AppColors.accent, width: 1),
+      todayBorder: BorderSide(color: AppColors.accent, width: 1),
       yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) return AppColors.accent;
         return null;
@@ -1135,7 +1135,7 @@ class _CalendarThemed extends StatelessWidget {
           surface: AppColors.bg,
           onSurface: AppColors.textPrimary,
         ),
-        iconTheme: const IconThemeData(
+        iconTheme: IconThemeData(
           color: AppColors.textSecondary,
           size: 16,
         ),
@@ -1269,7 +1269,7 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
               onChange: _setDate,
             ),
           ),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Column(
@@ -1384,15 +1384,15 @@ class _TimeInputState extends State<_TimeInput> {
           fillColor: AppColors.surface,
           border: OutlineInputBorder(
             borderRadius: Radii.brSm,
-            borderSide: const BorderSide(color: AppColors.border),
+            borderSide: BorderSide(color: AppColors.border),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: Radii.brSm,
-            borderSide: const BorderSide(color: AppColors.border),
+            borderSide: BorderSide(color: AppColors.border),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: Radii.brSm,
-            borderSide: const BorderSide(color: AppColors.accent),
+            borderSide: BorderSide(color: AppColors.accent),
           ),
         ),
       ),
@@ -1480,15 +1480,15 @@ class _TzInputState extends State<_TzInput> {
               ),
               border: OutlineInputBorder(
                 borderRadius: Radii.brSm,
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: AppColors.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: Radii.brSm,
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: AppColors.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: Radii.brSm,
-                borderSide: const BorderSide(color: AppColors.accent),
+                borderSide: BorderSide(color: AppColors.accent),
               ),
             ),
           ),

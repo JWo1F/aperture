@@ -31,7 +31,7 @@ class TableView extends StatelessWidget {
         Expanded(
           child: tab.result == null
               ? (tab.loading
-                  ? const Center(
+                  ? Center(
                       child: SizedBox(
                         width: 20,
                         height: 20,
@@ -127,7 +127,7 @@ class _RefreshBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
+    return SizedBox(
       height: 2,
       child: LinearProgressIndicator(
         minHeight: 2,
@@ -248,7 +248,7 @@ class _TableToolbarState extends State<_TableToolbar> {
 
     return Container(
       height: 40,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
@@ -534,7 +534,7 @@ class _EditCountBadgeState extends State<_EditCountBadge> {
                 Container(
                   width: 5,
                   height: 5,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: AppColors.accent,
                     shape: BoxShape.circle,
                   ),
@@ -574,7 +574,7 @@ class _PaginationBar extends StatelessWidget {
     return Container(
       height: 30,
       padding: const EdgeInsets.symmetric(horizontal: Insets.md),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),

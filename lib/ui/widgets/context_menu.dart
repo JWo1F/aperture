@@ -148,8 +148,8 @@ class _Menu extends StatelessWidget {
           children: [
             for (final e in entries)
               if (e is CmDivider)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
                   child: Divider(height: 1, color: AppColors.border),
                 )
               else if (e is CmItem)

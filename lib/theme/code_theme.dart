@@ -6,33 +6,35 @@ import 'app_theme.dart';
 /// Aperture-tuned highlight theme. Maps `highlight` token class names to
 /// [TextStyle]s. Shared by `flutter_highlight`'s `HighlightView`,
 /// `flutter_code_editor`'s `CodeTheme`, and our custom controllers.
-final Map<String, TextStyle> apertureCodeStyles = {
-  'root': const TextStyle(
-    color: AppColors.textPrimary,
-    backgroundColor: AppColors.bg,
-  ),
-  'keyword': const TextStyle(
-    color: AppColors.sqlKeyword,
-    fontWeight: FontWeight.w500,
-  ),
-  'built_in': const TextStyle(color: AppColors.sqlFunction),
-  'type': const TextStyle(color: AppColors.sqlKeyword),
-  'literal': const TextStyle(color: AppColors.sqlNumber),
-  'number': const TextStyle(color: AppColors.sqlNumber),
-  'string': const TextStyle(color: AppColors.sqlString),
-  'symbol': const TextStyle(color: AppColors.sqlString),
-  'comment': const TextStyle(
-    color: AppColors.sqlComment,
-    fontStyle: FontStyle.italic,
-  ),
-  'meta': const TextStyle(color: AppColors.sqlComment),
-  'operator': const TextStyle(color: AppColors.textSecondary),
-  'punctuation': const TextStyle(color: AppColors.textSecondary),
-  // pgsql-specific token kinds that show up in real schemas
-  'attr': const TextStyle(color: AppColors.sqlIdentifier),
-  'name': const TextStyle(color: AppColors.sqlIdentifier),
-  'function': const TextStyle(color: AppColors.sqlFunction),
-};
+///
+/// Rebuilt on each access so palette swaps (dark ⇄ light) take effect on
+/// the next paint without threading a theme object through every consumer.
+Map<String, TextStyle> get apertureCodeStyles => {
+      'root': TextStyle(
+        color: AppColors.textPrimary,
+        backgroundColor: AppColors.bg,
+      ),
+      'keyword': TextStyle(
+        color: AppColors.sqlKeyword,
+        fontWeight: FontWeight.w500,
+      ),
+      'built_in': TextStyle(color: AppColors.sqlFunction),
+      'type': TextStyle(color: AppColors.sqlKeyword),
+      'literal': TextStyle(color: AppColors.sqlNumber),
+      'number': TextStyle(color: AppColors.sqlNumber),
+      'string': TextStyle(color: AppColors.sqlString),
+      'symbol': TextStyle(color: AppColors.sqlString),
+      'comment': TextStyle(
+        color: AppColors.sqlComment,
+        fontStyle: FontStyle.italic,
+      ),
+      'meta': TextStyle(color: AppColors.sqlComment),
+      'operator': TextStyle(color: AppColors.textSecondary),
+      'punctuation': TextStyle(color: AppColors.textSecondary),
+      'attr': TextStyle(color: AppColors.sqlIdentifier),
+      'name': TextStyle(color: AppColors.sqlIdentifier),
+      'function': TextStyle(color: AppColors.sqlFunction),
+    };
 
 /// Walks a `highlight` parse tree and returns the matching [TextSpan] tree.
 /// Theme styles are merged on top of [base] so the caller's font choice

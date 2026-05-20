@@ -41,7 +41,7 @@ Future<void> showExportDialog(
     builder: (_) => Dialog(
       backgroundColor: AppColors.surface,
       elevation: 0,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: Radii.brLg,
         side: BorderSide(color: AppColors.borderStrong),
       ),
@@ -163,7 +163,7 @@ class _ExportBodyState extends State<_ExportBody> {
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.ios_share,
                 size: 14,
                 color: AppColors.accent,
@@ -225,7 +225,7 @@ class _ExportBodyState extends State<_ExportBody> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.error_outline,
+                  Icon(Icons.error_outline,
                       size: 13, color: AppColors.error),
                   const SizedBox(width: 6),
                   Flexible(
@@ -403,7 +403,7 @@ class _ScopeChoiceState extends State<_ScopeChoice> {
                         child: Container(
                           width: 6,
                           height: 6,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.accent,
                             shape: BoxShape.circle,
                           ),

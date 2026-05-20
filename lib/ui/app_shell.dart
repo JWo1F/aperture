@@ -11,6 +11,7 @@ import 'connection/connection_dialog.dart';
 import 'connection/connection_menu.dart';
 import 'sidebar/sidebar.dart';
 import 'widgets/common.dart';
+import 'widgets/table_glyph.dart';
 import 'workspace/workspace.dart';
 
 const _windowChannel = MethodChannel('dbv/window');
@@ -79,7 +80,7 @@ class _AppShellState extends State<AppShell> {
           child: Column(
             children: [
               const RepaintBoundary(child: _Toolbar()),
-              const Divider(height: 1, color: AppColors.border),
+              Divider(height: 1, color: AppColors.border),
               Expanded(
                 child: Row(
                   children: [
@@ -89,7 +90,7 @@ class _AppShellState extends State<AppShell> {
                     // back through the sidebar's compositor layer, and vice
                     // versa.
                     const RepaintBoundary(child: Sidebar()),
-                    const VerticalDivider(width: 1, color: AppColors.border),
+                    VerticalDivider(width: 1, color: AppColors.border),
                     Expanded(
                       child: RepaintBoundary(
                         child: Container(
@@ -103,7 +104,7 @@ class _AppShellState extends State<AppShell> {
                   ],
                 ),
               ),
-              const Divider(height: 1, color: AppColors.border),
+              Divider(height: 1, color: AppColors.border),
               RepaintBoundary(child: _StatusBar(state: state)),
             ],
           ),
@@ -126,7 +127,7 @@ class _Toolbar extends StatelessWidget {
       onPanStart: (_) => _windowChannel.invokeMethod('startDrag'),
       onDoubleTap: () => _windowChannel.invokeMethod('toggleZoom'),
       child: Container(
-        height: 48,
+        height: 52,
         color: AppColors.surface,
         padding: const EdgeInsets.only(
           left: _trafficLightInset,
@@ -134,19 +135,11 @@ class _Toolbar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Text(
-              'DBV',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.6,
-              ),
-            ),
+            const _BrandMark(),
             Expanded(
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 380),
+                  constraints: const BoxConstraints(maxWidth: 420),
                   child: _CommandBarTrigger(
                     onTap: () => showCommandPalette(context, state),
                   ),
@@ -154,18 +147,27 @@ class _Toolbar extends StatelessWidget {
               ),
             ),
             const ConnectionMenu(),
+            const SizedBox(width: 10),
+            const Rail(height: 20),
+            const SizedBox(width: 2),
+            _ThemeToggle(
+              brightness: state.brightness,
+              onTap: state.toggleBrightness,
+            ),
             if (connected) ...[
-              const SizedBox(width: Insets.sm),
+              const SizedBox(width: 2),
+              const Rail(height: 20),
+              const SizedBox(width: 10),
               AppButton(
                 label: 'New Query',
                 icon: Icons.add,
+                primary: true,
                 onPressed: state.newQueryTab,
               ),
               const SizedBox(width: Insets.sm),
-              AppButton(
-                label: 'Disconnect',
+              IconAction(
                 icon: Icons.power_settings_new,
-                danger: true,
+                tooltip: 'Disconnect',
                 onPressed: state.disconnect,
               ),
             ],
@@ -176,7 +178,61 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
+/// Wordmark + small table glyph in the accent. The glyph carries the
+/// "this app is about tables" semantic without resorting to a stock icon,
+/// and the indigo tint keeps it tied to the rest of the chrome.
+class _BrandMark extends StatelessWidget {
+  const _BrandMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.accentSoft,
+            borderRadius: Radii.brSm,
+            border: Border.all(color: AppColors.accent.withValues(alpha: 0.32)),
+          ),
+          child: TableGlyph(size: 11, color: AppColors.accent),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          'DBV',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.6,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(width: 3, height: 3, decoration: BoxDecoration(
+          color: AppColors.textMuted,
+          shape: BoxShape.circle,
+        )),
+        const SizedBox(width: 8),
+        Text(
+          'postgres',
+          style: AppTheme.ui(
+            size: 10.5,
+            color: AppColors.textMuted,
+            weight: FontWeight.w500,
+            letterSpacing: 0.6,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Spotlight-style trigger in the center of the toolbar that opens ⌘K.
+/// The bottom edge lights up in the accent on hover — a single quiet signal
+/// that this thing is the search bar without resorting to a focus ring.
 class _CommandBarTrigger extends StatefulWidget {
   const _CommandBarTrigger({required this.onTap});
   final VoidCallback onTap;
@@ -197,23 +253,37 @@ class _CommandBarTriggerState extends State<_CommandBarTrigger> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          height: 28,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOut,
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 11),
           decoration: BoxDecoration(
             color: _hover ? AppColors.surfaceHover : AppColors.bg,
             borderRadius: Radii.brSm,
             border: Border.all(
-              color: _hover ? AppColors.borderStrong : AppColors.border,
+              color: _hover ? AppColors.accent : AppColors.border,
             ),
+            boxShadow: _hover
+                ? [
+                    BoxShadow(
+                      color: AppColors.accentSoft,
+                      blurRadius: 10,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             children: [
-              const Icon(Icons.search, size: 13, color: AppColors.textMuted),
-              const SizedBox(width: 8),
+              Icon(
+                Icons.search,
+                size: 13,
+                color: _hover ? AppColors.accent : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  'Search & jump',
+                  'Search tables, queries, schemas',
                   style: AppTheme.ui(
                     size: 12,
                     color: AppColors.textMuted,
@@ -222,7 +292,7 @@ class _CommandBarTriggerState extends State<_CommandBarTrigger> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceAlt,
                   borderRadius: Radii.brSm,
@@ -230,10 +300,77 @@ class _CommandBarTriggerState extends State<_CommandBarTrigger> {
                 ),
                 child: Text(
                   '⌘K',
-                  style: AppTheme.mono(size: 10, color: AppColors.textMuted),
+                  style: AppTheme.mono(
+                    size: 10,
+                    color: AppColors.textSecondary,
+                    weight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Sun / moon toggle that swaps [AppColors] between the dark and light
+/// palettes. Icon morphs with a quick rotate-fade rather than a hard swap.
+class _ThemeToggle extends StatefulWidget {
+  const _ThemeToggle({required this.brightness, required this.onTap});
+
+  final AppBrightness brightness;
+  final VoidCallback onTap;
+
+  @override
+  State<_ThemeToggle> createState() => _ThemeToggleState();
+}
+
+class _ThemeToggleState extends State<_ThemeToggle> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.brightness == AppBrightness.dark;
+    final icon = isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined;
+    final tooltip = isDark ? 'Switch to light theme' : 'Switch to dark theme';
+
+    return Tooltip(
+      message: tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _hover ? AppColors.surfaceHover : Colors.transparent,
+              borderRadius: Radii.brSm,
+            ),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              transitionBuilder: (child, anim) {
+                return FadeTransition(
+                  opacity: anim,
+                  child: RotationTransition(
+                    turns: Tween<double>(begin: 0.6, end: 1).animate(anim),
+                    child: child,
+                  ),
+                );
+              },
+              child: Icon(
+                icon,
+                key: ValueKey(isDark),
+                size: 16,
+                color: _hover ? AppColors.accent : AppColors.textSecondary,
+              ),
+            ),
           ),
         ),
       ),
@@ -275,7 +412,7 @@ class _WelcomePanel extends StatelessWidget {
                 _BrandHero(),
                 const SizedBox(height: Insets.xl),
                 if (connecting)
-                  const SizedBox(
+                  SizedBox(
                     width: 22,
                     height: 22,
                     child: CircularProgressIndicator(
@@ -321,14 +458,14 @@ class _BrandHero extends StatelessWidget {
             borderRadius: Radii.brMd,
             border: Border.all(color: AppColors.border),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.storage_rounded,
             size: 24,
             color: AppColors.accent,
           ),
         ),
         const SizedBox(height: 14),
-        const Text(
+        Text(
           'DBV',
           style: TextStyle(
             color: AppColors.textPrimary,
@@ -375,7 +512,7 @@ class _RecentsBlock extends StatelessWidget {
             Container(
               width: 4,
               height: 4,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.textMuted,
                 shape: BoxShape.circle,
               ),
@@ -455,7 +592,7 @@ class _RecentCardState extends State<_RecentCard> {
                   Container(
                     width: 7,
                     height: 7,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: AppColors.accent,
                       shape: BoxShape.circle,
                     ),
@@ -594,7 +731,7 @@ class _ErrorBox extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.error_outline,
+            Icon(Icons.error_outline,
                 size: 15, color: AppColors.error),
             const SizedBox(width: Insets.sm),
             Flexible(

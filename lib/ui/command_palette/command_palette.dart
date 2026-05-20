@@ -233,7 +233,7 @@ class _PaletteState extends State<_Palette> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _SearchInput(controller: _controller, focusNode: _focus),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.border),
             Flexible(
               child: filtered.isEmpty
                   ? Padding(
@@ -274,7 +274,7 @@ class _SearchInput extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Row(
         children: [
-          const Icon(Icons.search, size: 18, color: AppColors.textMuted),
+          Icon(Icons.search, size: 18, color: AppColors.textMuted),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
@@ -416,9 +416,9 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 30,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.vertical(bottom: Radii.lg),
+        borderRadius: const BorderRadius.vertical(bottom: Radii.lg),
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14),

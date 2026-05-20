@@ -18,7 +18,7 @@ Future<void> showPendingEditsModal(
     builder: (_) => Dialog(
       backgroundColor: AppColors.surface,
       elevation: 0,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: Radii.brLg,
         side: BorderSide(color: AppColors.borderStrong),
       ),
@@ -92,7 +92,7 @@ class _Body extends StatelessWidget {
             ],
           ),
         ),
-        const Divider(height: 1, color: AppColors.border),
+        Divider(height: 1, color: AppColors.border),
         Flexible(
           child: statements.isEmpty
               ? Padding(
@@ -115,7 +115,7 @@ class _Body extends StatelessWidget {
                   ),
                 ),
         ),
-        const Divider(height: 1, color: AppColors.border),
+        Divider(height: 1, color: AppColors.border),
         Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: Insets.md,
@@ -167,9 +167,9 @@ class _StatementCard extends StatelessWidget {
           Container(
             height: 26,
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.surfaceAlt,
-              borderRadius: BorderRadius.only(
+              borderRadius: const BorderRadius.only(
                 topLeft: Radii.sm,
                 topRight: Radii.sm,
               ),

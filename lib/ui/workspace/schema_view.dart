@@ -56,13 +56,13 @@ class _Toolbar extends StatelessWidget {
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: Insets.md),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.data_object,
             size: 14,
             color: AppColors.accent,
@@ -125,7 +125,7 @@ class _Body extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (tab.loading && tab.ddl == null) {
-      return const Center(
+      return Center(
         child: SizedBox(
           width: 20,
           height: 20,

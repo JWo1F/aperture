@@ -231,7 +231,7 @@ class _QueryEditorState extends State<QueryEditor> {
             ),
           ),
         ),
-        const Divider(height: 1, color: AppColors.borderStrong),
+        Divider(height: 1, color: AppColors.borderStrong),
         Expanded(
           flex: 3,
           child: Container(
@@ -286,7 +286,7 @@ class _Toolbar extends StatelessWidget {
     return Container(
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: Insets.md),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
@@ -375,7 +375,7 @@ class _RunningIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const SizedBox(
+        SizedBox(
           width: 12,
           height: 12,
           child: CircularProgressIndicator(
@@ -463,7 +463,7 @@ class _StatusFooter extends StatelessWidget {
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: Insets.md),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
@@ -676,7 +676,7 @@ class _RunStmtIcon extends StatelessWidget {
                   fontSize: _editorFontSize,
                   height: _editorLineHeight,
                 ),
-                children: const [
+                children: [
                   WidgetSpan(
                     alignment: PlaceholderAlignment.middle,
                     child: Icon(

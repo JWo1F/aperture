@@ -81,7 +81,7 @@ class _TabStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 34,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.bg,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),

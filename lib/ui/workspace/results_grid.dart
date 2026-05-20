@@ -580,7 +580,7 @@ class _ResultsGridState extends State<ResultsGrid> {
 
     return Container(
       height: _rowHeight,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surfaceAlt,
         border: Border(bottom: BorderSide(color: AppColors.borderStrong)),
       ),
@@ -745,7 +745,7 @@ class _ResultsGridState extends State<ResultsGrid> {
           width: rowWidth,
           decoration: BoxDecoration(
             color: bg,
-            border: const Border(
+            border: Border(
               bottom: BorderSide(color: AppColors.border),
             ),
           ),
@@ -789,7 +789,7 @@ class _ResultsGridState extends State<ResultsGrid> {
               top: 0,
               width: _widths[selCol],
               height: _rowHeight,
-              child: const IgnorePointer(
+              child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     border: Border.fromBorderSide(
@@ -882,7 +882,7 @@ class _ResultsGridState extends State<ResultsGrid> {
       alignment: Alignment.centerLeft,
       padding: const EdgeInsets.symmetric(horizontal: 9),
       decoration: isEdited
-          ? const BoxDecoration(
+          ? BoxDecoration(
               color: AppColors.accentSoft,
               border: Border(
                 left: BorderSide(color: AppColors.accent, width: 2),
@@ -979,7 +979,7 @@ class _HeaderCellState extends State<_HeaderCell> {
                     ),
                     if (widget.isForeignKey) ...[
                       const SizedBox(width: 4),
-                      const Icon(
+                      Icon(
                         Icons.north_east,
                         size: 10,
                         color: AppColors.info,
