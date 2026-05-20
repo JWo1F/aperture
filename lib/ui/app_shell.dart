@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -11,7 +13,6 @@ import 'connection/connection_dialog.dart';
 import 'connection/connection_menu.dart';
 import 'sidebar/sidebar.dart';
 import 'widgets/common.dart';
-import 'widgets/table_glyph.dart';
 import 'workspace/workspace.dart';
 
 const _windowChannel = MethodChannel('dbv/window');
@@ -127,50 +128,41 @@ class _Toolbar extends StatelessWidget {
       onPanStart: (_) => _windowChannel.invokeMethod('startDrag'),
       onDoubleTap: () => _windowChannel.invokeMethod('toggleZoom'),
       child: Container(
-        height: 52,
-        color: AppColors.surface,
+        height: 50,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          // The faint accent hairline at the bottom edge gives the chrome a
+          // sense of "instrument panel" — the workspace below reads as a
+          // viewport rather than a continuation of the toolbar.
+          border: Border(
+            bottom: BorderSide(
+              color: AppColors.brightness == AppBrightness.dark
+                  ? AppColors.accent.withValues(alpha: 0.08)
+                  : AppColors.accent.withValues(alpha: 0.12),
+              width: 1,
+            ),
+          ),
+        ),
         padding: const EdgeInsets.only(
           left: _trafficLightInset,
-          right: Insets.md,
+          right: 10,
         ),
         child: Row(
           children: [
             const _BrandMark(),
-            Expanded(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: _CommandBarTrigger(
-                    onTap: () => showCommandPalette(context, state),
-                  ),
-                ),
-              ),
-            ),
+            const SizedBox(width: 14),
             const ConnectionMenu(),
-            const SizedBox(width: 10),
-            const Rail(height: 20),
-            const SizedBox(width: 2),
-            _ThemeToggle(
-              brightness: state.brightness,
-              onTap: state.toggleBrightness,
+            const Spacer(),
+            _CompactSearch(
+              onTap: () => showCommandPalette(context, state),
             ),
-            if (connected) ...[
-              const SizedBox(width: 2),
-              const Rail(height: 20),
-              const SizedBox(width: 10),
-              AppButton(
-                label: 'New Query',
-                icon: Icons.add,
-                primary: true,
-                onPressed: state.newQueryTab,
-              ),
-              const SizedBox(width: Insets.sm),
-              IconAction(
-                icon: Icons.power_settings_new,
-                tooltip: 'Disconnect',
-                onPressed: state.disconnect,
-              ),
-            ],
+            const Spacer(),
+            _ActionCluster(
+              brightness: state.brightness,
+              onToggleTheme: state.toggleBrightness,
+              onNewQuery: connected ? state.newQueryTab : null,
+              onDisconnect: connected ? state.disconnect : null,
+            ),
           ],
         ),
       ),
@@ -178,9 +170,10 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
-/// Wordmark + small table glyph in the accent. The glyph carries the
-/// "this app is about tables" semantic without resorting to a stock icon,
-/// and the indigo tint keeps it tied to the rest of the chrome.
+/// Hand-drawn aperture iris + lowercase JetBrains Mono wordmark. The mark
+/// stands on its own glyph weight — no chip, no rounded background — so the
+/// brand reads as "tool" rather than "app icon". The iris is built from four
+/// rotated chevrons that converge on a central point, lit in the accent.
 class _BrandMark extends StatelessWidget {
   const _BrandMark();
 
@@ -188,156 +181,124 @@ class _BrandMark extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Container(
-          width: 22,
-          height: 22,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.accentSoft,
-            borderRadius: Radii.brSm,
-            border: Border.all(color: AppColors.accent.withValues(alpha: 0.32)),
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: CustomPaint(
+            painter: _ApertureIrisPainter(
+              accent: AppColors.accent,
+              dim: AppColors.textMuted,
+            ),
           ),
-          child: TableGlyph(size: 11, color: AppColors.accent),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 9),
         Text(
-          'DBV',
-          style: TextStyle(
+          'dbv',
+          style: AppTheme.mono(
+            size: 14,
             color: AppColors.textPrimary,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.6,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Container(width: 3, height: 3, decoration: BoxDecoration(
-          color: AppColors.textMuted,
-          shape: BoxShape.circle,
-        )),
-        const SizedBox(width: 8),
-        Text(
-          'postgres',
-          style: AppTheme.ui(
-            size: 10.5,
-            color: AppColors.textMuted,
-            weight: FontWeight.w500,
-            letterSpacing: 0.6,
-          ),
+            weight: FontWeight.w700,
+          ).copyWith(letterSpacing: -0.2),
         ),
       ],
     );
   }
 }
 
-/// Spotlight-style trigger in the center of the toolbar that opens ⌘K.
-/// The bottom edge lights up in the accent on hover — a single quiet signal
-/// that this thing is the search bar without resorting to a focus ring.
-class _CommandBarTrigger extends StatefulWidget {
-  const _CommandBarTrigger({required this.onTap});
-  final VoidCallback onTap;
+class _ApertureIrisPainter extends CustomPainter {
+  _ApertureIrisPainter({required this.accent, required this.dim});
+
+  final Color accent;
+  final Color dim;
 
   @override
-  State<_CommandBarTrigger> createState() => _CommandBarTriggerState();
-}
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..color = accent
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..isAntiAlias = true;
 
-class _CommandBarTriggerState extends State<_CommandBarTrigger> {
-  bool _hover = false;
+    final dimStroke = Paint()
+      ..color = dim.withValues(alpha: 0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..isAntiAlias = true;
 
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          curve: Curves.easeOut,
-          height: 30,
-          padding: const EdgeInsets.symmetric(horizontal: 11),
-          decoration: BoxDecoration(
-            color: _hover ? AppColors.surfaceHover : AppColors.bg,
-            borderRadius: Radii.brSm,
-            border: Border.all(
-              color: _hover ? AppColors.accent : AppColors.border,
-            ),
-            boxShadow: _hover
-                ? [
-                    BoxShadow(
-                      color: AppColors.accentSoft,
-                      blurRadius: 10,
-                      offset: const Offset(0, 1),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.search,
-                size: 13,
-                color: _hover ? AppColors.accent : AppColors.textSecondary,
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  'Search tables, queries, schemas',
-                  style: AppTheme.ui(
-                    size: 12,
-                    color: AppColors.textMuted,
-                    weight: FontWeight.w400,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  borderRadius: Radii.brSm,
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Text(
-                  '⌘K',
-                  style: AppTheme.mono(
-                    size: 10,
-                    color: AppColors.textSecondary,
-                    weight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = size.width / 2 - 1.5;
+
+    // Outer hex perimeter — six hairlines, dim.
+    final hex = Path();
+    for (int i = 0; i < 6; i++) {
+      final a = (i * 60 - 90) * math.pi / 180;
+      final x = cx + r * math.cos(a);
+      final y = cy + r * math.sin(a);
+      if (i == 0) {
+        hex.moveTo(x, y);
+      } else {
+        hex.lineTo(x, y);
+      }
+    }
+    hex.close();
+    canvas.drawPath(hex, dimStroke);
+
+    // Three iris blades — short chords from hex vertices to a small offset
+    // around the centre, creating a triangular shutter look without painting
+    // every blade (keeps it readable at 18px).
+    Offset vertex(int i) {
+      final a = (i * 60 - 90) * math.pi / 180;
+      return Offset(cx + r * math.cos(a), cy + r * math.sin(a));
+    }
+
+    final blade1 = Path()
+      ..moveTo(vertex(0).dx, vertex(0).dy)
+      ..lineTo(cx + 1.5, cy + 1.5)
+      ..lineTo(vertex(2).dx, vertex(2).dy);
+    final blade2 = Path()
+      ..moveTo(vertex(2).dx, vertex(2).dy)
+      ..lineTo(cx - 1.5, cy + 1.5)
+      ..lineTo(vertex(4).dx, vertex(4).dy);
+    final blade3 = Path()
+      ..moveTo(vertex(4).dx, vertex(4).dy)
+      ..lineTo(cx, cy - 2)
+      ..lineTo(vertex(0).dx, vertex(0).dy);
+
+    canvas.drawPath(blade1, stroke);
+    canvas.drawPath(blade2, stroke);
+    canvas.drawPath(blade3, stroke);
   }
+
+  @override
+  bool shouldRepaint(_ApertureIrisPainter old) =>
+      old.accent != accent || old.dim != dim;
 }
 
-/// Sun / moon toggle that swaps [AppColors] between the dark and light
-/// palettes. Icon morphs with a quick rotate-fade rather than a hard swap.
-class _ThemeToggle extends StatefulWidget {
-  const _ThemeToggle({required this.brightness, required this.onTap});
-
-  final AppBrightness brightness;
+/// Compact search affordance — pill with a tight ⌘K chip and a small magnifier
+/// glyph. Sits in the dead-centre of the toolbar but is narrow enough that the
+/// header doesn't feel like a search-first interface.
+class _CompactSearch extends StatefulWidget {
+  const _CompactSearch({required this.onTap});
   final VoidCallback onTap;
 
   @override
-  State<_ThemeToggle> createState() => _ThemeToggleState();
+  State<_CompactSearch> createState() => _CompactSearchState();
 }
 
-class _ThemeToggleState extends State<_ThemeToggle> {
+class _CompactSearchState extends State<_CompactSearch> {
   bool _hover = false;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = widget.brightness == AppBrightness.dark;
-    final icon = isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined;
-    final tooltip = isDark ? 'Switch to light theme' : 'Switch to dark theme';
+    final accentLine = _hover ? AppColors.accent : AppColors.borderStrong;
 
     return Tooltip(
-      message: tooltip,
+      message: 'Search & jump  ⌘K',
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hover = true),
@@ -346,33 +307,231 @@ class _ThemeToggleState extends State<_ThemeToggle> {
           onTap: widget.onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 140),
-            width: 30,
-            height: 30,
-            alignment: Alignment.center,
+            curve: Curves.easeOut,
+            height: 28,
+            padding: const EdgeInsets.only(left: 11, right: 5),
             decoration: BoxDecoration(
               color: _hover ? AppColors.surfaceHover : Colors.transparent,
-              borderRadius: Radii.brSm,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: accentLine),
             ),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              transitionBuilder: (child, anim) {
-                return FadeTransition(
-                  opacity: anim,
-                  child: RotationTransition(
-                    turns: Tween<double>(begin: 0.6, end: 1).animate(anim),
-                    child: child,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.search,
+                  size: 12,
+                  color: _hover ? AppColors.accent : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'jump…',
+                  style: AppTheme.mono(
+                    size: 11,
+                    color: AppColors.textSecondary,
+                    weight: FontWeight.w400,
                   ),
-                );
-              },
-              child: Icon(
-                icon,
-                key: ValueKey(isDark),
-                size: 16,
-                color: _hover ? AppColors.accent : AppColors.textSecondary,
-              ),
+                ),
+                const SizedBox(width: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: AppColors.bg,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '⌘K',
+                    style: AppTheme.mono(
+                      size: 9.5,
+                      color: AppColors.textSecondary,
+                      weight: FontWeight.w600,
+                    ).copyWith(letterSpacing: 0.4),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Right-side action group — one rounded shell with hairline rails between
+/// the cells. Reads as a single transport panel rather than a row of
+/// disconnected pills, which is the standard SaaS-dashboard tell.
+class _ActionCluster extends StatelessWidget {
+  const _ActionCluster({
+    required this.brightness,
+    required this.onToggleTheme,
+    required this.onNewQuery,
+    required this.onDisconnect,
+  });
+
+  final AppBrightness brightness;
+  final VoidCallback onToggleTheme;
+  final VoidCallback? onNewQuery;
+  final VoidCallback? onDisconnect;
+
+  @override
+  Widget build(BuildContext context) {
+    final connected = onNewQuery != null;
+    return Container(
+      height: 30,
+      decoration: BoxDecoration(
+        color: AppColors.bg,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ClusterCell(
+            onTap: onToggleTheme,
+            tooltip: brightness == AppBrightness.dark
+                ? 'Switch to light theme'
+                : 'Switch to dark theme',
+            child: _ThemeCellGlyph(brightness: brightness),
+          ),
+          if (connected) ...[
+            _ClusterDivider(),
+            _ClusterCell(
+              accent: true,
+              onTap: onNewQuery,
+              tooltip: 'New query  ⌘N',
+              horizontalPad: 12,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add, size: 13, color: AppColors.accent),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Query',
+                    style: AppTheme.ui(
+                      size: 12,
+                      color: AppColors.accent,
+                      weight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _ClusterDivider(),
+            _ClusterCell(
+              hoverFg: AppColors.error,
+              onTap: onDisconnect,
+              tooltip: 'Disconnect',
+              child: Icon(
+                Icons.power_settings_new,
+                size: 14,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One pressable cell inside [_ActionCluster]. Hover paints the cell, not
+/// the icon's own background, so the shell stays the visual unit.
+class _ClusterCell extends StatefulWidget {
+  const _ClusterCell({
+    required this.child,
+    required this.onTap,
+    this.tooltip,
+    this.horizontalPad = 8,
+    this.accent = false,
+    this.hoverFg,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final String? tooltip;
+  final double horizontalPad;
+  final bool accent;
+  final Color? hoverFg;
+
+  @override
+  State<_ClusterCell> createState() => _ClusterCellState();
+}
+
+class _ClusterCellState extends State<_ClusterCell> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onTap != null;
+    final Color hoverBg = widget.accent
+        ? AppColors.accentSoft
+        : AppColors.surfaceHover;
+
+    Widget child = widget.child;
+    // Replace child's foreground color on hover by re-wrapping iconography.
+    if (_hover && widget.hoverFg != null && widget.child is Icon) {
+      final i = widget.child as Icon;
+      child = Icon(i.icon, size: i.size, color: widget.hoverFg);
+    }
+
+    final cell = MouseRegion(
+      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          height: 28,
+          padding: EdgeInsets.symmetric(horizontal: widget.horizontalPad),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _hover && enabled ? hoverBg : Colors.transparent,
+          ),
+          child: child,
+        ),
+      ),
+    );
+
+    if (widget.tooltip == null) return cell;
+    return Tooltip(message: widget.tooltip!, child: cell);
+  }
+}
+
+/// 1px vertical hairline used between [_ClusterCell]s.
+class _ClusterDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 1, height: 28, color: AppColors.border);
+  }
+}
+
+/// Sun ⇄ moon glyph inside an action cluster cell. Fade-rotates between the
+/// two states on toggle.
+class _ThemeCellGlyph extends StatelessWidget {
+  const _ThemeCellGlyph({required this.brightness});
+  final AppBrightness brightness;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = brightness == AppBrightness.dark;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      transitionBuilder: (child, anim) {
+        return FadeTransition(
+          opacity: anim,
+          child: RotationTransition(
+            turns: Tween<double>(begin: 0.55, end: 1).animate(anim),
+            child: child,
+          ),
+        );
+      },
+      child: Icon(
+        isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+        key: ValueKey(isDark),
+        size: 14,
+        color: AppColors.textSecondary,
       ),
     );
   }

@@ -74,6 +74,9 @@ class _ConnectionMenuState extends State<ConnectionMenu> {
         ),
     };
 
+    // Breadcrumb-style trigger: leading vertical hairline + status dot +
+    // mono identifier + a tiny chevron. No pill border — the connection
+    // reads as a piece of header typography rather than a button.
     return CompositedTransformTarget(
       link: _link,
       child: MouseRegion(
@@ -82,49 +85,74 @@ class _ConnectionMenuState extends State<ConnectionMenu> {
         onExit: (_) => setState(() => _hover = false),
         child: GestureDetector(
           onTap: _open,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
+          child: Container(
             height: 28,
-            padding: const EdgeInsets.only(left: 10, right: 8),
-            decoration: BoxDecoration(
-              color: _hover ? AppColors.surfaceHover : AppColors.bg,
-              borderRadius: Radii.brSm,
-              border: Border.all(
-                color: _hover ? AppColors.borderStrong : AppColors.border,
-              ),
-            ),
+            padding: const EdgeInsets.only(right: 6),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 7,
-                  height: 7,
-                  decoration:
-                      BoxDecoration(color: color, shape: BoxShape.circle),
+                  width: 1,
+                  height: 16,
+                  color: AppColors.border,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
+                _StatusDot(color: color),
+                const SizedBox(width: 9),
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 160),
+                  constraints: const BoxConstraints(maxWidth: 280),
                   child: Text(
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTheme.ui(
-                      size: 12,
-                      color: AppColors.textSecondary,
+                    style: AppTheme.mono(
+                      size: 12.5,
+                      color: _hover
+                          ? AppColors.textPrimary
+                          : AppColors.textPrimary,
+                      weight: FontWeight.w500,
                     ),
                   ),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 6),
                 Icon(
-                  Icons.unfold_more,
-                  size: 13,
-                  color: AppColors.textMuted,
+                  Icons.expand_more,
+                  size: 14,
+                  color: _hover
+                      ? AppColors.textSecondary
+                      : AppColors.textMuted,
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Status dot with a soft halo when the connection is live. Pulls visual
+/// weight on green/red/amber states without an animation that competes
+/// with the workspace.
+class _StatusDot extends StatelessWidget {
+  const _StatusDot({required this.color});
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.4),
+            blurRadius: 5,
+            spreadRadius: 0.5,
+          ),
+        ],
       ),
     );
   }
