@@ -42,7 +42,10 @@ class Workspace extends StatelessWidget {
       color: AppColors.bg,
       child: Column(
         children: [
-          _TabStrip(state: state),
+          // Isolate the tab strip's compositor layer from the workspace body
+          // so scrolling/editing in the active tab doesn't redraw the strip
+          // every frame.
+          RepaintBoundary(child: _TabStrip(state: state)),
           Expanded(
             // All tabs stay mounted so per-tab state (scroll offset, code
             // editor cursor, query result) survives switching away and back.

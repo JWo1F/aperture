@@ -78,26 +78,33 @@ class _AppShellState extends State<AppShell> {
           autofocus: true,
           child: Column(
             children: [
-              const _Toolbar(),
+              const RepaintBoundary(child: _Toolbar()),
               const Divider(height: 1, color: AppColors.border),
               Expanded(
                 child: Row(
                   children: [
-                    const Sidebar(),
+                    // Wrap the sidebar and workspace in RepaintBoundary so a
+                    // repaint in one side doesn't dirty the layer of the
+                    // other. Cell-edit repaints in the grid no longer ripple
+                    // back through the sidebar's compositor layer, and vice
+                    // versa.
+                    const RepaintBoundary(child: Sidebar()),
                     const VerticalDivider(width: 1, color: AppColors.border),
                     Expanded(
-                      child: Container(
-                        color: AppColors.bg,
-                        child: connected
-                            ? const Workspace()
-                            : _WelcomePanel(state: state),
+                      child: RepaintBoundary(
+                        child: Container(
+                          color: AppColors.bg,
+                          child: connected
+                              ? const Workspace()
+                              : _WelcomePanel(state: state),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
               const Divider(height: 1, color: AppColors.border),
-              _StatusBar(state: state),
+              RepaintBoundary(child: _StatusBar(state: state)),
             ],
           ),
         ),
