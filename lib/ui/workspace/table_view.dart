@@ -359,8 +359,6 @@ class _RefreshSplitButtonState extends State<_RefreshSplitButton> {
     (Duration(minutes: 5), '5m'),
   ];
 
-  bool _hoverLeft = false;
-  bool _hoverRight = false;
   final GlobalKey _anchorKey = GlobalKey();
 
   void _openMenu() {
@@ -426,48 +424,44 @@ class _RefreshSplitButtonState extends State<_RefreshSplitButton> {
             message: active
                 ? 'Refresh now · auto ${_intervalLabel(tab.autoRefreshInterval!)}'
                 : 'Refresh',
-            child: MouseRegion(
+            child: Hoverable(
               cursor: disabled
                   ? SystemMouseCursors.basic
                   : SystemMouseCursors.click,
-              onEnter: (_) => setState(() => _hoverLeft = true),
-              onExit: (_) => setState(() => _hoverLeft = false),
-              child: GestureDetector(
-                onTap: disabled ? null : widget.onRefresh,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 120),
-                  height: 26,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: active ? 9 : 7,
+              onTap: disabled ? null : widget.onRefresh,
+              builder: (context, hovering) => AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                height: 26,
+                padding: EdgeInsets.symmetric(
+                  horizontal: active ? 9 : 7,
+                ),
+                decoration: BoxDecoration(
+                  color: hovering && !disabled
+                      ? (active
+                          ? AppColors.accentSoft
+                          : AppColors.surfaceHover)
+                      : Colors.transparent,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(5),
+                    bottomLeft: Radius.circular(5),
                   ),
-                  decoration: BoxDecoration(
-                    color: _hoverLeft && !disabled
-                        ? (active
-                            ? AppColors.accentSoft
-                            : AppColors.surfaceHover)
-                        : Colors.transparent,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(5),
-                      bottomLeft: Radius.circular(5),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _RefreshIcon(spinning: tab.loading, active: active),
-                      if (active) ...[
-                        const SizedBox(width: 7),
-                        Text(
-                          _intervalLabel(tab.autoRefreshInterval!),
-                          style: AppTheme.mono(
-                            size: 10.5,
-                            color: AppColors.accent,
-                            weight: FontWeight.w600,
-                          ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _RefreshIcon(spinning: tab.loading, active: active),
+                    if (active) ...[
+                      const SizedBox(width: 7),
+                      Text(
+                        _intervalLabel(tab.autoRefreshInterval!),
+                        style: AppTheme.mono(
+                          size: 10.5,
+                          color: AppColors.accent,
+                          weight: FontWeight.w600,
                         ),
-                      ],
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -477,35 +471,30 @@ class _RefreshSplitButtonState extends State<_RefreshSplitButton> {
           // ── dropdown half ──
           Tooltip(
             message: 'Auto-refresh…',
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              onEnter: (_) => setState(() => _hoverRight = true),
-              onExit: (_) => setState(() => _hoverRight = false),
-              child: GestureDetector(
-                onTap: _openMenu,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 120),
-                  width: 18,
-                  height: 26,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: _hoverRight
-                        ? (active
-                            ? AppColors.accentSoft
-                            : AppColors.surfaceHover)
-                        : Colors.transparent,
-                    borderRadius: const BorderRadius.only(
-                      topRight: Radius.circular(5),
-                      bottomRight: Radius.circular(5),
-                    ),
+            child: Hoverable(
+              onTap: _openMenu,
+              builder: (context, hovering) => AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                width: 18,
+                height: 26,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: hovering
+                      ? (active
+                          ? AppColors.accentSoft
+                          : AppColors.surfaceHover)
+                      : Colors.transparent,
+                  borderRadius: const BorderRadius.only(
+                    topRight: Radius.circular(5),
+                    bottomRight: Radius.circular(5),
                   ),
-                  child: Icon(
-                    Icons.expand_more,
-                    size: 13,
-                    color: active
-                        ? AppColors.accent
-                        : AppColors.textSecondary,
-                  ),
+                ),
+                child: Icon(
+                  Icons.expand_more,
+                  size: 13,
+                  color: active
+                      ? AppColors.accent
+                      : AppColors.textSecondary,
                 ),
               ),
             ),
@@ -722,68 +711,56 @@ class _ClauseState extends State<_Clause> {
 
 /// Tight pill that signals the count of pending cell edits. Click to preview
 /// the generated UPDATE statements.
-class _EditCountBadge extends StatefulWidget {
+class _EditCountBadge extends StatelessWidget {
   const _EditCountBadge({required this.count, this.onTap});
 
   final int count;
   final VoidCallback? onTap;
 
   @override
-  State<_EditCountBadge> createState() => _EditCountBadgeState();
-}
-
-class _EditCountBadgeState extends State<_EditCountBadge> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    if (widget.count == 0) return const SizedBox.shrink();
-    final clickable = widget.onTap != null;
+    if (count == 0) return const SizedBox.shrink();
+    final clickable = onTap != null;
     final tooltip = clickable
-        ? '${widget.count} pending edit${widget.count == 1 ? '' : 's'} — click to preview'
-        : '${widget.count} pending edit${widget.count == 1 ? '' : 's'}';
+        ? '$count pending edit${count == 1 ? '' : 's'} — click to preview'
+        : '$count pending edit${count == 1 ? '' : 's'}';
 
     return Tooltip(
       message: tooltip,
-      child: MouseRegion(
-        cursor: clickable
-            ? SystemMouseCursors.click
-            : SystemMouseCursors.basic,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            height: 22,
-            padding: const EdgeInsets.symmetric(horizontal: 7),
-            decoration: BoxDecoration(
-              color: _hover && clickable
-                  ? AppColors.accent.withValues(alpha: 0.32)
-                  : AppColors.accentSoft,
-              borderRadius: Radii.brSm,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 5,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent,
-                    shape: BoxShape.circle,
-                  ),
+      child: Hoverable(
+        cursor:
+            clickable ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onTap: onTap,
+        builder: (context, hovering) => AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          height: 22,
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          decoration: BoxDecoration(
+            color: hovering && clickable
+                ? AppColors.accent.withValues(alpha: 0.32)
+                : AppColors.accentSoft,
+            borderRadius: Radii.brSm,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 5,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 5),
-                Text(
-                  '${widget.count}',
-                  style: AppTheme.mono(
-                    size: 10.5,
-                    color: AppColors.accent,
-                    weight: FontWeight.w600,
-                  ),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                '$count',
+                style: AppTheme.mono(
+                  size: 10.5,
+                  color: AppColors.accent,
+                  weight: FontWeight.w600,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

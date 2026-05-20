@@ -185,34 +185,28 @@ class _Tab extends StatefulWidget {
 }
 
 class _TabState extends State<_Tab> {
-  bool _hover = false;
-
   IconData get _tabIcon => switch (widget.tab) {
         QueryTab() => Icons.terminal,
         SchemaTab() => Icons.data_object,
-        _ => Icons.table_rows_outlined,
+        TableTab() => Icons.table_rows_outlined,
       };
 
   @override
   Widget build(BuildContext context) {
-    final accentTrack = widget.active
-        ? AppColors.accent
-        : (_hover ? AppColors.borderStrong : Colors.transparent);
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        onSecondaryTapDown: (d) => widget.onContextMenu(d.globalPosition),
-        onTertiaryTapUp: (_) => widget.onClose(),
-        child: Container(
+    return Hoverable(
+      onTap: widget.onTap,
+      onSecondaryTapDown: (d) => widget.onContextMenu(d.globalPosition),
+      onTertiaryTapUp: (_) => widget.onClose(),
+      builder: (context, hovering) {
+        final accentTrack = widget.active
+            ? AppColors.accent
+            : (hovering ? AppColors.borderStrong : Colors.transparent);
+        return Container(
           padding: const EdgeInsets.symmetric(horizontal: Insets.md),
           decoration: BoxDecoration(
             color: widget.active
                 ? AppColors.surface
-                : (_hover ? AppColors.surfaceHover : Colors.transparent),
+                : (hovering ? AppColors.surfaceHover : Colors.transparent),
             border: Border(
               bottom: BorderSide(color: accentTrack, width: 2),
             ),
@@ -222,16 +216,16 @@ class _TabState extends State<_Tab> {
               Icon(
                 _tabIcon,
                 size: 13,
-                color: widget.active
-                    ? AppColors.accent
-                    : AppColors.textMuted,
+                color:
+                    widget.active ? AppColors.accent : AppColors.textMuted,
               ),
               const SizedBox(width: 7),
               Text(
                 widget.tab.title,
                 style: AppTheme.ui(
                   size: 12,
-                  weight: widget.active ? FontWeight.w600 : FontWeight.w400,
+                  weight:
+                      widget.active ? FontWeight.w600 : FontWeight.w400,
                   color: widget.active
                       ? AppColors.textPrimary
                       : AppColors.textSecondary,
@@ -248,7 +242,7 @@ class _TabState extends State<_Tab> {
                     child: Icon(
                       Icons.close,
                       size: 13,
-                      color: _hover || widget.active
+                      color: hovering || widget.active
                           ? AppColors.textSecondary
                           : Colors.transparent,
                     ),
@@ -257,8 +251,8 @@ class _TabState extends State<_Tab> {
               ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

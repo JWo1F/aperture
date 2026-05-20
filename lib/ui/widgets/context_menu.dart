@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import 'common.dart';
 
 /// A line in a context menu — either an action or a separator.
 sealed class CmEntry {
@@ -161,21 +162,13 @@ class _Menu extends StatelessWidget {
   }
 }
 
-class _Row extends StatefulWidget {
+class _Row extends StatelessWidget {
   const _Row({required this.item, required this.onClose});
   final CmItem item;
   final VoidCallback onClose;
 
   @override
-  State<_Row> createState() => _RowState();
-}
-
-class _RowState extends State<_Row> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    final item = widget.item;
     final disabled = !item.enabled;
     final fg = disabled
         ? AppColors.textMuted
@@ -188,56 +181,50 @@ class _RowState extends State<_Row> {
             ? AppColors.error
             : AppColors.textSecondary;
 
-    return MouseRegion(
+    return Hoverable(
       cursor: disabled ? SystemMouseCursors.basic : SystemMouseCursors.click,
-      onEnter: (_) {
-        if (!disabled) setState(() => _hover = true);
-      },
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: disabled
-            ? null
-            : () {
-                widget.onClose();
-                item.onTap();
-              },
-        child: Container(
-          height: 28,
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: _hover && !disabled
-                ? AppColors.accentSoft
-                : Colors.transparent,
-            borderRadius: Radii.brSm,
-          ),
-          child: Row(
-            children: [
-              if (item.icon != null) ...[
-                Icon(item.icon, size: 13, color: iconColor),
-                const SizedBox(width: 9),
-              ] else
-                const SizedBox(width: 22),
-              Expanded(
-                child: Text(
-                  item.label,
-                  style: AppTheme.ui(
-                    size: 12,
-                    color: fg,
-                    weight: FontWeight.w400,
-                  ),
+      onTap: disabled
+          ? null
+          : () {
+              onClose();
+              item.onTap();
+            },
+      builder: (context, hovering) => Container(
+        height: 28,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: hovering && !disabled
+              ? AppColors.accentSoft
+              : Colors.transparent,
+          borderRadius: Radii.brSm,
+        ),
+        child: Row(
+          children: [
+            if (item.icon != null) ...[
+              Icon(item.icon, size: 13, color: iconColor),
+              const SizedBox(width: 9),
+            ] else
+              const SizedBox(width: 22),
+            Expanded(
+              child: Text(
+                item.label,
+                style: AppTheme.ui(
+                  size: 12,
+                  color: fg,
+                  weight: FontWeight.w400,
                 ),
               ),
-              if (item.shortcut != null)
-                Text(
-                  item.shortcut!,
-                  style: AppTheme.mono(
-                    size: 10,
-                    color: AppColors.textMuted,
-                  ),
+            ),
+            if (item.shortcut != null)
+              Text(
+                item.shortcut!,
+                style: AppTheme.mono(
+                  size: 10,
+                  color: AppColors.textMuted,
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );

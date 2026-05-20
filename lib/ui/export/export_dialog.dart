@@ -328,7 +328,7 @@ class _FormatChips extends StatelessWidget {
   }
 }
 
-class _FormatChip extends StatefulWidget {
+class _FormatChip extends StatelessWidget {
   const _FormatChip({
     required this.format,
     required this.selected,
@@ -340,40 +340,27 @@ class _FormatChip extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_FormatChip> createState() => _FormatChipState();
-}
-
-class _FormatChipState extends State<_FormatChip> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    final selected = widget.selected;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.accentSoft
-                : (_hover ? AppColors.surfaceHover : AppColors.bg),
-            borderRadius: Radii.brSm,
-            border: Border.all(
-              color: selected ? AppColors.accent : AppColors.border,
-            ),
+    return Hoverable(
+      onTap: onTap,
+      builder: (context, hovering) => AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.accentSoft
+              : (hovering ? AppColors.surfaceHover : AppColors.bg),
+          borderRadius: Radii.brSm,
+          border: Border.all(
+            color: selected ? AppColors.accent : AppColors.border,
           ),
-          child: Text(
-            widget.format.label,
-            style: AppTheme.mono(
-              size: 11.5,
-              color: selected ? AppColors.accent : AppColors.textSecondary,
-              weight: FontWeight.w600,
-            ),
+        ),
+        child: Text(
+          format.label,
+          style: AppTheme.mono(
+            size: 11.5,
+            color: selected ? AppColors.accent : AppColors.textSecondary,
+            weight: FontWeight.w600,
           ),
         ),
       ),
@@ -410,7 +397,7 @@ class _DestinationChips extends StatelessWidget {
   }
 }
 
-class _DestinationChip extends StatefulWidget {
+class _DestinationChip extends StatelessWidget {
   const _DestinationChip({
     required this.destination,
     required this.selected,
@@ -426,60 +413,47 @@ class _DestinationChip extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_DestinationChip> createState() => _DestinationChipState();
-}
-
-class _DestinationChipState extends State<_DestinationChip> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    final selected = widget.selected;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.accentSoft
-                : (_hover ? AppColors.surfaceHover : AppColors.bg),
-            borderRadius: Radii.brSm,
-            border: Border.all(
-              color: selected ? AppColors.accent : AppColors.border,
+    return Hoverable(
+      onTap: onTap,
+      builder: (context, hovering) => AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.accentSoft
+              : (hovering ? AppColors.surfaceHover : AppColors.bg),
+          borderRadius: Radii.brSm,
+          border: Border.all(
+            color: selected ? AppColors.accent : AppColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 12,
+              color: selected ? AppColors.accent : AppColors.textSecondary,
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                widget.icon,
-                size: 12,
-                color: selected ? AppColors.accent : AppColors.textSecondary,
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: AppTheme.mono(
+                size: 11.5,
+                color:
+                    selected ? AppColors.accent : AppColors.textSecondary,
+                weight: FontWeight.w600,
               ),
-              const SizedBox(width: 6),
-              Text(
-                widget.label,
-                style: AppTheme.mono(
-                  size: 11.5,
-                  color:
-                      selected ? AppColors.accent : AppColors.textSecondary,
-                  weight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _ScopeChoice extends StatefulWidget {
+class _ScopeChoice extends StatelessWidget {
   const _ScopeChoice({
     required this.scope,
     required this.selected,
@@ -495,87 +469,75 @@ class _ScopeChoice extends StatefulWidget {
   final VoidCallback onSelect;
 
   @override
-  State<_ScopeChoice> createState() => _ScopeChoiceState();
-}
-
-class _ScopeChoiceState extends State<_ScopeChoice> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    final selected = widget.scope == widget.selected;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onSelect,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Insets.md,
-            vertical: 9,
+    final isSelected = scope == selected;
+    return Hoverable(
+      onTap: onSelect,
+      builder: (context, hovering) => Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Insets.md,
+          vertical: 9,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.accentSoft
+              : (hovering ? AppColors.surfaceHover : AppColors.bg),
+          borderRadius: Radii.brSm,
+          border: Border.all(
+            color: isSelected ? AppColors.accent : AppColors.border,
           ),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.accentSoft
-                : (_hover ? AppColors.surfaceHover : AppColors.bg),
-            borderRadius: Radii.brSm,
-            border: Border.all(
-              color: selected ? AppColors.accent : AppColors.border,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: selected
-                        ? AppColors.accent
-                        : AppColors.borderStrong,
-                    width: 1.5,
-                  ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected
+                      ? AppColors.accent
+                      : AppColors.borderStrong,
+                  width: 1.5,
                 ),
-                child: selected
-                    ? Center(
-                        child: Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: AppColors.accent,
-                            shape: BoxShape.circle,
-                          ),
+              ),
+              child: isSelected
+                  ? Center(
+                      child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: AppColors.accent,
+                          shape: BoxShape.circle,
                         ),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.label,
-                      style: AppTheme.ui(
-                        size: 12.5,
-                        weight: FontWeight.w500,
-                        color: AppColors.textPrimary,
                       ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: AppTheme.ui(
+                      size: 12.5,
+                      weight: FontWeight.w500,
+                      color: AppColors.textPrimary,
                     ),
-                    Text(
-                      widget.hint,
-                      style: AppTheme.mono(
-                        size: 10.5,
-                        color: AppColors.textMuted,
-                      ),
+                  ),
+                  Text(
+                    hint,
+                    style: AppTheme.mono(
+                      size: 10.5,
+                      color: AppColors.textMuted,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

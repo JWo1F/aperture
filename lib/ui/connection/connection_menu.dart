@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/connection_config.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
+import '../widgets/common.dart';
 import 'connection_dialog.dart';
 
 /// Toolbar dropdown showing the active connection and letting the user switch
@@ -18,7 +19,6 @@ class ConnectionMenu extends StatefulWidget {
 class _ConnectionMenuState extends State<ConnectionMenu> {
   final LayerLink _link = LayerLink();
   OverlayEntry? _entry;
-  bool _hover = false;
 
   void _open() {
     if (_entry != null) return _close();
@@ -83,51 +83,44 @@ class _ConnectionMenuState extends State<ConnectionMenu> {
     // reads as a piece of header typography rather than a button.
     return CompositedTransformTarget(
       link: _link,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: _open,
-          child: Container(
-            height: 28,
-            padding: const EdgeInsets.only(right: 6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 1,
-                  height: 16,
-                  color: AppColors.border,
-                ),
-                const SizedBox(width: 12),
-                _StatusDot(color: color),
-                const SizedBox(width: 9),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 280),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTheme.mono(
-                      size: 12.5,
-                      color: _hover
-                          ? AppColors.textPrimary
-                          : AppColors.textPrimary,
-                      weight: FontWeight.w500,
-                    ),
+      child: Hoverable(
+        onTap: _open,
+        builder: (context, hovering) => Container(
+          height: 28,
+          padding: const EdgeInsets.only(right: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 1,
+                height: 16,
+                color: AppColors.border,
+              ),
+              const SizedBox(width: 12),
+              _StatusDot(color: color),
+              const SizedBox(width: 9),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 280),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.mono(
+                    size: 12.5,
+                    color: AppColors.textPrimary,
+                    weight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(width: 6),
-                Icon(
-                  Icons.expand_more,
-                  size: 14,
-                  color: _hover
-                      ? AppColors.textSecondary
-                      : AppColors.textMuted,
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.expand_more,
+                size: 14,
+                color: hovering
+                    ? AppColors.textSecondary
+                    : AppColors.textMuted,
+              ),
+            ],
           ),
         ),
       ),
@@ -311,75 +304,68 @@ class _ConnectionEntry extends StatefulWidget {
 }
 
 class _ConnectionEntryState extends State<_ConnectionEntry> {
-  bool _hover = false;
-
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-          decoration: BoxDecoration(
-            color: widget.active
-                ? AppColors.accentSoft
-                : (_hover ? AppColors.surfaceHover : Colors.transparent),
-            borderRadius: Radii.brSm,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: widget.active
-                      ? AppColors.success
-                      : AppColors.borderStrong,
-                  shape: BoxShape.circle,
-                ),
+    return Hoverable(
+      onTap: widget.onTap,
+      builder: (context, hovering) => Container(
+        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+        decoration: BoxDecoration(
+          color: widget.active
+              ? AppColors.accentSoft
+              : (hovering ? AppColors.surfaceHover : Colors.transparent),
+          borderRadius: Radii.brSm,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: widget.active
+                    ? AppColors.success
+                    : AppColors.borderStrong,
+                shape: BoxShape.circle,
               ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.config.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTheme.ui(
-                        size: 12.5,
-                        weight: FontWeight.w500,
-                        color: widget.active
-                            ? AppColors.textPrimary
-                            : AppColors.textSecondary,
-                      ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.config.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTheme.ui(
+                      size: 12.5,
+                      weight: FontWeight.w500,
+                      color: widget.active
+                          ? AppColors.textPrimary
+                          : AppColors.textSecondary,
                     ),
-                    Text(
-                      widget.config.summary,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTheme.mono(
-                        size: 10,
-                        color: AppColors.textMuted,
-                      ),
+                  ),
+                  Text(
+                    widget.config.summary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTheme.mono(
+                      size: 10,
+                      color: AppColors.textMuted,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              if (_hover) ...[
-                _IconMini(
-                    icon: Icons.edit_outlined, onTap: widget.onEdit),
-                const SizedBox(width: 2),
-                _IconMini(
-                    icon: Icons.delete_outline, onTap: widget.onDelete),
-              ],
+            ),
+            if (hovering) ...[
+              _IconMini(
+                  icon: Icons.edit_outlined, onTap: widget.onEdit),
+              const SizedBox(width: 2),
+              _IconMini(
+                  icon: Icons.delete_outline, onTap: widget.onDelete),
             ],
-          ),
+          ],
         ),
       ),
     );

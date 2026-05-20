@@ -951,7 +951,7 @@ class _BoolBody extends StatelessWidget {
   }
 }
 
-class _BoolChoice extends StatefulWidget {
+class _BoolChoice extends StatelessWidget {
   const _BoolChoice({
     required this.label,
     required this.selected,
@@ -963,41 +963,28 @@ class _BoolChoice extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_BoolChoice> createState() => _BoolChoiceState();
-}
-
-class _BoolChoiceState extends State<_BoolChoice> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    final selected = widget.selected;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.accentSoft
-                : (_hover ? AppColors.surfaceHover : AppColors.surface),
-            borderRadius: Radii.brMd,
-            border: Border.all(
-              color: selected ? AppColors.accent : AppColors.border,
-            ),
+    return Hoverable(
+      onTap: onTap,
+      builder: (context, hovering) => AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        height: 44,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.accentSoft
+              : (hovering ? AppColors.surfaceHover : AppColors.surface),
+          borderRadius: Radii.brMd,
+          border: Border.all(
+            color: selected ? AppColors.accent : AppColors.border,
           ),
-          child: Text(
-            widget.label,
-            style: AppTheme.mono(
-              size: 13,
-              color: selected ? AppColors.accent : AppColors.textSecondary,
-              weight: FontWeight.w600,
-            ),
+        ),
+        child: Text(
+          label,
+          style: AppTheme.mono(
+            size: 13,
+            color: selected ? AppColors.accent : AppColors.textSecondary,
+            weight: FontWeight.w600,
           ),
         ),
       ),

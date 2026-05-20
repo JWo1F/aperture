@@ -34,6 +34,9 @@ class Hoverable extends StatefulWidget {
     required this.builder,
     this.onTap,
     this.onSecondaryTap,
+    this.onSecondaryTapDown,
+    this.onTapDown,
+    this.onTertiaryTapUp,
     this.cursor = SystemMouseCursors.click,
     this.behavior = HitTestBehavior.opaque,
   });
@@ -41,6 +44,9 @@ class Hoverable extends StatefulWidget {
   final Widget Function(BuildContext context, bool hovering) builder;
   final VoidCallback? onTap;
   final VoidCallback? onSecondaryTap;
+  final GestureTapDownCallback? onSecondaryTapDown;
+  final GestureTapDownCallback? onTapDown;
+  final GestureTapUpCallback? onTertiaryTapUp;
   final MouseCursor cursor;
   final HitTestBehavior behavior;
 
@@ -60,7 +66,10 @@ class _HoverableState extends State<Hoverable> {
       child: GestureDetector(
         behavior: widget.behavior,
         onTap: widget.onTap,
+        onTapDown: widget.onTapDown,
         onSecondaryTap: widget.onSecondaryTap,
+        onSecondaryTapDown: widget.onSecondaryTapDown,
+        onTertiaryTapUp: widget.onTertiaryTapUp,
         child: widget.builder(context, _hover),
       ),
     );

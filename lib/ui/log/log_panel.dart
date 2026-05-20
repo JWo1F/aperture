@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/log_event.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
+import '../widgets/common.dart';
 
 /// Slide-out pane that shows the in-memory event log (queries, edits,
 /// connection lifecycle, errors). Bound to ⌘L from the app shell.
@@ -77,36 +78,24 @@ class LogPanel extends StatelessWidget {
   }
 }
 
-class _CloseButton extends StatefulWidget {
+class _CloseButton extends StatelessWidget {
   const _CloseButton({required this.onTap});
   final VoidCallback onTap;
 
   @override
-  State<_CloseButton> createState() => _CloseButtonState();
-}
-
-class _CloseButtonState extends State<_CloseButton> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          padding: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            color: _hover ? AppColors.surfaceHover : Colors.transparent,
-            borderRadius: Radii.brSm,
-          ),
-          child: Icon(
-            Icons.close,
-            size: 12,
-            color: _hover ? AppColors.textPrimary : AppColors.textMuted,
-          ),
+    return Hoverable(
+      onTap: onTap,
+      builder: (context, hovering) => Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: hovering ? AppColors.surfaceHover : Colors.transparent,
+          borderRadius: Radii.brSm,
+        ),
+        child: Icon(
+          Icons.close,
+          size: 12,
+          color: hovering ? AppColors.textPrimary : AppColors.textMuted,
         ),
       ),
     );

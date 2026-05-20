@@ -935,8 +935,6 @@ class _HeaderCell extends StatefulWidget {
 }
 
 class _HeaderCellState extends State<_HeaderCell> {
-  bool _hover = false;
-
   @override
   Widget build(BuildContext context) {
     final sort = widget.sort;
@@ -947,21 +945,18 @@ class _HeaderCellState extends State<_HeaderCell> {
       height: 28,
       child: Stack(
         children: [
-          MouseRegion(
+          Hoverable(
             cursor: sortable
                 ? SystemMouseCursors.click
                 : SystemMouseCursors.basic,
-            onEnter: (_) => setState(() => _hover = true),
-            onExit: (_) => setState(() => _hover = false),
-            child: GestureDetector(
-              onTap: widget.onSort,
-              child: Container(
-                color: _hover && sortable
-                    ? AppColors.surfaceHover
-                    : Colors.transparent,
-                padding: const EdgeInsets.symmetric(horizontal: 9),
-                alignment: Alignment.centerLeft,
-                child: Row(
+            onTap: widget.onSort,
+            builder: (context, hovering) => Container(
+              color: hovering && sortable
+                  ? AppColors.surfaceHover
+                  : Colors.transparent,
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              alignment: Alignment.centerLeft,
+              child: Row(
                   children: [
                     Flexible(
                       child: Text(
@@ -1007,7 +1002,6 @@ class _HeaderCellState extends State<_HeaderCell> {
                 ),
               ),
             ),
-          ),
           Positioned(
             right: 0,
             top: 0,

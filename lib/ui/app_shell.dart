@@ -342,36 +342,26 @@ class _ApertureIrisPainter extends CustomPainter {
 /// Compact search affordance — pill with a tight ⌘K chip and a small magnifier
 /// glyph. Sits in the dead-centre of the toolbar but is narrow enough that the
 /// header doesn't feel like a search-first interface.
-class _CompactSearch extends StatefulWidget {
+class _CompactSearch extends StatelessWidget {
   const _CompactSearch({required this.onTap});
   final VoidCallback onTap;
 
   @override
-  State<_CompactSearch> createState() => _CompactSearchState();
-}
-
-class _CompactSearchState extends State<_CompactSearch> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    final accentLine = _hover ? AppColors.accent : AppColors.borderStrong;
-
     return Tooltip(
       message: 'Search & jump  ⌘K',
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: AnimatedContainer(
+      child: Hoverable(
+        onTap: onTap,
+        builder: (context, hovering) {
+          final accentLine =
+              hovering ? AppColors.accent : AppColors.borderStrong;
+          return AnimatedContainer(
             duration: const Duration(milliseconds: 140),
             curve: Curves.easeOut,
             height: 28,
             padding: const EdgeInsets.only(left: 11, right: 5),
             decoration: BoxDecoration(
-              color: _hover ? AppColors.surfaceHover : Colors.transparent,
+              color: hovering ? AppColors.surfaceHover : Colors.transparent,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: accentLine),
             ),
@@ -381,7 +371,9 @@ class _CompactSearchState extends State<_CompactSearch> {
                 Icon(
                   Icons.search,
                   size: 12,
-                  color: _hover ? AppColors.accent : AppColors.textSecondary,
+                  color: hovering
+                      ? AppColors.accent
+                      : AppColors.textSecondary,
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -411,8 +403,8 @@ class _CompactSearchState extends State<_CompactSearch> {
                 ),
               ],
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -497,7 +489,7 @@ class _ActionCluster extends StatelessWidget {
 
 /// One pressable cell inside [_ActionCluster]. Hover paints the cell, not
 /// the icon's own background, so the shell stays the visual unit.
-class _ClusterCell extends StatefulWidget {
+class _ClusterCell extends StatelessWidget {
   const _ClusterCell({
     required this.child,
     required this.onTap,
@@ -515,47 +507,36 @@ class _ClusterCell extends StatefulWidget {
   final Color? hoverFg;
 
   @override
-  State<_ClusterCell> createState() => _ClusterCellState();
-}
-
-class _ClusterCellState extends State<_ClusterCell> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    final enabled = widget.onTap != null;
-    final Color hoverBg = widget.accent
-        ? AppColors.accentSoft
-        : AppColors.surfaceHover;
+    final enabled = onTap != null;
+    final Color hoverBg =
+        accent ? AppColors.accentSoft : AppColors.surfaceHover;
 
-    Widget child = widget.child;
-    // Replace child's foreground color on hover by re-wrapping iconography.
-    if (_hover && widget.hoverFg != null && widget.child is Icon) {
-      final i = widget.child as Icon;
-      child = Icon(i.icon, size: i.size, color: widget.hoverFg);
-    }
-
-    final cell = MouseRegion(
+    final cell = Hoverable(
       cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
+      onTap: onTap,
+      builder: (context, hovering) {
+        Widget content = child;
+        // Replace child's foreground color on hover by re-wrapping iconography.
+        if (hovering && hoverFg != null && child is Icon) {
+          final i = child as Icon;
+          content = Icon(i.icon, size: i.size, color: hoverFg);
+        }
+        return AnimatedContainer(
           duration: const Duration(milliseconds: 120),
           height: 28,
-          padding: EdgeInsets.symmetric(horizontal: widget.horizontalPad),
+          padding: EdgeInsets.symmetric(horizontal: horizontalPad),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: _hover && enabled ? hoverBg : Colors.transparent,
+            color: hovering && enabled ? hoverBg : Colors.transparent,
           ),
-          child: child,
-        ),
-      ),
+          child: content,
+        );
+      },
     );
 
-    if (widget.tooltip == null) return cell;
-    return Tooltip(message: widget.tooltip!, child: cell);
+    if (tooltip == null) return cell;
+    return Tooltip(message: tooltip!, child: cell);
   }
 }
 
@@ -760,142 +741,115 @@ class _RecentsBlock extends StatelessWidget {
   }
 }
 
-class _RecentCard extends StatefulWidget {
+class _RecentCard extends StatelessWidget {
   const _RecentCard({required this.config, required this.onTap});
   final ConnectionConfig config;
   final VoidCallback onTap;
 
   @override
-  State<_RecentCard> createState() => _RecentCardState();
-}
-
-class _RecentCardState extends State<_RecentCard> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    final config = widget.config;
     final ts = config.lastConnectedAt;
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          width: 260,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: _hover ? AppColors.surfaceHover : AppColors.surface,
-            borderRadius: Radii.brMd,
-            border: Border.all(
-              color: _hover ? AppColors.accent : AppColors.border,
-            ),
-            boxShadow: _hover
-                ? const [
-                    BoxShadow(
-                      color: Color(0x335B7CFA),
-                      blurRadius: 16,
-                      offset: Offset(0, 4),
-                    ),
-                  ]
-                : null,
+    return Hoverable(
+      onTap: onTap,
+      builder: (context, hovering) => AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        width: 260,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: hovering ? AppColors.surfaceHover : AppColors.surface,
+          borderRadius: Radii.brMd,
+          border: Border.all(
+            color: hovering ? AppColors.accent : AppColors.border,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      color: AppColors.accent,
-                      shape: BoxShape.circle,
-                    ),
+          boxShadow: hovering
+              ? const [
+                  BoxShadow(
+                    color: Color(0x335B7CFA),
+                    blurRadius: 16,
+                    offset: Offset(0, 4),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      config.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTheme.ui(
-                        size: 13,
-                        weight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent,
+                    shape: BoxShape.circle,
                   ),
-                  if (ts != null)
-                    Text(
-                      timeAgo(ts),
-                      style: AppTheme.mono(
-                        size: 10,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                config.summary,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTheme.mono(
-                  size: 11,
-                  color: AppColors.textSecondary,
                 ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    config.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTheme.ui(
+                      size: 13,
+                      weight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                if (ts != null)
+                  Text(
+                    timeAgo(ts),
+                    style: AppTheme.mono(
+                      size: 10,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              config.summary,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.mono(
+                size: 11,
+                color: AppColors.textSecondary,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _NewConnectionLink extends StatefulWidget {
+class _NewConnectionLink extends StatelessWidget {
   const _NewConnectionLink({required this.onTap});
   final VoidCallback onTap;
 
   @override
-  State<_NewConnectionLink> createState() => _NewConnectionLinkState();
-}
-
-class _NewConnectionLinkState extends State<_NewConnectionLink> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Row(
+    return Hoverable(
+      onTap: onTap,
+      builder: (context, hovering) {
+        final fg = hovering ? AppColors.accentHover : AppColors.accent;
+        return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.add,
-              size: 13,
-              color: _hover ? AppColors.accentHover : AppColors.accent,
-            ),
+            Icon(Icons.add, size: 13, color: fg),
             const SizedBox(width: 6),
             Text(
               'New connection',
               style: AppTheme.ui(
                 size: 12,
-                color: _hover ? AppColors.accentHover : AppColors.accent,
+                color: fg,
                 weight: FontWeight.w500,
               ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
