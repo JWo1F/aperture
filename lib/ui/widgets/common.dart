@@ -19,6 +19,54 @@ class Rail extends StatelessWidget {
   }
 }
 
+/// Generic hover wrapper: tracks a hover bool and exposes it to a
+/// builder, so the dozen-plus widgets that need a "hovering?" state for
+/// background swaps don't each carry the same MouseRegion + setState
+/// scaffolding.
+///
+/// The widget owns the [GestureDetector] for [onTap] so the hit area
+/// matches the visible region cleanly. Builders should return a widget
+/// that paints differently based on [hovering] — they do not need their
+/// own MouseRegion.
+class Hoverable extends StatefulWidget {
+  const Hoverable({
+    super.key,
+    required this.builder,
+    this.onTap,
+    this.onSecondaryTap,
+    this.cursor = SystemMouseCursors.click,
+    this.behavior = HitTestBehavior.opaque,
+  });
+
+  final Widget Function(BuildContext context, bool hovering) builder;
+  final VoidCallback? onTap;
+  final VoidCallback? onSecondaryTap;
+  final MouseCursor cursor;
+  final HitTestBehavior behavior;
+
+  @override
+  State<Hoverable> createState() => _HoverableState();
+}
+
+class _HoverableState extends State<Hoverable> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: widget.cursor,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        behavior: widget.behavior,
+        onTap: widget.onTap,
+        onSecondaryTap: widget.onSecondaryTap,
+        child: widget.builder(context, _hover),
+      ),
+    );
+  }
+}
+
 /// Tiny key-cap-style chip used to render keyboard shortcut hints inline
 /// next to buttons.
 class KbdChip extends StatelessWidget {
@@ -44,7 +92,7 @@ class KbdChip extends StatelessWidget {
 
 /// Compact toolbar/dialog button with a hover state. The [primary] variant
 /// fills with the amber accent; the default variant is a quiet outline.
-class AppButton extends StatefulWidget {
+class AppButton extends StatelessWidget {
   const AppButton({
     super.key,
     required this.label,
@@ -61,42 +109,31 @@ class AppButton extends StatefulWidget {
   final bool danger;
 
   @override
-  State<AppButton> createState() => _AppButtonState();
-}
-
-class _AppButtonState extends State<AppButton> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    final enabled = widget.onPressed != null;
-    final accent = widget.danger ? AppColors.error : AppColors.accent;
-
-    Color bg;
-    Color fg;
-    Color border;
-    if (widget.primary) {
-      bg = _hover ? AppColors.accentHover : accent;
-      fg = AppColors.bg;
-      border = bg;
-    } else {
-      bg = _hover ? AppColors.surfaceHover : AppColors.surfaceAlt;
-      fg = widget.danger ? AppColors.error : AppColors.textPrimary;
-      border = _hover ? AppColors.borderStrong : AppColors.border;
-    }
-    if (!enabled) {
-      bg = AppColors.surfaceAlt;
-      fg = AppColors.textMuted;
-      border = AppColors.border;
-    }
-
-    return MouseRegion(
+    final enabled = onPressed != null;
+    final accent = danger ? AppColors.error : AppColors.accent;
+    return Hoverable(
       cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onPressed,
-        child: AnimatedContainer(
+      onTap: onPressed,
+      builder: (context, hovering) {
+        Color bg;
+        Color fg;
+        Color border;
+        if (primary) {
+          bg = hovering ? AppColors.accentHover : accent;
+          fg = AppColors.bg;
+          border = bg;
+        } else {
+          bg = hovering ? AppColors.surfaceHover : AppColors.surfaceAlt;
+          fg = danger ? AppColors.error : AppColors.textPrimary;
+          border = hovering ? AppColors.borderStrong : AppColors.border;
+        }
+        if (!enabled) {
+          bg = AppColors.surfaceAlt;
+          fg = AppColors.textMuted;
+          border = AppColors.border;
+        }
+        return AnimatedContainer(
           duration: const Duration(milliseconds: 120),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
@@ -107,12 +144,12 @@ class _AppButtonState extends State<AppButton> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (widget.icon != null) ...[
-                Icon(widget.icon, size: 14, color: fg),
+              if (icon != null) ...[
+                Icon(icon, size: 14, color: fg),
                 const SizedBox(width: 6),
               ],
               Text(
-                widget.label,
+                label,
                 style: TextStyle(
                   color: fg,
                   fontSize: 12.5,
@@ -121,15 +158,15 @@ class _AppButtonState extends State<AppButton> {
               ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
 /// Square icon-only button for toolbar affordances. `primary` colours the
 /// icon in the accent (so it can stand in for a labelled primary button).
-class IconAction extends StatefulWidget {
+class IconAction extends StatelessWidget {
   const IconAction({
     super.key,
     required this.icon,
@@ -146,63 +183,50 @@ class IconAction extends StatefulWidget {
   final bool busy;
 
   @override
-  State<IconAction> createState() => _IconActionState();
-}
-
-class _IconActionState extends State<IconAction> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    final enabled = widget.onPressed != null && !widget.busy;
-
-    Color iconColor;
-    Color hoverBg;
-    if (widget.primary) {
-      iconColor = enabled
-          ? (_hover ? AppColors.accentHover : AppColors.accent)
-          : AppColors.textMuted;
-      hoverBg = AppColors.accentSoft;
-    } else {
-      iconColor = enabled
-          ? (_hover ? AppColors.textPrimary : AppColors.textSecondary)
-          : AppColors.textMuted;
-      hoverBg = AppColors.surfaceHover;
-    }
-
-    final Widget glyph = widget.busy
-        ? SizedBox(
-            width: 12,
-            height: 12,
-            child: CircularProgressIndicator(
-              strokeWidth: 1.6,
-              color: AppColors.accent,
-            ),
-          )
-        : Icon(widget.icon, size: 16, color: iconColor);
-
-    final button = MouseRegion(
+    final enabled = onPressed != null && !busy;
+    final button = Hoverable(
       cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onPressed,
-        child: AnimatedContainer(
+      onTap: onPressed,
+      builder: (context, hovering) {
+        final Color iconColor;
+        final Color hoverBg;
+        if (primary) {
+          iconColor = enabled
+              ? (hovering ? AppColors.accentHover : AppColors.accent)
+              : AppColors.textMuted;
+          hoverBg = AppColors.accentSoft;
+        } else {
+          iconColor = enabled
+              ? (hovering ? AppColors.textPrimary : AppColors.textSecondary)
+              : AppColors.textMuted;
+          hoverBg = AppColors.surfaceHover;
+        }
+        final glyph = busy
+            ? SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.6,
+                  color: AppColors.accent,
+                ),
+              )
+            : Icon(icon, size: 16, color: iconColor);
+        return AnimatedContainer(
           duration: const Duration(milliseconds: 120),
           width: 30,
           height: 30,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: _hover && enabled ? hoverBg : Colors.transparent,
+            color: hovering && enabled ? hoverBg : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
           ),
           child: glyph,
-        ),
-      ),
+        );
+      },
     );
-
-    if (widget.tooltip == null) return button;
-    return Tooltip(message: widget.tooltip!, child: button);
+    if (tooltip == null) return button;
+    return Tooltip(message: tooltip!, child: button);
   }
 }
 
