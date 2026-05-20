@@ -52,6 +52,8 @@ class TableView extends StatelessWidget {
                           editable: !tab.table.isView,
                           edits: tab.edits,
                           widths: tab.columnWidths,
+                          onWidthChanged: (col, w) =>
+                              state.persistColumnWidth(tab.table, col, w),
                           onEditCell: (row, col, value) =>
                               state.setCellEdit(tab, row, col, value),
                           onRevertEdit: (row, col) =>

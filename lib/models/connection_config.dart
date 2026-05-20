@@ -15,9 +15,11 @@ class ConnectionConfig {
     Set<String>? favoriteTables,
     List<SavedQuery>? savedQueries,
     List<String>? recentTables,
+    Map<String, Map<String, double>>? columnWidths,
   })  : favoriteTables = favoriteTables ?? const {},
         savedQueries = savedQueries ?? const [],
-        recentTables = recentTables ?? const [];
+        recentTables = recentTables ?? const [],
+        columnWidths = columnWidths ?? const {};
 
   final String id;
   final String name;
@@ -41,6 +43,10 @@ class ConnectionConfig {
   /// catalog is loaded on connect.
   final List<String> recentTables;
 
+  /// User-set column widths, keyed by `schema.table` then by column name.
+  /// Rehydrated into the open tab's columnWidths on openTable.
+  final Map<String, Map<String, double>> columnWidths;
+
   String get summary => '$username@$host:$port/$database';
 
   Map<String, dynamic> toJson() => {
@@ -59,6 +65,7 @@ class ConnectionConfig {
         if (savedQueries.isNotEmpty)
           'queries': [for (final q in savedQueries) q.toJson()],
         if (recentTables.isNotEmpty) 'recentTables': recentTables,
+        if (columnWidths.isNotEmpty) 'columnWidths': columnWidths,
       };
 
   factory ConnectionConfig.fromJson(Map<String, dynamic> j) => ConnectionConfig(
@@ -85,6 +92,16 @@ class ConnectionConfig {
         recentTables: j['recentTables'] is List
             ? [for (final v in j['recentTables'] as List) v as String]
             : null,
+        columnWidths: j['columnWidths'] is Map
+            ? <String, Map<String, double>>{
+                for (final e
+                    in (j['columnWidths'] as Map).entries)
+                  e.key as String: <String, double>{
+                    for (final ee in (e.value as Map).entries)
+                      ee.key as String: (ee.value as num).toDouble(),
+                  },
+              }
+            : null,
       );
 
   ConnectionConfig copyWith({
@@ -99,6 +116,7 @@ class ConnectionConfig {
     Set<String>? favoriteTables,
     List<SavedQuery>? savedQueries,
     List<String>? recentTables,
+    Map<String, Map<String, double>>? columnWidths,
   }) {
     return ConnectionConfig(
       id: id,
@@ -113,6 +131,7 @@ class ConnectionConfig {
       favoriteTables: favoriteTables ?? this.favoriteTables,
       savedQueries: savedQueries ?? this.savedQueries,
       recentTables: recentTables ?? this.recentTables,
+      columnWidths: columnWidths ?? this.columnWidths,
     );
   }
 }

@@ -161,35 +161,30 @@ class _Body extends StatelessWidget {
 
     return Container(
       color: AppColors.bg,
-      child: Scrollbar(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Insets.lg,
+        vertical: Insets.md,
+      ),
+      child: SingleChildScrollView(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Insets.lg,
-            vertical: Insets.md,
-          ),
-          child: Scrollbar(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: IntrinsicWidth(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _LineNumbers(count: lineCount),
-                    const SizedBox(width: 14),
-                    SelectableText.rich(
-                      TextSpan(
-                        children: highlightNodesToSpans(
-                          parsed.nodes,
-                          base,
-                          apertureCodeStyles,
-                        ),
-                      ),
-                      style: base,
-                    ),
-                  ],
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _LineNumbers(count: lineCount),
+              const SizedBox(width: 14),
+              SelectableText.rich(
+                TextSpan(
+                  children: highlightNodesToSpans(
+                    parsed.nodes,
+                    base,
+                    apertureCodeStyles,
+                  ),
                 ),
+                style: base,
               ),
-            ),
+            ],
           ),
         ),
       ),

@@ -617,6 +617,10 @@ class AppState extends ChangeNotifier {
     }
 
     final tab = TableTab(_nextId(), table);
+    // Hydrate saved column widths for this table, if any.
+    final savedWidths =
+        _activeConnection?.columnWidths[table.qualifiedKey];
+    if (savedWidths != null) tab.columnWidths.addAll(savedWidths);
     _tabs.add(tab);
     _selectTab(_tabs.length - 1);
     // Catalog metadata first — it's a small query, and having it before the
@@ -625,6 +629,37 @@ class AppState extends ChangeNotifier {
     // doesn't reveal the column type.
     await ensureColumns(table);
     await loadTablePage(tab, 0);
+  }
+
+  // --- column widths persistence ---------------------------------------
+
+  Timer? _widthSaveTimer;
+  Map<String, Map<String, double>>? _pendingWidths;
+
+  /// Stores the user's resized [width] for [column] of [table], debounced so a
+  /// continuous drag coalesces into one disk write.
+  void persistColumnWidth(DbTable table, String column, double width) {
+    final conn = _activeConnection;
+    if (conn == null) return;
+
+    _pendingWidths ??=
+        Map<String, Map<String, double>>.from(conn.columnWidths.map(
+      (k, v) => MapEntry(k, Map<String, double>.from(v)),
+    ));
+    final perTable = _pendingWidths!.putIfAbsent(
+      table.qualifiedKey,
+      () => <String, double>{},
+    );
+    perTable[column] = width;
+
+    _widthSaveTimer?.cancel();
+    _widthSaveTimer = Timer(const Duration(milliseconds: 500), () {
+      final c = _activeConnection;
+      final pending = _pendingWidths;
+      if (c == null || pending == null) return;
+      _pendingWidths = null;
+      _replaceActiveConnection(c.copyWith(columnWidths: pending));
+    });
   }
 
   /// Opens (or focuses) the referenced table and filters it down to the row

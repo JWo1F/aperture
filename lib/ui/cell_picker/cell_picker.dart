@@ -134,32 +134,32 @@ const _kDate = _Kind(
   id: _KindId.date,
   label: 'date',
   color: AppColors.info,
-  size: Size(312, 360),
+  size: Size(252, 296),
 );
 const _kTime = _Kind(
   id: _KindId.time,
   label: 'time',
   color: AppColors.info,
-  size: Size(320, 158),
+  size: Size(252, 126),
 );
 const _kTimeTz = _Kind(
   id: _KindId.time,
   label: 'timetz',
   color: AppColors.info,
-  size: Size(320, 208),
+  size: Size(252, 168),
   withTimezone: true,
 );
 const _kDatetime = _Kind(
   id: _KindId.datetime,
   label: 'timestamp',
   color: AppColors.info,
-  size: Size(320, 444),
+  size: Size(252, 360),
 );
 const _kDatetimeTz = _Kind(
   id: _KindId.datetime,
   label: 'timestamptz',
   color: AppColors.info,
-  size: Size(320, 492),
+  size: Size(252, 400),
   withTimezone: true,
 );
 const _kBytes = _Kind(
@@ -1176,13 +1176,13 @@ class _TimeInputState extends State<_TimeInput> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _segment(_h, 'HH', width: 46, maxLen: 2),
+        _segment(_h, 'HH', width: 40, maxLen: 2),
         _sep(':'),
-        _segment(_m, 'MM', width: 46, maxLen: 2),
+        _segment(_m, 'MM', width: 40, maxLen: 2),
         _sep(':'),
-        _segment(_s, 'SS', width: 46, maxLen: 2),
+        _segment(_s, 'SS', width: 40, maxLen: 2),
         _sep('.'),
-        _segment(_ms, 'MS', width: 56, maxLen: 3),
+        _segment(_ms, 'MS', width: 50, maxLen: 3),
       ],
     );
   }

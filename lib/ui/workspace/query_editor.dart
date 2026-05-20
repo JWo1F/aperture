@@ -170,8 +170,8 @@ class _QueryEditorState extends State<QueryEditor> {
     super.dispose();
   }
 
-  /// Custom gutter line builder — injects a play icon (WidgetSpan) on each
-  /// runnable line so the user can fire a single statement with one click.
+  /// Custom gutter line builder — line number first, then a play icon
+  /// (WidgetSpan) on each runnable line. Click runs just that statement.
   TextSpan _gutterLine(int line, TextStyle? style) {
     if (!_runnableLines.contains(line)) {
       return TextSpan(text: '$line', style: style);
@@ -179,6 +179,7 @@ class _QueryEditorState extends State<QueryEditor> {
     final stmt = _statements.firstWhere((s) => s.startLine + 1 == line);
     return TextSpan(
       children: [
+        TextSpan(text: '$line', style: style),
         WidgetSpan(
           alignment: PlaceholderAlignment.middle,
           child: MouseRegion(
@@ -186,17 +187,16 @@ class _QueryEditorState extends State<QueryEditor> {
             child: GestureDetector(
               onTap: () => _runStatement(stmt),
               child: const Padding(
-                padding: EdgeInsets.only(right: 4),
+                padding: EdgeInsets.only(left: 4),
                 child: Icon(
                   Icons.play_arrow_rounded,
-                  size: 12,
+                  size: 13,
                   color: AppColors.success,
                 ),
               ),
             ),
           ),
         ),
-        TextSpan(text: '$line', style: style),
       ],
     );
   }
@@ -214,8 +214,6 @@ class _QueryEditorState extends State<QueryEditor> {
           statementCount: _statements.length,
           cursorStmt: _cursorStmt,
           onRun: tab.running ? null : _runAll,
-          onRunAtCursor:
-              tab.running || _statements.isEmpty ? null : _runAtCursor,
           onExport: tab.result == null ? null : _openExport,
         ),
         Expanded(
@@ -296,14 +294,13 @@ class _QueryEditorState extends State<QueryEditor> {
 }
 
 /// Query editor toolbar — synth-panel layout with hairline rails grouping
-/// the run actions, the multi-statement controls, and the export action.
+/// the run action, the multi-statement status readout, and the export action.
 class _Toolbar extends StatelessWidget {
   const _Toolbar({
     required this.tab,
     required this.statementCount,
     required this.cursorStmt,
     required this.onRun,
-    required this.onRunAtCursor,
     required this.onExport,
   });
 
@@ -311,7 +308,6 @@ class _Toolbar extends StatelessWidget {
   final int statementCount;
   final int? cursorStmt;
   final VoidCallback? onRun;
-  final VoidCallback? onRunAtCursor;
   final VoidCallback? onExport;
 
   @override
@@ -336,21 +332,17 @@ class _Toolbar extends StatelessWidget {
           ),
           const SizedBox(width: 7),
           const KbdChip('⌘↵'),
-          // ── multi-statement controls (only when relevant) ──
+          // ── statement readout (only when multi-statement) ──
+          // No standalone "At cursor" button — the gutter ▶ icons + ⌘⇧↵
+          // shortcut cover that path.
           if (multi) ...[
-            const Rail(),
-            AppButton(
-              label: 'At cursor',
-              icon: Icons.adjust,
-              onPressed: onRunAtCursor,
-            ),
-            const SizedBox(width: 7),
-            const KbdChip('⌘⇧↵'),
             const Rail(),
             _StatementStatus(
               count: statementCount,
               cursorStmt: cursorStmt,
             ),
+            const SizedBox(width: 8),
+            const KbdChip('⌘⇧↵'),
           ],
           const Spacer(),
           if (tab.running)

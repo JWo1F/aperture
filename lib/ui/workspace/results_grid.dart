@@ -30,6 +30,7 @@ class ResultsGrid extends StatefulWidget {
     this.onSetSort,
     this.onAddFilter,
     this.widths,
+    this.onWidthChanged,
     this.foreignKeys,
     this.onFollowForeignKey,
     this.columnMeta,
@@ -49,6 +50,10 @@ class ResultsGrid extends StatefulWidget {
 
   /// Optional caller-owned width store, keyed by column name.
   final Map<String, double>? widths;
+
+  /// Called after a user drag finishes (or during, throttled by the parent)
+  /// with the column name and its new width. Used to persist resizes to disk.
+  final void Function(String column, double width)? onWidthChanged;
 
   /// Single-column foreign keys keyed by local column name.
   final Map<String, DbForeignKey>? foreignKeys;
@@ -460,6 +465,7 @@ class _ResultsGridState extends State<ResultsGrid> {
                         (_widths[i] + delta).clamp(64.0, 900.0);
                     setState(() => _widths[i] = next);
                     widget.widths?[columns[i]] = next;
+                    widget.onWidthChanged?.call(columns[i], next);
                   },
                 ),
             ],
