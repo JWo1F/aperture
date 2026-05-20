@@ -255,7 +255,7 @@ class _TableToolbarState extends State<_TableToolbar> {
         children: [
           // ── identity ──
           _TableIdentity(tab: tab),
-          const _Rail(),
+          const Rail(),
           // ── clauses ──
           Expanded(
             flex: 2,
@@ -292,7 +292,7 @@ class _TableToolbarState extends State<_TableToolbar> {
               active: orderActive,
             ),
           ),
-          const _Rail(),
+          const Rail(),
           // ── actions ──
           if (!tab.table.isView) ...[
             _EditCountBadge(
@@ -378,20 +378,6 @@ class _TableIdentity extends StatelessWidget {
   }
 }
 
-/// A 1px vertical rail that separates toolbar sections.
-class _Rail extends StatelessWidget {
-  const _Rail();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 18,
-      margin: const EdgeInsets.symmetric(horizontal: 10),
-      color: AppColors.border,
-    );
-  }
-}
 
 /// A clause chip: uppercase prefix label · vertical hairline · inline value.
 /// The prefix is rendered in the accent when the clause is constraining the

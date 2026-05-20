@@ -2,6 +2,46 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
 
+/// Hairline vertical rail used to separate logical groups in compact
+/// toolbars (table view, query editor, …).
+class Rail extends StatelessWidget {
+  const Rail({super.key, this.height = 18});
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: height,
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      color: AppColors.border,
+    );
+  }
+}
+
+/// Tiny key-cap-style chip used to render keyboard shortcut hints inline
+/// next to buttons.
+class KbdChip extends StatelessWidget {
+  const KbdChip(this.text, {super.key});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: Radii.brSm,
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(
+        text,
+        style: AppTheme.mono(size: 10, color: AppColors.textMuted),
+      ),
+    );
+  }
+}
+
 /// Compact toolbar/dialog button with a hover state. The [primary] variant
 /// fills with the amber accent; the default variant is a quiet outline.
 class AppButton extends StatefulWidget {

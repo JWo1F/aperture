@@ -38,33 +38,59 @@ class _QueryEditorState extends State<QueryEditor> {
   Timer? _saveTimer;
   List<SqlStatement> _statements = const [];
   Set<int> _runnableLines = const {};
+  int? _cursorStmt; // 1-based statement index containing the caret
 
   @override
   void initState() {
     super.initState();
     _controller = CodeController(text: widget.tab.sql, language: pgsql);
-    _controller.addListener(_onTextChanged);
+    _controller.addListener(_onControllerChange);
     _recomputeStatements();
+    _recomputeCursorStmt();
   }
 
-  void _onTextChanged() {
+  void _onControllerChange() {
     final text = _controller.text;
-    if (widget.tab.sql == text) return;
-    widget.tab.sql = text;
-    _recomputeStatements();
-    setState(() {});
+    var dirty = false;
 
-    // Debounced autosave into the active connection's SavedQuery list.
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 400), () {
-      if (!mounted) return;
-      context.read<AppState>().updateQuerySql(widget.tab, _controller.text);
-    });
+    if (widget.tab.sql != text) {
+      widget.tab.sql = text;
+      _recomputeStatements();
+      dirty = true;
+
+      _saveTimer?.cancel();
+      _saveTimer = Timer(const Duration(milliseconds: 400), () {
+        if (!mounted) return;
+        context.read<AppState>().updateQuerySql(widget.tab, _controller.text);
+      });
+    }
+
+    final nextCursor = _computeCursorStmt();
+    if (nextCursor != _cursorStmt) {
+      _cursorStmt = nextCursor;
+      dirty = true;
+    }
+
+    if (dirty) setState(() {});
   }
 
   void _recomputeStatements() {
     _statements = parseSqlStatements(_controller.text);
     _runnableLines = {for (final s in _statements) s.startLine + 1};
+  }
+
+  void _recomputeCursorStmt() {
+    _cursorStmt = _computeCursorStmt();
+  }
+
+  int? _computeCursorStmt() {
+    final offset = _controller.selection.baseOffset;
+    if (offset < 0 || _statements.isEmpty) return null;
+    for (var i = 0; i < _statements.length; i++) {
+      final s = _statements[i];
+      if (offset >= s.startOffset && offset <= s.endOffset) return i + 1;
+    }
+    return null;
   }
 
   void _refreshAutocomplete(AppState state) {
@@ -139,7 +165,7 @@ class _QueryEditorState extends State<QueryEditor> {
   @override
   void dispose() {
     _saveTimer?.cancel();
-    _controller.removeListener(_onTextChanged);
+    _controller.removeListener(_onControllerChange);
     _controller.dispose();
     super.dispose();
   }
@@ -186,8 +212,10 @@ class _QueryEditorState extends State<QueryEditor> {
         _Toolbar(
           tab: tab,
           statementCount: _statements.length,
+          cursorStmt: _cursorStmt,
           onRun: tab.running ? null : _runAll,
-          onRunAtCursor: tab.running || _statements.isEmpty ? null : _runAtCursor,
+          onRunAtCursor:
+              tab.running || _statements.isEmpty ? null : _runAtCursor,
           onExport: tab.result == null ? null : _openExport,
         ),
         Expanded(
@@ -267,10 +295,13 @@ class _QueryEditorState extends State<QueryEditor> {
   }
 }
 
+/// Query editor toolbar — synth-panel layout with hairline rails grouping
+/// the run actions, the multi-statement controls, and the export action.
 class _Toolbar extends StatelessWidget {
   const _Toolbar({
     required this.tab,
     required this.statementCount,
+    required this.cursorStmt,
     required this.onRun,
     required this.onRunAtCursor,
     required this.onExport,
@@ -278,14 +309,17 @@ class _Toolbar extends StatelessWidget {
 
   final QueryTab tab;
   final int statementCount;
+  final int? cursorStmt;
   final VoidCallback? onRun;
   final VoidCallback? onRunAtCursor;
   final VoidCallback? onExport;
 
   @override
   Widget build(BuildContext context) {
+    final multi = statementCount > 1;
+
     return Container(
-      height: 42,
+      height: 44,
       padding: const EdgeInsets.symmetric(horizontal: Insets.md),
       decoration: const BoxDecoration(
         color: AppColors.surface,
@@ -293,44 +327,37 @@ class _Toolbar extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // ── primary run ──
           AppButton(
-            label: tab.running ? 'Running…' : 'Run all',
+            label: tab.running ? 'Running…' : 'Run',
             icon: Icons.play_arrow,
             primary: true,
             onPressed: onRun,
           ),
-          const SizedBox(width: Insets.sm),
-          Text(
-            '⌘↵',
-            style: AppTheme.mono(size: 11, color: AppColors.textMuted),
-          ),
-          if (statementCount > 1) ...[
-            const SizedBox(width: Insets.md),
+          const SizedBox(width: 7),
+          const KbdChip('⌘↵'),
+          // ── multi-statement controls (only when relevant) ──
+          if (multi) ...[
+            const Rail(),
             AppButton(
-              label: 'Run at cursor',
+              label: 'At cursor',
               icon: Icons.adjust,
               onPressed: onRunAtCursor,
             ),
-            const SizedBox(width: Insets.sm),
-            Text(
-              '⌘⇧↵',
-              style: AppTheme.mono(size: 11, color: AppColors.textMuted),
+            const SizedBox(width: 7),
+            const KbdChip('⌘⇧↵'),
+            const Rail(),
+            _StatementStatus(
+              count: statementCount,
+              cursorStmt: cursorStmt,
             ),
-            const SizedBox(width: Insets.md),
-            _StatementCountBadge(count: statementCount),
           ],
           const Spacer(),
-          if (tab.running) ...[
-            const SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: AppColors.accent,
-              ),
-            ),
-            const SizedBox(width: Insets.sm),
-          ],
+          if (tab.running)
+            const _RunningIndicator()
+          else if (tab.result != null)
+            _LastStatus(tab: tab),
+          const Rail(),
           IconAction(
             icon: Icons.ios_share,
             tooltip: 'Export…',
@@ -342,26 +369,104 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
-class _StatementCountBadge extends StatelessWidget {
-  const _StatementCountBadge({required this.count});
+/// Compact readout: `3 statements · on #2` — number bolded, rest muted.
+class _StatementStatus extends StatelessWidget {
+  const _StatementStatus({required this.count, required this.cursorStmt});
   final int count;
+  final int? cursorStmt;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppColors.accentSoft,
-        borderRadius: Radii.brSm,
+    return RichText(
+      text: TextSpan(
+        style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+        children: [
+          TextSpan(
+            text: '$count',
+            style: AppTheme.mono(
+              size: 10.5,
+              color: AppColors.textSecondary,
+              weight: FontWeight.w600,
+            ),
+          ),
+          const TextSpan(text: ' statements'),
+          if (cursorStmt != null) ...[
+            const TextSpan(text: '  ·  on '),
+            TextSpan(
+              text: '#$cursorStmt',
+              style: AppTheme.mono(
+                size: 10.5,
+                color: AppColors.accent,
+                weight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
       ),
-      child: Text(
-        '$count stmts',
-        style: AppTheme.mono(
-          size: 10,
-          color: AppColors.accent,
-          weight: FontWeight.w600,
+    );
+  }
+}
+
+class _RunningIndicator extends StatelessWidget {
+  const _RunningIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const SizedBox(
+          width: 12,
+          height: 12,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.6,
+            color: AppColors.accent,
+          ),
         ),
-      ),
+        const SizedBox(width: 6),
+        Text(
+          'running',
+          style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+        ),
+      ],
+    );
+  }
+}
+
+/// Tiny end-of-toolbar status — rows / ms — when a result is loaded but no
+/// run is in progress. Mirrors the bottom status bar in a glanceable form.
+class _LastStatus extends StatelessWidget {
+  const _LastStatus({required this.tab});
+  final QueryTab tab;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = tab.result!;
+    final isError = r.isError;
+    final color = isError ? AppColors.error : AppColors.success;
+    final summary = isError
+        ? 'error'
+        : r.hasColumns
+            ? '${r.rows.length} rows'
+            : '${r.affectedRows ?? 0} rows affected';
+
+    return Row(
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          summary,
+          style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '${r.elapsed.inMilliseconds}ms',
+          style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+        ),
+      ],
     );
   }
 }
