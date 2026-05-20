@@ -9,10 +9,9 @@ import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
 import '../widgets/common.dart';
 
-/// Renders a [SchemaTab] — the reconstructed CREATE TABLE DDL with indexes
-/// and constraints. Uses `highlight`'s pgsql grammar through
-/// [highlightNodesToSpans] so the text stays inside a [SelectableText.rich],
-/// keeping the whole DDL selectable / copyable.
+/// Renders a [SchemaTab] in the design's "article" style: centered title,
+/// muted relation subtitle, eyebrow section heading, and a surface DDL block
+/// with selectable, syntax-highlighted source.
 class SchemaView extends StatelessWidget {
   const SchemaView({super.key, required this.tab});
 
@@ -54,28 +53,24 @@ class _Toolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: Insets.md),
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.bgDeep,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.data_object,
-            size: 14,
-            color: AppColors.accent,
-          ),
+          Icon(Icons.data_object, size: 13, color: AppColors.accent),
           const SizedBox(width: 7),
           RichText(
             text: TextSpan(
-              style: AppTheme.mono(size: 12, weight: FontWeight.w600),
+              style: AppTheme.mono(size: 11.5, weight: FontWeight.w600),
               children: [
                 TextSpan(
                   text: '${tab.table.schema}.',
                   style: AppTheme.mono(
-                    size: 12,
+                    size: 11.5,
                     color: AppColors.textMuted,
                     weight: FontWeight.w400,
                   ),
@@ -150,45 +145,69 @@ class _Body extends StatelessWidget {
       );
     }
 
-    final base = AppTheme.mono(size: 12, color: AppColors.textPrimary);
-    // Trim trailing newline so line numbers match the rendered lines exactly.
+    final base = AppTheme.mono(size: 12, color: AppColors.textPrimary)
+        .copyWith(height: 1.65);
     final raw = tab.ddl!;
     final ddl = raw.endsWith('\n')
         ? raw.substring(0, raw.length - 1)
         : raw;
-    final lineCount = '\n'.allMatches(ddl).length + 1;
     final parsed = highlight.parse(ddl, language: 'pgsql');
 
     return Container(
       color: AppColors.bg,
       child: SingleChildScrollView(
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _LineNumbers(count: lineCount, baseStyle: base),
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.fromLTRB(
-                    14,
-                    Insets.md,
-                    Insets.md,
-                    Insets.md,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 920),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(40, 28, 40, 60),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    tab.table.name,
+                    style: AppTheme.mono(
+                      size: 18,
+                      color: AppColors.textPrimary,
+                      weight: FontWeight.w500,
+                    ),
                   ),
-                  child: SelectableText.rich(
-                    TextSpan(
-                      children: highlightNodesToSpans(
-                        parsed.nodes,
-                        base,
-                        apertureCodeStyles,
+                  const SizedBox(height: 4),
+                  Text(
+                    '${tab.table.schema} · ${tab.table.isView ? 'view' : 'table'}',
+                    style: AppTheme.mono(
+                      size: 11.5,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  _SectionTitle(label: 'DDL'),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: Radii.brSm,
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SelectableText.rich(
+                        TextSpan(
+                          children: highlightNodesToSpans(
+                            parsed.nodes,
+                            base,
+                            apertureCodeStyles,
+                          ),
+                        ),
+                        style: base,
                       ),
                     ),
-                    style: base,
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -196,29 +215,25 @@ class _Body extends StatelessWidget {
   }
 }
 
-class _LineNumbers extends StatelessWidget {
-  const _LineNumbers({required this.count, required this.baseStyle});
-  final int count;
-
-  /// Body text style. Line numbers inherit its size + height so each row
-  /// aligns exactly with its source line — different sizes drift over many
-  /// lines and make numbers look one short at the bottom.
-  final TextStyle baseStyle;
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.label});
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    final style = baseStyle.copyWith(color: AppColors.textMuted);
-    return SelectionContainer.disabled(
-      child: Container(
-        color: AppColors.surface,
-        padding: const EdgeInsets.fromLTRB(10, Insets.md, 10, Insets.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            for (var i = 1; i <= count; i++) Text('$i', style: style),
-          ],
+    return Row(
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: AppTheme.mono(
+            size: 10.5,
+            color: AppColors.textMuted,
+            weight: FontWeight.w600,
+          ).copyWith(letterSpacing: 0.08 * 10.5),
         ),
-      ),
+        const SizedBox(width: 8),
+        Expanded(child: Container(height: 1, color: AppColors.hairline)),
+      ],
     );
   }
 }

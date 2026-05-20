@@ -9,10 +9,12 @@ import '../models/connection_config.dart';
 import '../models/time_ago.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../state/workspace_tab.dart';
 import 'about/about_dialog.dart';
 import 'command_palette/command_palette.dart';
 import 'connection/connection_dialog.dart';
-import 'connection/connection_menu.dart';
+import 'edits/pending_edits_modal.dart';
+import 'export/export_dialog.dart';
 import 'log/log_panel.dart';
 import 'sidebar/sidebar.dart';
 import 'widgets/common.dart';
@@ -246,6 +248,12 @@ class _Toolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final connected = state.status == ConnectionStatus.connected;
+    final pending = state.unappliedEditCount;
+    final activeTab = state.activeTab;
+    final isQueryTab = activeTab is QueryTab;
+    final queryRunning = isQueryTab && (activeTab).running;
+    final tableTab = activeTab is TableTab ? activeTab : null;
+    final canExport = tableTab?.result != null;
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -259,26 +267,96 @@ class _Toolbar extends StatelessWidget {
             bottom: BorderSide(color: AppColors.hairline, width: 1),
           ),
         ),
-        padding: const EdgeInsets.only(
+        padding: EdgeInsets.only(
           left: _trafficLightInset,
           right: 10,
         ),
         child: Row(
           children: [
-            const _BrandMark(),
-            const SizedBox(width: 14),
-            const ConnectionMenu(),
-            const Spacer(),
-            _CompactSearch(
-              onTap: () => showCommandPalette(context, state),
+            _TbIcon(
+              icon: Icons.view_sidebar_outlined,
+              tooltip: 'Toggle sidebar',
+              onPressed: () {},
+            ),
+            const _TbRail(),
+            _TbIcon(
+              icon: Icons.arrow_back,
+              tooltip: 'Back  ⌘[',
+              onPressed: state.canGoBack ? state.historyBack : null,
+            ),
+            _TbIcon(
+              icon: Icons.arrow_forward,
+              tooltip: 'Forward  ⌘]',
+              onPressed: state.canGoForward ? state.historyForward : null,
+            ),
+            const _TbRail(),
+            const SizedBox(width: 6),
+            const ConnectionPill(),
+            const _TbRail(),
+            _TbPrimary(
+              label: 'Run',
+              icon: Icons.play_arrow,
+              kbd: const ['⌘', '↵'],
+              onPressed: isQueryTab && !queryRunning
+                  ? () => state.runQuery(activeTab)
+                  : (connected ? state.newQueryTab : null),
+            ),
+            const SizedBox(width: 2),
+            _TbIcon(
+              icon: Icons.bolt_outlined,
+              tooltip: 'Run all  ⌘⇧↵',
+              onPressed: isQueryTab && !queryRunning
+                  ? () => state.runQuery(activeTab)
+                  : null,
+            ),
+            const _TbRail(),
+            _TbIcon(
+              icon: Icons.ios_share,
+              tooltip: 'Export…',
+              onPressed: canExport && tableTab != null
+                  ? () => _openTableExport(context, state, tableTab)
+                  : null,
+            ),
+            _TbIcon(
+              icon: Icons.refresh,
+              tooltip: 'Refresh schema  ⌘R',
+              busy: state.isCatalogLoading,
+              onPressed:
+                  connected && !state.isCatalogLoading ? state.refreshCatalog : null,
             ),
             const Spacer(),
-            _ActionCluster(
-              brightness: state.brightness,
-              onToggleTheme: state.toggleBrightness,
-              onNewQuery: connected ? state.newQueryTab : null,
-              onDisconnect: connected ? state.disconnect : null,
+            if (pending > 0) ...[
+              _PendingPill(
+                count: pending,
+                onTap: () => _openPendingForActiveTab(context, state),
+              ),
+              const _TbRail(),
+            ],
+            // Search pill flexes so the toolbar never overflows on a narrow
+            // window: shrinks down to a thin search affordance, the kbd hint
+            // tucks out of view via overflow ellipsis on the hint text.
+            Flexible(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 220),
+                child: _TbSearch(
+                  onTap: () => showCommandPalette(context, state),
+                ),
+              ),
             ),
+            const SizedBox(width: 6),
+            _TbIcon(
+              icon: state.brightness == AppBrightness.dark
+                  ? Icons.dark_mode_outlined
+                  : Icons.light_mode_outlined,
+              tooltip: 'Toggle theme',
+              onPressed: state.toggleBrightness,
+            ),
+            if (connected)
+              _TbIcon(
+                icon: Icons.power_settings_new,
+                tooltip: 'Disconnect',
+                onPressed: state.disconnect,
+              ),
           ],
         ),
       ),
@@ -286,38 +364,341 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
-/// Hand-drawn aperture iris + lowercase JetBrains Mono wordmark. The mark
-/// stands on its own glyph weight — no chip, no rounded background — so the
-/// brand reads as "tool" rather than "app icon". The iris is built from four
-/// rotated chevrons that converge on a central point, lit in the accent.
-class _BrandMark extends StatelessWidget {
-  const _BrandMark();
+void _openTableExport(BuildContext context, AppState state, TableTab tab) {
+  final result = tab.result;
+  if (result == null) return;
+  final timestamp = filenameTimestamp();
+  showExportDialog(
+    context,
+    target: ExportTarget(
+      suggestedFilename: '${tab.table.name}_$timestamp.csv',
+      currentResult: result,
+      fetchAll: () => state.fetchAllForExport(tab),
+      totalRowsForAll: tab.totalRows,
+    ),
+  );
+}
+
+void _openPendingForActiveTab(BuildContext context, AppState state) {
+  final tab = state.activeTab;
+  if (tab is TableTab && tab.hasEdits) {
+    final statements = state.previewEditStatements(tab);
+    showPendingEditsModal(context, statements: statements);
+    return;
+  }
+  // Active tab has no edits; surface the first tab that does.
+  for (final t in state.tabs) {
+    if (t is TableTab && t.hasEdits) {
+      state.selectTab(state.tabs.indexOf(t));
+      final statements = state.previewEditStatements(t);
+      showPendingEditsModal(context, statements: statements);
+      return;
+    }
+  }
+}
+
+/// 1px vertical hairline separating toolbar groups.
+class _TbRail extends StatelessWidget {
+  const _TbRail();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 16,
+      margin: const EdgeInsets.symmetric(horizontal: 6),
+      color: AppColors.hairline,
+    );
+  }
+}
+
+/// 26×26 ghost icon button used throughout the toolbar.
+class _TbIcon extends StatelessWidget {
+  const _TbIcon({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    this.busy = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null && !busy;
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 350),
+      child: Hoverable(
+        cursor: enabled
+            ? SystemMouseCursors.click
+            : SystemMouseCursors.basic,
+        onTap: onPressed,
+        builder: (context, hovering) {
+          final Color fg = enabled
+              ? (hovering ? AppColors.textPrimary : AppColors.textMuted)
+              : AppColors.textMuted.withValues(alpha: 0.4);
+          final Color bg = hovering && enabled
+              ? AppColors.surfaceHover
+              : Colors.transparent;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            width: 26,
+            height: 26,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: Radii.brSm,
+            ),
+            child: busy
+                ? SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.6,
+                      color: AppColors.accent,
+                    ),
+                  )
+                : Icon(icon, size: 14, color: fg),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Filled-accent primary button for the toolbar's Run action.
+class _TbPrimary extends StatelessWidget {
+  const _TbPrimary({
+    required this.label,
+    required this.icon,
+    required this.kbd,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final List<String> kbd;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    return Hoverable(
+      cursor:
+          enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onTap: onPressed,
+      builder: (context, hovering) {
+        final bg = !enabled
+            ? AppColors.accent.withValues(alpha: 0.4)
+            : (hovering ? AppColors.accentHover : AppColors.accent);
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          height: 24,
+          padding: const EdgeInsets.only(left: 8, right: 6),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: Radii.brSm,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(icon, size: 12, color: Colors.white),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: AppTheme.ui(
+                  size: 11.5,
+                  color: Colors.white,
+                  weight: FontWeight.w600,
+                  letterSpacing: -0.005 * 11.5,
+                ),
+              ),
+              const SizedBox(width: 6),
+              _PrimaryKbd(parts: kbd),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Small mono kbd chip rendered on top of the accent background — uses a
+/// translucent white tile to read as keys at a glance.
+class _PrimaryKbd extends StatelessWidget {
+  const _PrimaryKbd({required this.parts});
+  final List<String> parts;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        SizedBox(
-          width: 18,
-          height: 18,
-          child: CustomPaint(
-            painter: _ApertureIrisPainter(
-              accent: AppColors.accent,
-              dim: AppColors.textMuted,
+        for (var i = 0; i < parts.length; i++) ...[
+          if (i > 0) const SizedBox(width: 2),
+          Container(
+            constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: Text(
+              parts[i],
+              style: AppTheme.mono(
+                size: 9.5,
+                color: Colors.white,
+                weight: FontWeight.w600,
+              ),
             ),
           ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Accent pill that surfaces the cross-tab pending edit count.
+class _PendingPill extends StatelessWidget {
+  const _PendingPill({required this.count, required this.onTap});
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Open pending edits',
+      child: Hoverable(
+        onTap: onTap,
+        builder: (context, hovering) => Container(
+          height: 24,
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          decoration: BoxDecoration(
+            color: hovering
+                ? AppColors.accent.withValues(alpha: 0.22)
+                : AppColors.accentSoft,
+            borderRadius: Radii.brSm,
+            border: Border.all(color: AppColors.accentSoft),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.accent.withValues(alpha: 0.4),
+                      blurRadius: 3,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '$count pending',
+                style: AppTheme.ui(
+                  size: 11.5,
+                  color: AppColors.accent,
+                  weight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(width: 9),
-        Text(
-          'dbv',
-          style: AppTheme.mono(
-            size: 14,
-            color: AppColors.textPrimary,
-            weight: FontWeight.w700,
-          ).copyWith(letterSpacing: -0.2),
+      ),
+    );
+  }
+}
+
+/// Wide ⌘K search trigger styled as a flat input — surface bg, hairline
+/// border, magnifier glyph, hint text, kbd chip.
+class _TbSearch extends StatelessWidget {
+  const _TbSearch({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Find tables, queries…  ⌘K',
+      child: Hoverable(
+        onTap: onTap,
+        builder: (context, hovering) => Container(
+          height: 24,
+          padding: const EdgeInsets.only(left: 10, right: 5),
+          decoration: BoxDecoration(
+            color: hovering ? AppColors.surfaceHover : AppColors.surface,
+            borderRadius: Radii.brSm,
+            border: Border.all(
+              color: hovering ? AppColors.borderStrong : AppColors.border,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.search, size: 12, color: AppColors.textMuted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Find tables, queries…',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.mono(
+                    size: 11,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const _MonoKbd(parts: ['⌘', 'K']),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// Tiny kbd group rendered with the design's surface-2 chip styling.
+class _MonoKbd extends StatelessWidget {
+  const _MonoKbd({required this.parts});
+  final List<String> parts;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < parts.length; i++) ...[
+          if (i > 0) const SizedBox(width: 2),
+          Container(
+            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Text(
+              parts[i],
+              style: AppTheme.mono(
+                size: 10,
+                color: AppColors.textSecondary,
+                weight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -395,240 +776,351 @@ class _ApertureIrisPainter extends CustomPainter {
       old.accent != accent || old.dim != dim;
 }
 
-/// Compact search affordance — pill with a tight ⌘K chip and a small magnifier
-/// glyph. Sits in the dead-centre of the toolbar but is narrow enough that the
-/// header doesn't feel like a search-first interface.
-class _CompactSearch extends StatelessWidget {
-  const _CompactSearch({required this.onTap});
-  final VoidCallback onTap;
+/// Toolbar identity pill: dot · db icon · conn name · `/` · schema · chev.
+/// Tap opens the connection switcher overlay.
+class ConnectionPill extends StatefulWidget {
+  const ConnectionPill({super.key});
+
+  @override
+  State<ConnectionPill> createState() => _ConnectionPillState();
+}
+
+class _ConnectionPillState extends State<ConnectionPill> {
+  final LayerLink _link = LayerLink();
+  OverlayEntry? _entry;
+
+  void _open() {
+    if (_entry != null) {
+      _close();
+      return;
+    }
+    _entry = OverlayEntry(builder: _buildOverlay);
+    Overlay.of(context).insert(_entry!);
+  }
+
+  void _close() {
+    _entry?.remove();
+    _entry = null;
+  }
+
+  @override
+  void dispose() {
+    _close();
+    super.dispose();
+  }
+
+  Widget _buildOverlay(BuildContext _) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _close,
+          ),
+        ),
+        CompositedTransformFollower(
+          link: _link,
+          targetAnchor: Alignment.bottomLeft,
+          offset: const Offset(0, 6),
+          showWhenUnlinked: false,
+          child: _ConnectionPickerPanel(onClose: _close),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Search & jump  ⌘K',
+    final state = context.watch<AppState>();
+    final conn = state.activeConnection;
+    final (Color dot, String connLabel) = switch (state.status) {
+      ConnectionStatus.connected => (
+          AppColors.success,
+          conn?.name ?? 'connected',
+        ),
+      ConnectionStatus.connecting => (AppColors.accent, 'connecting…'),
+      ConnectionStatus.lost => (AppColors.warning, conn?.name ?? 'lost'),
+      ConnectionStatus.error => (AppColors.error, 'no connection'),
+      ConnectionStatus.disconnected => (
+          AppColors.textMuted,
+          'no connection',
+        ),
+    };
+    final schema = _activeSchema(state) ?? 'public';
+
+    return CompositedTransformTarget(
+      link: _link,
       child: Hoverable(
-        onTap: onTap,
-        builder: (context, hovering) {
-          final accentLine =
-              hovering ? AppColors.accent : AppColors.borderStrong;
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            curve: Curves.easeOut,
-            height: 28,
-            padding: const EdgeInsets.only(left: 11, right: 5),
-            decoration: BoxDecoration(
-              color: hovering ? AppColors.surfaceHover : Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: accentLine),
+        onTap: _open,
+        builder: (context, hovering) => Container(
+          height: 26,
+          padding: const EdgeInsets.only(left: 8, right: 8),
+          decoration: BoxDecoration(
+            color:
+                hovering ? AppColors.surfaceHover : AppColors.surface,
+            borderRadius: Radii.brSm,
+            border: Border.all(
+              color: hovering
+                  ? AppColors.borderStrong
+                  : AppColors.border,
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.search,
-                  size: 12,
-                  color: hovering
-                      ? AppColors.accent
-                      : AppColors.textSecondary,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: dot,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: dot.withValues(alpha: 0.32),
+                      blurRadius: 3,
+                      spreadRadius: 1.2,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'jump…',
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.storage_rounded,
+                size: 11,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 200),
+                child: Text(
+                  connLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTheme.mono(
-                    size: 11,
-                    color: AppColors.textSecondary,
-                    weight: FontWeight.w400,
+                    size: 11.5,
+                    color: AppColors.textPrimary,
+                    weight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(width: 14),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: AppColors.bg,
-                    borderRadius: BorderRadius.circular(10),
+              ),
+              if (state.status == ConnectionStatus.connected) ...[
+                const SizedBox(width: 6),
+                Text(
+                  '/',
+                  style: AppTheme.mono(
+                    size: 11.5,
+                    color: AppColors.text4,
                   ),
+                ),
+                const SizedBox(width: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 160),
                   child: Text(
-                    '⌘K',
+                    schema,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: AppTheme.mono(
-                      size: 9.5,
+                      size: 11.5,
                       color: AppColors.textSecondary,
-                      weight: FontWeight.w600,
-                    ).copyWith(letterSpacing: 0.4),
+                    ),
                   ),
                 ),
               ],
+              const SizedBox(width: 4),
+              Icon(
+                Icons.expand_more,
+                size: 12,
+                color: AppColors.text4,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String? _activeSchema(AppState state) {
+    final tab = state.activeTab;
+    if (tab is TableTab) return tab.table.schema;
+    if (tab is SchemaTab) return tab.table.schema;
+    return null;
+  }
+}
+
+class _ConnectionPickerPanel extends StatelessWidget {
+  const _ConnectionPickerPanel({required this.onClose});
+  final VoidCallback onClose;
+
+  Future<void> _newConnection(BuildContext context) async {
+    onClose();
+    final state = context.read<AppState>();
+    final config = await showConnectionDialog(context);
+    if (config == null) return;
+    state.addConnection(config);
+    await state.connect(config);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final active = state.activeConnection?.id;
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 320,
+        constraints: const BoxConstraints(maxHeight: 360),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: Radii.brMd,
+          border: Border.all(color: AppColors.borderStrong),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x88000000),
+              blurRadius: 30,
+              offset: Offset(0, 10),
             ),
-          );
-        },
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (state.connections.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 14,
+                  ),
+                  child: Text(
+                    'No saved connections yet.',
+                    style: AppTheme.ui(
+                      size: 11.5,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                )
+              else
+                Flexible(
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: state.connections.length,
+                    itemBuilder: (_, i) {
+                      final c = state.connections[i];
+                      return _ConnPickerRow(
+                        config: c,
+                        active: c.id == active,
+                        onTap: () {
+                          onClose();
+                          if (c.id != active) state.connect(c);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              Divider(height: 9, color: AppColors.hairline),
+              Hoverable(
+                onTap: () => _newConnection(context),
+                builder: (context, hovering) => Container(
+                  height: 30,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: hovering
+                        ? AppColors.surfaceHover
+                        : Colors.transparent,
+                    borderRadius: Radii.brSm,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.add, size: 13, color: AppColors.accent),
+                      const SizedBox(width: 8),
+                      Text(
+                        'New connection…',
+                        style: AppTheme.ui(
+                          size: 12,
+                          color: AppColors.accent,
+                          weight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-/// Right-side action group — one rounded shell with hairline rails between
-/// the cells. Reads as a single transport panel rather than a row of
-/// disconnected pills, which is the standard SaaS-dashboard tell.
-class _ActionCluster extends StatelessWidget {
-  const _ActionCluster({
-    required this.brightness,
-    required this.onToggleTheme,
-    required this.onNewQuery,
-    required this.onDisconnect,
+class _ConnPickerRow extends StatelessWidget {
+  const _ConnPickerRow({
+    required this.config,
+    required this.active,
+    required this.onTap,
   });
 
-  final AppBrightness brightness;
-  final VoidCallback onToggleTheme;
-  final VoidCallback? onNewQuery;
-  final VoidCallback? onDisconnect;
+  final ConnectionConfig config;
+  final bool active;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final connected = onNewQuery != null;
-    return Container(
-      height: 30,
-      decoration: BoxDecoration(
-        color: AppColors.bg,
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _ClusterCell(
-            onTap: onToggleTheme,
-            tooltip: brightness == AppBrightness.dark
-                ? 'Switch to light theme'
-                : 'Switch to dark theme',
-            child: _ThemeCellGlyph(brightness: brightness),
-          ),
-          if (connected) ...[
-            _ClusterDivider(),
-            _ClusterCell(
-              accent: true,
-              onTap: onNewQuery,
-              tooltip: 'New query  ⌘N',
-              horizontalPad: 12,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+    return Hoverable(
+      onTap: onTap,
+      builder: (context, hovering) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: active
+              ? AppColors.accentSoft
+              : (hovering ? AppColors.surfaceHover : Colors.transparent),
+          borderRadius: Radii.brSm,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: active ? AppColors.success : AppColors.borderStrong,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.add, size: 13, color: AppColors.accent),
-                  const SizedBox(width: 6),
                   Text(
-                    'Query',
-                    style: AppTheme.ui(
+                    config.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTheme.mono(
                       size: 12,
-                      color: AppColors.accent,
+                      color: AppColors.textPrimary,
                       weight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    config.summary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTheme.mono(
+                      size: 10.5,
+                      color: AppColors.textMuted,
                     ),
                   ),
                 ],
               ),
             ),
-            _ClusterDivider(),
-            _ClusterCell(
-              hoverFg: AppColors.error,
-              onTap: onDisconnect,
-              tooltip: 'Disconnect',
-              child: Icon(
-                Icons.power_settings_new,
-                size: 14,
-                color: AppColors.textSecondary,
-              ),
-            ),
+            if (active)
+              Icon(Icons.check, size: 13, color: AppColors.accent),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-/// One pressable cell inside [_ActionCluster]. Hover paints the cell, not
-/// the icon's own background, so the shell stays the visual unit.
-class _ClusterCell extends StatelessWidget {
-  const _ClusterCell({
-    required this.child,
-    required this.onTap,
-    this.tooltip,
-    this.horizontalPad = 8,
-    this.accent = false,
-    this.hoverFg,
-  });
-
-  final Widget child;
-  final VoidCallback? onTap;
-  final String? tooltip;
-  final double horizontalPad;
-  final bool accent;
-  final Color? hoverFg;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onTap != null;
-    final Color hoverBg =
-        accent ? AppColors.accentSoft : AppColors.surfaceHover;
-
-    final cell = Hoverable(
-      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-      onTap: onTap,
-      builder: (context, hovering) {
-        Widget content = child;
-        // Replace child's foreground color on hover by re-wrapping iconography.
-        if (hovering && hoverFg != null && child is Icon) {
-          final i = child as Icon;
-          content = Icon(i.icon, size: i.size, color: hoverFg);
-        }
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          height: 28,
-          padding: EdgeInsets.symmetric(horizontal: horizontalPad),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: hovering && enabled ? hoverBg : Colors.transparent,
-          ),
-          child: content,
-        );
-      },
-    );
-
-    if (tooltip == null) return cell;
-    return Tooltip(message: tooltip!, child: cell);
-  }
-}
-
-/// 1px vertical hairline used between [_ClusterCell]s.
-class _ClusterDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(width: 1, height: 28, color: AppColors.border);
-  }
-}
-
-/// Sun ⇄ moon glyph inside an action cluster cell. Fade-rotates between the
-/// two states on toggle.
-class _ThemeCellGlyph extends StatelessWidget {
-  const _ThemeCellGlyph({required this.brightness});
-  final AppBrightness brightness;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = brightness == AppBrightness.dark;
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      transitionBuilder: (child, anim) {
-        return FadeTransition(
-          opacity: anim,
-          child: RotationTransition(
-            turns: Tween<double>(begin: 0.55, end: 1).animate(anim),
-            child: child,
-          ),
-        );
-      },
-      child: Icon(
-        isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
-        key: ValueKey(isDark),
-        size: 14,
-        color: AppColors.textSecondary,
+        ),
       ),
     );
   }
@@ -719,18 +1211,22 @@ class _BrandHero extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Container(
+        SizedBox(
           width: 56,
           height: 56,
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: Radii.brMd,
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Icon(
-            Icons.storage_rounded,
-            size: 24,
-            color: AppColors.accent,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: Radii.brMd,
+              border: Border.all(color: AppColors.border),
+            ),
+            padding: const EdgeInsets.all(14),
+            child: CustomPaint(
+              painter: _ApertureIrisPainter(
+                accent: AppColors.accent,
+                dim: AppColors.textMuted,
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 14),

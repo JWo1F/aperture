@@ -170,17 +170,6 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final disabled = !item.enabled;
-    final fg = disabled
-        ? AppColors.textMuted
-        : item.danger
-            ? AppColors.error
-            : AppColors.textPrimary;
-    final iconColor = disabled
-        ? AppColors.textMuted
-        : item.danger
-            ? AppColors.error
-            : AppColors.textSecondary;
-
     return Hoverable(
       cursor: disabled ? SystemMouseCursors.basic : SystemMouseCursors.click,
       onTap: disabled
@@ -189,44 +178,68 @@ class _Row extends StatelessWidget {
               onClose();
               item.onTap();
             },
-      builder: (context, hovering) => Container(
-        height: 28,
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          color: hovering && !disabled
-              ? AppColors.accentSoft
-              : Colors.transparent,
-          borderRadius: Radii.brSm,
-        ),
-        child: Row(
-          children: [
-            if (item.icon != null) ...[
-              Icon(item.icon, size: 13, color: iconColor),
-              const SizedBox(width: 9),
-            ] else
-              const SizedBox(width: 22),
-            Expanded(
-              child: Text(
-                item.label,
-                style: AppTheme.ui(
-                  size: 12,
-                  color: fg,
-                  weight: FontWeight.w400,
+      builder: (context, hovering) {
+        final hot = hovering && !disabled;
+        // On hover the row paints accent for non-destructive items and the
+        // danger tone for destructive ones; foreground flips to white either
+        // way, mirroring the design's `.menu-item:hover` rule.
+        final Color bg = hot
+            ? (item.danger ? AppColors.error : AppColors.accent)
+            : Colors.transparent;
+        final Color fg = hot
+            ? Colors.white
+            : disabled
+                ? AppColors.textMuted
+                : (item.danger ? AppColors.error : AppColors.textPrimary);
+        final Color iconColor = hot
+            ? Colors.white.withValues(alpha: 0.85)
+            : disabled
+                ? AppColors.textMuted
+                : (item.danger ? AppColors.error : AppColors.textSecondary);
+        final Color shortcutColor = hot
+            ? Colors.white.withValues(alpha: 0.85)
+            : AppColors.textMuted;
+
+        return Container(
+          height: 26,
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(5),
+          ),
+          child: Row(
+            children: [
+              if (item.icon != null) ...[
+                SizedBox(
+                  width: 14,
+                  child: Icon(item.icon, size: 13, color: iconColor),
+                ),
+                const SizedBox(width: 10),
+              ] else
+                const SizedBox(width: 24),
+              Expanded(
+                child: Text(
+                  item.label,
+                  style: AppTheme.ui(
+                    size: 12,
+                    color: fg,
+                    weight: FontWeight.w400,
+                  ),
                 ),
               ),
-            ),
-            if (item.shortcut != null)
-              Text(
-                item.shortcut!,
-                style: AppTheme.mono(
-                  size: 10,
-                  color: AppColors.textMuted,
+              if (item.shortcut != null)
+                Text(
+                  item.shortcut!,
+                  style: AppTheme.mono(
+                    size: 10,
+                    color: shortcutColor,
+                  ),
                 ),
-              ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

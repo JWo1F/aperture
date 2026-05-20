@@ -81,10 +81,7 @@ class _TabStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 32,
-      decoration: BoxDecoration(
-        color: AppColors.bgDeep,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
+      color: AppColors.bgDeep,
       child: Row(
         children: [
           Expanded(
@@ -110,12 +107,40 @@ class _TabStrip extends StatelessWidget {
               },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Insets.xs),
-            child: IconAction(
-              icon: Icons.add,
-              tooltip: 'New query',
-              onPressed: state.newQueryTab,
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: AppColors.border, width: 1),
+              ),
+            ),
+            child: Tooltip(
+              message: 'New query',
+              child: Hoverable(
+                onTap: state.newQueryTab,
+                builder: (context, hovering) => Container(
+                  alignment: Alignment.center,
+                  color:
+                      hovering ? AppColors.surfaceHover : Colors.transparent,
+                  child: Icon(
+                    Icons.add,
+                    size: 13,
+                    color: hovering
+                        ? AppColors.textPrimary
+                        : AppColors.textMuted,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: AppColors.border, width: 1),
+                ),
+              ),
             ),
           ),
         ],
@@ -210,11 +235,15 @@ class _TabState extends State<_Tab> {
                     : Colors.transparent),
             border: Border(
               right: BorderSide(color: AppColors.borderSoft, width: 1),
-              // Accent line sits at the top of the active tab; inactive tabs
-              // have no top border so the strip's bottom border is unbroken.
               top: widget.active
                   ? BorderSide(color: AppColors.accent, width: 1)
                   : BorderSide.none,
+              // Inactive tabs carry the strip's bottom rule on their own
+              // bottom edge; the active tab leaves it off so its body blends
+              // into the workspace bg without a hairline cap.
+              bottom: widget.active
+                  ? BorderSide.none
+                  : BorderSide(color: AppColors.border, width: 1),
             ),
           ),
           padding: const EdgeInsets.only(left: 10, right: 8),
@@ -223,10 +252,10 @@ class _TabState extends State<_Tab> {
             children: [
               Icon(
                 _tabIcon,
-                size: 13,
+                size: 11,
                 color: widget.active
-                    ? AppColors.accent
-                    : AppColors.textMuted,
+                    ? AppColors.textMuted
+                    : AppColors.text4,
               ),
               const SizedBox(width: 6),
               Flexible(
@@ -245,20 +274,27 @@ class _TabState extends State<_Tab> {
                 ),
               ),
               const SizedBox(width: 6),
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: widget.onClose,
-                  child: SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: Icon(
-                      Icons.close,
-                      size: 12,
-                      color: showClose
-                          ? AppColors.textSecondary
-                          : Colors.transparent,
-                    ),
+              Hoverable(
+                onTap: widget.onClose,
+                builder: (context, closeHovering) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 100),
+                  width: 14,
+                  height: 14,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: closeHovering
+                        ? AppColors.surfaceHover
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Icon(
+                    Icons.close,
+                    size: 8,
+                    color: showClose
+                        ? (closeHovering
+                            ? AppColors.textPrimary
+                            : AppColors.textMuted)
+                        : Colors.transparent,
                   ),
                 ),
               ),

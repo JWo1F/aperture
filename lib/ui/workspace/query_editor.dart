@@ -228,7 +228,7 @@ class _QueryEditorState extends State<QueryEditor> {
             ),
           ),
         ),
-        Divider(height: 1, color: AppColors.border),
+        _ResultsDivider(tab: tab),
         Expanded(
           flex: 3,
           child: Container(
@@ -259,8 +259,9 @@ class _QueryEditorState extends State<QueryEditor> {
   }
 }
 
-/// Query editor toolbar — synth-panel layout with hairline rails grouping
-/// the run action, the multi-statement status readout, and the export action.
+/// Query editor toolbar — matches the design's two-action primary cluster
+/// (Run statement / Run all) with inline kbd chips, an Export action, and a
+/// scratch/save status breadcrumb on the right.
 class _Toolbar extends StatelessWidget {
   const _Toolbar({
     required this.tab,
@@ -281,45 +282,72 @@ class _Toolbar extends StatelessWidget {
     final multi = statementCount > 1;
 
     return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: Insets.md),
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: AppColors.bgDeep,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
-          // ── primary run ──
-          AppButton(
-            label: tab.running ? 'Running…' : 'Run',
+          _QtPrimaryButton(
+            label: tab.running ? 'Running…' : 'Run statement',
             icon: Icons.play_arrow,
-            primary: true,
+            kbd: const ['⌘', '↵'],
             onPressed: onRun,
           ),
-          const SizedBox(width: 7),
-          const KbdChip('⌘↵'),
-          // ── statement readout (only when multi-statement) ──
-          // No standalone "At cursor" button — the gutter ▶ icons + ⌘⇧↵
-          // shortcut cover that path.
-          if (multi) ...[
-            const Rail(),
-            _StatementStatus(
-              count: statementCount,
-              cursorStmt: cursorStmt,
-            ),
-            const SizedBox(width: 8),
-            const KbdChip('⌘⇧↵'),
-          ],
-          const Spacer(),
-          if (tab.running)
-            const _RunningIndicator()
-          else if (tab.result != null)
-            _LastStatus(tab: tab),
-          const Rail(),
-          IconAction(
+          const SizedBox(width: 4),
+          _QtBorderButton(
+            label: 'Run all',
+            icon: Icons.bolt_outlined,
+            kbd: const ['⌘', '⇧', '↵'],
+            onPressed: onRun,
+          ),
+          const _QtRail(),
+          _QtBorderButton(
+            label: 'Export',
             icon: Icons.ios_share,
-            tooltip: 'Export…',
             onPressed: onExport,
+          ),
+          const _QtRail(),
+          _ScratchBreadcrumb(
+            tab: tab,
+            statementCount: statementCount,
+            cursorStmt: cursorStmt,
+            multi: multi,
+          ),
+          const Spacer(),
+          Tooltip(
+            message: 'Format SQL',
+            child: Hoverable(
+              onTap: () {},
+              builder: (context, hovering) => _QtIconShell(
+                hovering: hovering,
+                child: Icon(
+                  Icons.format_align_left,
+                  size: 13,
+                  color: hovering
+                      ? AppColors.textPrimary
+                      : AppColors.textMuted,
+                ),
+              ),
+            ),
+          ),
+          Tooltip(
+            message: 'Save query…',
+            child: Hoverable(
+              onTap: () {},
+              builder: (context, hovering) => _QtIconShell(
+                hovering: hovering,
+                child: Icon(
+                  Icons.star_outline,
+                  size: 13,
+                  color: hovering
+                      ? AppColors.textPrimary
+                      : AppColors.textMuted,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -327,7 +355,418 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
+/// Hairline rail with 8px horizontal margin used between toolbar groups.
+class _QtRail extends StatelessWidget {
+  const _QtRail();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 16,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      color: AppColors.hairline,
+    );
+  }
+}
+
+/// Filled-accent button used as the primary "Run" in the query toolbar.
+class _QtPrimaryButton extends StatelessWidget {
+  const _QtPrimaryButton({
+    required this.label,
+    required this.icon,
+    required this.kbd,
+    required this.onPressed,
+  });
+  final String label;
+  final IconData icon;
+  final List<String> kbd;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    return Hoverable(
+      cursor:
+          enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onTap: onPressed,
+      builder: (context, hovering) {
+        final bg = !enabled
+            ? AppColors.accent.withValues(alpha: 0.4)
+            : (hovering ? AppColors.accentHover : AppColors.accent);
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          height: 24,
+          padding: const EdgeInsets.only(left: 9, right: 6),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: Radii.brSm,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 12, color: Colors.white),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: AppTheme.ui(
+                  size: 11.5,
+                  color: Colors.white,
+                  weight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 7),
+              _QtInlineKbd(parts: kbd, onAccent: true),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Outline ghost button with optional kbd cluster.
+class _QtBorderButton extends StatelessWidget {
+  const _QtBorderButton({
+    required this.label,
+    required this.icon,
+    this.kbd,
+    required this.onPressed,
+  });
+  final String label;
+  final IconData icon;
+  final List<String>? kbd;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    return Hoverable(
+      cursor:
+          enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onTap: onPressed,
+      builder: (context, hovering) {
+        final fg = enabled
+            ? (hovering ? AppColors.textPrimary : AppColors.textSecondary)
+            : AppColors.textMuted.withValues(alpha: 0.5);
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          height: 24,
+          padding: const EdgeInsets.only(left: 9, right: 6),
+          decoration: BoxDecoration(
+            color: hovering && enabled
+                ? AppColors.surfaceHover
+                : Colors.transparent,
+            borderRadius: Radii.brSm,
+            border: Border.all(
+              color: hovering && enabled
+                  ? AppColors.borderStrong
+                  : AppColors.border,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 12, color: fg),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: AppTheme.ui(
+                  size: 11.5,
+                  color: fg,
+                  weight: FontWeight.w500,
+                ),
+              ),
+              if (kbd != null) ...[
+                const SizedBox(width: 7),
+                _QtInlineKbd(parts: kbd!),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Square icon-action shell used in the query toolbar.
+class _QtIconShell extends StatelessWidget {
+  const _QtIconShell({required this.hovering, required this.child});
+  final bool hovering;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 100),
+      width: 24,
+      height: 24,
+      margin: const EdgeInsets.symmetric(horizontal: 1),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: hovering ? AppColors.surfaceHover : Colors.transparent,
+        borderRadius: Radii.brSm,
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Tiny mono kbd chip group; the `onAccent` variant uses a translucent white
+/// chip so it reads correctly on the primary button background.
+class _QtInlineKbd extends StatelessWidget {
+  const _QtInlineKbd({required this.parts, this.onAccent = false});
+  final List<String> parts;
+  final bool onAccent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < parts.length; i++) ...[
+          if (i > 0) const SizedBox(width: 2),
+          Container(
+            constraints: BoxConstraints(
+              minWidth: onAccent ? 13 : 16,
+              minHeight: onAccent ? 13 : 16,
+            ),
+            padding: EdgeInsets.symmetric(horizontal: onAccent ? 3 : 4),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: onAccent
+                  ? Colors.white.withValues(alpha: 0.18)
+                  : AppColors.surface2,
+              borderRadius: BorderRadius.circular(onAccent ? 3 : 4),
+              border: onAccent
+                  ? null
+                  : Border.all(color: AppColors.border),
+            ),
+            child: Text(
+              parts[i],
+              style: AppTheme.mono(
+                size: onAccent ? 9.5 : 10,
+                color: onAccent ? Colors.white : AppColors.textSecondary,
+                weight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// `scratch · ● unsaved` + optional multi-statement cursor readout.
+class _ScratchBreadcrumb extends StatelessWidget {
+  const _ScratchBreadcrumb({
+    required this.tab,
+    required this.statementCount,
+    required this.cursorStmt,
+    required this.multi,
+  });
+
+  final QueryTab tab;
+  final int statementCount;
+  final int? cursorStmt;
+  final bool multi;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'scratch',
+          style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          width: 1,
+          height: 10,
+          color: AppColors.hairline,
+        ),
+        const SizedBox(width: 8),
+        Container(
+          width: 5,
+          height: 5,
+          decoration: BoxDecoration(
+            color: AppColors.accent,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          'unsaved',
+          style: AppTheme.mono(size: 10.5, color: AppColors.accent),
+        ),
+        if (multi && cursorStmt != null) ...[
+          const SizedBox(width: 8),
+          Container(
+            width: 1,
+            height: 10,
+            color: AppColors.hairline,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'on ',
+            style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+          ),
+          Text(
+            '#$cursorStmt',
+            style: AppTheme.mono(
+              size: 10.5,
+              color: AppColors.accent,
+              weight: FontWeight.w600,
+            ),
+          ),
+          Text(
+            ' of $statementCount',
+            style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Bar between the editor and the result grid: tabs (Results / Plan /
+/// Messages), inline stats (rows · ms), and a success / error pill.
+class _ResultsDivider extends StatelessWidget {
+  const _ResultsDivider({required this.tab});
+  final QueryTab tab;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = tab.result;
+    final isError = r?.isError == true;
+    final hasRows = r?.hasColumns == true;
+    final rowCount = hasRows ? r!.rows.length : 0;
+    final ms = r?.elapsed.inMilliseconds;
+
+    return Container(
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.bgDeep,
+        border: Border(
+          top: BorderSide(color: AppColors.border, width: 1),
+          bottom: BorderSide(color: AppColors.border, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          _RdTab(label: 'Results', active: true),
+          const SizedBox(width: 12),
+          _RdTab(label: 'Plan', active: false),
+          const SizedBox(width: 12),
+          _RdTab(label: 'Messages', active: false),
+          const SizedBox(width: 14),
+          if (r != null && hasRows)
+            _RdStat(
+              head: '$rowCount',
+              tail: ' rows',
+            ),
+          if (r != null && ms != null) ...[
+            const SizedBox(width: 6),
+            Text('·',
+                style: AppTheme.mono(size: 10.5, color: AppColors.text4)),
+            const SizedBox(width: 6),
+            _RdStat(head: '$ms', tail: 'ms'),
+          ],
+          const Spacer(),
+          if (r != null)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: isError ? AppColors.error : AppColors.success,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isError ? 'error' : 'success',
+                  style: AppTheme.mono(
+                    size: 10.5,
+                    color: isError ? AppColors.error : AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RdTab extends StatelessWidget {
+  const _RdTab({required this.label, required this.active});
+  final String label;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Text(
+            label.toUpperCase(),
+            style: AppTheme.mono(
+              size: 10.5,
+              color: active ? AppColors.textPrimary : AppColors.textMuted,
+              weight: FontWeight.w600,
+            ).copyWith(letterSpacing: 0.04 * 10.5),
+          ),
+        ),
+        if (active)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: -5,
+            child: Container(
+              height: 1,
+              color: AppColors.accent,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _RdStat extends StatelessWidget {
+  const _RdStat({required this.head, required this.tail});
+  final String head;
+  final String tail;
+
+  @override
+  Widget build(BuildContext context) {
+    return RichText(
+      text: TextSpan(
+        style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+        children: [
+          TextSpan(
+            text: head,
+            style: AppTheme.mono(
+              size: 10.5,
+              color: AppColors.textPrimary,
+              weight: FontWeight.w600,
+            ),
+          ),
+          TextSpan(text: tail),
+        ],
+      ),
+    );
+  }
+}
+
 /// Compact readout: `3 statements · on #2` — number bolded, rest muted.
+// ignore: unused_element
 class _StatementStatus extends StatelessWidget {
   const _StatementStatus({required this.count, required this.cursorStmt});
   final int count;
@@ -365,69 +804,6 @@ class _StatementStatus extends StatelessWidget {
   }
 }
 
-class _RunningIndicator extends StatelessWidget {
-  const _RunningIndicator();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 12,
-          height: 12,
-          child: CircularProgressIndicator(
-            strokeWidth: 1.6,
-            color: AppColors.accent,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          'running',
-          style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
-        ),
-      ],
-    );
-  }
-}
-
-/// Tiny end-of-toolbar status — rows / ms — when a result is loaded but no
-/// run is in progress. Mirrors the bottom status bar in a glanceable form.
-class _LastStatus extends StatelessWidget {
-  const _LastStatus({required this.tab});
-  final QueryTab tab;
-
-  @override
-  Widget build(BuildContext context) {
-    final r = tab.result!;
-    final isError = r.isError;
-    final color = isError ? AppColors.error : AppColors.success;
-    final summary = isError
-        ? 'error'
-        : r.hasColumns
-            ? '${r.rows.length} rows'
-            : '${r.affectedRows ?? 0} rows affected';
-
-    return Row(
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          summary,
-          style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          '${r.elapsed.inMilliseconds}ms',
-          style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
-        ),
-      ],
-    );
-  }
-}
 
 class _StatusFooter extends StatelessWidget {
   const _StatusFooter({required this.tab, required this.connected});

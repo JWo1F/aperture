@@ -910,7 +910,8 @@ class _EditCountBadge extends StatelessWidget {
   }
 }
 
-/// Bottom rail: pagination affordances + a quiet row-count readout.
+/// Bottom rail in the design layout — `X rows · page X/Y · X total · Xms ·
+/// pending · prev / next`. Mono throughout, dot separators, bgDeep surface.
 class _PaginationBar extends StatelessWidget {
   const _PaginationBar({required this.tab, required this.state});
 
@@ -921,65 +922,208 @@ class _PaginationBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final canPrev = tab.page > 0 && !tab.loading;
     final canNext = tab.page < tab.pageCount - 1 && !tab.loading;
-    final first = tab.totalRows == 0 ? 0 : tab.offset + 1;
-    final last = (tab.offset + tab.pageSize).clamp(0, tab.totalRows);
+    final result = tab.result;
+    final rowCount = result?.rows.length ?? 0;
+    final pageCount = tab.pageCount;
+    final pendingCount = tab.edits.length;
 
     return Container(
-      height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: Insets.md),
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.bgDeep,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
-          IconAction(
+          _PbStat(
+            head: '$rowCount',
+            tail: ' rows',
+            headHighlight: true,
+          ),
+          const _PbDot(),
+          _PbStat(
+            head: 'page ',
+            mid: '${tab.page + 1}',
+            tail: ' / $pageCount',
+          ),
+          const _PbDot(),
+          _PbStat(
+            head: '${tab.totalRows}',
+            tail: ' total',
+            headHighlight: true,
+          ),
+          if (result != null) ...[
+            const _PbDot(),
+            Text(
+              '${result.elapsed.inMilliseconds}ms',
+              style: AppTheme.mono(
+                size: 10.5,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ],
+          const Spacer(),
+          if (pendingCount > 0) ...[
+            _PendingChip(
+              count: pendingCount,
+              onTap: () {
+                final statements = state.previewEditStatements(tab);
+                showPendingEditsModal(context, statements: statements);
+              },
+            ),
+            const _PbDot(),
+          ],
+          _PbChev(
             icon: Icons.chevron_left,
             tooltip: 'Previous page',
-            onPressed:
-                canPrev ? () => state.loadTablePage(tab, tab.page - 1) : null,
+            onPressed: canPrev
+                ? () => state.loadTablePage(tab, tab.page - 1)
+                : null,
           ),
-          IconAction(
+          _PbChev(
             icon: Icons.chevron_right,
             tooltip: 'Next page',
-            onPressed:
-                canNext ? () => state.loadTablePage(tab, tab.page + 1) : null,
-          ),
-          const SizedBox(width: 6),
-          RichText(
-            text: TextSpan(
-              style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
-              children: [
-                const TextSpan(text: 'pg '),
-                TextSpan(
-                  text: '${tab.page + 1}',
-                  style: AppTheme.mono(
-                    size: 10.5,
-                    color: AppColors.textSecondary,
-                    weight: FontWeight.w600,
-                  ),
-                ),
-                TextSpan(text: ' / ${tab.pageCount}'),
-              ],
-            ),
-          ),
-          const Spacer(),
-          RichText(
-            text: TextSpan(
-              style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
-              children: [
-                TextSpan(
-                  text: '$first–$last',
-                  style: AppTheme.mono(
-                    size: 10.5,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                TextSpan(text: '  of  ${tab.totalRows}  rows'),
-              ],
-            ),
+            onPressed: canNext
+                ? () => state.loadTablePage(tab, tab.page + 1)
+                : null,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PbDot extends StatelessWidget {
+  const _PbDot();
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Text(
+        '·',
+        style: AppTheme.mono(size: 10.5, color: AppColors.text4),
+      ),
+    );
+  }
+}
+
+class _PbStat extends StatelessWidget {
+  const _PbStat({
+    this.head,
+    this.mid,
+    this.tail,
+    this.headHighlight = false,
+  });
+  final String? head;
+  final String? mid;
+  final String? tail;
+
+  /// When true the leading [head] segment is rendered in primary text (the
+  /// design's `<b>` highlight); otherwise everything reads in textMuted.
+  final bool headHighlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = AppTheme.mono(size: 10.5, color: AppColors.textMuted);
+    final emph = AppTheme.mono(
+      size: 10.5,
+      color: AppColors.textPrimary,
+      weight: FontWeight.w600,
+    );
+    return RichText(
+      text: TextSpan(
+        style: base,
+        children: [
+          if (head != null)
+            TextSpan(text: head!, style: headHighlight ? emph : base),
+          if (mid != null) TextSpan(text: mid!, style: emph),
+          if (tail != null) TextSpan(text: tail!),
+        ],
+      ),
+    );
+  }
+}
+
+class _PbChev extends StatelessWidget {
+  const _PbChev({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    return Tooltip(
+      message: tooltip,
+      child: Hoverable(
+        cursor:
+            enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onTap: onPressed,
+        builder: (context, hovering) {
+          final fg = enabled
+              ? (hovering ? AppColors.textPrimary : AppColors.textMuted)
+              : AppColors.textMuted.withValues(alpha: 0.4);
+          return Container(
+            width: 22,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: hovering && enabled
+                  ? AppColors.surfaceHover
+                  : Colors.transparent,
+              borderRadius: Radii.brSm,
+            ),
+            child: Icon(icon, size: 14, color: fg),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PendingChip extends StatelessWidget {
+  const _PendingChip({required this.count, required this.onTap});
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Hoverable(
+      onTap: onTap,
+      builder: (context, hovering) => Container(
+        height: 20,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: hovering ? AppColors.accentSoft : Colors.transparent,
+          borderRadius: Radii.brSm,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 5,
+              height: 5,
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '$count pending edit${count == 1 ? '' : 's'}',
+              style: AppTheme.mono(
+                size: 11,
+                color: AppColors.accent,
+                weight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

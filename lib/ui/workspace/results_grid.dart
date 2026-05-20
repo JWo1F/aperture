@@ -672,6 +672,9 @@ class _ResultsGridState extends State<ResultsGrid> {
               sortPriority: _sortPriority(columns[i]),
               isForeignKey:
                   widget.foreignKeys?.containsKey(columns[i]) ?? false,
+              isPrimaryKey:
+                  widget.columnMeta?[columns[i]]?.isPrimaryKey ?? false,
+              typeLabel: widget.columnMeta?[columns[i]]?.dataType,
               onSort: widget.onSortColumn == null
                   ? null
                   : () => widget.onSortColumn!(columns[i]),
@@ -1040,6 +1043,8 @@ class _HeaderCell extends StatefulWidget {
     required this.sortPriority,
     this.onSort,
     this.isForeignKey = false,
+    this.isPrimaryKey = false,
+    this.typeLabel,
   });
 
   final String label;
@@ -1050,6 +1055,8 @@ class _HeaderCell extends StatefulWidget {
   final int sortPriority;
   final VoidCallback? onSort;
   final bool isForeignKey;
+  final bool isPrimaryKey;
+  final String? typeLabel;
 
   @override
   State<_HeaderCell> createState() => _HeaderCellState();
@@ -1060,6 +1067,11 @@ class _HeaderCellState extends State<_HeaderCell> {
   Widget build(BuildContext context) {
     final sort = widget.sort;
     final sortable = widget.onSort != null;
+    final Color nameColor = widget.isPrimaryKey
+        ? AppColors.accent
+        : widget.isForeignKey
+            ? AppColors.tFk
+            : AppColors.textPrimary;
 
     return SizedBox(
       width: widget.width,
@@ -1075,56 +1087,77 @@ class _HeaderCellState extends State<_HeaderCell> {
               color: hovering && sortable
                   ? AppColors.surfaceHover
                   : AppColors.bgDeep,
-              padding: const EdgeInsets.symmetric(horizontal: 9),
+              decoration: BoxDecoration(
+                color: hovering && sortable
+                    ? AppColors.surfaceHover
+                    : AppColors.bgDeep,
+                border: Border(
+                  right: BorderSide(color: AppColors.hairline, width: 1),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               alignment: Alignment.centerLeft,
               child: Row(
-                  children: [
+                children: [
+                  if (widget.isPrimaryKey) ...[
+                    Icon(Icons.vpn_key, size: 10, color: AppColors.accent),
+                    const SizedBox(width: 5),
+                  ] else if (widget.isForeignKey) ...[
+                    Icon(Icons.north_east, size: 10, color: AppColors.tFk),
+                    const SizedBox(width: 5),
+                  ],
+                  Flexible(
+                    child: Text(
+                      widget.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.mono(
+                        size: 11,
+                        color: nameColor,
+                        weight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (widget.typeLabel != null) ...[
+                    const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        widget.label,
+                        widget.typeLabel!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTheme.mono(
-                          size: 11,
-                          color: sort != null
-                              ? AppColors.accent
-                              : widget.isForeignKey
-                                  ? AppColors.tFk
-                                  : AppColors.textSecondary,
-                          weight: FontWeight.w600,
+                          size: 10,
+                          color: AppColors.text4,
+                          weight: FontWeight.w500,
                         ),
                       ),
                     ),
-                    if (widget.isForeignKey) ...[
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.north_east,
-                        size: 10,
-                        color: AppColors.tFk,
-                      ),
-                    ],
-                    if (sort != null) ...[
-                      const SizedBox(width: 4),
-                      Icon(
-                        sort.descending
-                            ? Icons.arrow_downward
-                            : Icons.arrow_upward,
-                        size: 12,
-                        color: AppColors.accent,
-                      ),
-                      if (widget.sortPriority > 0)
-                        Text(
-                          '${widget.sortPriority}',
-                          style: AppTheme.mono(
-                            size: 9,
-                            color: AppColors.accent,
-                          ),
+                  ],
+                  if (sort != null) ...[
+                    const Spacer(),
+                    Icon(
+                      sort.descending
+                          ? Icons.arrow_downward
+                          : Icons.arrow_upward,
+                      size: 11,
+                      color: AppColors.accent,
+                    ),
+                    if (widget.sortPriority > 0) ...[
+                      const SizedBox(width: 2),
+                      Text(
+                        '${widget.sortPriority}',
+                        style: AppTheme.mono(
+                          size: 9,
+                          color: AppColors.accent,
+                          weight: FontWeight.w700,
                         ),
+                      ),
                     ],
                   ],
-                ),
+                ],
               ),
             ),
+          ),
           Positioned(
             right: 0,
             top: 0,
@@ -1135,9 +1168,7 @@ class _HeaderCellState extends State<_HeaderCell> {
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onHorizontalDragUpdate: (d) => widget.onResize(d.delta.dx),
-                child: Center(
-                  child: Container(width: 1, color: AppColors.hairline),
-                ),
+                child: const SizedBox.expand(),
               ),
             ),
           ),
