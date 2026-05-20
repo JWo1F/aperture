@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_highlight/flutter_highlight.dart';
+import 'package:highlight/highlight.dart' show highlight;
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
@@ -10,8 +10,9 @@ import '../../theme/code_theme.dart';
 import '../widgets/common.dart';
 
 /// Renders a [SchemaTab] — the reconstructed CREATE TABLE DDL with indexes
-/// and constraints. Tokenisation comes from the `highlight` package's pgsql
-/// grammar via `flutter_highlight`, so the full SQL vocabulary is coloured.
+/// and constraints. Uses `highlight`'s pgsql grammar through
+/// [highlightNodesToSpans] so the text stays inside a [SelectableText.rich],
+/// keeping the whole DDL selectable / copyable.
 class SchemaView extends StatelessWidget {
   const SchemaView({super.key, required this.tab});
 
@@ -149,8 +150,14 @@ class _Body extends StatelessWidget {
       );
     }
 
-    final textStyle = AppTheme.mono(size: 12, color: AppColors.textPrimary);
-    final lines = tab.ddl!.split('\n');
+    final base = AppTheme.mono(size: 12, color: AppColors.textPrimary);
+    // Trim trailing newline so line numbers match the rendered lines exactly.
+    final raw = tab.ddl!;
+    final ddl = raw.endsWith('\n')
+        ? raw.substring(0, raw.length - 1)
+        : raw;
+    final lineCount = '\n'.allMatches(ddl).length + 1;
+    final parsed = highlight.parse(ddl, language: 'pgsql');
 
     return Container(
       color: AppColors.bg,
@@ -160,22 +167,28 @@ class _Body extends StatelessWidget {
             horizontal: Insets.lg,
             vertical: Insets.md,
           ),
-          child: SelectionArea(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _LineNumbers(count: lines.length),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: HighlightView(
-                    tab.ddl!,
-                    language: 'pgsql',
-                    theme: apertureCodeStyles,
-                    textStyle: textStyle,
-                    padding: EdgeInsets.zero,
-                  ),
+          child: Scrollbar(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: IntrinsicWidth(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _LineNumbers(count: lineCount),
+                    const SizedBox(width: 14),
+                    SelectableText.rich(
+                      TextSpan(
+                        children: highlightNodesToSpans(
+                          parsed.nodes,
+                          base,
+                          apertureCodeStyles,
+                        ),
+                      ),
+                      style: base,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
