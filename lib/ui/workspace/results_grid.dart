@@ -85,6 +85,17 @@ class _ResultsGridState extends State<ResultsGrid> {
   late final ScrollController _hBody;
   final ScrollController _vBody = ScrollController();
 
+  /// Focus node for the grid body — owns keyboard shortcuts (⌘C / Ctrl-C
+  /// to copy the selected cell, Esc to clear the selection). Lazily takes
+  /// focus on the first cell click so the toolbar text fields keep their
+  /// default editing keybindings while no cell is active.
+  final FocusNode _gridFocus = FocusNode(debugLabel: 'results-grid');
+
+  /// The active cell (row, column). `null` until the user clicks one; cleared
+  /// by Esc or when the underlying result changes (new page / filter).
+  int? _selRow;
+  int? _selCol;
+
   List<double> _widths = [];
   List<String> _widthKeys = [];
 
@@ -119,6 +130,12 @@ class _ResultsGridState extends State<ResultsGrid> {
       _syncWidths();
     } else if (!identical(old.result, widget.result)) {
       _syncWidths();
+    }
+    // A new result set invalidates the row/column indices we held; clearing
+    // the selection avoids highlighting an arbitrary cell after pagination.
+    if (!identical(old.result, widget.result)) {
+      _selRow = null;
+      _selCol = null;
     }
   }
 
@@ -174,8 +191,56 @@ class _ResultsGridState extends State<ResultsGrid> {
     _hHeader.dispose();
     _hBody.dispose();
     _vBody.dispose();
+    _gridFocus.dispose();
     _measurer.dispose();
     super.dispose();
+  }
+
+  // --- selection -------------------------------------------------------
+
+  void _selectCell(int row, int column) {
+    setState(() {
+      _selRow = row;
+      _selCol = column;
+    });
+    _gridFocus.requestFocus();
+  }
+
+  void _clearSelection() {
+    if (_selRow == null && _selCol == null) return;
+    setState(() {
+      _selRow = null;
+      _selCol = null;
+    });
+  }
+
+  /// Returns the textual form of the selected cell — pending edit (if any)
+  /// wins over the original, mirroring what's painted in the grid.
+  String _selectedCellText() {
+    final r = _selRow!;
+    final c = _selCol!;
+    final pending = widget.edits?[CellEdit(r, c)];
+    if (pending is CellLiteral) return pending.value ?? 'NULL';
+    if (pending is CellDefault) return 'DEFAULT';
+    final formatted = formatCellValue(widget.result.rows[r][c]);
+    return formatted ?? 'NULL';
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (_selRow == null) return KeyEventResult.ignored;
+      _clearSelection();
+      return KeyEventResult.handled;
+    }
+    final isCopyChord = event.logicalKey == LogicalKeyboardKey.keyC &&
+        (HardwareKeyboard.instance.isMetaPressed ||
+            HardwareKeyboard.instance.isControlPressed);
+    if (isCopyChord && _selRow != null && _selCol != null) {
+      Clipboard.setData(ClipboardData(text: _selectedCellText()));
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   // --- cell picker -----------------------------------------------------
@@ -476,25 +541,48 @@ class _ResultsGridState extends State<ResultsGrid> {
   }
 
   Widget _buildBody(QueryResult result, double totalWidth) {
-    return Scrollbar(
-      controller: _vBody,
-      thumbVisibility: true,
-      notificationPredicate: (n) => n.metrics.axis == Axis.vertical,
+    // Suppress Material's auto-injected desktop scrollbars — we draw our
+    // own via the outer Scrollbar wrappers, and the default behavior would
+    // stack a second vertical bar against the ListView. Inheriting platform
+    // scroll physics (rather than forcing Clamping) makes the trackpad feel
+    // match other macOS apps.
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
       child: Scrollbar(
-        controller: _hBody,
+        controller: _vBody,
         thumbVisibility: true,
-        notificationPredicate: (n) => n.metrics.axis == Axis.horizontal,
-        child: SingleChildScrollView(
+        notificationPredicate: (n) => n.metrics.axis == Axis.vertical,
+        child: Scrollbar(
           controller: _hBody,
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: totalWidth,
-            child: ListView.builder(
-              controller: _vBody,
-              itemCount: result.rows.length,
-              itemExtent: _rowHeight,
-              physics: const ClampingScrollPhysics(),
-              itemBuilder: (_, r) => _buildRow(r, result.rows[r]),
+          thumbVisibility: true,
+          notificationPredicate: (n) => n.metrics.axis == Axis.horizontal,
+          child: Focus(
+            focusNode: _gridFocus,
+            onKeyEvent: _handleKey,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Expanding to at least the viewport width keeps row stripes
+                // flush to the right edge when the table is narrower than
+                // its container, and collapses the redundant horizontal
+                // scrollbar in that case.
+                final bodyWidth = totalWidth < constraints.maxWidth
+                    ? constraints.maxWidth
+                    : totalWidth;
+                return SingleChildScrollView(
+                  controller: _hBody,
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: bodyWidth,
+                    child: ListView.builder(
+                      controller: _vBody,
+                      itemCount: result.rows.length,
+                      itemExtent: _rowHeight,
+                      itemBuilder: (_, r) =>
+                          _buildRow(r, result.rows[r], bodyWidth),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -502,10 +590,22 @@ class _ResultsGridState extends State<ResultsGrid> {
     );
   }
 
-  Widget _buildRow(int row, List<dynamic> values) {
+  Widget _buildRow(int row, List<dynamic> values, double rowWidth) {
+    final isSelectedRow = _selRow == row;
+    final Color bg;
+    if (isSelectedRow) {
+      // ~10% accent — visible without competing with the focused cell's
+      // bolder border.
+      bg = const Color(0x1A5B7CFA);
+    } else if (row.isOdd) {
+      bg = AppColors.surfaceAlt;
+    } else {
+      bg = Colors.transparent;
+    }
     return Container(
+      width: rowWidth,
       decoration: BoxDecoration(
-        color: row.isOdd ? AppColors.surfaceAlt : Colors.transparent,
+        color: bg,
         border: const Border(
           bottom: BorderSide(color: AppColors.border),
         ),
@@ -517,7 +617,13 @@ class _ResultsGridState extends State<ResultsGrid> {
             align: Alignment.centerRight,
             child: Text(
               '${row + 1}',
-              style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+              style: AppTheme.mono(
+                size: 10.5,
+                color: isSelectedRow
+                    ? AppColors.accent
+                    : AppColors.textMuted,
+                weight: isSelectedRow ? FontWeight.w600 : FontWeight.w400,
+              ),
             ),
           ),
           for (var c = 0; c < values.length; c++)
@@ -594,7 +700,9 @@ class _ResultsGridState extends State<ResultsGrid> {
       );
     }
 
-    final cell = Container(
+    final isSelected = _selRow == row && _selCol == column;
+
+    final cellBody = Container(
       width: _widths[column],
       height: _rowHeight,
       alignment: Alignment.centerLeft,
@@ -610,6 +718,28 @@ class _ResultsGridState extends State<ResultsGrid> {
       child: rendered,
     );
 
+    // The selection ring is drawn as an overlay so it doesn't shift the
+    // cell's text or interfere with the edited-state left stripe.
+    final Widget cell = isSelected
+        ? Stack(
+            children: [
+              cellBody,
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: AppColors.accent,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
+        : cellBody;
+
     return Builder(
       builder: (cellCtx) => MouseRegion(
         cursor: widget.editable
@@ -617,16 +747,20 @@ class _ResultsGridState extends State<ResultsGrid> {
             : SystemMouseCursors.basic,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
+          onTap: () => _selectCell(row, column),
           onDoubleTap: widget.editable
               ? () => _openCellPicker(cellCtx, row, column, original)
               : null,
-          onSecondaryTapDown: (d) => _openCellMenu(
-            cellCtx,
-            d.globalPosition,
-            row,
-            column,
-            original,
-          ),
+          onSecondaryTapDown: (d) {
+            _selectCell(row, column);
+            _openCellMenu(
+              cellCtx,
+              d.globalPosition,
+              row,
+              column,
+              original,
+            );
+          },
           child: cell,
         ),
       ),
