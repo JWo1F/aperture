@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/db_object.dart';
 import '../../models/query_result.dart';
+import '../../services/sql_complete.dart';
 import '../../services/sql_statements.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
@@ -238,6 +239,17 @@ class _QueryEditorState extends State<QueryEditor> {
             ),
             tooltip: 'Run statement (⌘⇧↵)',
             onTap: () => _runStatement(stmt),
+          );
+        },
+        suggest: (req) {
+          // Limit scope to the statement under the cursor so a `FROM users`
+          // in a sibling statement doesn't leak its columns into another one.
+          final stmt = statementAtOffset(_statements, req.cursor);
+          final stmtText = stmt?.text ?? req.text;
+          return completeQueryEditor(
+            req: req,
+            catalog: state.catalog.catalog,
+            stmtText: stmtText,
           );
         },
       ),

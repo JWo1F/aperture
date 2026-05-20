@@ -7,6 +7,7 @@ import '../../models/value_format.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../../services/sql_complete.dart';
 import '../edits/pending_edits_modal.dart';
 import '../widgets/code_editor.dart';
 import '../widgets/common.dart';
@@ -232,6 +233,15 @@ class _TableToolbarState extends State<_TableToolbar> {
     final whereActive = tab.filter.trim().isNotEmpty;
     final orderActive = tab.orderBy.trim().isNotEmpty;
 
+    final columns = widget.state.columnsFor(tab.table) ?? const [];
+    CodeSuggestProvider clauseSuggest(List<String> keywords) {
+      return (req) => completeClause(
+            req: req,
+            columns: columns,
+            extraKeywords: keywords,
+          );
+    }
+
     // Mirror the design's `.tab-content` grid — the clause bar sits flush
     // against the tab strip, no inline action strip. Refresh / Export /
     // Apply-edits live in the toolbar (and pending edits modal) instead.
@@ -248,6 +258,9 @@ class _TableToolbarState extends State<_TableToolbar> {
       selectActive: selectActive,
       whereActive: whereActive,
       orderActive: orderActive,
+      selectSuggest: clauseSuggest(selectModifierKeywords),
+      filterSuggest: clauseSuggest(whereOperatorKeywords),
+      orderSuggest: clauseSuggest(orderModifierKeywords),
     );
   }
 }
@@ -267,6 +280,9 @@ class _ClauseBar extends StatelessWidget {
     required this.selectActive,
     required this.whereActive,
     required this.orderActive,
+    required this.selectSuggest,
+    required this.filterSuggest,
+    required this.orderSuggest,
   });
 
   final CodeEditorController selectController;
@@ -281,6 +297,9 @@ class _ClauseBar extends StatelessWidget {
   final bool selectActive;
   final bool whereActive;
   final bool orderActive;
+  final CodeSuggestProvider selectSuggest;
+  final CodeSuggestProvider filterSuggest;
+  final CodeSuggestProvider orderSuggest;
 
   @override
   Widget build(BuildContext context) {
@@ -329,6 +348,7 @@ class _ClauseBar extends StatelessWidget {
                     actionIcon: Icons.filter_alt_outlined,
                     actionTooltip: 'Apply filter (↵)',
                     isLast: false,
+                    suggest: filterSuggest,
                   ),
                   _ClauseRow(
                     label: 'SELECT',
@@ -340,6 +360,7 @@ class _ClauseBar extends StatelessWidget {
                     actionIcon: Icons.view_column_outlined,
                     actionTooltip: 'Apply columns (↵)',
                     isLast: false,
+                    suggest: selectSuggest,
                   ),
                   _ClauseRow(
                     label: 'ORDER',
@@ -351,6 +372,7 @@ class _ClauseBar extends StatelessWidget {
                     actionIcon: Icons.swap_vert,
                     actionTooltip: 'Apply sort (↵)',
                     isLast: true,
+                    suggest: orderSuggest,
                   ),
                 ],
               ),
@@ -374,6 +396,7 @@ class _ClauseRow extends StatefulWidget {
     required this.actionIcon,
     required this.actionTooltip,
     required this.isLast,
+    required this.suggest,
   });
 
   final String label;
@@ -386,6 +409,7 @@ class _ClauseRow extends StatefulWidget {
   final String actionTooltip;
   /// Omits the bottom hairline on the last row (the outer bar border covers it).
   final bool isLast;
+  final CodeSuggestProvider suggest;
 
   @override
   State<_ClauseRow> createState() => _ClauseRowState();
@@ -478,6 +502,7 @@ class _ClauseRowState extends State<_ClauseRow> {
                   color: AppColors.text4,
                 ).copyWith(fontStyle: FontStyle.italic),
                 onSubmit: widget.onApply,
+                suggest: widget.suggest,
               ),
             ),
           ),
