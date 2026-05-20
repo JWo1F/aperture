@@ -1,115 +1,61 @@
 import 'package:flutter/widgets.dart';
+import 'package:highlight/highlight.dart' show Node, highlight;
+import 'package:highlight/languages/json.dart';
 
 import '../../theme/app_theme.dart';
 
-/// Tokenises an already-encoded JSON string into coloured [TextSpan]s.
-///
-/// Cheap, single-pass, no allocations beyond the spans themselves. Designed
-/// to render inline inside a grid cell with `maxLines: 1` ellipsis.
+/// Tokenises a JSON string into coloured [TextSpan]s using the `highlight`
+/// package's `json` grammar (shared with our SQL highlighter) plus the dbv
+/// palette. Single source of truth for JSON colour in the table grid and
+/// the cell-picker editor.
 List<InlineSpan> jsonSpans(String source, TextStyle base) {
-  final spans = <InlineSpan>[];
-  if (source.isEmpty) return spans;
-
-  final length = source.length;
-  var i = 0;
-
-  TextStyle styled(Color color) => base.copyWith(color: color);
-
-  while (i < length) {
-    final ch = source.codeUnitAt(i);
-
-    // Strings — quoted, with backslash escape.
-    if (ch == 0x22 /* " */) {
-      final start = i;
-      i++;
-      while (i < length) {
-        final c = source.codeUnitAt(i);
-        if (c == 0x5C /* \ */) {
-          i += 2;
-          continue;
-        }
-        i++;
-        if (c == 0x22) break;
-      }
-      // Look past whitespace for ':' to decide key vs value.
-      var j = i;
-      while (j < length && source.codeUnitAt(j) == 0x20) {
-        j++;
-      }
-      final isKey = j < length && source.codeUnitAt(j) == 0x3A /* : */;
-      spans.add(TextSpan(
-        text: source.substring(start, i),
-        style: styled(
-          isKey ? AppColors.sqlKeyword : AppColors.sqlString,
-        ),
-      ));
-      continue;
-    }
-
-    // Numbers — optional minus, digits, optional fraction, optional exponent.
-    if (ch == 0x2D /* - */ || (ch >= 0x30 && ch <= 0x39)) {
-      final start = i;
-      i++;
-      while (i < length) {
-        final c = source.codeUnitAt(i);
-        final isDigit = c >= 0x30 && c <= 0x39;
-        final isDecimalish = c == 0x2E || c == 0x65 || c == 0x45 ||
-            c == 0x2B || c == 0x2D;
-        if (!isDigit && !isDecimalish) break;
-        i++;
-      }
-      spans.add(TextSpan(
-        text: source.substring(start, i),
-        style: styled(AppColors.sqlNumber),
-      ));
-      continue;
-    }
-
-    // Keywords: true / false / null
-    if (_match(source, i, 'true')) {
-      spans.add(TextSpan(text: 'true', style: styled(AppColors.sqlFunction)));
-      i += 4;
-      continue;
-    }
-    if (_match(source, i, 'false')) {
-      spans.add(TextSpan(text: 'false', style: styled(AppColors.sqlFunction)));
-      i += 5;
-      continue;
-    }
-    if (_match(source, i, 'null')) {
-      spans.add(TextSpan(text: 'null', style: styled(AppColors.textMuted)));
-      i += 4;
-      continue;
-    }
-
-    // Structural / whitespace — accumulate as much as possible in one span.
-    final start = i;
-    i++;
-    while (i < length) {
-      final c = source.codeUnitAt(i);
-      if (c == 0x22 ||
-          c == 0x2D ||
-          (c >= 0x30 && c <= 0x39) ||
-          c == 0x74 ||
-          c == 0x66 ||
-          c == 0x6E) {
-        break;
-      }
-      i++;
-    }
-    spans.add(TextSpan(
-      text: source.substring(start, i),
-      style: styled(AppColors.textSecondary),
-    ));
-  }
-
-  return spans;
+  if (source.isEmpty) return const [];
+  _registerOnce();
+  final parsed = highlight.parse(source, language: 'json');
+  return _walk(parsed.nodes, base);
 }
 
-bool _match(String source, int offset, String literal) {
-  if (offset + literal.length > source.length) return false;
-  for (var k = 0; k < literal.length; k++) {
-    if (source.codeUnitAt(offset + k) != literal.codeUnitAt(k)) return false;
+bool _registered = false;
+void _registerOnce() {
+  if (_registered) return;
+  highlight.registerLanguage('json', json);
+  _registered = true;
+}
+
+TextStyle? _styleFor(String? className, String? value, TextStyle base) {
+  switch (className) {
+    case 'attr':
+      return base.copyWith(color: AppColors.sqlKeyword);
+    case 'string':
+      return base.copyWith(color: AppColors.sqlString);
+    case 'number':
+      return base.copyWith(color: AppColors.sqlNumber);
+    case 'literal':
+      // Treat `null` as muted (it's the absence of a value), `true`/`false`
+      // as a function-tinted keyword like in the grid renderer.
+      if (value == 'null') return base.copyWith(color: AppColors.textMuted);
+      return base.copyWith(color: AppColors.sqlFunction);
+    case 'punctuation':
+      return base.copyWith(color: AppColors.textSecondary);
+    default:
+      return null;
   }
-  return true;
+}
+
+List<InlineSpan> _walk(List<Node>? nodes, TextStyle base) {
+  if (nodes == null) return const [];
+  final out = <InlineSpan>[];
+  for (final node in nodes) {
+    final classStyle = _styleFor(node.className, node.value, base);
+    if (node.value != null) {
+      out.add(TextSpan(text: node.value, style: classStyle ?? base));
+    } else if (node.children != null) {
+      // Children inherit the parent's class style as their `base`, so a
+      // nested string literal inside a `string` node still picks up the
+      // right colour even when the inner node has no className.
+      final inner = classStyle ?? base;
+      out.add(TextSpan(children: _walk(node.children, inner)));
+    }
+  }
+  return out;
 }

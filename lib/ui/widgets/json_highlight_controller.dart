@@ -1,21 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:highlight/highlight.dart' show highlight;
-import 'package:highlight/languages/json.dart';
 
-import '../../theme/code_theme.dart';
+import 'json_spans.dart';
 
-/// JSON-highlighted text controller — uses the `highlight` package's json
-/// grammar so keys, strings, numbers, booleans and null are coloured live
-/// as the user types.
+/// JSON-highlighted text controller — defers to [jsonSpans] so the inline
+/// renderer in the table grid and the editable picker share one tokenizer
+/// and one colour palette. Live-tokenizes on each keystroke; tolerant of
+/// incomplete input because [jsonSpans] is single-pass and never throws.
 class JsonHighlightController extends TextEditingController {
-  JsonHighlightController({super.text}) {
-    _registered ??= () {
-      highlight.registerLanguage('json', json);
-      return true;
-    }();
-  }
-
-  static bool? _registered;
+  JsonHighlightController({super.text});
 
   @override
   TextSpan buildTextSpan({
@@ -25,10 +17,6 @@ class JsonHighlightController extends TextEditingController {
   }) {
     final base = style ?? const TextStyle();
     if (text.isEmpty) return TextSpan(text: '', style: base);
-    final parsed = highlight.parse(text, language: 'json');
-    return TextSpan(
-      style: base,
-      children: highlightNodesToSpans(parsed.nodes, base, apertureCodeStyles),
-    );
+    return TextSpan(style: base, children: jsonSpans(text, base));
   }
 }
