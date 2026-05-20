@@ -70,6 +70,9 @@ class _AppShellState extends State<AppShell> {
         bindings: {
           const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
               showCommandPalette(context, state),
+          if (connected)
+            const SingleActivator(LogicalKeyboardKey.keyR, meta: true):
+                () => state.refreshCatalog(),
         },
         child: FocusScope(
           autofocus: true,

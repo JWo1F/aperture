@@ -6,6 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:highlight/highlight.dart' show highlight;
 import 'package:provider/provider.dart';
 
+import '../../models/db_object.dart';
+import '../../models/query_result.dart';
 import '../../services/sql_statements.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
@@ -244,11 +246,11 @@ class _QueryEditorState extends State<QueryEditor> {
                 : ResultsGrid(
                     result: tab.result!,
                     widths: tab.columnWidths,
-                    foreignKeys: state.aggregatedForeignKeys,
+                    foreignKeys: _resolveFks(state, tab.result!),
                     onFollowForeignKey: (fk, value) =>
                         state.followForeignKey(fk, value),
                     findRowOwner: (col) =>
-                        state.findPrimaryKeyOwner(col),
+                        _findRowOwner(state, tab.result!, col),
                     onFindRow: (table, col, value) =>
                         state.findRowInTable(table, col, value),
                   ),
@@ -603,6 +605,39 @@ class _SqlController extends TextEditingController {
       children: highlightNodesToSpans(parsed.nodes, base, apertureCodeStyles),
     );
   }
+}
+
+/// Builds a column-name → FK lookup for a raw query result. Prefers the
+/// source-relation OID exposed by the wire protocol so the FK action targets
+/// the *actual* table the column came from; falls back to the catalog-wide
+/// aggregation when the column is an expression (no source relation).
+Map<String, DbForeignKey> _resolveFks(AppState state, QueryResult result) {
+  final schemas = result.columnSchemas;
+  if (schemas == null) return state.aggregatedForeignKeys;
+  final out = <String, DbForeignKey>{};
+  for (final schema in schemas) {
+    final precise = state.findForeignKey(schema.tableOid, schema.name);
+    if (precise != null) {
+      out[schema.name] = precise;
+    } else if (!schema.hasSourceRelation) {
+      final guess = state.aggregatedForeignKeys[schema.name];
+      if (guess != null) out[schema.name] = guess;
+    }
+  }
+  return out;
+}
+
+/// Returns the relation whose PK is [columnName], preferring the source
+/// relation OID from the wire protocol when present. Falls back to the
+/// ambiguity-safe catalog lookup otherwise.
+DbTable? _findRowOwner(AppState state, QueryResult result, String columnName) {
+  final schemas = result.columnSchemas;
+  if (schemas == null) return state.findPrimaryKeyOwner(columnName);
+  for (final schema in schemas) {
+    if (schema.name != columnName) continue;
+    return state.findPrimaryKeyOwnerByOid(schema.tableOid, columnName);
+  }
+  return state.findPrimaryKeyOwner(columnName);
 }
 
 class _RunStmtIcon extends StatelessWidget {

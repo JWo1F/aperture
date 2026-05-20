@@ -4,6 +4,7 @@ import '../models/connection_config.dart';
 import '../models/db_object.dart';
 import '../models/query_result.dart';
 import '../state/workspace_tab.dart';
+import 'introspector.dart';
 
 /// Wraps a single live Postgres connection: opening it, introspecting the
 /// catalog, and running statements. One instance maps to one open connection.
@@ -45,104 +46,10 @@ class PostgresService {
     return c;
   }
 
-  /// Reads every user schema with its tables and views in one round trip.
-  Future<List<DbSchema>> loadSchemas() async {
-    final result = await _conn.execute(
-      "SELECT table_schema, table_name, table_type "
-      "FROM information_schema.tables "
-      "WHERE table_schema NOT IN ('pg_catalog', 'information_schema') "
-      "ORDER BY table_schema, table_name",
-    );
-
-    final grouped = <String, List<DbTable>>{};
-    for (final row in result) {
-      final schema = row[0] as String;
-      final name = row[1] as String;
-      final type = row[2] as String;
-      grouped.putIfAbsent(schema, () => []).add(
-            DbTable(
-              schema: schema,
-              name: name,
-              kind: type == 'VIEW'
-                  ? DbRelationKind.view
-                  : DbRelationKind.table,
-            ),
-          );
-    }
-
-    return grouped.entries
-        .map((e) => DbSchema(name: e.key, tables: e.value))
-        .toList();
-  }
-
-  Future<List<DbColumn>> loadColumns(DbTable table) async {
-    final result = await _conn.execute(
-      Sql.named(
-        'SELECT c.column_name, c.data_type, c.is_nullable, '
-        '       c.column_default IS NOT NULL AS has_default, '
-        '       COALESCE(pk.is_pk, false) AS is_primary_key '
-        'FROM information_schema.columns c '
-        'LEFT JOIN ('
-        '  SELECT kcu.column_name, true AS is_pk '
-        '  FROM information_schema.table_constraints tc '
-        '  JOIN information_schema.key_column_usage kcu '
-        '    ON tc.constraint_name = kcu.constraint_name '
-        '   AND tc.table_schema = kcu.table_schema '
-        "  WHERE tc.constraint_type = 'PRIMARY KEY' "
-        '    AND tc.table_schema = @schema AND tc.table_name = @table'
-        ') pk ON pk.column_name = c.column_name '
-        'WHERE c.table_schema = @schema AND c.table_name = @table '
-        'ORDER BY c.ordinal_position',
-      ),
-      parameters: {'schema': table.schema, 'table': table.name},
-    );
-
-    return result
-        .map(
-          (row) => DbColumn(
-            name: row[0] as String,
-            dataType: row[1] as String,
-            nullable: (row[2] as String) == 'YES',
-            hasDefault: row[3] as bool,
-            isPrimaryKey: row[4] as bool,
-          ),
-        )
-        .toList();
-  }
-
-  /// Single-column foreign keys keyed by local column name. Multi-column FKs
-  /// (rare) are filtered out via `cardinality(conkey) = 1`.
-  Future<Map<String, DbForeignKey>> loadForeignKeys(DbTable table) async {
-    final regclass =
-        "'${_quoteIdent(table.schema)}.${_quoteIdent(table.name)}'::regclass";
-
-    final result = await _conn.execute(
-      'SELECT a.attname::text, ns.nspname::text, '
-      '       refcls.relname::text, refa.attname::text '
-      'FROM pg_constraint c '
-      'JOIN pg_attribute a ON a.attrelid = c.conrelid '
-      '  AND a.attnum = c.conkey[1] '
-      'JOIN pg_class refcls ON refcls.oid = c.confrelid '
-      'JOIN pg_namespace ns ON ns.oid = refcls.relnamespace '
-      'JOIN pg_attribute refa ON refa.attrelid = c.confrelid '
-      '  AND refa.attnum = c.confkey[1] '
-      "WHERE c.conrelid = $regclass "
-      "  AND c.contype = 'f' "
-      '  AND cardinality(c.conkey) = 1',
-    );
-
-    final map = <String, DbForeignKey>{};
-    for (final r in result) {
-      final column = r[0] as String;
-      map[column] = DbForeignKey(
-        column: column,
-        refSchema: r[1] as String,
-        refTable: r[2] as String,
-        refColumn: r[3] as String,
-      );
-    }
-    return map;
-  }
+  /// Catalog introspector bound to this connection. The caller drives which
+  /// sweeps to run (schemas + columns + FKs + indexes + enums + domains) and
+  /// in what order — see [Introspector] for the individual queries.
+  Introspector get introspector => Introspector(_conn);
 
   String _whereClause(String filter) {
     final trimmed = filter.trim();
@@ -190,10 +97,21 @@ class PostgresService {
       );
       watch.stop();
 
-      final columns = result.schema.columns
+      // First schema column is the injected ctid — strip it from both the
+      // column list and the per-column schemas before returning.
+      final dataSchemas = result.schema.columns.sublist(1);
+      final columns = dataSchemas
           .map((c) => c.columnName ?? 'column')
-          .toList()
-        ..removeAt(0);
+          .toList();
+      final columnSchemas = dataSchemas
+          .map(
+            (c) => ResultColumnSchema(
+              name: c.columnName ?? 'column',
+              tableOid: c.tableOid,
+              columnAttNum: c.columnOid,
+            ),
+          )
+          .toList();
       final rows = <List<dynamic>>[];
       final rowIds = <String>[];
       for (final row in result) {
@@ -206,6 +124,7 @@ class PostgresService {
         columns: columns,
         rows: rows,
         rowIds: rowIds,
+        columnSchemas: columnSchemas,
         elapsed: watch.elapsed,
       );
     } on ServerException catch (e) {
@@ -400,6 +319,15 @@ class PostgresService {
       final columns = result.schema.columns
           .map((c) => c.columnName ?? 'column')
           .toList();
+      final columnSchemas = result.schema.columns
+          .map(
+            (c) => ResultColumnSchema(
+              name: c.columnName ?? 'column',
+              tableOid: c.tableOid,
+              columnAttNum: c.columnOid,
+            ),
+          )
+          .toList();
       final rows = result.map((row) => row.toList()).toList();
 
       return QueryResult.rows(
@@ -407,6 +335,7 @@ class PostgresService {
         rows: rows,
         elapsed: watch.elapsed,
         affectedRows: result.affectedRows,
+        columnSchemas: columnSchemas,
       );
     } on ServerException catch (e) {
       watch.stop();

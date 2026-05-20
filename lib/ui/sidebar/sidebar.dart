@@ -116,8 +116,9 @@ class _ConnectionRow extends StatelessWidget {
           if (state.status == ConnectionStatus.connected)
             IconAction(
               icon: Icons.refresh,
-              tooltip: 'Refresh schema',
-              onPressed: state.refreshSchemas,
+              tooltip: 'Refresh catalog',
+              busy: state.isCatalogLoading,
+              onPressed: state.isCatalogLoading ? null : state.refreshCatalog,
             ),
         ],
       ),
@@ -732,8 +733,8 @@ class _TableRowState extends State<_TableRow> {
         const CmDivider(),
         CmItem(
           icon: Icons.refresh,
-          label: 'Refresh schema list',
-          onTap: () => _state.refreshSchemas(),
+          label: 'Refresh catalog',
+          onTap: () => _state.refreshCatalog(),
         ),
       ],
     );

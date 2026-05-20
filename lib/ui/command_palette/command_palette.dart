@@ -116,10 +116,10 @@ class _PaletteState extends State<_Palette> {
       ));
       cmds.add(_Cmd(
         kind: _CmdKind.action,
-        label: 'Reload Schema',
-        subtitle: 'Re-introspect the catalog',
+        label: 'Refresh Catalog',
+        subtitle: 'Re-introspect the database',
         icon: Icons.refresh,
-        run: state.refreshSchemas,
+        run: state.refreshCatalog,
       ));
       cmds.add(_Cmd(
         kind: _CmdKind.action,

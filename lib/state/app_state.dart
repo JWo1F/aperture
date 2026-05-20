@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/connection_config.dart';
+import '../models/db_catalog.dart';
 import '../models/db_object.dart';
 import '../models/order_term.dart';
 import '../models/query_result.dart';
@@ -59,52 +60,88 @@ class AppState extends ChangeNotifier {
   String? _connectionError;
   String? get connectionError => _connectionError;
 
-  List<DbSchema> _schemas = [];
-  List<DbSchema> get schemas => _schemas;
+  /// Live introspected catalog. Replaces the per-table caches we used to
+  /// maintain — schemas/columns/FKs/indexes/enums/domains all live here.
+  /// Filled in two passes after [connect]: phase 0 (schemas) before the
+  /// sidebar paints, phase 1 (everything else) in the background.
+  DatabaseCatalog _catalog = DatabaseCatalog.empty;
+  DatabaseCatalog get catalog => _catalog;
+
+  /// Bumped on every [connect] / [disconnect] / [refreshCatalog]. Background
+  /// introspection tasks compare against the generation they were launched
+  /// under before merging results, so connection switches don't leak stale
+  /// data into the new catalog.
+  int _catalogGeneration = 0;
+
+  bool _catalogPhase1Loading = false;
+  bool get isCatalogLoading => _catalogPhase1Loading;
+
+  List<DbSchema> get schemas => _catalog.schemas;
 
   final Set<String> _expandedSchemas = {};
   bool isSchemaExpanded(String name) => _expandedSchemas.contains(name);
 
-  final Map<String, List<DbColumn>> _columnCache = {};
-  List<DbColumn>? columnsFor(DbTable table) =>
-      _columnCache[table.qualifiedName];
-
-  final Map<String, Map<String, DbForeignKey>> _fkCache = {};
-  Map<String, DbForeignKey>? foreignKeysFor(DbTable table) =>
-      _fkCache[table.qualifiedName];
-
-  /// Union of all loaded tables' FKs, keyed by local column name. Used by
-  /// query result grids to offer "Follow →" when an FK column appears in a
-  /// raw SQL result. First match wins on collisions (a personal-tool tradeoff
-  /// for the much simpler implementation vs. resolving source table OIDs).
-  Map<String, DbForeignKey> get aggregatedForeignKeys {
-    final out = <String, DbForeignKey>{};
-    for (final perTable in _fkCache.values) {
-      for (final entry in perTable.entries) {
-        out.putIfAbsent(entry.key, () => entry.value);
-      }
-    }
-    return out;
+  List<DbColumn>? columnsFor(DbTable table) {
+    final cols = _catalog.columnsByOid[table.oid];
+    return (cols == null || cols.isEmpty) ? null : cols;
   }
 
-  /// Heuristic lookup: which loaded table treats [columnName] as its (single)
-  /// primary key? First match wins. Returns null when no loaded table claims
-  /// this column as a PK — in which case the "Find row in table" menu item
-  /// is hidden.
-  DbTable? findPrimaryKeyOwner(String columnName) {
-    for (final entry in _columnCache.entries) {
-      final cols = entry.value;
-      if (cols.any((c) => c.name == columnName && c.isPrimaryKey)) {
-        // Locate the matching DbTable instance in our schemas list.
-        for (final s in _schemas) {
-          for (final t in s.tables) {
-            if (t.qualifiedName == entry.key) return t;
-          }
-        }
-      }
+  /// Single-column foreign keys of [table] keyed by local column name. The
+  /// grid's column-header FK icon only handles single-column FKs; multi-
+  /// column constraints are dropped here (still visible via DDL view).
+  Map<String, DbForeignKey>? foreignKeysFor(DbTable table) {
+    if (!_catalog.hasPhase(CatalogPhase.foreignKeys)) return null;
+    return _catalog.singleColumnForeignKeysFor(table);
+  }
+
+  /// Aggregated single-column FKs across all relations. Used by the raw
+  /// query result grid only when the column's source relation OID is not
+  /// available from the result schema (expression columns, function calls).
+  Map<String, DbForeignKey> get aggregatedForeignKeys =>
+      _catalog.aggregatedSingleColumnForeignKeys;
+
+  /// Resolves the FK that applies to [columnName] when we know the source
+  /// relation OID from the wire protocol. Precise — no cross-table collision.
+  DbForeignKey? findForeignKey(int? sourceRelOid, String columnName) {
+    if (sourceRelOid == null || sourceRelOid == 0) return null;
+    final fks = _catalog.foreignKeysByOid[sourceRelOid];
+    if (fks == null) return null;
+    for (final fk in fks) {
+      if (fk.isSingleColumn && fk.localColumn == columnName) return fk;
     }
     return null;
   }
+
+  /// PK-owning relation for [columnName]. Returns null on ambiguity rather
+  /// than silently picking the first match — accuracy is preferred over
+  /// always lighting up the "Find row" menu item.
+  DbTable? findPrimaryKeyOwner(String columnName) =>
+      _catalog.findUniquePrimaryKeyOwner(columnName);
+
+  /// Like [findPrimaryKeyOwner] but pinned to a specific relation oid when
+  /// the wire protocol told us where the column came from.
+  DbTable? findPrimaryKeyOwnerByOid(int? sourceRelOid, String columnName) {
+    if (sourceRelOid == null || sourceRelOid == 0) {
+      return findPrimaryKeyOwner(columnName);
+    }
+    final cols = _catalog.columnsByOid[sourceRelOid];
+    if (cols == null) return findPrimaryKeyOwner(columnName);
+    final match =
+        cols.firstWhere((c) => c.name == columnName, orElse: () => _missingCol);
+    if (identical(match, _missingCol) || !match.isPrimaryKey) {
+      return findPrimaryKeyOwner(columnName);
+    }
+    return _catalog.relation(sourceRelOid);
+  }
+
+  static final DbColumn _missingCol = DbColumn(
+    name: '',
+    dataType: '',
+    nullable: true,
+    isPrimaryKey: false,
+    hasDefault: false,
+    ordinal: 0,
+  );
 
   /// Opens (or focuses) [refTable] and filters it to the row where
   /// [refColumn] equals [value]. Used by the "Find row" cell-context action.
@@ -121,9 +158,8 @@ class AppState extends ChangeNotifier {
     await setTableFilter(tab, _equalityFragment(refColumn, value));
   }
 
-  /// Every column name we've ever loaded — fed into SQL editor autocomplete.
-  Iterable<String> get loadedColumnNames =>
-      _columnCache.values.expand((cols) => cols.map((c) => c.name));
+  /// Every column name we know about — fed into SQL editor autocomplete.
+  Iterable<String> get loadedColumnNames => _catalog.allColumnNames;
 
   final List<WorkspaceTab> _tabs = [];
   List<WorkspaceTab> get tabs => List.unmodifiable(_tabs);
@@ -166,7 +202,7 @@ class AppState extends ChangeNotifier {
   void _hydrateRecents(ConnectionConfig conn) {
     _recents.clear();
     final lookup = <String, DbTable>{
-      for (final s in _schemas)
+      for (final s in schemas)
         for (final t in s.tables) t.qualifiedKey: t,
     };
     for (final key in conn.recentTables) {
@@ -287,25 +323,33 @@ class AppState extends ChangeNotifier {
     _activeConnection = config;
     _status = ConnectionStatus.connecting;
     _connectionError = null;
-    _schemas = [];
+    _catalogGeneration++;
+    _catalog = DatabaseCatalog.empty;
+    _catalogPhase1Loading = false;
     _tabs.clear();
     _navHistory.clear();
     _historyIndex = -1;
-    _columnCache.clear();
     notifyListeners();
 
+    final gen = _catalogGeneration;
     try {
       await _service!.connect();
-      _schemas = await _service!.loadSchemas();
-      if (_schemas.length == 1) _expandedSchemas.add(_schemas.first.name);
+      final phase0 = await _loadCatalogPhase0();
+      if (gen != _catalogGeneration) return;
+      _catalog = phase0;
+      if (_catalog.schemas.length == 1) {
+        _expandedSchemas.add(_catalog.schemas.first.name);
+      }
       _status = ConnectionStatus.connected;
-      // Stamp the connection time so the welcome screen can surface recents.
       final stamped = config.copyWith(lastConnectedAt: DateTime.now());
       final idx = _connections.indexWhere((c) => c.id == config.id);
       if (idx != -1) _connections[idx] = stamped;
       _activeConnection = stamped;
       _hydrateRecents(stamped);
       _persist();
+      notifyListeners();
+      unawaited(_loadCatalogPhase1(gen));
+      return;
     } catch (e) {
       _status = ConnectionStatus.error;
       _connectionError = e.toString();
@@ -319,19 +363,94 @@ class AppState extends ChangeNotifier {
     _service = null;
     _activeConnection = null;
     _status = ConnectionStatus.disconnected;
-    _schemas = [];
+    _catalogGeneration++;
+    _catalog = DatabaseCatalog.empty;
+    _catalogPhase1Loading = false;
     _expandedSchemas.clear();
-    _columnCache.clear();
     _tabs.clear();
     _navHistory.clear();
     _historyIndex = -1;
     notifyListeners();
   }
 
-  Future<void> refreshSchemas() async {
+  /// User-triggered refresh (sidebar button / ⌘R). Re-runs both phases under
+  /// a fresh generation so any in-flight loads from a previous refresh are
+  /// dropped on arrival.
+  Future<void> refreshCatalog() async {
     if (_service == null) return;
-    _schemas = await _service!.loadSchemas();
+    _catalogGeneration++;
+    final gen = _catalogGeneration;
+    _catalogPhase1Loading = true;
     notifyListeners();
+    try {
+      final phase0 = await _loadCatalogPhase0();
+      if (gen != _catalogGeneration) return;
+      _catalog = phase0;
+      notifyListeners();
+      await _loadCatalogPhase1(gen);
+    } catch (e) {
+      _catalogPhase1Loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<DatabaseCatalog> _loadCatalogPhase0() async {
+    final introspector = _service!.introspector;
+    final schemas = await introspector.loadSchemas();
+    final relationsByOid = <int, DbTable>{};
+    for (final s in schemas) {
+      for (final t in s.tables) {
+        relationsByOid[t.oid] = t;
+      }
+    }
+    return DatabaseCatalog.empty.copyWith(
+      schemas: schemas,
+      relationsByOid: relationsByOid,
+      phases: {CatalogPhase.schemas},
+    );
+  }
+
+  /// Runs the five concept-level sweeps in parallel. Each result is merged
+  /// into the catalog under the guard of [gen] so a connection switch while
+  /// loading discards any late arrivals.
+  Future<void> _loadCatalogPhase1(int gen) async {
+    if (_service == null) return;
+    _catalogPhase1Loading = true;
+    notifyListeners();
+    final introspector = _service!.introspector;
+    try {
+      final results = await Future.wait([
+        introspector.loadAllColumns(),
+        introspector.loadAllForeignKeys(),
+        introspector.loadAllIndexes(),
+        introspector.loadAllEnums(),
+        introspector.loadAllDomains(),
+      ]);
+      if (gen != _catalogGeneration) return;
+      _catalog = _catalog.copyWith(
+        columnsByOid: results[0] as Map<int, List<DbColumn>>,
+        foreignKeysByOid: results[1] as Map<int, List<DbForeignKey>>,
+        indexesByOid: results[2] as Map<int, List<DbIndex>>,
+        enums: results[3] as List<DbEnum>,
+        domains: results[4] as List<DbDomain>,
+        phases: {
+          ..._catalog.phases,
+          CatalogPhase.columns,
+          CatalogPhase.foreignKeys,
+          CatalogPhase.indexes,
+          CatalogPhase.enums,
+          CatalogPhase.domains,
+        },
+      );
+    } catch (_) {
+      // Phase 1 is best-effort: a failure here leaves the catalog in its
+      // phase-0 state. The user can retry via the refresh control.
+    } finally {
+      if (gen == _catalogGeneration) {
+        _catalogPhase1Loading = false;
+        notifyListeners();
+      }
+    }
   }
 
   // --- Schema tree -----------------------------------------------------
@@ -341,20 +460,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> ensureColumns(DbTable table) async {
-    if (_service == null) return;
-    final key = table.qualifiedName;
-    final needCols = !_columnCache.containsKey(key);
-    final needFks = !_fkCache.containsKey(key);
-    if (!needCols && !needFks) return;
-    if (needCols) {
-      _columnCache[key] = await _service!.loadColumns(table);
-    }
-    if (needFks) {
-      _fkCache[key] = await _service!.loadForeignKeys(table);
-    }
-    notifyListeners();
-  }
+  /// Retained for call-site compatibility. Once phase 1 has landed,
+  /// columns/FKs are already in the catalog and this is a no-op. Before
+  /// then, the UI simply renders without per-column metadata — features
+  /// that depend on it (FK icons, type-aware cell picker for NULL cells)
+  /// light up on the next notify when phase 1 completes.
+  Future<void> ensureColumns(DbTable table) async {}
 
   // --- Workspace tabs --------------------------------------------------
 
@@ -582,7 +693,7 @@ class AppState extends ChangeNotifier {
     final keys = _activeConnection?.favoriteTables;
     if (keys == null || keys.isEmpty) return const [];
     final lookup = <String, DbTable>{
-      for (final s in _schemas)
+      for (final s in schemas)
         for (final t in s.tables) t.qualifiedKey: t,
     };
     return [
@@ -664,29 +775,19 @@ class AppState extends ChangeNotifier {
 
   /// Opens (or focuses) the referenced table and filters it down to the row
   /// pointed at by [value]. Used by the cell context menu's "Follow →" item.
+  /// Only meaningful for single-column FKs — the column-header icon never
+  /// renders for multi-column constraints.
   Future<void> followForeignKey(DbForeignKey fk, dynamic value) async {
-    final ref = _findTable(fk.refSchema, fk.refTable) ??
-        DbTable(
-          schema: fk.refSchema,
-          name: fk.refTable,
-          kind: DbRelationKind.table,
-        );
+    if (!fk.isSingleColumn) return;
+    final ref = _catalog.relation(fk.refTableOid) ??
+        _catalog.relationByName(fk.refSchema, fk.refTable);
+    if (ref == null) return;
     await openTable(ref);
     final tab = _tabs.lastWhere(
       (t) =>
           t is TableTab && t.table.qualifiedName == ref.qualifiedName,
     ) as TableTab;
     await setTableFilter(tab, _equalityFragment(fk.refColumn, value));
-  }
-
-  DbTable? _findTable(String schema, String name) {
-    for (final s in _schemas) {
-      if (s.name != schema) continue;
-      for (final t in s.tables) {
-        if (t.name == name) return t;
-      }
-    }
-    return null;
   }
 
   String _equalityFragment(String column, dynamic value) {
