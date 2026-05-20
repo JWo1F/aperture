@@ -30,7 +30,12 @@ class TableView extends StatelessWidget {
       children: [
         _TableToolbar(tab: tab, state: state),
         Expanded(
-          child: tab.result == null
+          // Body uses `var(--bg)` per the design's `.grid-wrap` rule — the
+          // clause bar above is `var(--bg-deep)`, so the hairline between
+          // them reads even when the grid hasn't loaded any rows yet.
+          child: ColoredBox(
+            color: AppColors.bg,
+            child: tab.result == null
               ? (tab.loading
                   ? Center(
                       child: SizedBox(
@@ -93,6 +98,7 @@ class TableView extends StatelessWidget {
                           ),
                       ],
                     ),
+          ),
         ),
         _PaginationBar(tab: tab, state: state),
       ],
