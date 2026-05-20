@@ -252,21 +252,64 @@ class _ResultsGridState extends State<ResultsGrid> {
     return KeyEventResult.ignored;
   }
 
+  // --- cell hit-testing & geometry --------------------------------------
+
+  /// Maps a local-position pointer event on the body Listener to its cell.
+  /// Returns `null` for clicks on the row-number gutter or outside the grid.
+  (int, int)? _cellAt(Offset localPos) {
+    if (localPos.dx < _indexWidth) return null;
+    var x = _indexWidth;
+    int? col;
+    for (var c = 0; c < _widths.length; c++) {
+      final next = x + _widths[c];
+      if (localPos.dx < next) {
+        col = c;
+        break;
+      }
+      x = next;
+    }
+    if (col == null) return null;
+
+    final contentY = localPos.dy + (_vBody.hasClients ? _vBody.offset : 0);
+    if (contentY < 0) return null;
+    final row = (contentY / _rowHeight).floor();
+    if (row < 0 || row >= widget.result.rows.length) return null;
+
+    return (row, col);
+  }
+
+  /// Computes the cell's current global Rect from the body's RenderBox plus
+  /// column/row geometry — used as the picker overlay's anchor since cells
+  /// no longer carry their own per-cell BuildContext.
+  Rect _cellRect(BuildContext bodyCtx, int row, int col) {
+    final box = bodyCtx.findRenderObject();
+    if (box is! RenderBox) return Rect.zero;
+    final origin = box.localToGlobal(Offset.zero);
+
+    var contentX = _indexWidth;
+    for (var i = 0; i < col; i++) {
+      contentX += _widths[i];
+    }
+    final viewportY =
+        row * _rowHeight - (_vBody.hasClients ? _vBody.offset : 0);
+
+    return Rect.fromLTWH(
+      origin.dx + contentX,
+      origin.dy + viewportY,
+      _widths[col],
+      _rowHeight,
+    );
+  }
+
   // --- cell picker -----------------------------------------------------
 
   void _openCellPicker(
-    BuildContext cellCtx,
+    BuildContext bodyCtx,
     int row,
     int column,
     dynamic original,
   ) {
     if (widget.onEditCell == null) return;
-    final renderObject = cellCtx.findRenderObject();
-    if (renderObject is! RenderBox) return;
-    final origin = renderObject.localToGlobal(Offset.zero);
-    final size = renderObject.size;
-    final rect =
-        Rect.fromLTWH(origin.dx, origin.dy, size.width, size.height);
 
     final columnName = widget.result.columns[column];
     final key = CellEdit(row, column);
@@ -274,8 +317,8 @@ class _ResultsGridState extends State<ResultsGrid> {
     final meta = widget.columnMeta?[columnName];
 
     showCellPicker(
-      cellCtx,
-      anchorRect: rect,
+      bodyCtx,
+      anchorRect: _cellRect(bodyCtx, row, column),
       columnName: columnName,
       originalValue: original,
       pendingEdit: pending,
@@ -599,10 +642,12 @@ class _ResultsGridState extends State<ResultsGrid> {
                 // from the scrollbar thumb overlay so vertical thumb
                 // drags don't force a repaint of every visible row.
                 //
-                // The MouseRegion sets the cell-text cursor once for the
-                // whole grid instead of attaching one per cell — the cursor
-                // is the same value for every cell, so per-cell hover
-                // tracking was just overhead during scroll.
+                // A single Listener + GestureDetector at the body level
+                // owns click / double-click / right-click for every cell.
+                // Per-cell pointer handlers used to be allocated for every
+                // new row that scrolled into view — that churn was the
+                // biggest cost during fast scrolling. We hit-test (row,
+                // column) from the pointer's local position instead.
                 return RepaintBoundary(
                   child: MouseRegion(
                     cursor: widget.editable
@@ -613,12 +658,51 @@ class _ResultsGridState extends State<ResultsGrid> {
                       scrollDirection: Axis.horizontal,
                       child: SizedBox(
                         width: bodyWidth,
-                        child: ListView.builder(
-                          controller: _vBody,
-                          itemCount: result.rows.length,
-                          itemExtent: _rowHeight,
-                          itemBuilder: (_, r) =>
-                              _buildRow(r, result.rows[r], bodyWidth),
+                        child: Builder(
+                          builder: (bodyCtx) => Listener(
+                            behavior: HitTestBehavior.translucent,
+                            onPointerDown: (e) {
+                              final cell = _cellAt(e.localPosition);
+                              if (cell == null) return;
+                              _selectCell(cell.$1, cell.$2);
+                            },
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onDoubleTapDown: widget.editable
+                                  ? (d) {
+                                      final cell = _cellAt(d.localPosition);
+                                      if (cell == null) return;
+                                      final (r, c) = cell;
+                                      _openCellPicker(
+                                        bodyCtx,
+                                        r,
+                                        c,
+                                        result.rows[r][c],
+                                      );
+                                    }
+                                  : null,
+                              onSecondaryTapDown: (d) {
+                                final cell = _cellAt(d.localPosition);
+                                if (cell == null) return;
+                                final (r, c) = cell;
+                                _selectCell(r, c);
+                                _openCellMenu(
+                                  bodyCtx,
+                                  d.globalPosition,
+                                  r,
+                                  c,
+                                  result.rows[r][c],
+                                );
+                              },
+                              child: ListView.builder(
+                                controller: _vBody,
+                                itemCount: result.rows.length,
+                                itemExtent: _rowHeight,
+                                itemBuilder: (_, r) =>
+                                    _buildRow(r, result.rows[r], bodyWidth),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -782,7 +866,11 @@ class _ResultsGridState extends State<ResultsGrid> {
       );
     }
 
-    final cellBody = Container(
+    // Pointer handling lives at the body level — a single Listener +
+    // GestureDetector hit-tests (row, column) from the click's local
+    // position. Cells reduce to a sized Container, which keeps the per-row
+    // widget allocation small enough for fast scrolling.
+    return Container(
       width: _widths[column],
       height: _rowHeight,
       alignment: Alignment.centerLeft,
@@ -796,38 +884,6 @@ class _ResultsGridState extends State<ResultsGrid> {
             )
           : null,
       child: rendered,
-    );
-
-    // Listener.onPointerDown fires synchronously on the raw pointer event,
-    // before the gesture arena starts disambiguating taps from double taps.
-    // GestureDetector.onTapDown is gated by the tap recognizer's deadline
-    // (~kPressTimeout) when onDoubleTap is also registered, which is what
-    // made the selection visibly trail the click. The GestureDetector below
-    // still owns double-click (open the picker) and secondary tap.
-    //
-    // No MouseRegion here — the cursor is set once at the body level for the
-    // whole grid since it's the same for every cell. Dropping 200 per-cell
-    // MouseRegions removed a significant chunk of hover-tracking work that
-    // was firing on every mouse-move event during scroll.
-    return Builder(
-      builder: (cellCtx) => Listener(
-        behavior: HitTestBehavior.opaque,
-        onPointerDown: (_) => _selectCell(row, column),
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onDoubleTap: widget.editable
-              ? () => _openCellPicker(cellCtx, row, column, original)
-              : null,
-          onSecondaryTapDown: (d) => _openCellMenu(
-            cellCtx,
-            d.globalPosition,
-            row,
-            column,
-            original,
-          ),
-          child: cellBody,
-        ),
-      ),
     );
   }
 
