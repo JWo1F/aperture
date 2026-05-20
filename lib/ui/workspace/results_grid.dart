@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 
 import '../../models/db_object.dart';
@@ -229,21 +231,117 @@ class _ResultsGridState extends State<ResultsGrid> {
     return formatted ?? 'NULL';
   }
 
+  BuildContext? _bodyCtx;
+
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.escape) {
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
       if (_selRow == null) return KeyEventResult.ignored;
       _clearSelection();
       return KeyEventResult.handled;
     }
-    final isCopyChord = event.logicalKey == LogicalKeyboardKey.keyC &&
+    final isCopyChord = key == LogicalKeyboardKey.keyC &&
         (HardwareKeyboard.instance.isMetaPressed ||
             HardwareKeyboard.instance.isControlPressed);
     if (isCopyChord && _selRow != null && _selCol != null) {
       Clipboard.setData(ClipboardData(text: _selectedCellText()));
       return KeyEventResult.handled;
     }
+
+    if (_moveSelection(key)) return KeyEventResult.handled;
+
+    if ((key == LogicalKeyboardKey.enter ||
+            key == LogicalKeyboardKey.numpadEnter ||
+            key == LogicalKeyboardKey.f2) &&
+        widget.editable &&
+        widget.onEditCell != null &&
+        _selRow != null &&
+        _selCol != null &&
+        _bodyCtx != null) {
+      _openCellPicker(
+        _bodyCtx!,
+        _selRow!,
+        _selCol!,
+        widget.result.rows[_selRow!][_selCol!],
+      );
+      return KeyEventResult.handled;
+    }
     return KeyEventResult.ignored;
+  }
+
+  /// Handles arrow-key navigation (with Home/End/PageUp/PageDown). Returns
+  /// true when the event was consumed. With no selection, any arrow lands
+  /// on (0, 0) so the user can take over after a fresh focus.
+  bool _moveSelection(LogicalKeyboardKey key) {
+    final rows = widget.result.rows.length;
+    final cols = widget.result.columns.length;
+    if (rows == 0 || cols == 0) return false;
+
+    int? r = _selRow;
+    int? c = _selCol;
+    if (key == LogicalKeyboardKey.arrowUp) {
+      r = r == null ? 0 : (r - 1).clamp(0, rows - 1);
+      c = c ?? 0;
+    } else if (key == LogicalKeyboardKey.arrowDown) {
+      r = r == null ? 0 : (r + 1).clamp(0, rows - 1);
+      c = c ?? 0;
+    } else if (key == LogicalKeyboardKey.arrowLeft) {
+      c = c == null ? 0 : (c - 1).clamp(0, cols - 1);
+      r = r ?? 0;
+    } else if (key == LogicalKeyboardKey.arrowRight) {
+      c = c == null ? 0 : (c + 1).clamp(0, cols - 1);
+      r = r ?? 0;
+    } else if (key == LogicalKeyboardKey.home) {
+      r = r ?? 0;
+      c = 0;
+    } else if (key == LogicalKeyboardKey.end) {
+      r = r ?? 0;
+      c = cols - 1;
+    } else if (key == LogicalKeyboardKey.pageUp) {
+      r = r == null ? 0 : (r - _pageJump).clamp(0, rows - 1);
+      c = c ?? 0;
+    } else if (key == LogicalKeyboardKey.pageDown) {
+      r = r == null ? 0 : (r + _pageJump).clamp(0, rows - 1);
+      c = c ?? 0;
+    } else {
+      return false;
+    }
+    _selectCell(r, c);
+    _scrollToCell(r, c);
+    return true;
+  }
+
+  static const int _pageJump = 20;
+
+  /// Nudge the body scrollers so the cell sits inside the viewport. We
+  /// scroll only when the cell is off-screen — no jitter on every arrow.
+  void _scrollToCell(int row, int col) {
+    if (_vBody.hasClients) {
+      final top = row * _rowHeight;
+      final bottom = top + _rowHeight;
+      final viewport = _vBody.position.viewportDimension;
+      final offset = _vBody.offset;
+      if (top < offset) {
+        _vBody.jumpTo(top);
+      } else if (bottom > offset + viewport) {
+        _vBody.jumpTo(bottom - viewport);
+      }
+    }
+    if (_hBody.hasClients) {
+      var left = _indexWidth;
+      for (var i = 0; i < col; i++) {
+        left += _widths[i];
+      }
+      final right = left + _widths[col];
+      final viewport = _hBody.position.viewportDimension;
+      final offset = _hBody.offset;
+      if (left < offset + _indexWidth) {
+        _hBody.jumpTo(math.max(0, left - _indexWidth));
+      } else if (right > offset + viewport) {
+        _hBody.jumpTo(right - viewport);
+      }
+    }
   }
 
   // --- cell hit-testing & geometry --------------------------------------
@@ -653,7 +751,9 @@ class _ResultsGridState extends State<ResultsGrid> {
                       child: SizedBox(
                         width: bodyWidth,
                         child: Builder(
-                          builder: (bodyCtx) => Listener(
+                          builder: (bodyCtx) {
+                            _bodyCtx = bodyCtx;
+                            return Listener(
                             behavior: HitTestBehavior.translucent,
                             onPointerDown: (e) {
                               final cell = _cellAt(e.localPosition);
@@ -702,7 +802,8 @@ class _ResultsGridState extends State<ResultsGrid> {
                                     _buildRow(r, result.rows[r], bodyWidth),
                               ),
                             ),
-                          ),
+                            );
+                          },
                         ),
                       ),
                     ),
