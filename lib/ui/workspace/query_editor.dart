@@ -453,8 +453,11 @@ class _StatusFooter extends StatelessWidget {
       message = 'Error';
       color = AppColors.error;
     } else if (result.hasColumns) {
-      message = '${result.rows.length} rows';
-      color = AppColors.success;
+      final cap = result.truncatedAt;
+      message = cap == null
+          ? '${result.rows.length} rows'
+          : '${result.rows.length} rows · truncated to $cap (add LIMIT to override)';
+      color = cap == null ? AppColors.success : AppColors.warning;
     } else {
       message = '${result.affectedRows ?? 0} rows affected';
       color = AppColors.success;

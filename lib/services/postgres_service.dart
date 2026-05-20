@@ -6,6 +6,7 @@ import '../models/db_object.dart';
 import '../models/query_result.dart';
 import 'driver_decoder.dart';
 import 'introspector.dart';
+import 'safe_query.dart';
 import 'table_repository.dart';
 
 export 'table_repository.dart'
@@ -117,12 +118,20 @@ class PostgresService {
   ) =>
       tableRepository.applyEdits(table, updatesByCtid);
 
+  /// Default cap applied to bare top-level `SELECT` statements that don't
+  /// carry their own LIMIT. Prevents an unbounded `SELECT *` from
+  /// materialising an entire billion-row table in the isolate. Statements
+  /// that aren't a plain SELECT — anything starting with `WITH`, `INSERT`,
+  /// DDL, etc. — pass through untouched.
+  static const defaultSelectLimit = 10000;
+
   /// Executes an arbitrary statement, capturing timing and errors so the UI
   /// never has to deal with raised exceptions directly.
   Future<QueryResult> runQuery(String sql) async {
+    final safe = applyDefaultLimit(sql, limit: defaultSelectLimit);
     final watch = Stopwatch()..start();
     try {
-      final result = await _conn.execute(sql);
+      final result = await _conn.execute(safe.sql);
       watch.stop();
 
       if (result.schema.columns.isEmpty) {
@@ -152,6 +161,7 @@ class PostgresService {
         elapsed: watch.elapsed,
         affectedRows: result.affectedRows,
         columnSchemas: columnSchemas,
+        truncatedAt: safe.appliedLimit ? defaultSelectLimit : null,
       );
     } on ServerException catch (e) {
       watch.stop();

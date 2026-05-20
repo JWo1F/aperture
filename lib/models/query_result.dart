@@ -7,6 +7,7 @@ class QueryResult {
     this.affectedRows,
     this.rowIds,
     this.columnSchemas,
+    this.truncatedAt,
   })  : error = null,
         isError = false;
 
@@ -17,6 +18,7 @@ class QueryResult {
         rows = const [],
         rowIds = null,
         columnSchemas = null,
+        truncatedAt = null,
         error = null,
         isError = false;
 
@@ -25,6 +27,7 @@ class QueryResult {
         rows = const [],
         rowIds = null,
         columnSchemas = null,
+        truncatedAt = null,
         affectedRows = null,
         isError = true;
 
@@ -44,6 +47,11 @@ class QueryResult {
   final Duration elapsed;
   final String? error;
   final bool isError;
+
+  /// When non-null, the runner appended `LIMIT [truncatedAt]` to the
+  /// statement to avoid materialising an unbounded result. The UI shows a
+  /// banner so the user knows they're seeing a capped view.
+  final int? truncatedAt;
 
   bool get hasColumns => columns.isNotEmpty;
 }
