@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local review notes — kept locally but not part of the repo history.
+.review/
+devtools_options.yaml
