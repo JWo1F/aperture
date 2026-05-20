@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:flutter/foundation.dart';
+
 import '../../models/db_object.dart';
 import '../../models/order_term.dart';
 import '../../models/query_result.dart';
@@ -131,7 +133,7 @@ class _ResultsGridState extends State<ResultsGrid> {
   @override
   void didUpdateWidget(ResultsGrid old) {
     super.didUpdateWidget(old);
-    if (!_sameColumns(widget.result.columns, _widthKeys)) {
+    if (!listEquals(widget.result.columns, _widthKeys)) {
       _syncWidths();
     } else if (!identical(old.result, widget.result)) {
       _syncWidths();
@@ -141,14 +143,6 @@ class _ResultsGridState extends State<ResultsGrid> {
     if (!identical(old.result, widget.result)) {
       _selection.value = (null, null);
     }
-  }
-
-  bool _sameColumns(List<String> a, List<String> b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
   }
 
   /// Default width = widest visible cell (and the header) in this column,

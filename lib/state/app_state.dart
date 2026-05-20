@@ -219,7 +219,8 @@ class AppState extends ChangeNotifier {
 
   Future<void> openSchema(DbTable table) => tabsController.openSchema(table);
   Future<void> reloadSchema(SchemaTab tab) => tabsController.reloadSchema(tab);
-  Future<void> openTable(DbTable table) => tabsController.openTable(table);
+  Future<TableTab> openTable(DbTable table) =>
+      tabsController.openTable(table);
   void openSavedQuery(SavedQuery q) => tabsController.openSavedQuery(q);
 
   Future<void> loadTablePage(TableTab tab, int page) =>

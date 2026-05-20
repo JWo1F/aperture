@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/db_object.dart';
 import '../../models/order_term.dart';
+import '../../models/time_ago.dart';
 import '../../models/value_format.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
@@ -184,11 +185,7 @@ class _TableToolbarState extends State<_TableToolbar> {
     final tab = widget.tab;
     final result = tab.result;
     if (result == null) return;
-    final timestamp = DateTime.now()
-        .toIso8601String()
-        .replaceAll(':', '-')
-        .split('.')
-        .first;
+    final timestamp = filenameTimestamp();
     showExportDialog(
       context,
       target: ExportTarget(

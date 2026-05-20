@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/db_object.dart';
 import '../../models/query_result.dart';
+import '../../models/time_ago.dart';
 import '../../services/sql_statements.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
@@ -169,11 +170,7 @@ class _QueryEditorState extends State<QueryEditor> {
   void _openExport() {
     final result = widget.tab.result;
     if (result == null) return;
-    final timestamp = DateTime.now()
-        .toIso8601String()
-        .replaceAll(':', '-')
-        .split('.')
-        .first;
+    final timestamp = filenameTimestamp();
     showExportDialog(
       context,
       target: ExportTarget(
