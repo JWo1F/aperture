@@ -303,74 +303,78 @@ class _ClauseBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The clause bar is exactly 78px tall (three 26px rows) plus the 1px
+    // bottom border — no IntrinsicHeight needed because each row is hard-
+    // sized, and the side strip stretches via the Row's stretch alignment.
     return Container(
       decoration: BoxDecoration(
         color: AppColors.bgDeep,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: IntrinsicHeight(
+      child: SizedBox(
+        height: 78,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-          // Left decorative strip — 18px wide, accent gradient.
-          Container(
-            width: 18,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.accent.withValues(alpha: 0.05),
-                  Colors.transparent,
+            // Left decorative strip — 18px wide, accent gradient.
+            Container(
+              width: 18,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.accent.withValues(alpha: 0.05),
+                    Colors.transparent,
+                  ],
+                ),
+                border: Border(
+                  right: BorderSide(color: AppColors.hairline),
+                ),
+              ),
+            ),
+            // Clause rows stacked vertically.
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ClauseRow(
+                    label: 'WHERE',
+                    controller: filterController,
+                    focusNode: filterFocus,
+                    onApply: onApplyFilter,
+                    hint: "e.g.  status = 'active'",
+                    active: whereActive,
+                    actionIcon: Icons.filter_alt_outlined,
+                    actionTooltip: 'Apply filter (↵)',
+                    isLast: false,
+                  ),
+                  _ClauseRow(
+                    label: 'SELECT',
+                    controller: selectController,
+                    focusNode: selectFocus,
+                    onApply: onApplySelect,
+                    hint: '*  or  col_a, col_b',
+                    active: selectActive,
+                    actionIcon: Icons.view_column_outlined,
+                    actionTooltip: 'Apply columns (↵)',
+                    isLast: false,
+                  ),
+                  _ClauseRow(
+                    label: 'ORDER',
+                    controller: orderController,
+                    focusNode: orderFocus,
+                    onApply: onApplyOrder,
+                    hint: 'click a column header',
+                    active: orderActive,
+                    actionIcon: Icons.swap_vert,
+                    actionTooltip: 'Apply sort (↵)',
+                    isLast: true,
+                  ),
                 ],
               ),
-              border: Border(
-                right: BorderSide(color: AppColors.hairline),
-              ),
             ),
-          ),
-          // Clause rows stacked vertically.
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ClauseRow(
-                  label: 'WHERE',
-                  controller: filterController,
-                  focusNode: filterFocus,
-                  onApply: onApplyFilter,
-                  hint: "e.g.  status = 'active'",
-                  active: whereActive,
-                  actionIcon: Icons.filter_alt_outlined,
-                  actionTooltip: 'Apply filter (↵)',
-                  isLast: false,
-                ),
-                _ClauseRow(
-                  label: 'SELECT',
-                  controller: selectController,
-                  focusNode: selectFocus,
-                  onApply: onApplySelect,
-                  hint: '*  or  col_a, col_b',
-                  active: selectActive,
-                  actionIcon: Icons.view_column_outlined,
-                  actionTooltip: 'Apply columns (↵)',
-                  isLast: false,
-                ),
-                _ClauseRow(
-                  label: 'ORDER',
-                  controller: orderController,
-                  focusNode: orderFocus,
-                  onApply: onApplyOrder,
-                  hint: 'click a column header',
-                  active: orderActive,
-                  actionIcon: Icons.swap_vert,
-                  actionTooltip: 'Apply sort (↵)',
-                  isLast: true,
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -432,19 +436,21 @@ class _ClauseRowState extends State<_ClauseRow> {
         : AppColors.textMuted;
 
     return Container(
-      constraints: const BoxConstraints(minHeight: 26),
+      // Each clause row is exactly 26px tall — the design's `.clause-row`
+      // `min-height: 26px`. Using a hard height keeps the TextField inside
+      // from inflating the row above the design's three-row 78px clause bar.
+      height: 26,
       decoration: BoxDecoration(
         border: widget.isLast
             ? null
             : Border(bottom: BorderSide(color: AppColors.hairline)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── label ──
           Container(
             width: 64,
-            constraints: const BoxConstraints(minHeight: 26),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.centerLeft,
@@ -477,27 +483,30 @@ class _ClauseRowState extends State<_ClauseRow> {
                 const SingleActivator(LogicalKeyboardKey.enter):
                     widget.onApply,
               },
-              child: TextField(
-                controller: widget.controller,
-                focusNode: widget.focusNode,
-                cursorColor: AppColors.accent,
-                cursorHeight: 12,
-                style: AppTheme.mono(
-                  size: 11.5,
-                  color: AppColors.textPrimary,
-                ),
-                decoration: InputDecoration(
-                  isCollapsed: true,
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  hintText: widget.hint,
-                  hintStyle: AppTheme.mono(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextField(
+                  controller: widget.controller,
+                  focusNode: widget.focusNode,
+                  cursorColor: AppColors.accent,
+                  cursorHeight: 12,
+                  style: AppTheme.mono(
                     size: 11.5,
-                    color: AppColors.text4,
-                  ).copyWith(fontStyle: FontStyle.italic),
+                    color: AppColors.textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    isCollapsed: true,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    hintText: widget.hint,
+                    hintStyle: AppTheme.mono(
+                      size: 11.5,
+                      color: AppColors.text4,
+                    ).copyWith(fontStyle: FontStyle.italic),
+                  ),
                 ),
               ),
             ),
@@ -511,7 +520,6 @@ class _ClauseRowState extends State<_ClauseRow> {
               builder: (context, hovering) => AnimatedContainer(
                 duration: const Duration(milliseconds: 100),
                 width: 28,
-                height: 26,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: hovering
