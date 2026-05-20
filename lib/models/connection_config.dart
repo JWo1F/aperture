@@ -1,3 +1,5 @@
+import 'saved_query.dart';
+
 /// User-supplied details for one Postgres endpoint.
 class ConnectionConfig {
   ConnectionConfig({
@@ -11,7 +13,9 @@ class ConnectionConfig {
     this.useSsl = false,
     this.lastConnectedAt,
     Set<String>? favoriteTables,
-  }) : favoriteTables = favoriteTables ?? const {};
+    List<SavedQuery>? savedQueries,
+  })  : favoriteTables = favoriteTables ?? const {},
+        savedQueries = savedQueries ?? const [];
 
   final String id;
   final String name;
@@ -25,6 +29,10 @@ class ConnectionConfig {
 
   /// Per-connection favourite tables, stored as unquoted `schema.table` keys.
   final Set<String> favoriteTables;
+
+  /// Per-connection saved query texts. Tab ids match SavedQuery ids so
+  /// opening a saved query reuses the same tab slot.
+  final List<SavedQuery> savedQueries;
 
   String get summary => '$username@$host:$port/$database';
 
@@ -41,6 +49,8 @@ class ConnectionConfig {
           'lastConnectedAt': lastConnectedAt!.toIso8601String(),
         if (favoriteTables.isNotEmpty)
           'favorites': favoriteTables.toList()..sort(),
+        if (savedQueries.isNotEmpty)
+          'queries': [for (final q in savedQueries) q.toJson()],
       };
 
   factory ConnectionConfig.fromJson(Map<String, dynamic> j) => ConnectionConfig(
@@ -58,6 +68,12 @@ class ConnectionConfig {
         favoriteTables: j['favorites'] is List
             ? {for (final v in j['favorites'] as List) v as String}
             : null,
+        savedQueries: j['queries'] is List
+            ? [
+                for (final q in j['queries'] as List)
+                  SavedQuery.fromJson(q as Map<String, dynamic>),
+              ]
+            : null,
       );
 
   ConnectionConfig copyWith({
@@ -70,6 +86,7 @@ class ConnectionConfig {
     bool? useSsl,
     DateTime? lastConnectedAt,
     Set<String>? favoriteTables,
+    List<SavedQuery>? savedQueries,
   }) {
     return ConnectionConfig(
       id: id,
@@ -82,6 +99,7 @@ class ConnectionConfig {
       useSsl: useSsl ?? this.useSsl,
       lastConnectedAt: lastConnectedAt ?? this.lastConnectedAt,
       favoriteTables: favoriteTables ?? this.favoriteTables,
+      savedQueries: savedQueries ?? this.savedQueries,
     );
   }
 }

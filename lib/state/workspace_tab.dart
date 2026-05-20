@@ -16,14 +16,18 @@ sealed class WorkspaceTab {
 }
 
 class QueryTab extends WorkspaceTab {
-  QueryTab(super.id);
+  QueryTab(super.id, {this.name = 'Query', this.sql = ''});
 
-  String sql = '';
+  /// Display name shown in the tab strip + sidebar. User-renamable via
+  /// the sidebar context menu; auto-incremented as `Query 1`, `Query 2`,
+  /// … when created via the toolbar / ⌘N path.
+  String name;
+  String sql;
   QueryResult? result;
   bool running = false;
 
   @override
-  String get title => 'Query';
+  String get title => name;
 }
 
 /// Read-only view of a table's DDL (CREATE TABLE, indexes, FKs).

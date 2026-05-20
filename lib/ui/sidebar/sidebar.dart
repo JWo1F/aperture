@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/connection_config.dart';
 import '../../models/db_object.dart';
+import '../../models/saved_query.dart';
 import '../../models/time_ago.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
@@ -291,6 +292,19 @@ class _Body extends StatelessWidget {
               active: t.qualifiedName == activeId,
               onTap: () => state.openTable(t),
               indent: 12,
+            ),
+          const SizedBox(height: 10),
+        ],
+        if (state.savedQueries.isNotEmpty && !filtering) ...[
+          _SectionLabel(
+            label: 'Queries',
+            count: state.savedQueries.length,
+          ),
+          for (final q in state.savedQueries)
+            _SavedQueryRow(
+              query: q,
+              active: state.activeTab?.id == q.id,
+              state: state,
             ),
           const SizedBox(height: 10),
         ],
@@ -809,3 +823,210 @@ class _TableRowState extends State<_TableRow> {
   }
 }
 
+
+/// A clickable saved query row in the sidebar. Right-click for rename /
+/// delete / duplicate.
+class _SavedQueryRow extends StatefulWidget {
+  const _SavedQueryRow({
+    required this.query,
+    required this.active,
+    required this.state,
+  });
+
+  final SavedQuery query;
+  final bool active;
+  final AppState state;
+
+  @override
+  State<_SavedQueryRow> createState() => _SavedQueryRowState();
+}
+
+class _SavedQueryRowState extends State<_SavedQueryRow> {
+  bool _hover = false;
+
+  void _openMenu(Offset position) {
+    final query = widget.query;
+    void copy(String text) =>
+        Clipboard.setData(ClipboardData(text: text));
+
+    showContextMenu(
+      context,
+      globalPosition: position,
+      entries: [
+        CmItem(
+          icon: Icons.north_east,
+          label: 'Open',
+          onTap: () => widget.state.openSavedQuery(query),
+        ),
+        CmItem(
+          icon: Icons.edit_outlined,
+          label: 'Rename…',
+          onTap: () => _renameDialog(),
+        ),
+        CmItem(
+          icon: Icons.content_copy,
+          label: 'Duplicate',
+          onTap: () => widget.state.duplicateSavedQuery(query.id),
+        ),
+        const CmDivider(),
+        CmItem(
+          icon: Icons.code,
+          label: 'Copy SQL',
+          onTap: () => copy(query.sql),
+        ),
+        const CmDivider(),
+        CmItem(
+          icon: Icons.delete_outline,
+          label: 'Delete',
+          danger: true,
+          onTap: () => widget.state.deleteSavedQuery(query.id),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _renameDialog() async {
+    final controller = TextEditingController(text: widget.query.name);
+    final next = await showDialog<String>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: Radii.brLg,
+          side: BorderSide(color: AppColors.borderStrong),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.all(Insets.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Rename query',
+                  style: AppTheme.ui(size: 13.5, weight: FontWeight.w600),
+                ),
+                const SizedBox(height: Insets.md),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  cursorColor: AppColors.accent,
+                  style: AppTheme.ui(size: 13),
+                  onSubmitted: (v) => Navigator.of(ctx).pop(v),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    filled: true,
+                    fillColor: AppColors.bg,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 9,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: Radii.brSm,
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: Radii.brSm,
+                      borderSide: const BorderSide(color: AppColors.accent),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: Insets.lg),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    AppButton(
+                      label: 'Cancel',
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                    const SizedBox(width: Insets.sm),
+                    AppButton(
+                      label: 'Rename',
+                      icon: Icons.check,
+                      primary: true,
+                      onPressed: () =>
+                          Navigator.of(ctx).pop(controller.text),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    controller.dispose();
+    if (next != null && next.trim().isNotEmpty) {
+      widget.state.renameQuery(widget.query.id, next);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.active;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: () => widget.state.openSavedQuery(widget.query),
+        onSecondaryTapDown: (d) => _openMenu(d.globalPosition),
+        child: Container(
+          height: 28,
+          decoration: BoxDecoration(
+            color: active
+                ? AppColors.sidebarRowActive
+                : (_hover
+                    ? AppColors.sidebarRowHover
+                    : Colors.transparent),
+            border: Border(
+              left: BorderSide(
+                color: active ? AppColors.accent : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          padding: const EdgeInsets.only(left: 10, right: 8),
+          child: Row(
+            children: [
+              Icon(
+                Icons.terminal,
+                size: 12,
+                color: active ? AppColors.accent : AppColors.textMuted,
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  widget.query.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.ui(
+                    size: 12.5,
+                    color: active
+                        ? AppColors.textPrimary
+                        : AppColors.textSecondary,
+                    weight: active ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ),
+              if (_hover && !active)
+                GestureDetector(
+                  onTapDown: (d) => _openMenu(d.globalPosition),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(
+                      Icons.more_horiz,
+                      size: 13,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -6,6 +6,7 @@ import '../models/connection_config.dart';
 import '../models/db_object.dart';
 import '../models/order_term.dart';
 import '../models/query_result.dart';
+import '../models/saved_query.dart';
 import '../models/value_format.dart';
 import '../services/connection_store.dart';
 import '../services/postgres_service.dart';
@@ -276,7 +277,121 @@ class AppState extends ChangeNotifier {
   void selectTab(int index) => _selectTab(index);
 
   void newQueryTab() {
-    _tabs.add(QueryTab(_nextId()));
+    final id = _nextId();
+    final tab = QueryTab(id, name: _nextQueryName());
+    _tabs.add(tab);
+    _selectTab(_tabs.length - 1);
+    // New tabs aren't persisted until they have content — keeps the
+    // sidebar clean of empty placeholders.
+  }
+
+  // --- saved queries ---------------------------------------------------
+
+  List<SavedQuery> get savedQueries =>
+      _activeConnection?.savedQueries ?? const [];
+
+  String _nextQueryName() {
+    final taken = <String>{
+      for (final q in savedQueries) q.name,
+      for (final t in _tabs)
+        if (t is QueryTab) t.name,
+    };
+    var n = 1;
+    while (taken.contains('Query $n')) {
+      n++;
+    }
+    return 'Query $n';
+  }
+
+  /// Push the tab's current state into the active connection's saved-query
+  /// list (insert or update) and persist. No-op when no connection is live.
+  void _persistQuery(QueryTab tab) {
+    final conn = _activeConnection;
+    if (conn == null) return;
+    final entry = SavedQuery(
+      id: tab.id,
+      name: tab.name,
+      sql: tab.sql,
+      updatedAt: DateTime.now(),
+    );
+    final next = List<SavedQuery>.of(conn.savedQueries);
+    final i = next.indexWhere((q) => q.id == tab.id);
+    if (i == -1) {
+      next.add(entry);
+    } else {
+      next[i] = entry;
+    }
+    _replaceActiveConnection(conn.copyWith(savedQueries: next));
+  }
+
+  void _replaceActiveConnection(ConnectionConfig updated) {
+    final i = _connections.indexWhere((c) => c.id == updated.id);
+    if (i != -1) _connections[i] = updated;
+    _activeConnection = updated;
+    _persist();
+    notifyListeners();
+  }
+
+  /// Autosave from the query editor — debounced upstream.
+  void updateQuerySql(QueryTab tab, String sql) {
+    tab.sql = sql;
+    _persistQuery(tab);
+  }
+
+  void renameQuery(String id, String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final conn = _activeConnection;
+    if (conn == null) return;
+    final list = [
+      for (final q in conn.savedQueries)
+        if (q.id == id) q.copyWith(name: trimmed) else q,
+    ];
+    _replaceActiveConnection(conn.copyWith(savedQueries: list));
+    // Reflect in any open tab.
+    for (final t in _tabs) {
+      if (t is QueryTab && t.id == id) t.name = trimmed;
+    }
+    notifyListeners();
+  }
+
+  void deleteSavedQuery(String id) {
+    final conn = _activeConnection;
+    if (conn == null) return;
+    final list = conn.savedQueries.where((q) => q.id != id).toList();
+    _replaceActiveConnection(conn.copyWith(savedQueries: list));
+    // Close the open tab if any — closeTab notifies on its own.
+    closeTab(id);
+  }
+
+  void duplicateSavedQuery(String id) {
+    final conn = _activeConnection;
+    if (conn == null) return;
+    final src = conn.savedQueries.firstWhere(
+      (q) => q.id == id,
+      orElse: () => SavedQuery(id: '', name: '', sql: ''),
+    );
+    if (src.id.isEmpty) return;
+    final copy = SavedQuery(
+      id: _nextId(),
+      name: _nextQueryName(),
+      sql: src.sql,
+      updatedAt: DateTime.now(),
+    );
+    _replaceActiveConnection(
+      conn.copyWith(savedQueries: [...conn.savedQueries, copy]),
+    );
+  }
+
+  /// Opens (or focuses) a saved query as a workspace tab.
+  void openSavedQuery(SavedQuery q) {
+    final existing = _tabs.indexWhere((t) => t.id == q.id);
+    if (existing != -1) {
+      _selectTab(existing);
+      return;
+    }
+    final tab = QueryTab(q.id, name: q.name, sql: q.sql);
+    _tabs.add(tab);
     _selectTab(_tabs.length - 1);
   }
 
@@ -634,12 +749,13 @@ class AppState extends ChangeNotifier {
     return error;
   }
 
-  Future<void> runQuery(QueryTab tab) async {
-    if (_service == null || tab.sql.trim().isEmpty || tab.running) return;
+  Future<void> runQuery(QueryTab tab, {String? sqlOverride}) async {
+    final sql = sqlOverride ?? tab.sql;
+    if (_service == null || sql.trim().isEmpty || tab.running) return;
     tab.running = true;
     notifyListeners();
 
-    tab.result = await _service!.runQuery(tab.sql);
+    tab.result = await _service!.runQuery(sql);
     tab.running = false;
     notifyListeners();
   }
