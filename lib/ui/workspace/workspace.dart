@@ -84,56 +84,38 @@ class _TabStrip extends StatelessWidget {
       color: AppColors.bgDeep,
       child: Row(
         children: [
-          Expanded(
-            child: ListView.builder(
+          // The tab cluster sizes to its content (`Flexible`) and scrolls
+          // horizontally when there are more tabs than fit. The new-tab
+          // button rides at the end of that cluster — flush against the
+          // last tab — instead of getting marooned in the middle by an
+          // Expanded ListView.
+          Flexible(
+            child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              itemCount: state.tabs.length,
-              itemBuilder: (context, i) {
-                final t = state.tabs[i];
-                final canCloseRight = i < state.tabs.length - 1;
-                return _Tab(
-                  tab: t,
-                  active: i == state.activeTabIndex,
-                  onTap: () => state.selectTab(i),
-                  onClose: () => state.closeTab(t.id),
-                  onContextMenu: (pos) => _showTabMenu(
-                    context,
-                    state: state,
-                    tab: t,
-                    position: pos,
-                    canCloseRight: canCloseRight,
-                  ),
-                );
-              },
-            ),
-          ),
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: AppColors.border, width: 1),
-              ),
-            ),
-            child: Tooltip(
-              message: 'New query',
-              child: Hoverable(
-                onTap: state.newQueryTab,
-                builder: (context, hovering) => Container(
-                  alignment: Alignment.center,
-                  color:
-                      hovering ? AppColors.surfaceHover : Colors.transparent,
-                  child: Icon(
-                    Icons.add,
-                    size: 13,
-                    color: hovering
-                        ? AppColors.textPrimary
-                        : AppColors.textMuted,
-                  ),
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < state.tabs.length; i++)
+                    _Tab(
+                      tab: state.tabs[i],
+                      active: i == state.activeTabIndex,
+                      onTap: () => state.selectTab(i),
+                      onClose: () => state.closeTab(state.tabs[i].id),
+                      onContextMenu: (pos) => _showTabMenu(
+                        context,
+                        state: state,
+                        tab: state.tabs[i],
+                        position: pos,
+                        canCloseRight: i < state.tabs.length - 1,
+                      ),
+                    ),
+                  _NewTabButton(onTap: state.newQueryTab),
+                ],
               ),
             ),
           ),
+          // Trailing fill — carries the strip's bottom rule across the
+          // empty area to the right of the new-tab button.
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -144,6 +126,41 @@ class _TabStrip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 32px square at the end of the tab cluster — matches `.new-tab-btn` in
+/// the design. The bottom rule is rendered on the button itself so it
+/// continues the inactive-tab hairline cleanly.
+class _NewTabButton extends StatelessWidget {
+  const _NewTabButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'New query  ⌘N',
+      waitDuration: const Duration(milliseconds: 350),
+      child: Hoverable(
+        onTap: onTap,
+        builder: (context, hovering) => Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: hovering ? AppColors.surfaceHover : Colors.transparent,
+            border: Border(
+              bottom: BorderSide(color: AppColors.border, width: 1),
+            ),
+          ),
+          child: Icon(
+            Icons.add,
+            size: 13,
+            color: hovering ? AppColors.textPrimary : AppColors.textMuted,
+          ),
+        ),
       ),
     );
   }
