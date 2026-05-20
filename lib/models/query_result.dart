@@ -32,7 +32,7 @@ class QueryResult {
         isError = true;
 
   final List<String> columns;
-  final List<List<dynamic>> rows;
+  final List<List<Object?>> rows;
 
   /// Per-row Postgres `ctid`, present only for single-relation table pages.
   /// Used to target rows in UPDATE statements.

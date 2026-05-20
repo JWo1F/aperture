@@ -84,7 +84,7 @@ class TableRepository {
             ),
           )
           .toList();
-      final rows = <List<dynamic>>[];
+      final rows = <List<Object?>>[];
       final rowIds = <String>[];
       for (final row in result) {
         final values = row.toList();

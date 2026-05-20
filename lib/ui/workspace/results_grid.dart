@@ -45,7 +45,7 @@ class ResultsGrid extends StatefulWidget {
   final List<OrderTerm>? order;
   final void Function(String column)? onSortColumn;
   final void Function(String column, bool descending)? onSetSort;
-  final void Function(String column, dynamic value, bool not)? onAddFilter;
+  final void Function(String column, Object? value, bool not)? onAddFilter;
 
   /// Optional caller-owned width store, keyed by column name.
   final Map<String, double>? widths;
@@ -56,7 +56,7 @@ class ResultsGrid extends StatefulWidget {
 
   /// Single-column foreign keys keyed by local column name.
   final Map<String, DbForeignKey>? foreignKeys;
-  final void Function(DbForeignKey fk, dynamic value)? onFollowForeignKey;
+  final void Function(DbForeignKey fk, Object? value)? onFollowForeignKey;
 
   /// Column catalog metadata keyed by column name. Used to disable
   /// Set NULL / Set DEFAULT in the cell picker + context menu when the
@@ -67,7 +67,7 @@ class ResultsGrid extends StatefulWidget {
   /// column is a PK). Used in query result grids to surface a "Find row in
   /// {table}" action.
   final DbTable? Function(String column)? findRowOwner;
-  final void Function(DbTable table, String column, dynamic value)?
+  final void Function(DbTable table, String column, Object? value)?
       onFindRow;
 
   @override
@@ -307,7 +307,7 @@ class _ResultsGridState extends State<ResultsGrid> {
     BuildContext bodyCtx,
     int row,
     int column,
-    dynamic original,
+    Object? original,
   ) {
     if (widget.onEditCell == null) return;
 
@@ -350,7 +350,7 @@ class _ResultsGridState extends State<ResultsGrid> {
 
   // --- type colour -----------------------------------------------------
 
-  Color _colorFor(dynamic value) {
+  Color _colorFor(Object? value) {
     if (value is bool) return AppColors.sqlFunction;
     if (value is num || value is BigInt) return AppColors.sqlNumber;
     if (value is DateTime) return AppColors.info;
@@ -358,7 +358,7 @@ class _ResultsGridState extends State<ResultsGrid> {
     return AppColors.textPrimary;
   }
 
-  bool _wantsTooltip(dynamic original, String text) {
+  bool _wantsTooltip(Object? original, String text) {
     if (original is Map || original is List) return true;
     if (text.length > 36) return true;
     return false;
@@ -371,7 +371,7 @@ class _ResultsGridState extends State<ResultsGrid> {
     Offset pos,
     int row,
     int column,
-    dynamic original,
+    Object? original,
   ) {
     final columnName = widget.result.columns[column];
     final key = CellEdit(row, column);
@@ -722,7 +722,7 @@ class _ResultsGridState extends State<ResultsGrid> {
     );
   }
 
-  Widget _buildRow(int row, List<dynamic> values, double rowWidth) {
+  Widget _buildRow(int row, List<Object?> values, double rowWidth) {
     // Cells are built once per row. Their content doesn't depend on the
     // selection, so we don't put them inside the ValueListenableBuilder.
     // The selection ring overlay is drawn once at the row level (a single
@@ -805,7 +805,7 @@ class _ResultsGridState extends State<ResultsGrid> {
     );
   }
 
-  Widget _buildCell(int row, int column, dynamic original) {
+  Widget _buildCell(int row, int column, Object? original) {
     final key = CellEdit(row, column);
     final pending = widget.edits?[key];
     final isEdited = pending != null;

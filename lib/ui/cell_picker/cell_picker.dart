@@ -19,7 +19,7 @@ void showCellPicker(
   BuildContext context, {
   required Rect anchorRect,
   required String columnName,
-  required dynamic originalValue,
+  required Object? originalValue,
   required CellEditValue? pendingEdit,
   required ValueChanged<CellEditValue> onCommit,
   VoidCallback? onRevert,
@@ -179,7 +179,7 @@ final _kString = _Kind(
 /// Picks a picker shape. The column's `dataType` (from the catalog) is the
 /// authoritative source — falls back to the runtime value's class when the
 /// caller doesn't have catalog metadata yet.
-_Kind _kindFor(dynamic v, String? dataType) {
+_Kind _kindFor(Object? v, String? dataType) {
   if (dataType != null) {
     final dt = dataType.toLowerCase();
     if (dt == 'date') return _kDate;
@@ -223,7 +223,7 @@ _Kind _kindFor(dynamic v, String? dataType) {
 
 // --- Initial state extraction -----------------------------------------
 
-String _initialText(dynamic raw, CellEditValue? pending) {
+String _initialText(Object? raw, CellEditValue? pending) {
   if (pending is CellLiteral) return pending.value ?? '';
   if (pending is CellDefault) return '';
   if (raw == null) return '';
@@ -239,7 +239,7 @@ String _initialText(dynamic raw, CellEditValue? pending) {
   return raw.toString();
 }
 
-bool? _initialBool(dynamic raw, CellEditValue? pending) {
+bool? _initialBool(Object? raw, CellEditValue? pending) {
   if (pending is CellLiteral) {
     if (pending.value == null) return null;
     final v = pending.value!.toLowerCase();
@@ -251,7 +251,7 @@ bool? _initialBool(dynamic raw, CellEditValue? pending) {
   return null;
 }
 
-DateTime _initialMoment(dynamic raw, CellEditValue? pending) {
+DateTime _initialMoment(Object? raw, CellEditValue? pending) {
   if (pending is CellLiteral) {
     final s = pending.value;
     if (s != null && s.isNotEmpty) {
@@ -283,7 +283,7 @@ DateTime _initialMoment(dynamic raw, CellEditValue? pending) {
 
 /// Extracts a trailing timezone hint from a pending literal so re-opening a
 /// staged edit pre-fills the TZ field. Falls back to empty (server default).
-String _initialTz(dynamic raw, CellEditValue? pending) {
+String _initialTz(Object? raw, CellEditValue? pending) {
   if (pending is CellLiteral) {
     final s = pending.value;
     if (s != null) {
@@ -318,7 +318,7 @@ class _PickerOverlay extends StatelessWidget {
   final _Kind kind;
   final Rect anchorRect;
   final String columnName;
-  final dynamic originalValue;
+  final Object? originalValue;
   final CellEditValue? pendingEdit;
   final bool canBeNull;
   final bool hasDefault;
@@ -386,7 +386,7 @@ class _Panel extends StatefulWidget {
 
   final _Kind kind;
   final String columnName;
-  final dynamic originalValue;
+  final Object? originalValue;
   final CellEditValue? pendingEdit;
   final bool canBeNull;
   final bool hasDefault;
