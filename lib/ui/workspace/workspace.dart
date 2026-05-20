@@ -80,9 +80,9 @@ class _TabStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 34,
+      height: 32,
       decoration: BoxDecoration(
-        color: AppColors.bg,
+        color: AppColors.bgDeep,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
@@ -198,40 +198,53 @@ class _TabState extends State<_Tab> {
       onSecondaryTapDown: (d) => widget.onContextMenu(d.globalPosition),
       onTertiaryTapUp: (_) => widget.onClose(),
       builder: (context, hovering) {
-        final accentTrack = widget.active
-            ? AppColors.accent
-            : (hovering ? AppColors.borderStrong : Colors.transparent);
+        final showClose = hovering || widget.active;
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: Insets.md),
+          constraints: const BoxConstraints(minWidth: 120, maxWidth: 200),
+          height: 32,
           decoration: BoxDecoration(
             color: widget.active
-                ? AppColors.surface
-                : (hovering ? AppColors.surfaceHover : Colors.transparent),
+                ? AppColors.bg
+                : (hovering
+                    ? const Color(0x06FFFFFF)
+                    : Colors.transparent),
             border: Border(
-              bottom: BorderSide(color: accentTrack, width: 2),
+              right: BorderSide(color: AppColors.borderSoft, width: 1),
+              // Accent line sits at the top of the active tab; inactive tabs
+              // have no top border so the strip's bottom border is unbroken.
+              top: widget.active
+                  ? BorderSide(color: AppColors.accent, width: 1)
+                  : BorderSide.none,
             ),
           ),
+          padding: const EdgeInsets.only(left: 10, right: 8),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 _tabIcon,
                 size: 13,
-                color:
-                    widget.active ? AppColors.accent : AppColors.textMuted,
+                color: widget.active
+                    ? AppColors.accent
+                    : AppColors.textMuted,
               ),
-              const SizedBox(width: 7),
-              Text(
-                widget.tab.title,
-                style: AppTheme.ui(
-                  size: 12,
-                  weight:
-                      widget.active ? FontWeight.w600 : FontWeight.w400,
-                  color: widget.active
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  widget.tab.title,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.mono(
+                    size: 11,
+                    weight: FontWeight.w500,
+                    color: widget.active
+                        ? AppColors.textPrimary
+                        : (hovering
+                            ? AppColors.textSecondary
+                            : AppColors.textMuted),
+                  ),
                 ),
               ),
-              const SizedBox(width: Insets.sm),
+              const SizedBox(width: 6),
               MouseRegion(
                 cursor: SystemMouseCursors.click,
                 child: GestureDetector(
@@ -241,8 +254,8 @@ class _TabState extends State<_Tab> {
                     height: 14,
                     child: Icon(
                       Icons.close,
-                      size: 13,
-                      color: hovering || widget.active
+                      size: 12,
+                      color: showClose
                           ? AppColors.textSecondary
                           : Colors.transparent,
                     ),

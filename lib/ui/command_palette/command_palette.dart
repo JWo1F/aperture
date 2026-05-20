@@ -249,7 +249,7 @@ class _PaletteState extends State<_Palette> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _SearchInput(controller: _controller, focusNode: _focus),
-            Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.hairline),
             Flexible(
               child: filtered.isEmpty
                   ? Padding(
@@ -370,8 +370,8 @@ class _Row extends StatelessWidget {
                   children: [
                     Text(
                       cmd.label,
-                      style: AppTheme.ui(
-                        size: 13,
+                      style: AppTheme.mono(
+                        size: 12,
                         weight: FontWeight.w500,
                         color: AppColors.textPrimary,
                       ),
@@ -433,9 +433,9 @@ class _Footer extends StatelessWidget {
     return Container(
       height: 30,
       decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
+        color: AppColors.bgDeep,
         borderRadius: const BorderRadius.vertical(bottom: Radii.lg),
-        border: Border(top: BorderSide(color: AppColors.border)),
+        border: Border(top: BorderSide(color: AppColors.hairline)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Row(

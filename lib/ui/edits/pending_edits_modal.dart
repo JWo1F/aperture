@@ -92,7 +92,7 @@ class _Body extends StatelessWidget {
             ],
           ),
         ),
-        Divider(height: 1, color: AppColors.border),
+        Divider(height: 1, color: AppColors.hairline),
         Flexible(
           child: statements.isEmpty
               ? Padding(
@@ -115,24 +115,27 @@ class _Body extends StatelessWidget {
                   ),
                 ),
         ),
-        Divider(height: 1, color: AppColors.border),
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Insets.md,
-            vertical: 10,
-          ),
-          child: Row(
-            children: [
-              Text(
-                'These statements run in a single transaction when you click Apply.',
-                style: AppTheme.ui(size: 11, color: AppColors.textMuted),
-              ),
-              const Spacer(),
-              AppButton(
-                label: 'Close',
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
+        Divider(height: 1, color: AppColors.hairline),
+        ColoredBox(
+          color: AppColors.bgDeep,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Insets.md,
+              vertical: 10,
+            ),
+            child: Row(
+              children: [
+                Text(
+                  'These statements run in a single transaction when you click Apply.',
+                  style: AppTheme.ui(size: 11, color: AppColors.textMuted),
+                ),
+                const Spacer(),
+                AppButton(
+                  label: 'Close',
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -157,7 +160,7 @@ class _StatementCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.bg,
+        color: AppColors.bgDeep,
         borderRadius: Radii.brMd,
         border: Border.all(color: AppColors.border),
       ),

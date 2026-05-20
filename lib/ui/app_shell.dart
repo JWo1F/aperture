@@ -151,7 +151,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           child: Column(
             children: [
               const RepaintBoundary(child: _Toolbar()),
-              Divider(height: 1, color: AppColors.border),
               if (lost) _ConnectionLostBanner(state: state),
               Expanded(
                 child: Row(
@@ -162,7 +161,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     // back through the sidebar's compositor layer, and vice
                     // versa.
                     const RepaintBoundary(child: Sidebar()),
-                    VerticalDivider(width: 1, color: AppColors.border),
+                    VerticalDivider(width: 1, color: AppColors.hairline),
                     Expanded(
                       child: RepaintBoundary(
                         child: Container(
@@ -177,7 +176,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   ],
                 ),
               ),
-              Divider(height: 1, color: AppColors.border),
+              Divider(height: 1, color: AppColors.hairline),
               RepaintBoundary(child: _StatusBar(state: state)),
             ],
           ),
@@ -253,19 +252,11 @@ class _Toolbar extends StatelessWidget {
       onPanStart: (_) => _windowChannel.invokeMethod('startDrag'),
       onDoubleTap: () => _windowChannel.invokeMethod('toggleZoom'),
       child: Container(
-        height: 50,
+        height: 36,
         decoration: BoxDecoration(
-          color: AppColors.surface,
-          // The faint accent hairline at the bottom edge gives the chrome a
-          // sense of "instrument panel" — the workspace below reads as a
-          // viewport rather than a continuation of the toolbar.
+          color: AppColors.bg.withValues(alpha: 0.94),
           border: Border(
-            bottom: BorderSide(
-              color: AppColors.brightness == AppBrightness.dark
-                  ? AppColors.accent.withValues(alpha: 0.08)
-                  : AppColors.accent.withValues(alpha: 0.12),
-              width: 1,
-            ),
+            bottom: BorderSide(color: AppColors.hairline, width: 1),
           ),
         ),
         padding: const EdgeInsets.only(

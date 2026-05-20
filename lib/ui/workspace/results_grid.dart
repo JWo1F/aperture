@@ -79,7 +79,7 @@ class ResultsGrid extends StatefulWidget {
 }
 
 class _ResultsGridState extends State<ResultsGrid> {
-  static const double _rowHeight = 28;
+  static const double _rowHeight = 26;
   static const double _indexWidth = 56;
   static const double _handleWidth = 7;
 
@@ -442,12 +442,19 @@ class _ResultsGridState extends State<ResultsGrid> {
 
   // --- type colour -----------------------------------------------------
 
-  Color _colorFor(Object? value) {
-    if (value is bool) return AppColors.sqlFunction;
-    if (value is num || value is BigInt) return AppColors.sqlNumber;
-    if (value is DateTime) return AppColors.info;
-    if (value is Map || value is List) return AppColors.sqlString;
-    return AppColors.textPrimary;
+  Color _colorFor(Object? value, {String? dataType}) {
+    if (value == null) return AppColors.tNull;
+    if (value is bool) return value ? AppColors.tBool : AppColors.textMuted;
+    if (value is num || value is BigInt) return AppColors.tNum;
+    if (value is DateTime) return AppColors.tDate;
+    if (value is Map || value is List) return AppColors.tJson;
+    final dt = dataType?.toLowerCase() ?? '';
+    if (dt.contains('uuid')) return AppColors.tUuid;
+    if (dt.contains('date') || dt.contains('time') || dt.contains('stamp')) {
+      return AppColors.tDate;
+    }
+    if (dt.contains('json')) return AppColors.tJson;
+    return AppColors.tStr;
   }
 
   bool _wantsTooltip(Object? original, String text) {
@@ -642,10 +649,19 @@ class _ResultsGridState extends State<ResultsGrid> {
       width: totalWidth,
       child: Row(
         children: [
-          _staticCell(
+          Container(
             width: _indexWidth,
-            align: Alignment.center,
-            child: Text('#', style: AppTheme.eyebrow()),
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              border: Border(
+                right: BorderSide(color: AppColors.border),
+              ),
+            ),
+            child: Text(
+              '#',
+              style: AppTheme.mono(size: 10, color: AppColors.text4),
+            ),
           ),
           for (var i = 0; i < columns.length; i++)
             _HeaderCell(
@@ -671,10 +687,10 @@ class _ResultsGridState extends State<ResultsGrid> {
     );
 
     return Container(
-      height: _rowHeight,
+      height: 28,
       decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
-        border: Border(bottom: BorderSide(color: AppColors.borderStrong)),
+        color: AppColors.bgDeep,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       // ClipRect alone would force the header row to fit the viewport
       // (Transform passes parent constraints through). OverflowBox grants
@@ -828,34 +844,48 @@ class _ResultsGridState extends State<ResultsGrid> {
       for (var c = 0; c < values.length; c++) _buildCell(row, c, values[c]),
     ];
 
-    return ValueListenableBuilder<(int?, int?)>(
-      valueListenable: _selection,
-      builder: (_, sel, _) {
-        final isSelectedRow = sel.$1 == row;
-        final bg = isSelectedRow
-            ? const Color(0x1A5B7CFA)
-            : (row.isOdd ? AppColors.surfaceAlt : Colors.transparent);
+    return StatefulBuilder(
+      builder: (_, setRowState) {
+        var hovering = false;
+        return MouseRegion(
+          onEnter: (_) => setRowState(() => hovering = true),
+          onExit: (_) => setRowState(() => hovering = false),
+          child: ValueListenableBuilder<(int?, int?)>(
+            valueListenable: _selection,
+            builder: (_, sel, _) {
+              final isSelectedRow = sel.$1 == row;
+              final bg = isSelectedRow
+                  ? const Color(0x1A5B7CFA)
+                  : (hovering ? const Color(0x06FFFFFF) : Colors.transparent);
 
-        final body = Container(
-          width: rowWidth,
-          decoration: BoxDecoration(
-            color: bg,
-            border: Border(
-              bottom: BorderSide(color: AppColors.border),
-            ),
-          ),
+              final body = Container(
+                width: rowWidth,
+                decoration: BoxDecoration(
+                  color: bg,
+                  border: Border(
+                    bottom: BorderSide(color: AppColors.hairline),
+                  ),
+                ),
           child: Row(
             children: [
-              _staticCell(
+              Container(
                 width: _indexWidth,
-                align: Alignment.centerRight,
+                height: _rowHeight,
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.bg,
+                  border: Border(
+                    right: BorderSide(color: AppColors.border),
+                  ),
+                ),
                 child: Text(
                   '${row + 1}',
                   style: AppTheme.mono(
-                    size: 10.5,
+                    size: 10,
                     color: isSelectedRow
                         ? AppColors.accent
-                        : AppColors.textMuted,
+                        : AppColors.text4,
                     weight: isSelectedRow
                         ? FontWeight.w600
                         : FontWeight.w400,
@@ -895,6 +925,9 @@ class _ResultsGridState extends State<ResultsGrid> {
               ),
             ),
           ],
+        );
+      },
+          ),
         );
       },
     );
@@ -948,7 +981,14 @@ class _ResultsGridState extends State<ResultsGrid> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: _baseText.copyWith(
-            color: isEdited ? AppColors.textPrimary : _colorFor(original),
+            color: isEdited
+                ? AppColors.textPrimary
+                : _colorFor(
+                    original,
+                    dataType: widget
+                        .columnMeta?[widget.result.columns[column]]
+                        ?.dataType,
+                  ),
           ),
         );
         tooltipUseful = _wantsTooltip(original, displayValue);
@@ -985,20 +1025,6 @@ class _ResultsGridState extends State<ResultsGrid> {
             )
           : null,
       child: rendered,
-    );
-  }
-
-  Widget _staticCell({
-    required double width,
-    required Widget child,
-    Alignment align = Alignment.centerLeft,
-  }) {
-    return Container(
-      width: width,
-      height: _rowHeight,
-      alignment: align,
-      padding: const EdgeInsets.symmetric(horizontal: 9),
-      child: child,
     );
   }
 }
@@ -1048,7 +1074,7 @@ class _HeaderCellState extends State<_HeaderCell> {
             builder: (context, hovering) => Container(
               color: hovering && sortable
                   ? AppColors.surfaceHover
-                  : Colors.transparent,
+                  : AppColors.bgDeep,
               padding: const EdgeInsets.symmetric(horizontal: 9),
               alignment: Alignment.centerLeft,
               child: Row(
@@ -1059,10 +1085,12 @@ class _HeaderCellState extends State<_HeaderCell> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTheme.mono(
-                          size: 11.5,
+                          size: 11,
                           color: sort != null
                               ? AppColors.accent
-                              : AppColors.textPrimary,
+                              : widget.isForeignKey
+                                  ? AppColors.tFk
+                                  : AppColors.textSecondary,
                           weight: FontWeight.w600,
                         ),
                       ),
@@ -1072,7 +1100,7 @@ class _HeaderCellState extends State<_HeaderCell> {
                       Icon(
                         Icons.north_east,
                         size: 10,
-                        color: AppColors.info,
+                        color: AppColors.tFk,
                       ),
                     ],
                     if (sort != null) ...[
@@ -1108,7 +1136,7 @@ class _HeaderCellState extends State<_HeaderCell> {
                 behavior: HitTestBehavior.translucent,
                 onHorizontalDragUpdate: (d) => widget.onResize(d.delta.dx),
                 child: Center(
-                  child: Container(width: 1, color: AppColors.border),
+                  child: Container(width: 1, color: AppColors.hairline),
                 ),
               ),
             ),

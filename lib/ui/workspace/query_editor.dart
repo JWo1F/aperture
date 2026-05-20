@@ -228,7 +228,7 @@ class _QueryEditorState extends State<QueryEditor> {
             ),
           ),
         ),
-        Divider(height: 1, color: AppColors.borderStrong),
+        Divider(height: 1, color: AppColors.border),
         Expanded(
           flex: 3,
           child: Container(
@@ -284,7 +284,7 @@ class _Toolbar extends StatelessWidget {
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: Insets.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.bgDeep,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
@@ -464,8 +464,8 @@ class _StatusFooter extends StatelessWidget {
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: Insets.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
+        color: AppColors.bgDeep,
+        border: Border(top: BorderSide(color: AppColors.hairline)),
       ),
       child: Row(
         children: [
@@ -542,7 +542,12 @@ class _SqlCodeEditor extends StatelessWidget {
             children: [
               Container(
                 width: _gutterWidth,
-                color: AppColors.surface,
+                decoration: BoxDecoration(
+                  color: AppColors.bg,
+                  border: Border(
+                    right: BorderSide(color: AppColors.hairline, width: 1),
+                  ),
+                ),
               ),
               Expanded(
                 child: Container(
@@ -716,7 +721,7 @@ class _GutterLineNumber extends StatelessWidget {
           style: GoogleFonts.jetBrainsMono(
             fontSize: _editorFontSize,
             height: _editorLineHeight,
-            color: AppColors.textMuted,
+            color: AppColors.text4,
           ),
         ),
       ),

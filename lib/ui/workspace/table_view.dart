@@ -234,96 +234,79 @@ class _TableToolbarState extends State<_TableToolbar> {
     final whereActive = tab.filter.trim().isNotEmpty;
     final orderActive = tab.orderBy.trim().isNotEmpty;
 
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: Insets.md),
-      child: Row(
-        children: [
-          // ── identity ──
-          _TableIdentity(tab: tab),
-          const Rail(),
-          // ── clauses ──
-          Expanded(
-            flex: 2,
-            child: _Clause(
-              prefix: 'SELECT',
-              controller: _select,
-              focusNode: _selectFocus,
-              onApply: _applySelect,
-              hint: '*  or  col_a, col_b',
-              active: selectActive,
-            ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // ── action strip ──
+        Container(
+          height: 36,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            border: Border(bottom: BorderSide(color: AppColors.hairline)),
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            flex: 4,
-            child: _Clause(
-              prefix: 'WHERE',
-              controller: _filter,
-              focusNode: _filterFocus,
-              onApply: _applyFilter,
-              hint: "filter — e.g. status = 'active'",
-              active: whereActive,
-            ),
+          padding: const EdgeInsets.symmetric(horizontal: Insets.md),
+          child: Row(
+            children: [
+              _TableIdentity(tab: tab),
+              const Spacer(),
+              if (!tab.table.isView) ...[
+                _EditCountBadge(
+                  count: tab.edits.length,
+                  onTap: tab.hasEdits ? () => _previewEdits() : null,
+                ),
+                if (tab.hasEdits) const SizedBox(width: 6),
+                IconAction(
+                  icon: Icons.undo,
+                  tooltip: tab.hasEdits
+                      ? 'Reset pending edits'
+                      : 'No pending edits',
+                  onPressed: tab.hasEdits && !tab.applying
+                      ? () => widget.state.resetTableEdits(tab)
+                      : null,
+                ),
+                const SizedBox(width: 2),
+                IconAction(
+                  icon: Icons.check,
+                  tooltip: tab.applying
+                      ? 'Applying…'
+                      : (tab.hasEdits ? 'Apply edits' : 'No pending edits'),
+                  primary: true,
+                  busy: tab.applying,
+                  onPressed: tab.hasEdits && !tab.applying ? _applyEdits : null,
+                ),
+                const SizedBox(width: 4),
+              ],
+              _RefreshSplitButton(
+                tab: tab,
+                onRefresh: () => widget.state.refreshTable(tab),
+                onPickInterval: (d) =>
+                    widget.state.setTableAutoRefresh(tab, d),
+              ),
+              const SizedBox(width: 4),
+              IconAction(
+                icon: Icons.ios_share,
+                tooltip: 'Export…',
+                onPressed: tab.result == null ? null : _openExport,
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            flex: 3,
-            child: _Clause(
-              prefix: 'ORDER BY',
-              controller: _order,
-              focusNode: _orderFocus,
-              onApply: _applyOrder,
-              hint: 'click a column header',
-              active: orderActive,
-            ),
-          ),
-          const Rail(),
-          // ── actions ──
-          if (!tab.table.isView) ...[
-            _EditCountBadge(
-              count: tab.edits.length,
-              onTap: tab.hasEdits ? () => _previewEdits() : null,
-            ),
-            if (tab.hasEdits) const SizedBox(width: 6),
-            IconAction(
-              icon: Icons.undo,
-              tooltip: tab.hasEdits
-                  ? 'Reset pending edits'
-                  : 'No pending edits',
-              onPressed: tab.hasEdits && !tab.applying
-                  ? () => widget.state.resetTableEdits(tab)
-                  : null,
-            ),
-            const SizedBox(width: 2),
-            IconAction(
-              icon: Icons.check,
-              tooltip: tab.applying
-                  ? 'Applying…'
-                  : (tab.hasEdits ? 'Apply edits' : 'No pending edits'),
-              primary: true,
-              busy: tab.applying,
-              onPressed: tab.hasEdits && !tab.applying ? _applyEdits : null,
-            ),
-            const SizedBox(width: 4),
-          ],
-          _RefreshSplitButton(
-            tab: tab,
-            onRefresh: () => widget.state.refreshTable(tab),
-            onPickInterval: (d) => widget.state.setTableAutoRefresh(tab, d),
-          ),
-          const SizedBox(width: 4),
-          IconAction(
-            icon: Icons.ios_share,
-            tooltip: 'Export…',
-            onPressed: tab.result == null ? null : _openExport,
-          ),
-        ],
-      ),
+        ),
+        // ── clause bar ──
+        _ClauseBar(
+          selectController: _select,
+          filterController: _filter,
+          orderController: _order,
+          selectFocus: _selectFocus,
+          filterFocus: _filterFocus,
+          orderFocus: _orderFocus,
+          onApplySelect: _applySelect,
+          onApplyFilter: _applyFilter,
+          onApplyOrder: _applyOrder,
+          selectActive: selectActive,
+          whereActive: whereActive,
+          orderActive: orderActive,
+        ),
+      ],
     );
   }
 }
@@ -601,100 +584,260 @@ class _TableIdentity extends StatelessWidget {
 }
 
 
-/// A clause chip: uppercase prefix label · vertical hairline · inline value.
-/// The prefix is rendered in the accent when the clause is constraining the
-/// query, so an "empty" toolbar reads as cleanly as a maxed-out one.
-class _Clause extends StatefulWidget {
-  const _Clause({
-    required this.prefix,
+/// Stacked clause bar with three rows: WHERE, SELECT, ORDER.
+/// Each row shares a narrow left decorative strip (accent gradient) with
+/// the clause label column separated by a hairline, then the input, then
+/// a trailing action icon.
+class _ClauseBar extends StatelessWidget {
+  const _ClauseBar({
+    required this.selectController,
+    required this.filterController,
+    required this.orderController,
+    required this.selectFocus,
+    required this.filterFocus,
+    required this.orderFocus,
+    required this.onApplySelect,
+    required this.onApplyFilter,
+    required this.onApplyOrder,
+    required this.selectActive,
+    required this.whereActive,
+    required this.orderActive,
+  });
+
+  final SqlHighlightController selectController;
+  final SqlHighlightController filterController;
+  final SqlHighlightController orderController;
+  final FocusNode selectFocus;
+  final FocusNode filterFocus;
+  final FocusNode orderFocus;
+  final VoidCallback onApplySelect;
+  final VoidCallback onApplyFilter;
+  final VoidCallback onApplyOrder;
+  final bool selectActive;
+  final bool whereActive;
+  final bool orderActive;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bgDeep,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Left decorative strip — 18px wide, accent gradient.
+          Container(
+            width: 18,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  AppColors.accent.withValues(alpha: 0.05),
+                  Colors.transparent,
+                ],
+              ),
+              border: Border(
+                right: BorderSide(color: AppColors.hairline),
+              ),
+            ),
+          ),
+          // Clause rows stacked vertically.
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ClauseRow(
+                  label: 'WHERE',
+                  controller: filterController,
+                  focusNode: filterFocus,
+                  onApply: onApplyFilter,
+                  hint: "e.g.  status = 'active'",
+                  active: whereActive,
+                  actionIcon: Icons.filter_alt_outlined,
+                  actionTooltip: 'Apply filter (↵)',
+                  isLast: false,
+                ),
+                _ClauseRow(
+                  label: 'SELECT',
+                  controller: selectController,
+                  focusNode: selectFocus,
+                  onApply: onApplySelect,
+                  hint: '*  or  col_a, col_b',
+                  active: selectActive,
+                  actionIcon: Icons.view_column_outlined,
+                  actionTooltip: 'Apply columns (↵)',
+                  isLast: false,
+                ),
+                _ClauseRow(
+                  label: 'ORDER',
+                  controller: orderController,
+                  focusNode: orderFocus,
+                  onApply: onApplyOrder,
+                  hint: 'click a column header',
+                  active: orderActive,
+                  actionIcon: Icons.swap_vert,
+                  actionTooltip: 'Apply sort (↵)',
+                  isLast: true,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A single row inside the clause bar: label | input | icon.
+class _ClauseRow extends StatefulWidget {
+  const _ClauseRow({
+    required this.label,
     required this.controller,
+    required this.focusNode,
     required this.onApply,
     required this.hint,
     required this.active,
-    this.focusNode,
+    required this.actionIcon,
+    required this.actionTooltip,
+    required this.isLast,
   });
 
-  final String prefix;
+  final String label;
   final SqlHighlightController controller;
+  final FocusNode focusNode;
   final VoidCallback onApply;
   final String hint;
   final bool active;
-  final FocusNode? focusNode;
+  final IconData actionIcon;
+  final String actionTooltip;
+  /// Omits the bottom hairline on the last row (the outer bar border covers it).
+  final bool isLast;
 
   @override
-  State<_Clause> createState() => _ClauseState();
+  State<_ClauseRow> createState() => _ClauseRowState();
 }
 
-class _ClauseState extends State<_Clause> {
-  late final FocusNode _focus;
+class _ClauseRowState extends State<_ClauseRow> {
   bool _focused = false;
 
   @override
   void initState() {
     super.initState();
-    _focus = widget.focusNode ?? FocusNode();
-    _focus.addListener(() => setState(() => _focused = _focus.hasFocus));
+    widget.focusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    setState(() => _focused = widget.focusNode.hasFocus);
   }
 
   @override
   void dispose() {
-    if (widget.focusNode == null) _focus.dispose();
+    widget.focusNode.removeListener(_onFocusChange);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final prefixColor = _focused
+    final labelColor = (_focused || widget.active)
         ? AppColors.accent
-        : (widget.active ? AppColors.accent : AppColors.textMuted);
-    final borderColor = _focused
-        ? AppColors.accent
-        : (widget.active ? AppColors.accent.withValues(alpha: 0.5) : AppColors.border);
+        : AppColors.textMuted;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 120),
-      height: 28,
+    return Container(
+      constraints: const BoxConstraints(minHeight: 26),
       decoration: BoxDecoration(
-        color: _focused ? AppColors.bg : AppColors.bg.withValues(alpha: 0.6),
-        borderRadius: Radii.brSm,
-        border: Border.all(color: borderColor),
+        border: widget.isLast
+            ? null
+            : Border(bottom: BorderSide(color: AppColors.hairline)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 9, right: 9),
-            child: Text(
-              widget.prefix,
-              style: AppTheme.ui(
-                size: 9.5,
-                color: prefixColor,
-                weight: FontWeight.w700,
-                letterSpacing: 0.9,
+          // ── label ──
+          Container(
+            width: 52,
+            constraints: const BoxConstraints(minHeight: 26),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  Colors.transparent,
+                  AppColors.accent.withValues(alpha: 0.04),
+                ],
               ),
+              border: Border(right: BorderSide(color: AppColors.hairline)),
+            ),
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.only(left: 10, right: 8),
+            child: Text(
+              widget.label,
+              style: AppTheme.mono(
+                size: 10.5,
+                color: labelColor,
+                weight: FontWeight.w600,
+              ).copyWith(letterSpacing: 0.04 * 10.5),
             ),
           ),
-          Container(width: 1, height: 28, color: AppColors.border),
+          // ── input ──
           Expanded(
             child: CallbackShortcuts(
               bindings: {
-                const SingleActivator(LogicalKeyboardKey.enter): widget.onApply,
+                const SingleActivator(LogicalKeyboardKey.enter):
+                    widget.onApply,
               },
               child: TextField(
                 controller: widget.controller,
-                focusNode: _focus,
+                focusNode: widget.focusNode,
                 cursorColor: AppColors.accent,
-                cursorHeight: 13,
-                style: AppTheme.mono(size: 11.5),
+                cursorHeight: 12,
+                style: AppTheme.mono(
+                  size: 11.5,
+                  color: AppColors.textPrimary,
+                ),
                 decoration: InputDecoration(
                   isCollapsed: true,
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 8,
+                    horizontal: 10,
+                    vertical: 6,
                   ),
                   hintText: widget.hint,
-                  hintStyle:
-                      AppTheme.mono(size: 11.5, color: AppColors.textMuted),
+                  hintStyle: AppTheme.mono(
+                    size: 11.5,
+                    color: AppColors.text4,
+                  ).copyWith(fontStyle: FontStyle.italic),
+                ),
+              ),
+            ),
+          ),
+          // ── action icon ──
+          Tooltip(
+            message: widget.actionTooltip,
+            child: Hoverable(
+              cursor: SystemMouseCursors.click,
+              onTap: widget.onApply,
+              builder: (context, hovering) => AnimatedContainer(
+                duration: const Duration(milliseconds: 100),
+                width: 28,
+                height: 26,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: hovering
+                      ? AppColors.surfaceHover
+                      : Colors.transparent,
+                  border: Border(
+                    left: BorderSide(color: AppColors.hairline),
+                  ),
+                ),
+                child: Icon(
+                  widget.actionIcon,
+                  size: 13,
+                  color: widget.active
+                      ? AppColors.accent
+                      : AppColors.textMuted,
                 ),
               ),
             ),
