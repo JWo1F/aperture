@@ -38,6 +38,31 @@ class MainFlutterWindow: NSWindow {
         let args = call.arguments as? [String: Any]
         let key = args?["key"] as? String ?? ""
         result(KeychainStore.delete(key: key))
+      case "getWindowFrame":
+        let frame = window.frame
+        result([
+          "x": frame.origin.x,
+          "y": frame.origin.y,
+          "w": frame.size.width,
+          "h": frame.size.height,
+        ])
+      case "setWindowFrame":
+        if let args = call.arguments as? [String: Any],
+           let x = args["x"] as? Double,
+           let y = args["y"] as? Double,
+           let w = args["w"] as? Double,
+           let h = args["h"] as? Double {
+          let target = NSRect(x: x, y: y, width: w, height: h)
+          // Constrain to a screen that actually contains the origin so
+          // we don't paint off-screen if monitors changed.
+          let onScreen = NSScreen.screens.contains { s in
+            s.visibleFrame.contains(NSPoint(x: x, y: y))
+          }
+          if onScreen {
+            window.setFrame(target, display: true)
+          }
+        }
+        result(nil)
       default:
         result(FlutterMethodNotImplemented)
       }

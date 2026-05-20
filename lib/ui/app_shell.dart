@@ -31,10 +31,11 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // ⌘[ / ⌘] are intercepted at the HardwareKeyboard layer so they fire
     // regardless of focus — a TextField inside the active tab would
     // otherwise swallow them via Flutter's default editing shortcuts.
@@ -42,7 +43,25 @@ class _AppShellState extends State<AppShell> {
   }
 
   @override
+  void didChangeMetrics() {
+    // Native window size / position changed — debounce-save the current
+    // frame so reopening lands at roughly the same place.
+    final state = Provider.of<AppState>(context, listen: false);
+    state.preferences.captureWindowFrame();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState == AppLifecycleState.inactive ||
+        lifecycleState == AppLifecycleState.detached) {
+      final state = Provider.of<AppState>(context, listen: false);
+      state.preferences.captureWindowFrame();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     HardwareKeyboard.instance.removeHandler(_onKey);
     super.dispose();
   }
