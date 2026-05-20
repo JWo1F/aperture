@@ -12,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../edits/pending_edits_modal.dart';
 import '../export/export_dialog.dart';
 import '../widgets/common.dart';
+import '../widgets/context_menu.dart';
 import '../widgets/sql_highlight_controller.dart';
 import 'results_grid.dart';
 
@@ -545,8 +546,10 @@ class _ClauseRowState extends State<_ClauseRow> {
   }
 }
 
-/// Bottom rail in the design layout — `X rows · page X/Y · X total · Xms ·
-/// pending · prev / next`. Mono throughout, dot separators, bgDeep surface.
+/// Bottom rail in the design layout — `X rows · page X/Y · N,NNN total ·
+/// Xms · refreshed HH:MM:SS` on the left, then pending · refresh + auto
+/// dropdown · prev/next on the right. Mono throughout, dot separators,
+/// bgDeep surface.
 class _PaginationBar extends StatelessWidget {
   const _PaginationBar({required this.tab, required this.state});
 
@@ -561,10 +564,11 @@ class _PaginationBar extends StatelessWidget {
     final rowCount = result?.rows.length ?? 0;
     final pageCount = tab.pageCount;
     final pendingCount = tab.edits.length;
+    final refreshedAt = tab.lastRefreshedAt;
 
     return Container(
       height: 28,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.only(left: 12, right: 6),
       decoration: BoxDecoration(
         color: AppColors.bgDeep,
         border: Border(top: BorderSide(color: AppColors.border)),
@@ -572,7 +576,7 @@ class _PaginationBar extends StatelessWidget {
       child: Row(
         children: [
           _PbStat(
-            head: '$rowCount',
+            head: _withCommas(rowCount),
             tail: ' rows',
             headHighlight: true,
           ),
@@ -580,11 +584,11 @@ class _PaginationBar extends StatelessWidget {
           _PbStat(
             head: 'page ',
             mid: '${tab.page + 1}',
-            tail: ' / $pageCount',
+            tail: ' / ${_withCommas(pageCount)}',
           ),
           const _PbDot(),
           _PbStat(
-            head: '${tab.totalRows}',
+            head: _withCommas(tab.totalRows),
             tail: ' total',
             headHighlight: true,
           ),
@@ -598,6 +602,13 @@ class _PaginationBar extends StatelessWidget {
               ),
             ),
           ],
+          if (refreshedAt != null) ...[
+            const _PbDot(),
+            _PbStat(
+              head: 'refreshed ',
+              mid: _formatClock(refreshedAt),
+            ),
+          ],
           const Spacer(),
           if (pendingCount > 0) ...[
             _PendingChip(
@@ -609,6 +620,8 @@ class _PaginationBar extends StatelessWidget {
             ),
             const _PbDot(),
           ],
+          _RefreshDropdown(tab: tab, state: state),
+          const _PbDot(),
           _PbChev(
             icon: Icons.chevron_left,
             tooltip: 'Previous page',
@@ -625,6 +638,163 @@ class _PaginationBar extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+String _withCommas(int n) {
+  final s = n.toString();
+  final buf = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
+    buf.write(s[i]);
+  }
+  return buf.toString();
+}
+
+String _formatClock(DateTime dt) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${two(dt.hour)}:${two(dt.minute)}:${two(dt.second)}';
+}
+
+/// Manual refresh button + an "auto · interval" pill that opens a dropdown
+/// to pick an auto-refresh cadence. Manual refresh ignores the cadence;
+/// flipping the cadence enables / disables the timer in TabsController.
+class _RefreshDropdown extends StatelessWidget {
+  const _RefreshDropdown({required this.tab, required this.state});
+
+  final TableTab tab;
+  final AppState state;
+
+  static const List<(String, Duration?)> _options = [
+    ('manual', null),
+    ('5 s', Duration(seconds: 5)),
+    ('15 s', Duration(seconds: 15)),
+    ('30 s', Duration(seconds: 30)),
+    ('1 m', Duration(minutes: 1)),
+    ('5 m', Duration(minutes: 5)),
+  ];
+
+  String _label(Duration? d) {
+    if (d == null) return 'manual';
+    for (final (label, opt) in _options) {
+      if (opt == d) return label;
+    }
+    return 'custom';
+  }
+
+  void _openMenu(BuildContext context, Offset position) {
+    showContextMenu(
+      context,
+      globalPosition: position,
+      entries: [
+        for (final (label, opt) in _options)
+          CmItem(
+            icon: opt == tab.autoRefreshInterval
+                ? Icons.check
+                : Icons.access_time,
+            label: opt == null ? 'Manual (off)' : 'Every $label',
+            onTap: () => state.setTableAutoRefresh(tab, opt),
+          ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final interval = tab.autoRefreshInterval;
+    final autoOn = interval != null;
+    final canRefresh = !tab.loading;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: 'Refresh',
+          child: Hoverable(
+            cursor: canRefresh
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.basic,
+            onTap: canRefresh ? () => state.refreshTable(tab) : null,
+            builder: (context, hovering) {
+              final fg = canRefresh
+                  ? (hovering
+                      ? AppColors.textPrimary
+                      : (autoOn ? AppColors.accent : AppColors.textMuted))
+                  : AppColors.textMuted.withValues(alpha: 0.4);
+              return Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: hovering && canRefresh
+                      ? AppColors.surfaceHover
+                      : Colors.transparent,
+                  borderRadius: Radii.brSm,
+                ),
+                child: tab.loading
+                    ? SizedBox(
+                        width: 11,
+                        height: 11,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.4,
+                          color: AppColors.accent,
+                        ),
+                      )
+                    : Icon(Icons.refresh, size: 13, color: fg),
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 2),
+        Builder(
+          builder: (anchorContext) => Hoverable(
+            cursor: SystemMouseCursors.click,
+            onTap: () {
+              final box = anchorContext.findRenderObject() as RenderBox?;
+              if (box == null) return;
+              final origin = box.localToGlobal(Offset.zero);
+              _openMenu(
+                context,
+                Offset(origin.dx, origin.dy + box.size.height + 2),
+              );
+            },
+            builder: (context, hovering) {
+              final Color fg =
+                  autoOn ? AppColors.accent : AppColors.textSecondary;
+              final Color hoverFg = hovering
+                  ? (autoOn ? AppColors.accent : AppColors.textPrimary)
+                  : fg;
+              return Container(
+                height: 22,
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: hovering
+                      ? AppColors.surfaceHover
+                      : Colors.transparent,
+                  borderRadius: Radii.brSm,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _label(interval),
+                      style: AppTheme.mono(
+                        size: 10.5,
+                        color: hoverFg,
+                        weight: autoOn ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(Icons.expand_more, size: 11, color: hoverFg),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

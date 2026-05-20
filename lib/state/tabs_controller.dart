@@ -269,6 +269,7 @@ class TabsController extends ChangeNotifier {
         orderBy: tab.orderBy,
         selectList: tab.selectList,
       );
+      tab.lastRefreshedAt = DateTime.now();
     } catch (e) {
       tab.result =
           QueryResult.failure(error: e.toString(), elapsed: Duration.zero);

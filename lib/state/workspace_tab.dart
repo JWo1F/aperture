@@ -125,6 +125,7 @@ class TableTab extends WorkspaceTab {
   String _filter = '';
   String _orderBy = '';
   Duration? _autoRefreshInterval;
+  DateTime? _lastRefreshedAt;
 
   /// Pending, un-applied cell edits.
   final Map<CellEdit, CellEditValue> edits = {};
@@ -200,6 +201,15 @@ class TableTab extends WorkspaceTab {
   Duration? get autoRefreshInterval => _autoRefreshInterval;
   set autoRefreshInterval(Duration? value) {
     _autoRefreshInterval = value;
+    notifyListeners();
+  }
+
+  /// Wall-clock time the most recent page load completed (manual refresh,
+  /// auto-refresh, or first open). Drives the "refreshed HH:MM:SS" tag in
+  /// the pagination bar.
+  DateTime? get lastRefreshedAt => _lastRefreshedAt;
+  set lastRefreshedAt(DateTime? value) {
+    _lastRefreshedAt = value;
     notifyListeners();
   }
 

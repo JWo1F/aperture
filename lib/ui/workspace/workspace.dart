@@ -253,7 +253,7 @@ class _TabState extends State<_Tab> {
       builder: (context, hovering) {
         final showClose = hovering || widget.active;
         return Container(
-          constraints: const BoxConstraints(minWidth: 120, maxWidth: 200),
+          constraints: const BoxConstraints(maxWidth: 200),
           height: 32,
           decoration: BoxDecoration(
             // Active tab paints a solid `bg` fill so the strip's bottom
@@ -271,7 +271,7 @@ class _TabState extends State<_Tab> {
                   : BorderSide.none,
             ),
           ),
-          padding: const EdgeInsets.only(left: 10, right: 8),
+          padding: const EdgeInsets.only(left: 10, right: 0),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
