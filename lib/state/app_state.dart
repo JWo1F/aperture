@@ -96,6 +96,35 @@ class AppState extends ChangeNotifier {
     _recents.removeWhere((t) => t.qualifiedName == table.qualifiedName);
     _recents.insert(0, table);
     if (_recents.length > 12) _recents.removeRange(12, _recents.length);
+    _persistRecents();
+  }
+
+  void _persistRecents() {
+    final conn = _activeConnection;
+    if (conn == null) return;
+    final keys = _recents.map((t) => t.qualifiedKey).toList();
+    if (_listEq(keys, conn.recentTables)) return;
+    _replaceActiveConnection(conn.copyWith(recentTables: keys));
+  }
+
+  bool _listEq(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  void _hydrateRecents(ConnectionConfig conn) {
+    _recents.clear();
+    final lookup = <String, DbTable>{
+      for (final s in _schemas)
+        for (final t in s.tables) t.qualifiedKey: t,
+    };
+    for (final key in conn.recentTables) {
+      final t = lookup[key];
+      if (t != null) _recents.add(t);
+    }
   }
 
   int _activeTabIndex = 0;
@@ -215,6 +244,7 @@ class AppState extends ChangeNotifier {
       final idx = _connections.indexWhere((c) => c.id == config.id);
       if (idx != -1) _connections[idx] = stamped;
       _activeConnection = stamped;
+      _hydrateRecents(stamped);
       _persist();
     } catch (e) {
       _status = ConnectionStatus.error;

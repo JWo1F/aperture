@@ -14,8 +14,10 @@ class ConnectionConfig {
     this.lastConnectedAt,
     Set<String>? favoriteTables,
     List<SavedQuery>? savedQueries,
+    List<String>? recentTables,
   })  : favoriteTables = favoriteTables ?? const {},
-        savedQueries = savedQueries ?? const [];
+        savedQueries = savedQueries ?? const [],
+        recentTables = recentTables ?? const [];
 
   final String id;
   final String name;
@@ -34,6 +36,11 @@ class ConnectionConfig {
   /// opening a saved query reuses the same tab slot.
   final List<SavedQuery> savedQueries;
 
+  /// Recently-opened tables for this connection, most-recent first, stored
+  /// as unquoted `schema.table` keys. Rehydrated into [DbTable]s once the
+  /// catalog is loaded on connect.
+  final List<String> recentTables;
+
   String get summary => '$username@$host:$port/$database';
 
   Map<String, dynamic> toJson() => {
@@ -51,6 +58,7 @@ class ConnectionConfig {
           'favorites': favoriteTables.toList()..sort(),
         if (savedQueries.isNotEmpty)
           'queries': [for (final q in savedQueries) q.toJson()],
+        if (recentTables.isNotEmpty) 'recentTables': recentTables,
       };
 
   factory ConnectionConfig.fromJson(Map<String, dynamic> j) => ConnectionConfig(
@@ -74,6 +82,9 @@ class ConnectionConfig {
                   SavedQuery.fromJson(q as Map<String, dynamic>),
               ]
             : null,
+        recentTables: j['recentTables'] is List
+            ? [for (final v in j['recentTables'] as List) v as String]
+            : null,
       );
 
   ConnectionConfig copyWith({
@@ -87,6 +98,7 @@ class ConnectionConfig {
     DateTime? lastConnectedAt,
     Set<String>? favoriteTables,
     List<SavedQuery>? savedQueries,
+    List<String>? recentTables,
   }) {
     return ConnectionConfig(
       id: id,
@@ -100,6 +112,7 @@ class ConnectionConfig {
       lastConnectedAt: lastConnectedAt ?? this.lastConnectedAt,
       favoriteTables: favoriteTables ?? this.favoriteTables,
       savedQueries: savedQueries ?? this.savedQueries,
+      recentTables: recentTables ?? this.recentTables,
     );
   }
 }
