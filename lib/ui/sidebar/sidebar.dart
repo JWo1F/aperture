@@ -59,6 +59,7 @@ class _ConnHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final conn = state.activeConnection;
+    final connected = state.status == ConnectionStatus.connected;
     final label = switch (state.status) {
       ConnectionStatus.connected => conn?.database ?? 'connected',
       ConnectionStatus.connecting => 'connecting…',
@@ -68,43 +69,97 @@ class _ConnHeader extends StatelessWidget {
     };
 
     final version = state.serverVersion;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.hairline)),
-      ),
-      child: Row(
-        children: [
-          // Icon stays in the accent the design uses regardless of state;
-          // connection liveness is surfaced by the footer dot.
-          Icon(Icons.storage_rounded, size: 12, color: AppColors.accent),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTheme.mono(
-                size: 11.5,
-                color: AppColors.textPrimary,
-                weight: FontWeight.w600,
+    final menuEnabled =
+        connected || state.status == ConnectionStatus.lost;
+
+    return Hoverable(
+      onTap: menuEnabled
+          ? () => _openConnMenu(context, state, _anchorBelow(context))
+          : null,
+      onSecondaryTapDown: menuEnabled
+          ? (d) => _openConnMenu(context, state, d.globalPosition)
+          : null,
+      builder: (context, hovering) => Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 8),
+        decoration: BoxDecoration(
+          color: hovering && menuEnabled
+              ? AppColors.sidebarRowHover
+              : Colors.transparent,
+          border: Border(bottom: BorderSide(color: AppColors.hairline)),
+        ),
+        child: Row(
+          children: [
+            // Icon stays in the accent the design uses regardless of state;
+            // connection liveness is surfaced by the footer dot.
+            Icon(Icons.storage_rounded, size: 12, color: AppColors.accent),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTheme.mono(
+                  size: 11.5,
+                  color: AppColors.textPrimary,
+                  weight: FontWeight.w600,
+                ),
               ),
             ),
-          ),
-          if (version != null)
-            Text(
-              version,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTheme.mono(
-                size: 10.5,
-                color: AppColors.text4,
+            if (version != null) ...[
+              Text(
+                version,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTheme.mono(
+                  size: 10.5,
+                  color: AppColors.text4,
+                ),
               ),
-            ),
-        ],
+              const SizedBox(width: 4),
+            ],
+            if (menuEnabled)
+              Icon(
+                Icons.expand_more,
+                size: 13,
+                color: hovering ? AppColors.textSecondary : AppColors.text4,
+              ),
+          ],
+        ),
       ),
     );
   }
+
+  /// Drop-anchor for the left-click menu — bottom-left of the conn row.
+  Offset _anchorBelow(BuildContext context) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return Offset.zero;
+    final origin = box.localToGlobal(Offset.zero);
+    return Offset(origin.dx + 12, origin.dy + box.size.height + 2);
+  }
+}
+
+void _openConnMenu(BuildContext context, AppState state, Offset position) {
+  showContextMenu(
+    context,
+    globalPosition: position,
+    entries: [
+      CmItem(
+        icon: Icons.refresh,
+        label: state.isCatalogLoading
+            ? 'Refreshing schema…'
+            : 'Refresh schema',
+        enabled: !state.isCatalogLoading,
+        onTap: state.refreshCatalog,
+      ),
+      const CmDivider(),
+      CmItem(
+        icon: Icons.power_settings_new,
+        label: 'Disconnect',
+        danger: true,
+        onTap: state.disconnect,
+      ),
+    ],
+  );
 }
 
 // --- sections -------------------------------------------------------------

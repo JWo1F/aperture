@@ -87,6 +87,9 @@ class AppState extends ChangeNotifier {
   void setBrightness(AppBrightness value) => preferences.setBrightness(value);
   void toggleBrightness() => preferences.toggleBrightness();
 
+  bool get sidebarVisible => preferences.sidebarVisible;
+  void toggleSidebar() => preferences.toggleSidebar();
+
   // --- Connection registry ---------------------------------------------
 
   List<ConnectionConfig> get connections => registry.all;

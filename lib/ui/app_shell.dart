@@ -145,8 +145,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           const SingleActivator(LogicalKeyboardKey.keyL, meta: true): () =>
               state.eventLog.toggleVisible(),
           if (connected)
-            const SingleActivator(LogicalKeyboardKey.keyR, meta: true):
-                () => state.refreshCatalog(),
+            const SingleActivator(LogicalKeyboardKey.keyR, meta: true): () {
+              final tab = state.activeTab;
+              if (tab is TableTab) state.refreshTable(tab);
+            },
         },
         child: FocusScope(
           autofocus: true,
@@ -178,8 +180,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     // other. Cell-edit repaints in the grid no longer ripple
                     // back through the sidebar's compositor layer, and vice
                     // versa.
-                    const RepaintBoundary(child: Sidebar()),
-                    VerticalDivider(width: 1, color: AppColors.hairline),
+                    if (state.sidebarVisible) ...[
+                      const RepaintBoundary(child: Sidebar()),
+                      VerticalDivider(width: 1, color: AppColors.hairline),
+                    ],
                     Expanded(
                       child: RepaintBoundary(
                         child: Container(
@@ -288,14 +292,14 @@ class _Toolbar extends StatelessWidget {
         ),
         padding: EdgeInsets.only(
           left: _trafficLightInset,
-          right: 10,
+          right: 4,
         ),
         child: Row(
           children: [
             _TbIcon(
               icon: Icons.view_sidebar_outlined,
               tooltip: 'Toggle sidebar',
-              onPressed: () {},
+              onPressed: state.toggleSidebar,
             ),
             const _TbRail(),
             _TbIcon(
@@ -308,10 +312,13 @@ class _Toolbar extends StatelessWidget {
               tooltip: 'Forward  ⌘]',
               onPressed: state.canGoForward ? state.historyForward : null,
             ),
-            const _TbRail(),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
+            const _TbGroupRail(),
+            const SizedBox(width: 10),
             const ConnectionPill(),
-            const _TbRail(),
+            const SizedBox(width: 8),
+            const _TbGroupRail(),
+            const SizedBox(width: 8),
             _TbPrimary(
               label: 'Run',
               icon: Icons.play_arrow,
@@ -336,13 +343,6 @@ class _Toolbar extends StatelessWidget {
                   ? () => _openTableExport(context, state, tableTab)
                   : null,
             ),
-            _TbIcon(
-              icon: Icons.refresh,
-              tooltip: 'Refresh schema  ⌘R',
-              busy: state.isCatalogLoading,
-              onPressed:
-                  connected && !state.isCatalogLoading ? state.refreshCatalog : null,
-            ),
             const Spacer(),
             if (pending > 0) ...[
               _PendingPill(
@@ -351,18 +351,17 @@ class _Toolbar extends StatelessWidget {
               ),
               const _TbRail(),
             ],
-            // Search pill flexes so the toolbar never overflows on a narrow
-            // window: shrinks down to a thin search affordance, the kbd hint
-            // tucks out of view via overflow ellipsis on the hint text.
-            Flexible(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 220),
-                child: _TbSearch(
-                  onTap: () => showCommandPalette(context, state),
-                ),
+            // Fixed-width search pill — making it Flexible would force it
+            // to compete with the Spacer above for leftover space, so on a
+            // wide window the spacer would collapse to half its slack and
+            // the search would drift away from the right edge.
+            SizedBox(
+              width: 220,
+              child: _TbSearch(
+                onTap: () => showCommandPalette(context, state),
               ),
             ),
-            const SizedBox(width: 6),
+            const _TbRail(),
             _TbIcon(
               icon: state.brightness == AppBrightness.dark
                   ? Icons.dark_mode_outlined
@@ -370,12 +369,6 @@ class _Toolbar extends StatelessWidget {
               tooltip: 'Toggle theme',
               onPressed: state.toggleBrightness,
             ),
-            if (connected)
-              _TbIcon(
-                icon: Icons.power_settings_new,
-                tooltip: 'Disconnect',
-                onPressed: state.disconnect,
-              ),
           ],
         ),
       ),
@@ -438,7 +431,8 @@ void _showPending(BuildContext context, AppState state, TableTab tab) {
   );
 }
 
-/// 1px vertical hairline separating toolbar groups.
+/// Short 1×14 hairline used *within* a toolbar group — e.g. between the
+/// sidebar toggle and the back/forward pair. Matches the design's `.rail`.
 class _TbRail extends StatelessWidget {
   const _TbRail();
 
@@ -446,8 +440,24 @@ class _TbRail extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 1,
-      height: 16,
-      margin: const EdgeInsets.symmetric(horizontal: 6),
+      height: 14,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      color: AppColors.hairline,
+    );
+  }
+}
+
+/// Full-height 1px hairline used *between* toolbar groups — sits flush with
+/// the surrounding group padding so it visually divides the run of icons
+/// instead of nesting inside one of them. Matches the design's `.tb-rail`.
+class _TbGroupRail extends StatelessWidget {
+  const _TbGroupRail();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      margin: const EdgeInsets.symmetric(vertical: 6),
       color: AppColors.hairline,
     );
   }
@@ -459,17 +469,15 @@ class _TbIcon extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onPressed,
-    this.busy = false,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
-  final bool busy;
 
   @override
   Widget build(BuildContext context) {
-    final enabled = onPressed != null && !busy;
+    final enabled = onPressed != null;
     return Tooltip(
       message: tooltip,
       waitDuration: const Duration(milliseconds: 350),
@@ -494,16 +502,7 @@ class _TbIcon extends StatelessWidget {
               color: bg,
               borderRadius: Radii.brSm,
             ),
-            child: busy
-                ? SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.6,
-                      color: AppColors.accent,
-                    ),
-                  )
-                : Icon(icon, size: 14, color: fg),
+            child: Icon(icon, size: 14, color: fg),
           );
         },
       ),
@@ -569,8 +568,11 @@ class _TbPrimary extends StatelessWidget {
   }
 }
 
-/// Small mono kbd chip rendered on top of the accent background — uses a
-/// translucent white tile to read as keys at a glance.
+/// Mono shortcut hint rendered on the accent Run button. The handoff's
+/// literal kbd styling (dark surface-2 tiles + dark border) reads as black
+/// holes on indigo, so the keys are drawn as plain bright-white glyphs with
+/// a thin spacer between parts — the surrounding accent fill carries the
+/// "key" affordance.
 class _PrimaryKbd extends StatelessWidget {
   const _PrimaryKbd({required this.parts});
   final List<String> parts;
@@ -581,22 +583,13 @@ class _PrimaryKbd extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var i = 0; i < parts.length; i++) ...[
-          if (i > 0) const SizedBox(width: 2),
-          Container(
-            constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(3),
-            ),
-            child: Text(
-              parts[i],
-              style: AppTheme.mono(
-                size: 9.5,
-                color: Colors.white,
-                weight: FontWeight.w600,
-              ),
+          if (i > 0) const SizedBox(width: 3),
+          Text(
+            parts[i],
+            style: AppTheme.mono(
+              size: 10.5,
+              color: Colors.white.withValues(alpha: 0.85),
+              weight: FontWeight.w600,
             ),
           ),
         ],

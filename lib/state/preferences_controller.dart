@@ -20,6 +20,9 @@ class PreferencesController extends ChangeNotifier {
   AppBrightness _brightness = AppBrightness.dark;
   AppBrightness get brightness => _brightness;
 
+  bool _sidebarVisible = true;
+  bool get sidebarVisible => _sidebarVisible;
+
   Map<String, double>? _frame;
   Timer? _frameSaveTimer;
 
@@ -40,6 +43,9 @@ class PreferencesController extends ChangeNotifier {
         }
       }
     }
+
+    final sidebar = prefs['sidebarVisible'];
+    if (sidebar is bool) _sidebarVisible = sidebar;
 
     final frame = prefs['windowFrame'];
     if (frame is Map) {
@@ -73,6 +79,12 @@ class PreferencesController extends ChangeNotifier {
     );
   }
 
+  void toggleSidebar() {
+    _sidebarVisible = !_sidebarVisible;
+    unawaited(_persist());
+    notifyListeners();
+  }
+
   /// Read the current native window frame and schedule a debounced save.
   /// Called from a resize / move listener on the AppLifecycleState.
   Future<void> captureWindowFrame() async {
@@ -86,6 +98,7 @@ class PreferencesController extends ChangeNotifier {
   Future<void> _persist() async {
     await _store.save({
       'brightness': _brightness.name,
+      'sidebarVisible': _sidebarVisible,
       if (_frame != null) 'windowFrame': _frame,
     });
   }
