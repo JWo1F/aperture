@@ -251,6 +251,13 @@ class _QueryEditorState extends State<QueryEditor> {
                 : ResultsGrid(
                     result: tab.result!,
                     widths: tab.columnWidths,
+                    foreignKeys: state.aggregatedForeignKeys,
+                    onFollowForeignKey: (fk, value) =>
+                        state.followForeignKey(fk, value),
+                    findRowOwner: (col) =>
+                        state.findPrimaryKeyOwner(col),
+                    onFindRow: (table, col, value) =>
+                        state.findRowInTable(table, col, value),
                   ),
           ),
         ),

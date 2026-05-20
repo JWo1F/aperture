@@ -33,6 +33,8 @@ class ResultsGrid extends StatefulWidget {
     this.foreignKeys,
     this.onFollowForeignKey,
     this.columnMeta,
+    this.findRowOwner,
+    this.onFindRow,
   });
 
   final QueryResult result;
@@ -56,6 +58,13 @@ class ResultsGrid extends StatefulWidget {
   /// Set NULL / Set DEFAULT in the cell picker + context menu when the
   /// column's schema forbids those values.
   final Map<String, DbColumn>? columnMeta;
+
+  /// Resolves the "owning" table for a column name (i.e. the table where this
+  /// column is a PK). Used in query result grids to surface a "Find row in
+  /// {table}" action.
+  final DbTable? Function(String column)? findRowOwner;
+  final void Function(DbTable table, String column, dynamic value)?
+      onFindRow;
 
   @override
   State<ResultsGrid> createState() => _ResultsGridState();
@@ -257,6 +266,8 @@ class _ResultsGridState extends State<ResultsGrid> {
     void copy(String text) =>
         Clipboard.setData(ClipboardData(text: text));
 
+    final findOwner = widget.findRowOwner?.call(columnName);
+
     final entries = <CmEntry>[
       CmItem(
         icon: Icons.copy,
@@ -294,6 +305,14 @@ class _ResultsGridState extends State<ResultsGrid> {
             widget.foreignKeys![columnName]!,
             original,
           ),
+        ),
+        const CmDivider(),
+      ],
+      if (findOwner != null && widget.onFindRow != null) ...[
+        CmItem(
+          icon: Icons.search,
+          label: 'Find row in ${findOwner.qualifiedKey}',
+          onTap: () => widget.onFindRow!(findOwner, columnName, original),
         ),
         const CmDivider(),
       ],

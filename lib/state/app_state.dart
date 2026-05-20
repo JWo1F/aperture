@@ -73,6 +73,54 @@ class AppState extends ChangeNotifier {
   Map<String, DbForeignKey>? foreignKeysFor(DbTable table) =>
       _fkCache[table.qualifiedName];
 
+  /// Union of all loaded tables' FKs, keyed by local column name. Used by
+  /// query result grids to offer "Follow →" when an FK column appears in a
+  /// raw SQL result. First match wins on collisions (a personal-tool tradeoff
+  /// for the much simpler implementation vs. resolving source table OIDs).
+  Map<String, DbForeignKey> get aggregatedForeignKeys {
+    final out = <String, DbForeignKey>{};
+    for (final perTable in _fkCache.values) {
+      for (final entry in perTable.entries) {
+        out.putIfAbsent(entry.key, () => entry.value);
+      }
+    }
+    return out;
+  }
+
+  /// Heuristic lookup: which loaded table treats [columnName] as its (single)
+  /// primary key? First match wins. Returns null when no loaded table claims
+  /// this column as a PK — in which case the "Find row in table" menu item
+  /// is hidden.
+  DbTable? findPrimaryKeyOwner(String columnName) {
+    for (final entry in _columnCache.entries) {
+      final cols = entry.value;
+      if (cols.any((c) => c.name == columnName && c.isPrimaryKey)) {
+        // Locate the matching DbTable instance in our schemas list.
+        for (final s in _schemas) {
+          for (final t in s.tables) {
+            if (t.qualifiedName == entry.key) return t;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Opens (or focuses) [refTable] and filters it to the row where
+  /// [refColumn] equals [value]. Used by the "Find row" cell-context action.
+  Future<void> findRowInTable(
+    DbTable refTable,
+    String refColumn,
+    dynamic value,
+  ) async {
+    await openTable(refTable);
+    final tab = _tabs.lastWhere(
+      (t) =>
+          t is TableTab && t.table.qualifiedName == refTable.qualifiedName,
+    ) as TableTab;
+    await setTableFilter(tab, _equalityFragment(refColumn, value));
+  }
+
   /// Every column name we've ever loaded — fed into SQL editor autocomplete.
   Iterable<String> get loadedColumnNames =>
       _columnCache.values.expand((cols) => cols.map((c) => c.name));

@@ -67,6 +67,19 @@ class TableView extends StatelessWidget {
                           onFollowForeignKey: (fk, value) =>
                               state.followForeignKey(fk, value),
                           columnMeta: _columnMeta(state),
+                          findRowOwner: (col) {
+                            final owner = state.findPrimaryKeyOwner(col);
+                            // Skip the redundant "Find row in {this table}"
+                            // when the PK match is the table we're viewing.
+                            if (owner == null ||
+                                owner.qualifiedName ==
+                                    tab.table.qualifiedName) {
+                              return null;
+                            }
+                            return owner;
+                          },
+                          onFindRow: (table, col, value) =>
+                              state.findRowInTable(table, col, value),
                         ),
                         if (tab.loading)
                           const Positioned(
