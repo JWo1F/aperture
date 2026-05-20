@@ -184,12 +184,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     // versa.
                     if (state.sidebarVisible) ...[
                       const RepaintBoundary(child: Sidebar()),
-                      ResizeHandle(
-                        axis: Axis.vertical,
-                        onDrag: (dx) => state.preferences.setSidebarWidth(
-                          state.preferences.sidebarWidth + dx,
-                        ),
-                      ),
+                      _SidebarResizeHandle(state: state),
                     ],
                     Expanded(
                       child: RepaintBoundary(
@@ -202,12 +197,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                       ),
                     ),
                     if (state.eventLog.isVisible)
-                      ResizeHandle(
-                        axis: Axis.vertical,
-                        onDrag: (dx) => state.preferences.setLogPanelWidth(
-                          state.preferences.logPanelWidth - dx,
-                        ),
-                      ),
+                      _LogResizeHandle(state: state),
                     const RepaintBoundary(child: LogPanel()),
                   ],
                 ),
@@ -217,6 +207,54 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Captures the sidebar's current width on drag start so updates resolve
+/// as `start + cumulative`. The start value lives in State so it survives
+/// the rebuilds that fire on every `setSidebarWidth` call mid-drag.
+class _SidebarResizeHandle extends StatefulWidget {
+  const _SidebarResizeHandle({required this.state});
+  final AppState state;
+
+  @override
+  State<_SidebarResizeHandle> createState() => _SidebarResizeHandleState();
+}
+
+class _SidebarResizeHandleState extends State<_SidebarResizeHandle> {
+  double _startWidth = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return ResizeHandle(
+      axis: Axis.vertical,
+      onDragStart: () => _startWidth = widget.state.preferences.sidebarWidth,
+      onDragUpdate: (dx) =>
+          widget.state.preferences.setSidebarWidth(_startWidth + dx),
+    );
+  }
+}
+
+class _LogResizeHandle extends StatefulWidget {
+  const _LogResizeHandle({required this.state});
+  final AppState state;
+
+  @override
+  State<_LogResizeHandle> createState() => _LogResizeHandleState();
+}
+
+class _LogResizeHandleState extends State<_LogResizeHandle> {
+  double _startWidth = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return ResizeHandle(
+      axis: Axis.vertical,
+      onDragStart: () =>
+          _startWidth = widget.state.preferences.logPanelWidth,
+      onDragUpdate: (dx) =>
+          widget.state.preferences.setLogPanelWidth(_startWidth - dx),
     );
   }
 }

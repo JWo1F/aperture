@@ -269,31 +269,40 @@ class _QueryEditorState extends State<QueryEditor> {
               // side.
               const dividerHeight = 24.0;
               const handleHeight = 6.0;
+              const minSide = 80.0;
               final available =
                   (constraints.maxHeight - dividerHeight - handleHeight)
                       .clamp(0.0, double.infinity);
               final fraction = state.preferences.queryResultsFraction;
-              final resultsHeight = available * fraction;
+              double resultsHeight = available * fraction;
+              // Enforce a per-side pixel minimum on top of the fraction
+              // clamp; widgets like the empty-state card have an intrinsic
+              // height that paints an overflow stripe if the pane shrinks
+              // below it, and ClipRect below hides what's left over.
+              if (available >= minSide * 2) {
+                resultsHeight = resultsHeight
+                    .clamp(minSide, available - minSide);
+              }
               final editorHeight = available - resultsHeight;
               return Column(
                 children: [
-                  SizedBox(height: editorHeight, child: editor),
-                  ResizeHandle(
-                    axis: Axis.horizontal,
-                    thickness: handleHeight,
-                    onDrag: (dy) {
-                      if (available <= 0) return;
-                      state.preferences.setQueryResultsFraction(
-                        fraction - dy / available,
-                      );
-                    },
+                  SizedBox(
+                    height: editorHeight,
+                    child: ClipRect(child: editor),
+                  ),
+                  _QuerySplitHandle(
+                    state: state,
+                    available: available,
+                    handleHeight: handleHeight,
                   ),
                   _ResultsDivider(tab: tab),
                   SizedBox(
                     height: resultsHeight,
-                    child: Container(
-                      color: AppColors.bg,
-                      child: _buildContent(state, tab),
+                    child: ClipRect(
+                      child: Container(
+                        color: AppColors.bg,
+                        child: _buildContent(state, tab),
+                      ),
                     ),
                   ),
                 ],
@@ -307,6 +316,49 @@ class _QueryEditorState extends State<QueryEditor> {
   }
 }
 
+
+/// Drag handle between the editor and the results pane. Captures the
+/// starting fraction (and the available height at that instant) on drag
+/// start so the new fraction is computed against fixed anchors — without
+/// this, dragging past the clamp lets cumulative motion silently "bank"
+/// and the pane jumps back on direction reversal.
+class _QuerySplitHandle extends StatefulWidget {
+  const _QuerySplitHandle({
+    required this.state,
+    required this.available,
+    required this.handleHeight,
+  });
+
+  final AppState state;
+  final double available;
+  final double handleHeight;
+
+  @override
+  State<_QuerySplitHandle> createState() => _QuerySplitHandleState();
+}
+
+class _QuerySplitHandleState extends State<_QuerySplitHandle> {
+  double _startFraction = 0;
+  double _startAvailable = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return ResizeHandle(
+      axis: Axis.horizontal,
+      thickness: widget.handleHeight,
+      onDragStart: () {
+        _startFraction = widget.state.preferences.queryResultsFraction;
+        _startAvailable = widget.available;
+      },
+      onDragUpdate: (dy) {
+        if (_startAvailable <= 0) return;
+        widget.state.preferences.setQueryResultsFraction(
+          _startFraction - dy / _startAvailable,
+        );
+      },
+    );
+  }
+}
 
 /// Query editor toolbar — matches the design's two-action primary cluster
 /// (Run statement / Run all) with inline kbd chips, an Export action, and a

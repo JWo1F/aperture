@@ -8,17 +8,26 @@ import '../../theme/app_theme.dart';
 ///
 /// [axis] is the axis along which the *handle* runs — `vertical` for a column
 /// divider that resizes horizontally, `horizontal` for a row divider that
-/// resizes vertically. Drag deltas are passed to [onDrag] in logical pixels.
+/// resizes vertically.
+///
+/// Drag math is anchored: [onDragStart] is called once when a drag begins,
+/// and [onDragUpdate] is called with the *cumulative* pointer offset since
+/// that start. The parent captures its current pane size on start and adds
+/// the cumulative offset on every update, so values that clamp out-of-range
+/// stay clamped until the pointer crosses the original start position —
+/// dragging past the window edge can't silently "bank" extra movement.
 class ResizeHandle extends StatefulWidget {
   const ResizeHandle({
     super.key,
     required this.axis,
-    required this.onDrag,
+    required this.onDragStart,
+    required this.onDragUpdate,
     this.thickness = 6,
   });
 
   final Axis axis;
-  final void Function(double delta) onDrag;
+  final VoidCallback onDragStart;
+  final void Function(double cumulativeDelta) onDragUpdate;
   final double thickness;
 
   @override
@@ -28,6 +37,7 @@ class ResizeHandle extends StatefulWidget {
 class _ResizeHandleState extends State<ResizeHandle> {
   bool _hovering = false;
   bool _dragging = false;
+  double _startCoord = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -44,30 +54,31 @@ class _ResizeHandleState extends State<ResizeHandle> {
       color: lineColor,
     );
 
+    void start(DragStartDetails d) {
+      setState(() => _dragging = true);
+      _startCoord = isVertical ? d.globalPosition.dx : d.globalPosition.dy;
+      widget.onDragStart();
+    }
+
+    void update(DragUpdateDetails d) {
+      final cur = isVertical ? d.globalPosition.dx : d.globalPosition.dy;
+      widget.onDragUpdate(cur - _startCoord);
+    }
+
+    void end(_) => setState(() => _dragging = false);
+
     return MouseRegion(
       cursor: cursor,
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onHorizontalDragStart: isVertical
-            ? (_) => setState(() => _dragging = true)
-            : null,
-        onHorizontalDragUpdate: isVertical
-            ? (d) => widget.onDrag(d.delta.dx)
-            : null,
-        onHorizontalDragEnd: isVertical
-            ? (_) => setState(() => _dragging = false)
-            : null,
-        onVerticalDragStart: isVertical
-            ? null
-            : (_) => setState(() => _dragging = true),
-        onVerticalDragUpdate: isVertical
-            ? null
-            : (d) => widget.onDrag(d.delta.dy),
-        onVerticalDragEnd: isVertical
-            ? null
-            : (_) => setState(() => _dragging = false),
+        onHorizontalDragStart: isVertical ? start : null,
+        onHorizontalDragUpdate: isVertical ? update : null,
+        onHorizontalDragEnd: isVertical ? end : null,
+        onVerticalDragStart: isVertical ? null : start,
+        onVerticalDragUpdate: isVertical ? null : update,
+        onVerticalDragEnd: isVertical ? null : end,
         child: SizedBox(
           width: isVertical ? widget.thickness : null,
           height: isVertical ? null : widget.thickness,
