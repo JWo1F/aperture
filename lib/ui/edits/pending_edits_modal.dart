@@ -11,6 +11,8 @@ import '../widgets/common.dart';
 Future<void> showPendingEditsModal(
   BuildContext context, {
   required List<String> statements,
+  Future<void> Function()? onApply,
+  VoidCallback? onRevert,
 }) {
   return showDialog(
     context: context,
@@ -24,15 +26,34 @@ Future<void> showPendingEditsModal(
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760, maxHeight: 560),
-        child: _Body(statements: statements),
+        child: _Body(
+          statements: statements,
+          onApply: onApply,
+          onRevert: onRevert,
+        ),
       ),
     ),
   );
 }
 
-class _Body extends StatelessWidget {
-  const _Body({required this.statements});
+class _Body extends StatefulWidget {
+  const _Body({
+    required this.statements,
+    required this.onApply,
+    required this.onRevert,
+  });
   final List<String> statements;
+  final Future<void> Function()? onApply;
+  final VoidCallback? onRevert;
+
+  @override
+  State<_Body> createState() => _BodyState();
+}
+
+class _BodyState extends State<_Body> {
+  bool _applying = false;
+
+  List<String> get statements => widget.statements;
 
   void _copyAll() {
     final joined = statements.map((s) => '$s;').join('\n\n');
@@ -126,10 +147,43 @@ class _Body extends StatelessWidget {
                 style: AppTheme.ui(size: 11, color: AppColors.textMuted),
               ),
               const Spacer(),
+              if (widget.onRevert != null) ...[
+                AppButton(
+                  label: 'Revert all',
+                  onPressed: _applying
+                      ? null
+                      : () {
+                          widget.onRevert!();
+                          Navigator.of(context).pop();
+                        },
+                ),
+                const SizedBox(width: 8),
+              ],
               AppButton(
                 label: 'Close',
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed:
+                    _applying ? null : () => Navigator.of(context).pop(),
               ),
+              if (widget.onApply != null) ...[
+                const SizedBox(width: 8),
+                AppButton(
+                  label: _applying ? 'Applying…' : 'Apply',
+                  icon: Icons.check,
+                  primary: true,
+                  onPressed: _applying || statements.isEmpty
+                      ? null
+                      : () async {
+                          final nav = Navigator.of(context);
+                          setState(() => _applying = true);
+                          try {
+                            await widget.onApply!();
+                            if (mounted) nav.pop();
+                          } finally {
+                            if (mounted) setState(() => _applying = false);
+                          }
+                        },
+                ),
+              ],
             ],
           ),
         ),

@@ -12,7 +12,6 @@ import '../../theme/app_theme.dart';
 import '../edits/pending_edits_modal.dart';
 import '../export/export_dialog.dart';
 import '../widgets/common.dart';
-import '../widgets/context_menu.dart';
 import '../widgets/sql_highlight_controller.dart';
 import 'results_grid.dart';
 
@@ -176,11 +175,17 @@ class _TableToolbarState extends State<_TableToolbar> {
   void _applyOrder() =>
       widget.state.setTableOrder(widget.tab, _order.text.trim());
 
+  // ignore: unused_element
   void _previewEdits() {
     final statements = widget.state.previewEditStatements(widget.tab);
-    showPendingEditsModal(context, statements: statements);
+    showPendingEditsModal(
+      context,
+      statements: statements,
+      onApply: widget.tab.applying ? null : _applyEdits,
+    );
   }
 
+  // ignore: unused_element
   void _openExport() {
     final tab = widget.tab;
     final result = tab.result;
@@ -234,359 +239,26 @@ class _TableToolbarState extends State<_TableToolbar> {
     final whereActive = tab.filter.trim().isNotEmpty;
     final orderActive = tab.orderBy.trim().isNotEmpty;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // ── action strip ──
-        Container(
-          height: 36,
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            border: Border(bottom: BorderSide(color: AppColors.hairline)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: Insets.md),
-          child: Row(
-            children: [
-              _TableIdentity(tab: tab),
-              const Spacer(),
-              if (!tab.table.isView) ...[
-                _EditCountBadge(
-                  count: tab.edits.length,
-                  onTap: tab.hasEdits ? () => _previewEdits() : null,
-                ),
-                if (tab.hasEdits) const SizedBox(width: 6),
-                IconAction(
-                  icon: Icons.undo,
-                  tooltip: tab.hasEdits
-                      ? 'Reset pending edits'
-                      : 'No pending edits',
-                  onPressed: tab.hasEdits && !tab.applying
-                      ? () => widget.state.resetTableEdits(tab)
-                      : null,
-                ),
-                const SizedBox(width: 2),
-                IconAction(
-                  icon: Icons.check,
-                  tooltip: tab.applying
-                      ? 'Applying…'
-                      : (tab.hasEdits ? 'Apply edits' : 'No pending edits'),
-                  primary: true,
-                  busy: tab.applying,
-                  onPressed: tab.hasEdits && !tab.applying ? _applyEdits : null,
-                ),
-                const SizedBox(width: 4),
-              ],
-              _RefreshSplitButton(
-                tab: tab,
-                onRefresh: () => widget.state.refreshTable(tab),
-                onPickInterval: (d) =>
-                    widget.state.setTableAutoRefresh(tab, d),
-              ),
-              const SizedBox(width: 4),
-              IconAction(
-                icon: Icons.ios_share,
-                tooltip: 'Export…',
-                onPressed: tab.result == null ? null : _openExport,
-              ),
-            ],
-          ),
-        ),
-        // ── clause bar ──
-        _ClauseBar(
-          selectController: _select,
-          filterController: _filter,
-          orderController: _order,
-          selectFocus: _selectFocus,
-          filterFocus: _filterFocus,
-          orderFocus: _orderFocus,
-          onApplySelect: _applySelect,
-          onApplyFilter: _applyFilter,
-          onApplyOrder: _applyOrder,
-          selectActive: selectActive,
-          whereActive: whereActive,
-          orderActive: orderActive,
-        ),
-      ],
+    // Mirror the design's `.tab-content` grid — the clause bar sits flush
+    // against the tab strip, no inline action strip. Refresh / Export /
+    // Apply-edits live in the toolbar (and pending edits modal) instead.
+    return _ClauseBar(
+      selectController: _select,
+      filterController: _filter,
+      orderController: _order,
+      selectFocus: _selectFocus,
+      filterFocus: _filterFocus,
+      orderFocus: _orderFocus,
+      onApplySelect: _applySelect,
+      onApplyFilter: _applyFilter,
+      onApplyOrder: _applyOrder,
+      selectActive: selectActive,
+      whereActive: whereActive,
+      orderActive: orderActive,
     );
   }
 }
 
-/// Split-button: left half re-runs the current query, right half opens an
-/// auto-refresh interval picker. When an interval is active the shell paints
-/// in the accent and the live interval renders next to the icon, so the user
-/// always knows the table is updating itself.
-class _RefreshSplitButton extends StatefulWidget {
-  const _RefreshSplitButton({
-    required this.tab,
-    required this.onRefresh,
-    required this.onPickInterval,
-  });
-
-  final TableTab tab;
-  final VoidCallback onRefresh;
-  final void Function(Duration?) onPickInterval;
-
-  @override
-  State<_RefreshSplitButton> createState() => _RefreshSplitButtonState();
-}
-
-class _RefreshSplitButtonState extends State<_RefreshSplitButton> {
-  static const List<(Duration, String)> _intervals = [
-    (Duration(seconds: 5), '5s'),
-    (Duration(seconds: 15), '15s'),
-    (Duration(seconds: 30), '30s'),
-    (Duration(minutes: 1), '1m'),
-    (Duration(minutes: 5), '5m'),
-  ];
-
-  final GlobalKey _anchorKey = GlobalKey();
-
-  void _openMenu() {
-    final ctx = _anchorKey.currentContext;
-    if (ctx == null) return;
-    final box = ctx.findRenderObject() as RenderBox;
-    final origin = box.localToGlobal(Offset(0, box.size.height + 4));
-    final current = widget.tab.autoRefreshInterval;
-
-    showContextMenu(
-      context,
-      globalPosition: origin,
-      entries: [
-        CmItem(
-          icon: Icons.refresh,
-          label: 'Refresh now',
-          shortcut: '⌘R',
-          onTap: widget.onRefresh,
-        ),
-        const CmDivider(),
-        CmItem(
-          icon: current == null ? Icons.check : null,
-          label: 'Auto-refresh off',
-          onTap: () => widget.onPickInterval(null),
-        ),
-        for (final (duration, label) in _intervals)
-          CmItem(
-            icon: current == duration ? Icons.check : null,
-            label: 'Every $label',
-            onTap: () => widget.onPickInterval(duration),
-          ),
-      ],
-    );
-  }
-
-  String _intervalLabel(Duration d) {
-    for (final (dur, label) in _intervals) {
-      if (dur == d) return label;
-    }
-    return d.inSeconds < 60 ? '${d.inSeconds}s' : '${d.inMinutes}m';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tab = widget.tab;
-    final disabled = tab.loading;
-    final active = tab.autoRefreshInterval != null;
-    final shellBorder = active ? AppColors.accent : AppColors.border;
-
-    return Container(
-      key: _anchorKey,
-      height: 28,
-      decoration: BoxDecoration(
-        color: active ? AppColors.accentSoft : Colors.transparent,
-        borderRadius: Radii.brSm,
-        border: Border.all(color: shellBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ── refresh-now half ──
-          Tooltip(
-            message: active
-                ? 'Refresh now · auto ${_intervalLabel(tab.autoRefreshInterval!)}'
-                : 'Refresh',
-            child: Hoverable(
-              cursor: disabled
-                  ? SystemMouseCursors.basic
-                  : SystemMouseCursors.click,
-              onTap: disabled ? null : widget.onRefresh,
-              builder: (context, hovering) => AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                height: 26,
-                padding: EdgeInsets.symmetric(
-                  horizontal: active ? 9 : 7,
-                ),
-                decoration: BoxDecoration(
-                  color: hovering && !disabled
-                      ? (active
-                          ? AppColors.accentSoft
-                          : AppColors.surfaceHover)
-                      : Colors.transparent,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(5),
-                    bottomLeft: Radius.circular(5),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _RefreshIcon(spinning: tab.loading, active: active),
-                    if (active) ...[
-                      const SizedBox(width: 7),
-                      Text(
-                        _intervalLabel(tab.autoRefreshInterval!),
-                        style: AppTheme.mono(
-                          size: 10.5,
-                          color: AppColors.accent,
-                          weight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // ── hairline divider ──
-          Container(width: 1, height: 26, color: shellBorder),
-          // ── dropdown half ──
-          Tooltip(
-            message: 'Auto-refresh…',
-            child: Hoverable(
-              onTap: _openMenu,
-              builder: (context, hovering) => AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                width: 18,
-                height: 26,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: hovering
-                      ? (active
-                          ? AppColors.accentSoft
-                          : AppColors.surfaceHover)
-                      : Colors.transparent,
-                  borderRadius: const BorderRadius.only(
-                    topRight: Radius.circular(5),
-                    bottomRight: Radius.circular(5),
-                  ),
-                ),
-                child: Icon(
-                  Icons.expand_more,
-                  size: 13,
-                  color: active
-                      ? AppColors.accent
-                      : AppColors.textSecondary,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Refresh glyph that rotates continuously while a fetch is in-flight, so
-/// auto-refresh ticks are visible to the eye without a separate progress bar.
-class _RefreshIcon extends StatefulWidget {
-  const _RefreshIcon({required this.spinning, required this.active});
-  final bool spinning;
-  final bool active;
-
-  @override
-  State<_RefreshIcon> createState() => _RefreshIconState();
-}
-
-class _RefreshIconState extends State<_RefreshIcon>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 900),
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.spinning) _ctrl.repeat();
-  }
-
-  @override
-  void didUpdateWidget(covariant _RefreshIcon old) {
-    super.didUpdateWidget(old);
-    if (widget.spinning && !_ctrl.isAnimating) {
-      _ctrl.repeat();
-    } else if (!widget.spinning && _ctrl.isAnimating) {
-      _ctrl.stop();
-      _ctrl.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final color =
-        widget.active ? AppColors.accent : AppColors.textSecondary;
-    return RotationTransition(
-      turns: _ctrl,
-      child: Icon(Icons.refresh, size: 14, color: color),
-    );
-  }
-}
-
-/// Schema-qualified table name + relation icon. The schema renders in a quiet
-/// muted tone so the eye locks onto the table name itself.
-class _TableIdentity extends StatelessWidget {
-  const _TableIdentity({required this.tab});
-  final TableTab tab;
-
-  @override
-  Widget build(BuildContext context) {
-    final isView = tab.table.isView;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 240),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isView ? Icons.visibility_outlined : Icons.table_rows_outlined,
-            size: 14,
-            color: isView ? AppColors.info : AppColors.accent,
-          ),
-          const SizedBox(width: 7),
-          Flexible(
-            child: RichText(
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              text: TextSpan(
-                style: AppTheme.mono(size: 12, weight: FontWeight.w600),
-                children: [
-                  TextSpan(
-                    text: '${tab.table.schema}.',
-                    style: AppTheme.mono(
-                      size: 12,
-                      color: AppColors.textMuted,
-                      weight: FontWeight.w400,
-                    ),
-                  ),
-                  TextSpan(text: tab.table.name),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-
-/// Stacked clause bar with three rows: WHERE, SELECT, ORDER.
-/// Each row shares a narrow left decorative strip (accent gradient) with
-/// the clause label column separated by a hairline, then the input, then
 /// a trailing action icon.
 class _ClauseBar extends StatelessWidget {
   const _ClauseBar({
@@ -759,7 +431,7 @@ class _ClauseRowState extends State<_ClauseRow> {
         children: [
           // ── label ──
           Container(
-            width: 52,
+            width: 64,
             constraints: const BoxConstraints(minHeight: 26),
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -773,9 +445,12 @@ class _ClauseRowState extends State<_ClauseRow> {
               border: Border(right: BorderSide(color: AppColors.hairline)),
             ),
             alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.only(left: 10, right: 8),
+            padding: const EdgeInsets.only(left: 12, right: 10),
             child: Text(
               widget.label,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.visible,
               style: AppTheme.mono(
                 size: 10.5,
                 color: labelColor,
@@ -845,66 +520,6 @@ class _ClauseRowState extends State<_ClauseRow> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-
-/// Tight pill that signals the count of pending cell edits. Click to preview
-/// the generated UPDATE statements.
-class _EditCountBadge extends StatelessWidget {
-  const _EditCountBadge({required this.count, this.onTap});
-
-  final int count;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    if (count == 0) return const SizedBox.shrink();
-    final clickable = onTap != null;
-    final tooltip = clickable
-        ? '$count pending edit${count == 1 ? '' : 's'} — click to preview'
-        : '$count pending edit${count == 1 ? '' : 's'}';
-
-    return Tooltip(
-      message: tooltip,
-      child: Hoverable(
-        cursor:
-            clickable ? SystemMouseCursors.click : SystemMouseCursors.basic,
-        onTap: onTap,
-        builder: (context, hovering) => AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          height: 22,
-          padding: const EdgeInsets.symmetric(horizontal: 7),
-          decoration: BoxDecoration(
-            color: hovering && clickable
-                ? AppColors.accent.withValues(alpha: 0.32)
-                : AppColors.accentSoft,
-            borderRadius: Radii.brSm,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 5,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: AppColors.accent,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                '$count',
-                style: AppTheme.mono(
-                  size: 10.5,
-                  color: AppColors.accent,
-                  weight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

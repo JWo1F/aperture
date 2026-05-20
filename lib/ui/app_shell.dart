@@ -403,19 +403,41 @@ void _openTableExport(BuildContext context, AppState state, TableTab tab) {
 void _openPendingForActiveTab(BuildContext context, AppState state) {
   final tab = state.activeTab;
   if (tab is TableTab && tab.hasEdits) {
-    final statements = state.previewEditStatements(tab);
-    showPendingEditsModal(context, statements: statements);
+    _showPending(context, state, tab);
     return;
   }
   // Active tab has no edits; surface the first tab that does.
   for (final t in state.tabs) {
     if (t is TableTab && t.hasEdits) {
       state.selectTab(state.tabs.indexOf(t));
-      final statements = state.previewEditStatements(t);
-      showPendingEditsModal(context, statements: statements);
+      _showPending(context, state, t);
       return;
     }
   }
+}
+
+void _showPending(BuildContext context, AppState state, TableTab tab) {
+  final statements = state.previewEditStatements(tab);
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  showPendingEditsModal(
+    context,
+    statements: statements,
+    onApply: () async {
+      final error = await state.applyTableEdits(tab);
+      if (error != null && messenger != null) {
+        messenger.showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.surfaceAlt,
+            content: Text(
+              'Apply failed: $error',
+              style: AppTheme.mono(size: 11.5, color: AppColors.error),
+            ),
+          ),
+        );
+      }
+    },
+    onRevert: () => state.resetTableEdits(tab),
+  );
 }
 
 /// 1px vertical hairline separating toolbar groups.
