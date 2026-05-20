@@ -347,23 +347,78 @@ class PostgresService {
   }
 
   /// Applies pending cell edits as one transaction of `UPDATE` statements,
-  /// one per affected row keyed by `ctid`. Throws on the first failure so the
-  /// whole batch rolls back.
+  /// one per affected row keyed by `ctid`. Runs under REPEATABLE READ so the
+  /// snapshot used to resolve the ctids stays consistent for the whole batch.
+  ///
+  /// If any statement affects a row count other than 1, the whole batch is
+  /// rolled back and [StaleRowException] is thrown — the row's ctid was
+  /// moved by a concurrent VACUUM FULL / HOT update / DELETE, or the row was
+  /// never matched. The caller should ask the user to reload and retry.
   Future<int> applyTableEdits(
     DbTable table,
     Map<String, Map<String, CellEditValue>> updatesByCtid,
   ) async {
     if (updatesByCtid.isEmpty) return 0;
+    final ctids = updatesByCtid.keys.toList(growable: false);
     final statements = buildEditStatements(table, updatesByCtid);
-    return _conn.runTx((session) async {
-      var affected = 0;
-      for (final sql in statements) {
-        final result = await session.execute(sql);
-        affected += result.affectedRows;
-      }
-      return affected;
-    });
+    try {
+      return await _conn.runTx(
+        (session) async {
+          var affected = 0;
+          for (var i = 0; i < statements.length; i++) {
+            final result = await session.execute(statements[i]);
+            if (result.affectedRows != 1) {
+              throw StaleRowException(
+                ctid: ctids[i],
+                affectedRows: result.affectedRows,
+                table: table,
+              );
+            }
+            affected += result.affectedRows;
+          }
+          return affected;
+        },
+        settings: TransactionSettings(
+          isolationLevel: IsolationLevel.repeatableRead,
+        ),
+      );
+    } on StaleRowException {
+      rethrow;
+    } on ServerException catch (e) {
+      throw EditFailureException(e.message);
+    }
   }
+}
+
+/// Wraps a database-side failure during an edit batch so the UI layer never
+/// sees a raw driver exception type.
+class EditFailureException implements Exception {
+  EditFailureException(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// Thrown when an UPDATE batch hits a row whose ctid no longer matches.
+/// ctid is a physical row pointer: VACUUM FULL, CLUSTER, HOT updates, and
+/// concurrent DELETEs all move it. When this fires the transaction has
+/// already rolled back, so no partial edit is committed.
+class StaleRowException implements Exception {
+  StaleRowException({
+    required this.ctid,
+    required this.affectedRows,
+    required this.table,
+  });
+
+  final String ctid;
+  final int affectedRows;
+  final DbTable table;
+
+  @override
+  String toString() =>
+      'Row no longer matches in ${table.qualifiedName} '
+      '(ctid $ctid affected $affectedRows rows). Reload and retry.';
 }
 
 /// Pure builder for the per-ctid UPDATE statements that would be sent to the

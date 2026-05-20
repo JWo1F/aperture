@@ -1061,6 +1061,10 @@ class AppState extends ChangeNotifier {
     String? error;
     try {
       await _service!.applyTableEdits(tab.table, updates);
+    } on StaleRowException catch (e) {
+      error = e.toString();
+    } on EditFailureException catch (e) {
+      error = e.message;
     } catch (e) {
       error = e.toString();
     }
