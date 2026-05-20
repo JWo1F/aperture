@@ -199,7 +199,7 @@ class AppState extends ChangeNotifier {
       (t) =>
           t is TableTab && t.table.qualifiedName == refTable.qualifiedName,
     ) as TableTab;
-    await setTableFilter(tab, _equalityFragment(refColumn, value));
+    await setTableFilter(tab, equalityFragment(refColumn, value));
   }
 
   /// Every column name we know about — fed into SQL editor autocomplete.
@@ -842,17 +842,7 @@ class AppState extends ChangeNotifier {
       (t) =>
           t is TableTab && t.table.qualifiedName == ref.qualifiedName,
     ) as TableTab;
-    await setTableFilter(tab, _equalityFragment(fk.refColumn, value));
-  }
-
-  String _equalityFragment(String column, dynamic value) {
-    if (value == null) return '"$column" IS NULL';
-    if (value is num || value is BigInt || value is bool) {
-      return '"$column" = $value';
-    }
-    final text = formatCellValue(value) ?? '';
-    final escaped = text.replaceAll("'", "''");
-    return '"$column" = \'$escaped\'';
+    await setTableFilter(tab, equalityFragment(fk.refColumn, value));
   }
 
   /// Timers backing per-tab auto-refresh. Keyed by [TableTab.id] so we can

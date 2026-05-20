@@ -105,18 +105,8 @@ class TableView extends StatelessWidget {
     return {for (final c in cols) c.name: c};
   }
 
-  void _addFilter(AppState state, String column, dynamic value, bool not) {
-    final String fragment;
-    if (value == null) {
-      fragment = '"$column" IS ${not ? 'NOT ' : ''}NULL';
-    } else if (value is bool || value is num) {
-      fragment = '"$column" ${not ? '!=' : '='} $value';
-    } else {
-      final text = formatCellValue(value) ?? '';
-      final escaped = text.replaceAll("'", "''");
-      fragment = '"$column" ${not ? '!=' : '='} \'$escaped\'';
-    }
-    state.appendTableFilter(tab, fragment);
+  void _addFilter(AppState state, String column, Object? value, bool not) {
+    state.appendTableFilter(tab, equalityFragment(column, value, not: not));
   }
 }
 

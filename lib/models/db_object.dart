@@ -1,3 +1,5 @@
+import '../services/sql_identifier.dart';
+
 /// Schema-tree model: a schema owning a set of tables and views.
 class DbSchema {
   DbSchema({required this.name, required this.tables, this.comment});
@@ -33,7 +35,7 @@ class DbTable {
   final DbRelationKind kind;
   final String? comment;
 
-  String get qualifiedName => '"$schema"."$name"';
+  String get qualifiedName => qualify(schema, name);
 
   /// Stable, unquoted identifier used as a key in persisted maps/sets
   /// (e.g. favorites). Distinct from `qualifiedName` which is SQL-safe.
@@ -142,7 +144,7 @@ class DbEnum {
   final String name;
   final List<String> labels;
 
-  String get qualifiedName => '"$schema"."$name"';
+  String get qualifiedName => qualify(schema, name);
   String get qualifiedKey => '$schema.$name';
 }
 
@@ -160,5 +162,5 @@ class DbDomain {
   final String baseType;
   final bool notNull;
 
-  String get qualifiedName => '"$schema"."$name"';
+  String get qualifiedName => qualify(schema, name);
 }

@@ -5,6 +5,7 @@ import '../models/db_object.dart';
 import '../models/query_result.dart';
 import '../state/workspace_tab.dart';
 import 'introspector.dart';
+import 'sql_identifier.dart';
 
 /// Wraps a single live Postgres connection: opening it, introspecting the
 /// catalog, and running statements. One instance maps to one open connection.
@@ -170,8 +171,7 @@ class PostgresService {
   /// `CREATE INDEX` statements. Uses pg_catalog so the column types come back
   /// in canonical form (e.g. `numeric(8,2)`, `timestamp with time zone`).
   Future<String> loadTableDdl(DbTable table) async {
-    final regclass =
-        "'${_quoteIdent(table.schema)}.${_quoteIdent(table.name)}'::regclass";
+    final regclass = "'${qualify(table.schema, table.name)}'::regclass";
 
     // pg_catalog columns of type `name` (OID 19) have no built-in codec in
     // the postgres driver, so they come back as UndecodedBytes — explicit
@@ -216,7 +216,7 @@ class PostgresService {
     );
 
     // Build the column lines with aligned columns for readability.
-    final colNames = [for (final r in columns) '"${r[0] as String}"'];
+    final colNames = [for (final r in columns) quoteIdent(r[0] as String)];
     final colTypes = [for (final r in columns) r[1] as String];
     final nameWidth =
         colNames.fold<int>(0, (m, s) => s.length > m ? s.length : m);
@@ -242,22 +242,19 @@ class PostgresService {
 
     final constraintLines = <String>[
       for (final r in constraints)
-        '  CONSTRAINT "${r[0] as String}" ${r[2] as String}',
+        '  CONSTRAINT ${quoteIdent(r[0] as String)} ${r[2] as String}',
     ];
 
+    final qualified = qualify(table.schema, table.name);
     final buf = StringBuffer();
-    buf.writeln(
-      '-- Table: "${table.schema}"."${table.name}"',
-    );
+    buf.writeln('-- Table: $qualified');
     buf.writeln(
       '-- ${columns.length} columns · '
       '${constraints.where((r) => r[1] as String == 'f').length} foreign keys · '
       '${indexes.length} indexes',
     );
     buf.writeln();
-    buf.writeln(
-      'CREATE TABLE "${table.schema}"."${table.name}" (',
-    );
+    buf.writeln('CREATE TABLE $qualified (');
     final allLines = [...colLines, ...constraintLines];
     buf.writeln(allLines.join(',\n'));
     buf.writeln(');');
@@ -273,7 +270,7 @@ class PostgresService {
       }
       final escaped = c.replaceAll("'", "''");
       buf.writeln(
-        'COMMENT ON COLUMN "${table.schema}"."${table.name}"."${columns[i][0]}" '
+        'COMMENT ON COLUMN $qualified.${quoteIdent(columns[i][0] as String)} '
         "IS '$escaped';",
       );
     }
@@ -281,10 +278,7 @@ class PostgresService {
     if (tableComment != null) {
       buf.writeln();
       final escaped = tableComment.replaceAll("'", "''");
-      buf.writeln(
-        'COMMENT ON TABLE "${table.schema}"."${table.name}" '
-        "IS '$escaped';",
-      );
+      buf.writeln("COMMENT ON TABLE $qualified IS '$escaped';");
     }
 
     if (indexes.isNotEmpty) {
@@ -297,9 +291,6 @@ class PostgresService {
 
     return buf.toString();
   }
-
-  /// Doubles any embedded double-quotes for use inside a quoted identifier.
-  String _quoteIdent(String name) => name.replaceAll('"', '""');
 
   /// Executes an arbitrary statement, capturing timing and errors so the UI
   /// never has to deal with raised exceptions directly.
@@ -440,7 +431,7 @@ String _renderUpdate(
   Map<String, CellEditValue> assignments,
 ) {
   final lines = assignments.entries
-      .map((e) => '  "${e.key}" = ${_renderAssignment(e.value)}')
+      .map((e) => '  ${quoteIdent(e.key)} = ${_renderAssignment(e.value)}')
       .join(',\n');
   return 'UPDATE ${table.qualifiedName} SET\n'
       '$lines\n'
