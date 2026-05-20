@@ -65,6 +65,8 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final connected = state.status == ConnectionStatus.connected;
+    final lost = state.status == ConnectionStatus.lost;
+    final showWorkspace = connected || lost;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -82,6 +84,7 @@ class _AppShellState extends State<AppShell> {
             children: [
               const RepaintBoundary(child: _Toolbar()),
               Divider(height: 1, color: AppColors.border),
+              if (lost) _ConnectionLostBanner(state: state),
               Expanded(
                 child: Row(
                   children: [
@@ -96,7 +99,7 @@ class _AppShellState extends State<AppShell> {
                       child: RepaintBoundary(
                         child: Container(
                           color: AppColors.bg,
-                          child: connected
+                          child: showWorkspace
                               ? const Workspace()
                               : _WelcomePanel(state: state),
                         ),
@@ -110,6 +113,59 @@ class _AppShellState extends State<AppShell> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ConnectionLostBanner extends StatefulWidget {
+  const _ConnectionLostBanner({required this.state});
+
+  final AppState state;
+
+  @override
+  State<_ConnectionLostBanner> createState() => _ConnectionLostBannerState();
+}
+
+class _ConnectionLostBannerState extends State<_ConnectionLostBanner> {
+  bool _reconnecting = false;
+
+  Future<void> _reconnect() async {
+    if (_reconnecting) return;
+    setState(() => _reconnecting = true);
+    try {
+      await widget.state.reconnect();
+    } finally {
+      if (mounted) setState(() => _reconnecting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final error = widget.state.connectionError;
+    return Container(
+      color: AppColors.accent.withValues(alpha: 0.10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Icon(Icons.link_off, size: 14, color: AppColors.accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              error == null
+                  ? 'Connection lost. Your workspace is preserved.'
+                  : 'Connection lost: $error',
+              style: AppTheme.ui(color: AppColors.textPrimary),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 12),
+          AppButton(
+            label: _reconnecting ? 'Reconnecting…' : 'Reconnect',
+            onPressed: _reconnecting ? null : _reconnect,
+            primary: true,
+          ),
+        ],
       ),
     );
   }

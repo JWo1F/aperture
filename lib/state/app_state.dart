@@ -142,6 +142,26 @@ class AppState extends ChangeNotifier {
     history.clear();
   }
 
+  /// Reopen the dropped connection without disturbing the workspace.
+  ///
+  /// Reloads the catalog (OIDs can shift across server restarts) but
+  /// keeps the open tabs and navigation history intact, so the user
+  /// recovers to roughly where they were.
+  Future<void> reconnect() async {
+    final ok = await session.reconnect();
+    if (!ok) return;
+    final svc = session.service;
+    if (svc == null) return;
+    final gen = catalog.beginGeneration();
+    try {
+      final schemas = await catalog.runPhase0(svc, gen);
+      if (schemas == null) return;
+      unawaited(catalog.runPhase1(svc, gen));
+    } catch (_) {
+      // catalog.lastError will carry the failure for the UI to display.
+    }
+  }
+
   Future<void> refreshCatalog() async {
     final svc = session.service;
     if (svc == null) return;

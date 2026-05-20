@@ -67,6 +67,11 @@ class _ConnectionRow extends StatelessWidget {
           conn?.summary,
         ),
       ConnectionStatus.connecting => (AppColors.accent, 'Connecting…', null),
+      ConnectionStatus.lost => (
+          AppColors.warning,
+          conn != null ? '${conn.name} — lost' : 'Connection lost',
+          state.connectionError ?? 'Click reconnect in the banner',
+        ),
       ConnectionStatus.error => (
           AppColors.error,
           'Connection failed',

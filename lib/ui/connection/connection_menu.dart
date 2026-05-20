@@ -67,6 +67,10 @@ class _ConnectionMenuState extends State<ConnectionMenu> {
           conn?.name ?? 'Connected',
         ),
       ConnectionStatus.connecting => (AppColors.accent, 'Connecting…'),
+      ConnectionStatus.lost => (
+          AppColors.warning,
+          conn != null ? '${conn.name} — lost' : 'Connection lost',
+        ),
       ConnectionStatus.error => (AppColors.error, 'Connection failed'),
       ConnectionStatus.disconnected => (
           AppColors.textMuted,
