@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/query_result.dart';
 import '../../services/exporter.dart';
@@ -30,6 +31,8 @@ class ExportTarget {
 }
 
 enum _Scope { current, all }
+
+enum _Destination { file, clipboard }
 
 Future<void> showExportDialog(
   BuildContext context, {
@@ -64,6 +67,7 @@ class _ExportBody extends StatefulWidget {
 class _ExportBodyState extends State<_ExportBody> {
   ExportFormat _format = exportFormats.first;
   late _Scope _scope;
+  _Destination _destination = _Destination.file;
   bool _busy = false;
   String? _error;
 
@@ -91,45 +95,55 @@ class _ExportBodyState extends State<_ExportBody> {
         data = widget.target.currentResult;
       }
 
-      // 2. Ask the OS for a save location.
-      final suggested = _swapExtension(
-        widget.target.suggestedFilename,
-        _format.fileExtension,
-      );
-      final FileSaveLocation? location;
-      try {
-        location = await getSaveLocation(
-          suggestedName: suggested,
-          acceptedTypeGroups: [
-            XTypeGroup(
-              label: _format.label,
-              extensions: [_format.fileExtension],
-            ),
-          ],
+      // 2. Dispatch by destination.
+      final String snackText;
+      if (_destination == _Destination.clipboard) {
+        await Clipboard.setData(ClipboardData(text: _format.render(data)));
+        snackText =
+            'Copied ${data.rows.length} row${data.rows.length == 1 ? '' : 's'} '
+            'as ${_format.label} to the clipboard';
+      } else {
+        final suggested = _swapExtension(
+          widget.target.suggestedFilename,
+          _format.fileExtension,
         );
-      } catch (e) {
-        setState(() {
-          _busy = false;
-          _error = 'Save dialog failed: $e';
-        });
-        return;
-      }
+        final FileSaveLocation? location;
+        try {
+          location = await getSaveLocation(
+            suggestedName: suggested,
+            acceptedTypeGroups: [
+              XTypeGroup(
+                label: _format.label,
+                extensions: [_format.fileExtension],
+              ),
+            ],
+          );
+        } catch (e) {
+          setState(() {
+            _busy = false;
+            _error = 'Save dialog failed: $e';
+          });
+          return;
+        }
 
-      if (location == null) {
-        // User cancelled the save dialog — keep our dialog open so they can retry.
-        if (mounted) setState(() => _busy = false);
-        return;
-      }
+        if (location == null) {
+          // User cancelled the save dialog — keep our dialog open so they can retry.
+          if (mounted) setState(() => _busy = false);
+          return;
+        }
 
-      // 3. Write the file.
-      await _format.writeFile(File(location.path), data);
+        await _format.writeFile(File(location.path), data);
+        snackText =
+            'Exported ${data.rows.length} row${data.rows.length == 1 ? '' : 's'} '
+            'to ${location.path}';
+      }
 
       navigator.pop();
       messenger?.showSnackBar(
         SnackBar(
           backgroundColor: AppColors.surfaceAlt,
           content: Text(
-            'Exported ${data.rows.length} row${data.rows.length == 1 ? '' : 's'} to ${location.path}',
+            snackText,
             style: AppTheme.mono(size: 11.5, color: AppColors.textPrimary),
           ),
         ),
@@ -181,7 +195,9 @@ class _ExportBodyState extends State<_ExportBody> {
           ),
           const SizedBox(height: 2),
           Text(
-            'Save the result set to a file.',
+            _destination == _Destination.clipboard
+                ? 'Copy the result set to the clipboard.'
+                : 'Save the result set to a file.',
             style: AppTheme.ui(size: 12, color: AppColors.textMuted),
           ),
           const SizedBox(height: Insets.lg),
@@ -190,6 +206,13 @@ class _ExportBodyState extends State<_ExportBody> {
           _FormatChips(
             selected: _format,
             onSelect: (f) => setState(() => _format = f),
+          ),
+          const SizedBox(height: Insets.lg),
+          Text('DESTINATION', style: AppTheme.eyebrow()),
+          const SizedBox(height: 6),
+          _DestinationChips(
+            selected: _destination,
+            onSelect: (d) => setState(() => _destination = d),
           ),
           if (target.hasAllScope) ...[
             const SizedBox(height: Insets.lg),
@@ -252,8 +275,16 @@ class _ExportBodyState extends State<_ExportBody> {
               ),
               const SizedBox(width: Insets.sm),
               AppButton(
-                label: _busy ? 'Exporting…' : 'Export…',
-                icon: Icons.save_alt,
+                label: _busy
+                    ? (_destination == _Destination.clipboard
+                        ? 'Copying…'
+                        : 'Exporting…')
+                    : (_destination == _Destination.clipboard
+                        ? 'Copy'
+                        : 'Export…'),
+                icon: _destination == _Destination.clipboard
+                    ? Icons.content_copy
+                    : Icons.save_alt,
                 primary: true,
                 onPressed: _busy ? null : _export,
               ),
@@ -332,6 +363,104 @@ class _FormatChipState extends State<_FormatChip> {
               color: selected ? AppColors.accent : AppColors.textSecondary,
               weight: FontWeight.w600,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DestinationChips extends StatelessWidget {
+  const _DestinationChips({required this.selected, required this.onSelect});
+  final _Destination selected;
+  final ValueChanged<_Destination> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 6,
+      children: [
+        _DestinationChip(
+          destination: _Destination.file,
+          selected: selected == _Destination.file,
+          label: 'File',
+          icon: Icons.insert_drive_file_outlined,
+          onTap: () => onSelect(_Destination.file),
+        ),
+        _DestinationChip(
+          destination: _Destination.clipboard,
+          selected: selected == _Destination.clipboard,
+          label: 'Clipboard',
+          icon: Icons.content_copy,
+          onTap: () => onSelect(_Destination.clipboard),
+        ),
+      ],
+    );
+  }
+}
+
+class _DestinationChip extends StatefulWidget {
+  const _DestinationChip({
+    required this.destination,
+    required this.selected,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final _Destination destination;
+  final bool selected;
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  State<_DestinationChip> createState() => _DestinationChipState();
+}
+
+class _DestinationChipState extends State<_DestinationChip> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = widget.selected;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.accentSoft
+                : (_hover ? AppColors.surfaceHover : AppColors.bg),
+            borderRadius: Radii.brSm,
+            border: Border.all(
+              color: selected ? AppColors.accent : AppColors.border,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                widget.icon,
+                size: 12,
+                color: selected ? AppColors.accent : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                widget.label,
+                style: AppTheme.mono(
+                  size: 11.5,
+                  color:
+                      selected ? AppColors.accent : AppColors.textSecondary,
+                  weight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
       ),
