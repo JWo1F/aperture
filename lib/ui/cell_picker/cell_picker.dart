@@ -11,8 +11,8 @@ import '../widgets/json_highlight_controller.dart';
 
 /// Opens an overlay editor anchored to the cell's top-left corner. The shape
 /// of the picker depends on the value type — text grows multi-line, JSON gets
-/// syntax highlighting + room, booleans become a two-button toggle, numbers
-/// stay compact single-line.
+/// syntax highlighting + room, booleans become a two-button toggle, dates
+/// show a calendar, times show an HH:MM:SS spinner, datetimes combine both.
 ///
 /// Set NULL / Set DEFAULT are disabled when the column metadata forbids
 /// them (via [canBeNull] / [hasDefault]).
@@ -26,8 +26,9 @@ void showCellPicker(
   VoidCallback? onRevert,
   bool canBeNull = true,
   bool hasDefault = false,
+  String? columnDataType,
 }) {
-  final kind = _kindFor(originalValue);
+  final kind = _kindFor(originalValue, columnDataType);
   final overlay = Overlay.of(context);
   late OverlayEntry entry;
 
@@ -61,106 +62,129 @@ void showCellPicker(
   overlay.insert(entry);
 }
 
-// --- Type / shape ------------------------------------------------------
+// --- Kinds -------------------------------------------------------------
+
+enum _KindId { text, bool, json, date, time, datetime }
 
 class _Kind {
   const _Kind({
+    required this.id,
     required this.label,
     required this.color,
     required this.size,
-    required this.multiline,
-    required this.highlightJson,
-    required this.isBool,
+    this.multiline = false,
   });
+
+  final _KindId id;
   final String label;
   final Color color;
   final Size size;
   final bool multiline;
-  final bool highlightJson;
-  final bool isBool;
 }
 
-_Kind _kindFor(dynamic v) {
-  if (v is bool) {
-    return const _Kind(
-      label: 'bool',
-      color: AppColors.sqlFunction,
-      size: Size(240, 120),
-      multiline: false,
-      highlightJson: false,
-      isBool: true,
-    );
+const _kBool = _Kind(
+  id: _KindId.bool,
+  label: 'bool',
+  color: AppColors.sqlFunction,
+  size: Size(240, 130),
+);
+const _kJson = _Kind(
+  id: _KindId.json,
+  label: 'json',
+  color: AppColors.sqlString,
+  size: Size(540, 340),
+  multiline: true,
+);
+const _kArray = _Kind(
+  id: _KindId.json,
+  label: 'array',
+  color: AppColors.sqlString,
+  size: Size(540, 340),
+  multiline: true,
+);
+const _kInt = _Kind(
+  id: _KindId.text,
+  label: 'int',
+  color: AppColors.sqlNumber,
+  size: Size(260, 132),
+);
+const _kNumber = _Kind(
+  id: _KindId.text,
+  label: 'number',
+  color: AppColors.sqlNumber,
+  size: Size(260, 132),
+);
+const _kDate = _Kind(
+  id: _KindId.date,
+  label: 'date',
+  color: AppColors.info,
+  size: Size(340, 410),
+);
+const _kTime = _Kind(
+  id: _KindId.time,
+  label: 'time',
+  color: AppColors.info,
+  size: Size(280, 160),
+);
+const _kDatetime = _Kind(
+  id: _KindId.datetime,
+  label: 'timestamp',
+  color: AppColors.info,
+  size: Size(340, 480),
+);
+const _kBytes = _Kind(
+  id: _KindId.text,
+  label: 'bytes',
+  color: AppColors.textMuted,
+  size: Size(380, 220),
+  multiline: true,
+);
+const _kString = _Kind(
+  id: _KindId.text,
+  label: 'string',
+  color: AppColors.textSecondary,
+  size: Size(380, 220),
+  multiline: true,
+);
+
+/// Picks a picker shape. The column's `dataType` (from the catalog) is the
+/// authoritative source — falls back to the runtime value's class when the
+/// caller doesn't have catalog metadata yet.
+_Kind _kindFor(dynamic v, String? dataType) {
+  if (dataType != null) {
+    final dt = dataType.toLowerCase();
+    if (dt == 'date') return _kDate;
+    if (dt.startsWith('timestamp')) return _kDatetime;
+    if (dt.startsWith('time')) return _kTime;
+    if (dt == 'boolean') return _kBool;
+    if (dt == 'json' || dt == 'jsonb') return _kJson;
+    if (dt == 'array' || dt.endsWith('[]')) return _kArray;
+    if (dt.contains('int') ||
+        dt == 'smallint' ||
+        dt == 'bigint' ||
+        dt == 'serial') {
+      return _kInt;
+    }
+    if (dt == 'numeric' ||
+        dt == 'decimal' ||
+        dt == 'real' ||
+        dt == 'double precision') {
+      return _kNumber;
+    }
+    if (dt == 'bytea') return _kBytes;
+    // Fall through to runtime-type inspection for unknown types.
   }
-  if (v is Map) {
-    return const _Kind(
-      label: 'json',
-      color: AppColors.sqlString,
-      size: Size(540, 340),
-      multiline: true,
-      highlightJson: true,
-      isBool: false,
-    );
-  }
-  if (v is List) {
-    return const _Kind(
-      label: 'array',
-      color: AppColors.sqlString,
-      size: Size(540, 340),
-      multiline: true,
-      highlightJson: true,
-      isBool: false,
-    );
-  }
-  if (v is int || v is BigInt) {
-    return const _Kind(
-      label: 'int',
-      color: AppColors.sqlNumber,
-      size: Size(260, 132),
-      multiline: false,
-      highlightJson: false,
-      isBool: false,
-    );
-  }
-  if (v is num) {
-    return const _Kind(
-      label: 'number',
-      color: AppColors.sqlNumber,
-      size: Size(260, 132),
-      multiline: false,
-      highlightJson: false,
-      isBool: false,
-    );
-  }
-  if (v is DateTime) {
-    return const _Kind(
-      label: 'datetime',
-      color: AppColors.info,
-      size: Size(320, 132),
-      multiline: false,
-      highlightJson: false,
-      isBool: false,
-    );
-  }
-  if (v is UndecodedBytes) {
-    return const _Kind(
-      label: 'bytes',
-      color: AppColors.textMuted,
-      size: Size(380, 220),
-      multiline: true,
-      highlightJson: false,
-      isBool: false,
-    );
-  }
-  // string / null / unknown
-  return const _Kind(
-    label: 'string',
-    color: AppColors.textSecondary,
-    size: Size(380, 220),
-    multiline: true,
-    highlightJson: false,
-    isBool: false,
-  );
+  if (v is bool) return _kBool;
+  if (v is Map) return _kJson;
+  if (v is List) return _kArray;
+  if (v is int || v is BigInt) return _kInt;
+  if (v is num) return _kNumber;
+  if (v is DateTime) return _kDatetime;
+  if (v is UndecodedBytes) return _kBytes;
+  return _kString;
 }
+
+// --- Initial state extraction -----------------------------------------
 
 String _initialText(dynamic raw, CellEditValue? pending) {
   if (pending is CellLiteral) return pending.value ?? '';
@@ -188,6 +212,34 @@ bool? _initialBool(dynamic raw, CellEditValue? pending) {
   }
   if (raw is bool) return raw;
   return null;
+}
+
+DateTime _initialMoment(dynamic raw, CellEditValue? pending) {
+  if (pending is CellLiteral) {
+    final s = pending.value;
+    if (s != null && s.isNotEmpty) {
+      final parsed = DateTime.tryParse(s);
+      if (parsed != null) return parsed;
+      // Try time-only "HH:MM:SS"
+      final tm = RegExp(r'^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$').firstMatch(s);
+      if (tm != null) {
+        return DateTime(
+          1970,
+          1,
+          1,
+          int.parse(tm.group(1)!),
+          int.parse(tm.group(2)!),
+          int.parse(tm.group(3) ?? '0'),
+        );
+      }
+    }
+  }
+  if (raw is DateTime) return raw;
+  if (raw is String) {
+    final p = DateTime.tryParse(raw);
+    if (p != null) return p;
+  }
+  return DateTime.now();
 }
 
 // --- Overlay -----------------------------------------------------------
@@ -260,6 +312,8 @@ class _PickerOverlay extends StatelessWidget {
   }
 }
 
+// --- Panel -------------------------------------------------------------
+
 class _Panel extends StatefulWidget {
   const _Panel({
     required this.kind,
@@ -288,44 +342,83 @@ class _Panel extends StatefulWidget {
 }
 
 class _PanelState extends State<_Panel> {
-  late final TextEditingController _text;
+  // Text/JSON-only state
+  TextEditingController? _text;
+  late String _baselineText;
+
+  // Bool-only state
+  bool? _bool;
+  bool? _baselineBool;
+
+  // Date/time/datetime state
+  DateTime? _moment;
+  DateTime? _baselineMoment;
+
   final FocusNode _focus = FocusNode();
-  late bool? _bool;
-  late final String _baselineText;
-  late final bool? _baselineBool;
 
   @override
   void initState() {
     super.initState();
-    _baselineText = _initialText(widget.originalValue, widget.pendingEdit);
-    _baselineBool = _initialBool(widget.originalValue, widget.pendingEdit);
-    _text = widget.kind.highlightJson
-        ? JsonHighlightController(text: _baselineText)
-        : TextEditingController(text: _baselineText);
-    _bool = _baselineBool;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!widget.kind.isBool) _focus.requestFocus();
-    });
+    final k = widget.kind.id;
+    switch (k) {
+      case _KindId.bool:
+        _baselineBool =
+            _initialBool(widget.originalValue, widget.pendingEdit);
+        _bool = _baselineBool;
+      case _KindId.date:
+      case _KindId.time:
+      case _KindId.datetime:
+        _baselineMoment =
+            _initialMoment(widget.originalValue, widget.pendingEdit);
+        _moment = _baselineMoment;
+      case _KindId.text:
+      case _KindId.json:
+        _baselineText =
+            _initialText(widget.originalValue, widget.pendingEdit);
+        _text = k == _KindId.json
+            ? JsonHighlightController(text: _baselineText)
+            : TextEditingController(text: _baselineText);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _focus.requestFocus();
+        });
+    }
   }
 
   @override
   void dispose() {
-    _text.dispose();
+    _text?.dispose();
     _focus.dispose();
     super.dispose();
   }
 
   bool get _isDirty {
-    if (widget.kind.isBool) return _bool != _baselineBool;
-    return _text.text != _baselineText;
+    switch (widget.kind.id) {
+      case _KindId.bool:
+        return _bool != _baselineBool;
+      case _KindId.date:
+      case _KindId.time:
+      case _KindId.datetime:
+        return _moment != _baselineMoment;
+      case _KindId.text:
+      case _KindId.json:
+        return _text!.text != _baselineText;
+    }
   }
 
   void _save() {
-    if (widget.kind.isBool) {
-      if (_bool == null) return;
-      widget.onCommit(CellLiteral(_bool! ? 'true' : 'false'));
-    } else {
-      widget.onCommit(CellLiteral(_text.text));
+    switch (widget.kind.id) {
+      case _KindId.bool:
+        if (_bool == null) return;
+        widget.onCommit(CellLiteral(_bool! ? 'true' : 'false'));
+      case _KindId.date:
+        widget.onCommit(CellLiteral(_formatDate(_moment!)));
+      case _KindId.time:
+        widget.onCommit(CellLiteral(_formatTime(_moment!)));
+      case _KindId.datetime:
+        widget.onCommit(CellLiteral(_formatDateTime(_moment!)));
+      case _KindId.text:
+      case _KindId.json:
+        widget.onCommit(CellLiteral(_text!.text));
     }
   }
 
@@ -364,19 +457,7 @@ class _PanelState extends State<_Panel> {
                 onClose: widget.onClose,
               ),
               const Divider(height: 1, color: AppColors.border),
-              Expanded(
-                child: widget.kind.isBool
-                    ? _BoolBody(
-                        value: _bool,
-                        onChange: (v) => setState(() => _bool = v),
-                      )
-                    : _TextBody(
-                        controller: _text,
-                        focus: _focus,
-                        multiline: widget.kind.multiline,
-                        onChanged: () => setState(() {}),
-                      ),
-              ),
+              Expanded(child: _buildBody()),
               const Divider(height: 1, color: AppColors.border),
               _Footer(
                 hasPending: widget.pendingEdit != null,
@@ -395,7 +476,50 @@ class _PanelState extends State<_Panel> {
       ),
     );
   }
+
+  Widget _buildBody() {
+    switch (widget.kind.id) {
+      case _KindId.bool:
+        return _BoolBody(
+          value: _bool,
+          onChange: (v) => setState(() => _bool = v),
+        );
+      case _KindId.date:
+        return _CalendarBody(
+          initial: _moment!,
+          onChange: (d) => setState(() {
+            _moment = DateTime(d.year, d.month, d.day);
+          }),
+        );
+      case _KindId.time:
+        return _TimeBody(
+          initial: _moment!,
+          onChange: (h, m, s) => setState(() {
+            _moment = DateTime(1970, 1, 1, h, m, s);
+          }),
+        );
+      case _KindId.datetime:
+        return _DateTimeBody(
+          initial: _moment!,
+          onChange: (dt) => setState(() => _moment = dt),
+        );
+      case _KindId.text:
+      case _KindId.json:
+        return _TextBody(
+          controller: _text!,
+          focus: _focus,
+          multiline: widget.kind.multiline,
+          onChanged: () => setState(() {}),
+        );
+    }
+  }
 }
+
+String _pad(int n) => n.toString().padLeft(2, '0');
+String _formatDate(DateTime d) => '${d.year}-${_pad(d.month)}-${_pad(d.day)}';
+String _formatTime(DateTime d) =>
+    '${_pad(d.hour)}:${_pad(d.minute)}:${_pad(d.second)}';
+String _formatDateTime(DateTime d) => '${_formatDate(d)} ${_formatTime(d)}';
 
 // --- Header / Footer ---------------------------------------------------
 
@@ -429,7 +553,8 @@ class _Header extends StatelessWidget {
           Container(
             width: 6,
             height: 6,
-            decoration: BoxDecoration(color: kind.color, shape: BoxShape.circle),
+            decoration:
+                BoxDecoration(color: kind.color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 7),
           Expanded(
@@ -473,7 +598,8 @@ class _Tag extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: AppTheme.mono(size: 9.5, color: color, weight: FontWeight.w700),
+        style:
+            AppTheme.mono(size: 9.5, color: color, weight: FontWeight.w700),
       ),
     );
   }
@@ -518,15 +644,13 @@ class _Footer extends StatelessWidget {
           ],
           IconAction(
             icon: Icons.not_interested,
-            tooltip:
-                canBeNull ? 'Set NULL' : 'Column is NOT NULL',
+            tooltip: canBeNull ? 'Set NULL' : 'Column is NOT NULL',
             onPressed: canBeNull ? onSetNull : null,
           ),
           const SizedBox(width: 2),
           IconAction(
             icon: Icons.settings_backup_restore,
-            tooltip:
-                hasDefault ? 'Set DEFAULT' : 'Column has no default',
+            tooltip: hasDefault ? 'Set DEFAULT' : 'Column has no default',
             onPressed: hasDefault ? onSetDefault : null,
           ),
           const Spacer(),
@@ -680,4 +804,222 @@ class _BoolChoiceState extends State<_BoolChoice> {
       ),
     );
   }
+}
+
+// --- Date / time bodies -----------------------------------------------
+
+class _CalendarBody extends StatefulWidget {
+  const _CalendarBody({required this.initial, required this.onChange});
+  final DateTime initial;
+  final ValueChanged<DateTime> onChange;
+
+  @override
+  State<_CalendarBody> createState() => _CalendarBodyState();
+}
+
+class _CalendarBodyState extends State<_CalendarBody> {
+  late DateTime _current;
+
+  @override
+  void initState() {
+    super.initState();
+    _current = widget.initial;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.bg,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      child: CalendarDatePicker(
+        initialDate: _current,
+        firstDate: DateTime(1900),
+        lastDate: DateTime(2200),
+        onDateChanged: (d) {
+          setState(() => _current = d);
+          widget.onChange(d);
+        },
+      ),
+    );
+  }
+}
+
+class _TimeBody extends StatelessWidget {
+  const _TimeBody({required this.initial, required this.onChange});
+  final DateTime initial;
+  final void Function(int hour, int minute, int second) onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.bg,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      child: _TimeInput(initial: initial, onChange: onChange),
+    );
+  }
+}
+
+class _DateTimeBody extends StatefulWidget {
+  const _DateTimeBody({required this.initial, required this.onChange});
+  final DateTime initial;
+  final ValueChanged<DateTime> onChange;
+
+  @override
+  State<_DateTimeBody> createState() => _DateTimeBodyState();
+}
+
+class _DateTimeBodyState extends State<_DateTimeBody> {
+  late DateTime _value;
+
+  @override
+  void initState() {
+    super.initState();
+    _value = widget.initial;
+  }
+
+  void _setDate(DateTime d) {
+    final next = DateTime(
+      d.year,
+      d.month,
+      d.day,
+      _value.hour,
+      _value.minute,
+      _value.second,
+    );
+    setState(() => _value = next);
+    widget.onChange(next);
+  }
+
+  void _setTime(int h, int m, int s) {
+    final next = DateTime(_value.year, _value.month, _value.day, h, m, s);
+    setState(() => _value = next);
+    widget.onChange(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.bg,
+      child: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: CalendarDatePicker(
+                initialDate: _value,
+                firstDate: DateTime(1900),
+                lastDate: DateTime(2200),
+                onDateChanged: _setDate,
+              ),
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.border),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: _TimeInput(initial: _value, onChange: _setTime),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Three small numeric fields HH : MM : SS, value flows out via [onChange].
+class _TimeInput extends StatefulWidget {
+  const _TimeInput({required this.initial, required this.onChange});
+  final DateTime initial;
+  final void Function(int hour, int minute, int second) onChange;
+
+  @override
+  State<_TimeInput> createState() => _TimeInputState();
+}
+
+class _TimeInputState extends State<_TimeInput> {
+  late final TextEditingController _h;
+  late final TextEditingController _m;
+  late final TextEditingController _s;
+
+  @override
+  void initState() {
+    super.initState();
+    _h = TextEditingController(text: _pad(widget.initial.hour));
+    _m = TextEditingController(text: _pad(widget.initial.minute));
+    _s = TextEditingController(text: _pad(widget.initial.second));
+  }
+
+  @override
+  void dispose() {
+    _h.dispose();
+    _m.dispose();
+    _s.dispose();
+    super.dispose();
+  }
+
+  void _emit() {
+    final h = (int.tryParse(_h.text) ?? 0).clamp(0, 23);
+    final m = (int.tryParse(_m.text) ?? 0).clamp(0, 59);
+    final s = (int.tryParse(_s.text) ?? 0).clamp(0, 59);
+    widget.onChange(h, m, s);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _segment(_h, 'HH'),
+        _colon(),
+        _segment(_m, 'MM'),
+        _colon(),
+        _segment(_s, 'SS'),
+      ],
+    );
+  }
+
+  Widget _segment(TextEditingController c, String hint) {
+    return SizedBox(
+      width: 52,
+      child: TextField(
+        controller: c,
+        textAlign: TextAlign.center,
+        cursorColor: AppColors.accent,
+        keyboardType: TextInputType.number,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(2),
+        ],
+        onChanged: (_) => _emit(),
+        onSubmitted: (_) => _emit(),
+        style: AppTheme.mono(size: 18, weight: FontWeight.w600),
+        decoration: InputDecoration(
+          isCollapsed: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 8),
+          hintText: hint,
+          hintStyle: AppTheme.mono(size: 14, color: AppColors.textMuted),
+          filled: true,
+          fillColor: AppColors.surface,
+          border: OutlineInputBorder(
+            borderRadius: Radii.brSm,
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: Radii.brSm,
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: Radii.brSm,
+            borderSide: const BorderSide(color: AppColors.accent),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _colon() => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Text(
+          ':',
+          style: AppTheme.mono(size: 18, color: AppColors.textMuted),
+        ),
+      );
 }

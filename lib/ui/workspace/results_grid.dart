@@ -194,6 +194,7 @@ class _ResultsGridState extends State<ResultsGrid> {
       pendingEdit: pending,
       canBeNull: meta?.nullable ?? true,
       hasDefault: meta?.hasDefault ?? false,
+      columnDataType: meta?.dataType,
       onCommit: (value) => widget.onEditCell!(row, column, value),
       onRevert: pending == null
           ? null
