@@ -46,6 +46,15 @@ class TabsController extends ChangeNotifier {
   WorkspaceTab? get activeTab =>
       _tabs.isEmpty ? null : _tabs[_activeIndex.clamp(0, _tabs.length - 1)];
 
+  /// Total pending cell edits across every open TableTab.
+  int get unappliedEditCount {
+    var n = 0;
+    for (final t in _tabs) {
+      if (t is TableTab) n += t.edits.length;
+    }
+    return n;
+  }
+
   String _nextId() => 'id${_idCounter++}';
 
   /// Reset everything when the connection changes (or disconnects).

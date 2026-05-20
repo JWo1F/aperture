@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -78,7 +79,51 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       state.historyForward();
       return true;
     }
+    if (event.logicalKey == LogicalKeyboardKey.keyQ) {
+      // Only intercept when we'd actually warn the user.
+      if (state.unappliedEditCount > 0) {
+        unawaited(_confirmQuit(state.unappliedEditCount));
+        return true;
+      }
+    }
     return false;
+  }
+
+  Future<void> _confirmQuit(int pending) async {
+    final keepEditing = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text(
+          'Quit dbv?',
+          style: AppTheme.ui(
+            size: 14,
+            weight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        content: Text(
+          'You have $pending pending edit${pending == 1 ? '' : 's'}. '
+          "Quitting now discards them — they aren't on the server yet.",
+          style: AppTheme.ui(color: AppColors.textSecondary),
+        ),
+        actions: [
+          AppButton(
+            label: 'Keep editing',
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+          AppButton(
+            label: 'Quit anyway',
+            danger: true,
+            onPressed: () => Navigator.of(ctx).pop(false),
+          ),
+        ],
+      ),
+    );
+    if (keepEditing == false) {
+      // User confirmed quit — hand control back to AppKit's terminate.
+      await SystemNavigator.pop();
+    }
   }
 
   @override

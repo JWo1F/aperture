@@ -209,6 +209,7 @@ class AppState extends ChangeNotifier {
   List<WorkspaceTab> get tabs => tabsController.tabs;
   int get activeTabIndex => tabsController.activeIndex;
   WorkspaceTab? get activeTab => tabsController.activeTab;
+  int get unappliedEditCount => tabsController.unappliedEditCount;
 
   void newQueryTab() => tabsController.newQueryTab();
   void selectTab(int index) => tabsController.selectTab(index);
