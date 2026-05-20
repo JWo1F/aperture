@@ -1,9 +1,9 @@
 import 'package:postgres/postgres.dart';
 
+import '../models/cell_edit.dart';
 import '../models/connection_config.dart';
 import '../models/db_object.dart';
 import '../models/query_result.dart';
-import '../state/workspace_tab.dart';
 import 'introspector.dart';
 import 'sql_identifier.dart';
 

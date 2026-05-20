@@ -1,5 +1,8 @@
+import '../models/cell_edit.dart';
 import '../models/db_object.dart';
 import '../models/query_result.dart';
+
+export '../models/cell_edit.dart' show CellEdit, CellEditValue, CellLiteral, CellDefault;
 
 /// A tab in the center workspace. Either a free-form SQL editor, a data
 /// view bound to one relation, or a schema viewer.
@@ -41,36 +44,6 @@ class SchemaTab extends WorkspaceTab {
 
   @override
   String get title => '${table.name} · schema';
-}
-
-/// One pending cell edit, keyed by grid row and column index.
-class CellEdit {
-  CellEdit(this.row, this.column);
-
-  final int row;
-  final int column;
-
-  @override
-  bool operator ==(Object other) =>
-      other is CellEdit && other.row == row && other.column == column;
-
-  @override
-  int get hashCode => Object.hash(row, column);
-}
-
-/// What a cell is being changed to. Either a literal text value (null = SQL
-/// NULL) or the special `DEFAULT` directive.
-sealed class CellEditValue {
-  const CellEditValue();
-}
-
-class CellLiteral extends CellEditValue {
-  const CellLiteral(this.value);
-  final String? value;
-}
-
-class CellDefault extends CellEditValue {
-  const CellDefault();
 }
 
 class TableTab extends WorkspaceTab {
