@@ -12,6 +12,7 @@ class ConnectionConfig {
     required this.username,
     required this.password,
     this.useSsl = false,
+    this.readOnly = false,
     this.lastConnectedAt,
     Set<String>? favoriteTables,
     List<SavedQuery>? savedQueries,
@@ -32,6 +33,12 @@ class ConnectionConfig {
   final String username;
   final String password;
   final bool useSsl;
+
+  /// When true, the workspace blocks cell edits and DDL/UPDATE/DELETE
+  /// gestures. The flag is purely client-side — it does not change the
+  /// session role at the Postgres end.
+  final bool readOnly;
+
   final DateTime? lastConnectedAt;
 
   /// Per-connection favourite tables, stored as unquoted `schema.table` keys.
@@ -66,6 +73,7 @@ class ConnectionConfig {
         'username': username,
         'password': password,
         'useSsl': useSsl,
+        if (readOnly) 'readOnly': true,
         if (lastConnectedAt != null)
           'lastConnectedAt': lastConnectedAt!.toIso8601String(),
         if (favoriteTables.isNotEmpty)
@@ -90,6 +98,7 @@ class ConnectionConfig {
         username: j['username'] as String? ?? 'postgres',
         password: j['password'] as String? ?? '',
         useSsl: j['useSsl'] as bool? ?? false,
+        readOnly: j['readOnly'] as bool? ?? false,
         lastConnectedAt: j['lastConnectedAt'] is String
             ? DateTime.tryParse(j['lastConnectedAt'] as String)
             : null,
@@ -134,6 +143,7 @@ class ConnectionConfig {
     String? username,
     String? password,
     bool? useSsl,
+    bool? readOnly,
     DateTime? lastConnectedAt,
     Set<String>? favoriteTables,
     List<SavedQuery>? savedQueries,
@@ -150,6 +160,7 @@ class ConnectionConfig {
       username: username ?? this.username,
       password: password ?? this.password,
       useSsl: useSsl ?? this.useSsl,
+      readOnly: readOnly ?? this.readOnly,
       lastConnectedAt: lastConnectedAt ?? this.lastConnectedAt,
       favoriteTables: favoriteTables ?? this.favoriteTables,
       savedQueries: savedQueries ?? this.savedQueries,

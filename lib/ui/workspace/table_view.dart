@@ -60,7 +60,8 @@ class TableView extends StatelessWidget {
                   children: [
                         ResultsGrid(
                           result: tab.result!,
-                          editable: !tab.table.isView,
+                          editable: !tab.table.isView &&
+                              !(state.activeConnection?.readOnly ?? false),
                           edits: tab.edits,
                           widths: tab.columnWidths,
                           onWidthChanged: (col, w) =>

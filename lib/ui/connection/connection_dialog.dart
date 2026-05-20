@@ -61,7 +61,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
   late String _sslMode;
   late Color _tagColor;
   bool _savePassword = true;
-  bool _readOnly = false;
+  late bool _readOnly;
   bool _showPassword = false;
   int _activeTab = 0; // 0 = manual, 1 = connection string
 
@@ -82,6 +82,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     _password = TextEditingController(text: e?.password ?? '');
     _sslMode = (e?.useSsl ?? false) ? 'require' : 'disable';
     _tagColor = _tagColors.first;
+    _readOnly = e?.readOnly ?? false;
 
     for (final c in [_name, _host, _port, _database, _username, _password]) {
       c.addListener(_onAnyFieldChanged);
@@ -121,6 +122,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
       username: _username.text.trim(),
       password: _password.text,
       useSsl: _sslMode != 'disable',
+      readOnly: _readOnly,
     );
   }
 
