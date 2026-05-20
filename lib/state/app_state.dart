@@ -412,10 +412,12 @@ class AppState extends ChangeNotifier {
     final tab = TableTab(_nextId(), table);
     _tabs.add(tab);
     _selectTab(_tabs.length - 1);
+    // Catalog metadata first — it's a small query, and having it before the
+    // grid is interactive means the cell picker shows the right shape
+    // (calendar, time, …) even for NULL cells whose runtime type alone
+    // doesn't reveal the column type.
+    await ensureColumns(table);
     await loadTablePage(tab, 0);
-    // Load columns + FK metadata in the background so the grid can show
-    // FK indicators / context-menu items without blocking the first page.
-    unawaited(ensureColumns(table));
   }
 
   /// Opens (or focuses) the referenced table and filters it down to the row

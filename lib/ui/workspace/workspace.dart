@@ -43,7 +43,17 @@ class Workspace extends StatelessWidget {
       child: Column(
         children: [
           _TabStrip(state: state),
-          Expanded(child: _content(tab)),
+          Expanded(
+            // All tabs stay mounted so per-tab state (scroll offset, code
+            // editor cursor, query result) survives switching away and back.
+            child: IndexedStack(
+              index: state.activeTabIndex.clamp(0, state.tabs.length - 1),
+              sizing: StackFit.expand,
+              children: [
+                for (final t in state.tabs) _content(t),
+              ],
+            ),
+          ),
         ],
       ),
     );

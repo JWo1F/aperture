@@ -73,6 +73,7 @@ class _Kind {
     required this.color,
     required this.size,
     this.multiline = false,
+    this.inputFormatters,
   });
 
   final _KindId id;
@@ -80,7 +81,16 @@ class _Kind {
   final Color color;
   final Size size;
   final bool multiline;
+  final List<TextInputFormatter>? inputFormatters;
 }
+
+// Regexes for numeric input — `FilteringTextInputFormatter.allow` runs
+// per-character, so a digit-or-sign filter is enough to keep alpha out;
+// validity of the assembled value falls to Postgres on apply.
+final _intFilter =
+    FilteringTextInputFormatter.allow(RegExp(r'[0-9\-]'));
+final _numberFilter =
+    FilteringTextInputFormatter.allow(RegExp(r'[0-9\-+.eE]'));
 
 const _kBool = _Kind(
   id: _KindId.bool,
@@ -102,17 +112,19 @@ const _kArray = _Kind(
   size: Size(540, 340),
   multiline: true,
 );
-const _kInt = _Kind(
+final _kInt = _Kind(
   id: _KindId.text,
   label: 'int',
   color: AppColors.sqlNumber,
-  size: Size(260, 132),
+  size: const Size(260, 132),
+  inputFormatters: [_intFilter],
 );
-const _kNumber = _Kind(
+final _kNumber = _Kind(
   id: _KindId.text,
   label: 'number',
   color: AppColors.sqlNumber,
-  size: Size(260, 132),
+  size: const Size(260, 132),
+  inputFormatters: [_numberFilter],
 );
 const _kDate = _Kind(
   id: _KindId.date,
@@ -345,6 +357,7 @@ class _PanelState extends State<_Panel> {
   // Text/JSON-only state
   TextEditingController? _text;
   late String _baselineText;
+  String? _jsonError;
 
   // Bool-only state
   bool? _bool;
@@ -416,10 +429,32 @@ class _PanelState extends State<_Panel> {
         widget.onCommit(CellLiteral(_formatTime(_moment!)));
       case _KindId.datetime:
         widget.onCommit(CellLiteral(_formatDateTime(_moment!)));
-      case _KindId.text:
       case _KindId.json:
+        // Validate before committing — empty input is allowed (and means
+        // "send the empty string", e.g. for an empty jsonb column).
+        final text = _text!.text;
+        if (text.trim().isNotEmpty) {
+          try {
+            jsonDecode(text);
+          } catch (e) {
+            setState(() => _jsonError = _shortJsonError(e));
+            return;
+          }
+        }
+        setState(() => _jsonError = null);
+        widget.onCommit(CellLiteral(text));
+      case _KindId.text:
         widget.onCommit(CellLiteral(_text!.text));
     }
+  }
+
+  String _shortJsonError(Object e) {
+    // FormatException messages are usually "FormatException: <msg>". Strip
+    // the prefix for a cleaner inline error.
+    final s = e.toString();
+    const prefix = 'FormatException: ';
+    if (s.startsWith(prefix)) return s.substring(prefix.length);
+    return s;
   }
 
   void _setNull() => widget.onCommit(const CellLiteral(null));
@@ -509,7 +544,12 @@ class _PanelState extends State<_Panel> {
           controller: _text!,
           focus: _focus,
           multiline: widget.kind.multiline,
-          onChanged: () => setState(() {}),
+          onChanged: () => setState(() {
+            // Clear the stale JSON error as soon as the user starts typing.
+            if (_jsonError != null) _jsonError = null;
+          }),
+          inputFormatters: widget.kind.inputFormatters,
+          error: widget.kind.id == _KindId.json ? _jsonError : null,
         );
     }
   }
@@ -688,31 +728,78 @@ class _TextBody extends StatelessWidget {
     required this.focus,
     required this.multiline,
     required this.onChanged,
+    this.inputFormatters,
+    this.error,
   });
 
   final TextEditingController controller;
   final FocusNode focus;
   final bool multiline;
   final VoidCallback onChanged;
+  final List<TextInputFormatter>? inputFormatters;
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.bg,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: TextField(
-        controller: controller,
-        focusNode: focus,
-        maxLines: multiline ? null : 1,
-        expands: multiline,
-        textAlignVertical: TextAlignVertical.top,
-        cursorColor: AppColors.accent,
-        onChanged: (_) => onChanged(),
-        style: AppTheme.mono(size: 12, color: AppColors.textPrimary),
-        decoration: const InputDecoration(
-          isCollapsed: true,
-          border: InputBorder.none,
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: TextField(
+                controller: controller,
+                focusNode: focus,
+                maxLines: multiline ? null : 1,
+                expands: multiline,
+                textAlignVertical: TextAlignVertical.top,
+                cursorColor: AppColors.accent,
+                onChanged: (_) => onChanged(),
+                inputFormatters: inputFormatters,
+                style:
+                    AppTheme.mono(size: 12, color: AppColors.textPrimary),
+                decoration: const InputDecoration(
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                ),
+              ),
+            ),
+          ),
+          if (error != null)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 7,
+              ),
+              decoration: const BoxDecoration(
+                color: Color(0x33FB7185),
+                border: Border(
+                  top: BorderSide(color: AppColors.error),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline,
+                      size: 13, color: AppColors.error),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      error!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.mono(
+                        size: 11,
+                        color: AppColors.error,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

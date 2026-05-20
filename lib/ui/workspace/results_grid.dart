@@ -14,7 +14,6 @@ import '../cell_picker/cell_picker.dart';
 import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
 import '../widgets/json_spans.dart';
-import '../widgets/value_editor.dart';
 
 /// Scrollable data grid for a [QueryResult]. Lazy body, type-aware cell
 /// colours, JSON-inline highlighting, and a right-click context menu.
@@ -234,34 +233,6 @@ class _ResultsGridState extends State<ResultsGrid> {
     return false;
   }
 
-  // --- editor modal ----------------------------------------------------
-
-  Future<void> _openEditor(
-    int row,
-    int column,
-    dynamic original,
-    CellEditValue? pending,
-  ) async {
-    final columnName = widget.result.columns[column];
-    final meta = widget.columnMeta?[columnName];
-    final outcome = await showValueEditor(
-      context,
-      columnName: columnName,
-      rawValue: original,
-      editable: widget.editable && widget.onEditCell != null,
-      pendingEdit: pending,
-      canBeNull: meta?.nullable ?? true,
-      hasDefault: meta?.hasDefault ?? false,
-    );
-    if (!mounted || outcome == null) return;
-    switch (outcome) {
-      case EditorEdit(:final value):
-        widget.onEditCell?.call(row, column, value);
-      case EditorRevert():
-        widget.onRevertEdit?.call(row, column);
-    }
-  }
-
   // --- context menu ----------------------------------------------------
 
   void _openCellMenu(
@@ -387,13 +358,6 @@ class _ResultsGridState extends State<ResultsGrid> {
           onTap: () => widget.onSetSort!(columnName, true),
         ),
       ],
-      if (widget.onAddFilter != null || widget.onSetSort != null)
-        const CmDivider(),
-      CmItem(
-        icon: Icons.open_in_full,
-        label: 'Open editor',
-        onTap: () => _openEditor(row, column, original, pending),
-      ),
     ];
 
     showContextMenu(context, globalPosition: pos, entries: entries);

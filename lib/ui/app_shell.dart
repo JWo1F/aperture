@@ -21,8 +21,43 @@ const double _trafficLightInset = 78;
 
 /// Root layout: toolbar on top, sidebar + workspace in the middle, a thin
 /// status bar at the bottom.
-class AppShell extends StatelessWidget {
+class AppShell extends StatefulWidget {
   const AppShell({super.key});
+
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  @override
+  void initState() {
+    super.initState();
+    // ⌘[ / ⌘] are intercepted at the HardwareKeyboard layer so they fire
+    // regardless of focus — a TextField inside the active tab would
+    // otherwise swallow them via Flutter's default editing shortcuts.
+    HardwareKeyboard.instance.addHandler(_onKey);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
+    super.dispose();
+  }
+
+  bool _onKey(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    if (!HardwareKeyboard.instance.isMetaPressed) return false;
+    final state = context.read<AppState>();
+    if (event.logicalKey == LogicalKeyboardKey.bracketLeft) {
+      state.historyBack();
+      return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.bracketRight) {
+      state.historyForward();
+      return true;
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,10 +70,6 @@ class AppShell extends StatelessWidget {
         bindings: {
           const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
               showCommandPalette(context, state),
-          const SingleActivator(LogicalKeyboardKey.bracketLeft, meta: true):
-              state.historyBack,
-          const SingleActivator(LogicalKeyboardKey.bracketRight, meta: true):
-              state.historyForward,
         },
         child: FocusScope(
           autofocus: true,
