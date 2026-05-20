@@ -539,14 +539,24 @@ class _ResultsGridState extends State<ResultsGrid> {
         color: AppColors.surfaceAlt,
         border: Border(bottom: BorderSide(color: AppColors.borderStrong)),
       ),
+      // ClipRect alone would force the header row to fit the viewport
+      // (Transform passes parent constraints through). OverflowBox grants
+      // it the same unbounded horizontal space the body's scroll view has,
+      // so the Row lays out at `totalWidth` and we translate it sideways
+      // to mirror the body's scroll offset.
       child: ClipRect(
         child: AnimatedBuilder(
           animation: _hBody,
           builder: (_, child) {
             final offset = _hBody.hasClients ? _hBody.offset : 0.0;
-            return Transform.translate(
-              offset: Offset(-offset, 0),
-              child: child,
+            return OverflowBox(
+              minWidth: 0,
+              maxWidth: double.infinity,
+              alignment: Alignment.topLeft,
+              child: Transform.translate(
+                offset: Offset(-offset, 0),
+                child: child,
+              ),
             );
           },
           child: headerRow,
