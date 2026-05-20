@@ -52,6 +52,12 @@ class TableView extends StatelessWidget {
                       title: 'Could not load data',
                     ))
               : Stack(
+                  // Force non-positioned children (the ResultsGrid) to fill
+                  // the available Stack box. Without this, the grid sizes to
+                  // its content (28px header + 0-N rows) and leaves the rest
+                  // of the body painted in `var(--bg)`, which looked like
+                  // bottom padding on the clause bar.
+                  fit: StackFit.expand,
                   children: [
                         ResultsGrid(
                           result: tab.result!,
