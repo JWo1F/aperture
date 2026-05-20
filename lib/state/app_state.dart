@@ -370,6 +370,7 @@ class AppState extends ChangeNotifier {
     _catalogGeneration++;
     _catalog = DatabaseCatalog.empty;
     _catalogPhase1Loading = false;
+    _cancelAllAutoRefresh();
     _tabs.clear();
     _navHistory.clear();
     _historyIndex = -1;
@@ -411,6 +412,7 @@ class AppState extends ChangeNotifier {
     _catalog = DatabaseCatalog.empty;
     _catalogPhase1Loading = false;
     _expandedSchemas.clear();
+    _cancelAllAutoRefresh();
     _tabs.clear();
     _navHistory.clear();
     _historyIndex = -1;
@@ -645,6 +647,7 @@ class AppState extends ChangeNotifier {
   void closeTab(String id) {
     final i = _tabs.indexWhere((t) => t.id == id);
     if (i == -1) return;
+    _cancelAutoRefreshFor(id);
     _tabs.removeAt(i);
     if (_activeTabIndex >= _tabs.length) {
       _activeTabIndex = _tabs.isEmpty ? 0 : _tabs.length - 1;
@@ -658,6 +661,9 @@ class AppState extends ChangeNotifier {
       (t) => t.id == keepId,
       orElse: () => throw StateError('Tab not found'),
     );
+    for (final t in _tabs) {
+      if (t.id != keepId) _cancelAutoRefreshFor(t.id);
+    }
     _tabs
       ..clear()
       ..add(keep);
@@ -669,6 +675,9 @@ class AppState extends ChangeNotifier {
   void closeTabsToRight(String anchorId) {
     final i = _tabs.indexWhere((t) => t.id == anchorId);
     if (i == -1 || i == _tabs.length - 1) return;
+    for (final t in _tabs.sublist(i + 1)) {
+      _cancelAutoRefreshFor(t.id);
+    }
     _tabs.removeRange(i + 1, _tabs.length);
     if (_activeTabIndex >= _tabs.length) {
       _activeTabIndex = _tabs.length - 1;
@@ -677,6 +686,7 @@ class AppState extends ChangeNotifier {
   }
 
   void closeAllTabs() {
+    _cancelAllAutoRefresh();
     _tabs.clear();
     _activeTabIndex = 0;
     notifyListeners();
@@ -842,6 +852,44 @@ class AppState extends ChangeNotifier {
     final text = formatCellValue(value) ?? '';
     final escaped = text.replaceAll("'", "''");
     return '"$column" = \'$escaped\'';
+  }
+
+  /// Timers backing per-tab auto-refresh. Keyed by [TableTab.id] so we can
+  /// cancel them when the tab is closed, the user disconnects, or they pick
+  /// a new interval — without leaking ticks into a stale tab.
+  final Map<String, Timer> _autoRefreshTimers = {};
+
+  /// Re-fetches the current page using the active filter / select / order.
+  /// Mirrors what filter/sort/select changes already do; the manual refresh
+  /// button is just the same primitive without the clause change.
+  Future<void> refreshTable(TableTab tab) async {
+    await loadTablePage(tab, tab.page);
+  }
+
+  /// Sets (or clears, with `null`) the auto-refresh cadence for [tab].
+  /// Ticks are skipped while the tab has unsaved edits, is applying, or is
+  /// already loading — so we never silently destroy in-flight user work.
+  void setTableAutoRefresh(TableTab tab, Duration? interval) {
+    _autoRefreshTimers.remove(tab.id)?.cancel();
+    tab.autoRefreshInterval = interval;
+    if (interval != null) {
+      _autoRefreshTimers[tab.id] = Timer.periodic(interval, (_) {
+        if (tab.loading || tab.applying || tab.hasEdits) return;
+        unawaited(loadTablePage(tab, tab.page));
+      });
+    }
+    notifyListeners();
+  }
+
+  void _cancelAutoRefreshFor(String tabId) {
+    _autoRefreshTimers.remove(tabId)?.cancel();
+  }
+
+  void _cancelAllAutoRefresh() {
+    for (final t in _autoRefreshTimers.values) {
+      t.cancel();
+    }
+    _autoRefreshTimers.clear();
   }
 
   Future<void> loadTablePage(TableTab tab, int page) async {

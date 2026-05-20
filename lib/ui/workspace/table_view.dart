@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../edits/pending_edits_modal.dart';
 import '../export/export_dialog.dart';
 import '../widgets/common.dart';
+import '../widgets/context_menu.dart';
 import '../widgets/sql_highlight_controller.dart';
 import 'results_grid.dart';
 
@@ -323,6 +324,12 @@ class _TableToolbarState extends State<_TableToolbar> {
             ),
             const SizedBox(width: 4),
           ],
+          _RefreshSplitButton(
+            tab: tab,
+            onRefresh: () => widget.state.refreshTable(tab),
+            onPickInterval: (d) => widget.state.setTableAutoRefresh(tab, d),
+          ),
+          const SizedBox(width: 4),
           IconAction(
             icon: Icons.ios_share,
             tooltip: 'Export…',
@@ -330,6 +337,243 @@ class _TableToolbarState extends State<_TableToolbar> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Split-button: left half re-runs the current query, right half opens an
+/// auto-refresh interval picker. When an interval is active the shell paints
+/// in the accent and the live interval renders next to the icon, so the user
+/// always knows the table is updating itself.
+class _RefreshSplitButton extends StatefulWidget {
+  const _RefreshSplitButton({
+    required this.tab,
+    required this.onRefresh,
+    required this.onPickInterval,
+  });
+
+  final TableTab tab;
+  final VoidCallback onRefresh;
+  final void Function(Duration?) onPickInterval;
+
+  @override
+  State<_RefreshSplitButton> createState() => _RefreshSplitButtonState();
+}
+
+class _RefreshSplitButtonState extends State<_RefreshSplitButton> {
+  static const List<(Duration, String)> _intervals = [
+    (Duration(seconds: 5), '5s'),
+    (Duration(seconds: 15), '15s'),
+    (Duration(seconds: 30), '30s'),
+    (Duration(minutes: 1), '1m'),
+    (Duration(minutes: 5), '5m'),
+  ];
+
+  bool _hoverLeft = false;
+  bool _hoverRight = false;
+  final GlobalKey _anchorKey = GlobalKey();
+
+  void _openMenu() {
+    final ctx = _anchorKey.currentContext;
+    if (ctx == null) return;
+    final box = ctx.findRenderObject() as RenderBox;
+    final origin = box.localToGlobal(Offset(0, box.size.height + 4));
+    final current = widget.tab.autoRefreshInterval;
+
+    showContextMenu(
+      context,
+      globalPosition: origin,
+      entries: [
+        CmItem(
+          icon: Icons.refresh,
+          label: 'Refresh now',
+          shortcut: '⌘R',
+          onTap: widget.onRefresh,
+        ),
+        const CmDivider(),
+        CmItem(
+          icon: current == null ? Icons.check : null,
+          label: 'Auto-refresh off',
+          onTap: () => widget.onPickInterval(null),
+        ),
+        for (final (duration, label) in _intervals)
+          CmItem(
+            icon: current == duration ? Icons.check : null,
+            label: 'Every $label',
+            onTap: () => widget.onPickInterval(duration),
+          ),
+      ],
+    );
+  }
+
+  String _intervalLabel(Duration d) {
+    for (final (dur, label) in _intervals) {
+      if (dur == d) return label;
+    }
+    return d.inSeconds < 60 ? '${d.inSeconds}s' : '${d.inMinutes}m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tab = widget.tab;
+    final disabled = tab.loading;
+    final active = tab.autoRefreshInterval != null;
+    final shellBorder = active ? AppColors.accent : AppColors.border;
+
+    return Container(
+      key: _anchorKey,
+      height: 28,
+      decoration: BoxDecoration(
+        color: active ? AppColors.accentSoft : Colors.transparent,
+        borderRadius: Radii.brSm,
+        border: Border.all(color: shellBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── refresh-now half ──
+          Tooltip(
+            message: active
+                ? 'Refresh now · auto ${_intervalLabel(tab.autoRefreshInterval!)}'
+                : 'Refresh',
+            child: MouseRegion(
+              cursor: disabled
+                  ? SystemMouseCursors.basic
+                  : SystemMouseCursors.click,
+              onEnter: (_) => setState(() => _hoverLeft = true),
+              onExit: (_) => setState(() => _hoverLeft = false),
+              child: GestureDetector(
+                onTap: disabled ? null : widget.onRefresh,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  height: 26,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: active ? 9 : 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _hoverLeft && !disabled
+                        ? (active
+                            ? AppColors.accentSoft
+                            : AppColors.surfaceHover)
+                        : Colors.transparent,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(5),
+                      bottomLeft: Radius.circular(5),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _RefreshIcon(spinning: tab.loading, active: active),
+                      if (active) ...[
+                        const SizedBox(width: 7),
+                        Text(
+                          _intervalLabel(tab.autoRefreshInterval!),
+                          style: AppTheme.mono(
+                            size: 10.5,
+                            color: AppColors.accent,
+                            weight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // ── hairline divider ──
+          Container(width: 1, height: 26, color: shellBorder),
+          // ── dropdown half ──
+          Tooltip(
+            message: 'Auto-refresh…',
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              onEnter: (_) => setState(() => _hoverRight = true),
+              onExit: (_) => setState(() => _hoverRight = false),
+              child: GestureDetector(
+                onTap: _openMenu,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  width: 18,
+                  height: 26,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _hoverRight
+                        ? (active
+                            ? AppColors.accentSoft
+                            : AppColors.surfaceHover)
+                        : Colors.transparent,
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(5),
+                      bottomRight: Radius.circular(5),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.expand_more,
+                    size: 13,
+                    color: active
+                        ? AppColors.accent
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Refresh glyph that rotates continuously while a fetch is in-flight, so
+/// auto-refresh ticks are visible to the eye without a separate progress bar.
+class _RefreshIcon extends StatefulWidget {
+  const _RefreshIcon({required this.spinning, required this.active});
+  final bool spinning;
+  final bool active;
+
+  @override
+  State<_RefreshIcon> createState() => _RefreshIconState();
+}
+
+class _RefreshIconState extends State<_RefreshIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.spinning) _ctrl.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _RefreshIcon old) {
+    super.didUpdateWidget(old);
+    if (widget.spinning && !_ctrl.isAnimating) {
+      _ctrl.repeat();
+    } else if (!widget.spinning && _ctrl.isAnimating) {
+      _ctrl.stop();
+      _ctrl.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        widget.active ? AppColors.accent : AppColors.textSecondary;
+    return RotationTransition(
+      turns: _ctrl,
+      child: Icon(Icons.refresh, size: 14, color: color),
     );
   }
 }

@@ -97,6 +97,11 @@ class TableTab extends WorkspaceTab {
   /// Pending, un-applied cell edits.
   final Map<CellEdit, CellEditValue> edits = {};
 
+  /// When set, [AppState] periodically re-fetches the current page on this
+  /// interval. The Timer itself lives in [AppState] so the model stays free
+  /// of dart:async.
+  Duration? autoRefreshInterval;
+
   bool get hasEdits => edits.isNotEmpty;
 
   int get pageCount => totalRows == 0 ? 1 : ((totalRows - 1) ~/ pageSize) + 1;
