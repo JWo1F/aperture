@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/connection_config.dart';
+import '../models/query_result.dart';
 import '../models/time_ago.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -268,8 +269,7 @@ class _Toolbar extends StatelessWidget {
     final state = context.watch<AppState>();
     final pending = state.unappliedEditCount;
     final activeTab = state.activeTab;
-    final tableTab = activeTab is TableTab ? activeTab : null;
-    final canExport = tableTab?.result != null;
+    final canExport = _exportableResult(activeTab) != null;
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -319,8 +319,8 @@ class _Toolbar extends StatelessWidget {
             _TbIcon(
               icon: Icons.ios_share,
               tooltip: 'Export…',
-              onPressed: canExport && tableTab != null
-                  ? () => _openTableExport(context, state, tableTab)
+              onPressed: canExport
+                  ? () => _openExportForActiveTab(context, state, activeTab)
                   : null,
             ),
             const Spacer(),
@@ -356,19 +356,46 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
-void _openTableExport(BuildContext context, AppState state, TableTab tab) {
-  final result = tab.result;
-  if (result == null) return;
+/// Returns the [QueryResult] the toolbar's Export action would feed to the
+/// dialog, or null if [tab] has nothing exportable. Table and query tabs
+/// both qualify; lifecycle tabs (schema) never do.
+QueryResult? _exportableResult(WorkspaceTab? tab) {
+  if (tab is TableTab) return tab.result;
+  if (tab is QueryTab) return tab.result;
+  return null;
+}
+
+void _openExportForActiveTab(
+  BuildContext context,
+  AppState state,
+  WorkspaceTab? tab,
+) {
   final timestamp = filenameTimestamp();
-  showExportDialog(
-    context,
-    target: ExportTarget(
-      suggestedFilename: '${tab.table.name}_$timestamp.csv',
-      currentResult: result,
-      fetchAll: () => state.fetchAllForExport(tab),
-      totalRowsForAll: tab.totalRows,
-    ),
-  );
+  if (tab is TableTab) {
+    final result = tab.result;
+    if (result == null) return;
+    showExportDialog(
+      context,
+      target: ExportTarget(
+        suggestedFilename: '${tab.table.name}_$timestamp.csv',
+        currentResult: result,
+        fetchAll: () => state.fetchAllForExport(tab),
+        totalRowsForAll: tab.totalRows,
+      ),
+    );
+    return;
+  }
+  if (tab is QueryTab) {
+    final result = tab.result;
+    if (result == null) return;
+    showExportDialog(
+      context,
+      target: ExportTarget(
+        suggestedFilename: 'query_$timestamp.csv',
+        currentResult: result,
+      ),
+    );
+  }
 }
 
 void _openPendingForActiveTab(BuildContext context, AppState state) {

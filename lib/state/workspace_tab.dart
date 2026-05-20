@@ -2,7 +2,10 @@ import 'package:flutter/foundation.dart';
 
 import '../models/cell_edit.dart';
 import '../models/db_object.dart';
+import '../models/query_message.dart';
 import '../models/query_result.dart';
+
+export '../models/query_message.dart';
 
 export '../models/cell_edit.dart'
     show CellEdit, CellEditValue, CellLiteral, CellDefault;
@@ -32,6 +35,10 @@ sealed class WorkspaceTab extends ChangeNotifier {
   void markChanged() => notifyListeners();
 }
 
+/// Which section of the query tab the user is currently viewing below
+/// the editor: the result grid, the plan tree, or the messages log.
+enum QueryResultsView { results, plan, messages }
+
 class QueryTab extends WorkspaceTab {
   QueryTab(super.id, {String name = 'Query', String sql = ''})
       : _name = name,
@@ -42,6 +49,21 @@ class QueryTab extends WorkspaceTab {
   String _sql;
   QueryResult? _result;
   bool _running = false;
+  DateTime? _lastRefreshedAt;
+  String? _lastRunSql;
+  Duration? _autoRefreshInterval;
+  QueryResultsView _view = QueryResultsView.results;
+
+  /// Plan-tab state. [planJson] is the top-level node of the parsed JSON
+  /// EXPLAIN output. [planError] holds a server-side error if EXPLAIN
+  /// failed. [planLoading] flips while the EXPLAIN round-trip is in flight.
+  Map<String, dynamic>? _planJson;
+  String? _planError;
+  bool _planLoading = false;
+  String? _planSourceSql;
+
+  /// Per-tab message log — every SQL this tab issued, newest last.
+  final List<QueryMessage> messages = [];
 
   /// Display name shown in the tab strip + sidebar. User-renamable via
   /// the sidebar context menu; auto-incremented as `Query 1`, `Query 2`,
@@ -70,6 +92,77 @@ class QueryTab extends WorkspaceTab {
   set running(bool value) {
     if (_running == value) return;
     _running = value;
+    notifyListeners();
+  }
+
+  /// Wall-clock time the most recent run completed. Powers the "refreshed
+  /// HH:MM:SS" stamp in the query pagebar.
+  DateTime? get lastRefreshedAt => _lastRefreshedAt;
+  set lastRefreshedAt(DateTime? value) {
+    _lastRefreshedAt = value;
+    notifyListeners();
+  }
+
+  /// SQL the most recent run actually sent — may differ from [sql] when the
+  /// user invoked Run statement on a single block. The footer's refresh
+  /// button re-issues this exact text rather than the whole editor body.
+  String? get lastRunSql => _lastRunSql;
+  set lastRunSql(String? value) {
+    _lastRunSql = value;
+    notifyListeners();
+  }
+
+  /// Active section below the editor.
+  QueryResultsView get view => _view;
+  set view(QueryResultsView value) {
+    if (_view == value) return;
+    _view = value;
+    notifyListeners();
+  }
+
+  Map<String, dynamic>? get planJson => _planJson;
+  String? get planError => _planError;
+  bool get planLoading => _planLoading;
+
+  /// SQL the cached plan was computed against. Stays in sync with
+  /// [lastRunSql] until the next run, at which point the plan view shows
+  /// a stale indicator unless [loadQueryPlan] is invoked again.
+  String? get planSourceSql => _planSourceSql;
+
+  /// Reset plan to empty so the next switch into the Plan tab triggers a
+  /// fresh EXPLAIN.
+  void clearPlan() {
+    _planJson = null;
+    _planError = null;
+    _planLoading = false;
+    _planSourceSql = null;
+    notifyListeners();
+  }
+
+  void beginPlan() {
+    _planLoading = true;
+    _planError = null;
+    notifyListeners();
+  }
+
+  void completePlan({
+    Map<String, dynamic>? json,
+    String? error,
+    required String sourceSql,
+  }) {
+    _planJson = json;
+    _planError = error;
+    _planLoading = false;
+    _planSourceSql = sourceSql;
+    notifyListeners();
+  }
+
+  /// Auto-refresh cadence for this query tab. The timer in [TabsController]
+  /// re-runs [lastRunSql] on every tick; `null` means manual.
+  Duration? get autoRefreshInterval => _autoRefreshInterval;
+  set autoRefreshInterval(Duration? value) {
+    if (_autoRefreshInterval == value) return;
+    _autoRefreshInterval = value;
     notifyListeners();
   }
 

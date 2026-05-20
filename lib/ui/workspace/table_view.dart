@@ -4,15 +4,13 @@ import 'package:provider/provider.dart';
 
 import '../../models/db_object.dart';
 import '../../models/order_term.dart';
-import '../../models/time_ago.dart';
 import '../../models/value_format.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../edits/pending_edits_modal.dart';
-import '../export/export_dialog.dart';
 import '../widgets/common.dart';
-import '../widgets/context_menu.dart';
+import '../widgets/pagebar.dart';
 import '../widgets/sql_highlight_controller.dart';
 import 'results_grid.dart';
 
@@ -195,23 +193,6 @@ class _TableToolbarState extends State<_TableToolbar> {
       context,
       statements: statements,
       onApply: widget.tab.applying ? null : _applyEdits,
-    );
-  }
-
-  // ignore: unused_element
-  void _openExport() {
-    final tab = widget.tab;
-    final result = tab.result;
-    if (result == null) return;
-    final timestamp = filenameTimestamp();
-    showExportDialog(
-      context,
-      target: ExportTarget(
-        suggestedFilename: '${tab.table.name}_$timestamp.csv',
-        currentResult: result,
-        fetchAll: () => widget.state.fetchAllForExport(tab),
-        totalRowsForAll: tab.totalRows,
-      ),
     );
   }
 
@@ -567,7 +548,7 @@ class _PaginationBar extends StatelessWidget {
     final refreshedAt = tab.lastRefreshedAt;
 
     return Container(
-      height: 28,
+      height: pagebarHeight,
       padding: const EdgeInsets.only(left: 12, right: 6),
       decoration: BoxDecoration(
         color: AppColors.bgDeep,
@@ -575,25 +556,25 @@ class _PaginationBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _PbStat(
-            head: _withCommas(rowCount),
+          PbStat(
+            head: withCommas(rowCount),
             tail: ' rows',
             headHighlight: true,
           ),
-          const _PbDot(),
-          _PbStat(
+          const PbDot(),
+          PbStat(
             head: 'page ',
             mid: '${tab.page + 1}',
-            tail: ' / ${_withCommas(pageCount)}',
+            tail: ' / ${withCommas(pageCount)}',
           ),
-          const _PbDot(),
-          _PbStat(
-            head: _withCommas(tab.totalRows),
+          const PbDot(),
+          PbStat(
+            head: withCommas(tab.totalRows),
             tail: ' total',
             headHighlight: true,
           ),
           if (result != null) ...[
-            const _PbDot(),
+            const PbDot(),
             Text(
               '${result.elapsed.inMilliseconds}ms',
               style: AppTheme.mono(
@@ -603,10 +584,10 @@ class _PaginationBar extends StatelessWidget {
             ),
           ],
           if (refreshedAt != null) ...[
-            const _PbDot(),
-            _PbStat(
+            const PbDot(),
+            PbStat(
               head: 'refreshed ',
-              mid: _formatClock(refreshedAt),
+              mid: formatPagebarClock(refreshedAt),
             ),
           ],
           const Spacer(),
@@ -618,18 +599,24 @@ class _PaginationBar extends StatelessWidget {
                 showPendingEditsModal(context, statements: statements);
               },
             ),
-            const _PbDot(),
+            const PbDot(),
           ],
-          _RefreshDropdown(tab: tab, state: state),
-          const _PbDot(),
-          _PbChev(
+          RefreshDropdown(
+            interval: tab.autoRefreshInterval,
+            busy: tab.loading,
+            canRefresh: !tab.loading,
+            onManualRefresh: () => state.refreshTable(tab),
+            onSetInterval: (d) => state.setTableAutoRefresh(tab, d),
+          ),
+          const PbDot(),
+          PbChev(
             icon: Icons.chevron_left,
             tooltip: 'Previous page',
             onPressed: canPrev
                 ? () => state.loadTablePage(tab, tab.page - 1)
                 : null,
           ),
-          _PbChev(
+          PbChev(
             icon: Icons.chevron_right,
             tooltip: 'Next page',
             onPressed: canNext
@@ -642,254 +629,6 @@ class _PaginationBar extends StatelessWidget {
   }
 }
 
-String _withCommas(int n) {
-  final s = n.toString();
-  final buf = StringBuffer();
-  for (var i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
-    buf.write(s[i]);
-  }
-  return buf.toString();
-}
-
-String _formatClock(DateTime dt) {
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${two(dt.hour)}:${two(dt.minute)}:${two(dt.second)}';
-}
-
-/// Manual refresh button + an "auto · interval" pill that opens a dropdown
-/// to pick an auto-refresh cadence. Manual refresh ignores the cadence;
-/// flipping the cadence enables / disables the timer in TabsController.
-class _RefreshDropdown extends StatelessWidget {
-  const _RefreshDropdown({required this.tab, required this.state});
-
-  final TableTab tab;
-  final AppState state;
-
-  static const List<(String, Duration?)> _options = [
-    ('manual', null),
-    ('5 s', Duration(seconds: 5)),
-    ('15 s', Duration(seconds: 15)),
-    ('30 s', Duration(seconds: 30)),
-    ('1 m', Duration(minutes: 1)),
-    ('5 m', Duration(minutes: 5)),
-  ];
-
-  String _label(Duration? d) {
-    if (d == null) return 'manual';
-    for (final (label, opt) in _options) {
-      if (opt == d) return label;
-    }
-    return 'custom';
-  }
-
-  void _openMenu(BuildContext context, Offset position) {
-    showContextMenu(
-      context,
-      globalPosition: position,
-      entries: [
-        for (final (label, opt) in _options)
-          CmItem(
-            icon: opt == tab.autoRefreshInterval
-                ? Icons.check
-                : Icons.access_time,
-            label: opt == null ? 'Manual (off)' : 'Every $label',
-            onTap: () => state.setTableAutoRefresh(tab, opt),
-          ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final interval = tab.autoRefreshInterval;
-    final autoOn = interval != null;
-    final canRefresh = !tab.loading;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Tooltip(
-          message: 'Refresh',
-          child: Hoverable(
-            cursor: canRefresh
-                ? SystemMouseCursors.click
-                : SystemMouseCursors.basic,
-            onTap: canRefresh ? () => state.refreshTable(tab) : null,
-            builder: (context, hovering) {
-              final fg = canRefresh
-                  ? (hovering
-                      ? AppColors.textPrimary
-                      : (autoOn ? AppColors.accent : AppColors.textMuted))
-                  : AppColors.textMuted.withValues(alpha: 0.4);
-              return Container(
-                width: 22,
-                height: 22,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: hovering && canRefresh
-                      ? AppColors.surfaceHover
-                      : Colors.transparent,
-                  borderRadius: Radii.brSm,
-                ),
-                child: tab.loading
-                    ? SizedBox(
-                        width: 11,
-                        height: 11,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.4,
-                          color: AppColors.accent,
-                        ),
-                      )
-                    : Icon(Icons.refresh, size: 13, color: fg),
-              );
-            },
-          ),
-        ),
-        const SizedBox(width: 2),
-        Builder(
-          builder: (anchorContext) => Hoverable(
-            cursor: SystemMouseCursors.click,
-            onTap: () {
-              final box = anchorContext.findRenderObject() as RenderBox?;
-              if (box == null) return;
-              final origin = box.localToGlobal(Offset.zero);
-              _openMenu(
-                context,
-                Offset(origin.dx, origin.dy + box.size.height + 2),
-              );
-            },
-            builder: (context, hovering) {
-              final Color fg =
-                  autoOn ? AppColors.accent : AppColors.textSecondary;
-              final Color hoverFg = hovering
-                  ? (autoOn ? AppColors.accent : AppColors.textPrimary)
-                  : fg;
-              return Container(
-                height: 22,
-                padding: const EdgeInsets.symmetric(horizontal: 7),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: hovering
-                      ? AppColors.surfaceHover
-                      : Colors.transparent,
-                  borderRadius: Radii.brSm,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _label(interval),
-                      style: AppTheme.mono(
-                        size: 10.5,
-                        color: hoverFg,
-                        weight: autoOn ? FontWeight.w600 : FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 3),
-                    Icon(Icons.expand_more, size: 11, color: hoverFg),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PbDot extends StatelessWidget {
-  const _PbDot();
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Text(
-        '·',
-        style: AppTheme.mono(size: 10.5, color: AppColors.text4),
-      ),
-    );
-  }
-}
-
-class _PbStat extends StatelessWidget {
-  const _PbStat({
-    this.head,
-    this.mid,
-    this.tail,
-    this.headHighlight = false,
-  });
-  final String? head;
-  final String? mid;
-  final String? tail;
-
-  /// When true the leading [head] segment is rendered in primary text (the
-  /// design's `<b>` highlight); otherwise everything reads in textMuted.
-  final bool headHighlight;
-
-  @override
-  Widget build(BuildContext context) {
-    final base = AppTheme.mono(size: 10.5, color: AppColors.textMuted);
-    final emph = AppTheme.mono(
-      size: 10.5,
-      color: AppColors.textPrimary,
-      weight: FontWeight.w600,
-    );
-    return RichText(
-      text: TextSpan(
-        style: base,
-        children: [
-          if (head != null)
-            TextSpan(text: head!, style: headHighlight ? emph : base),
-          if (mid != null) TextSpan(text: mid!, style: emph),
-          if (tail != null) TextSpan(text: tail!),
-        ],
-      ),
-    );
-  }
-}
-
-class _PbChev extends StatelessWidget {
-  const _PbChev({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onPressed != null;
-    return Tooltip(
-      message: tooltip,
-      child: Hoverable(
-        cursor:
-            enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-        onTap: onPressed,
-        builder: (context, hovering) {
-          final fg = enabled
-              ? (hovering ? AppColors.textPrimary : AppColors.textMuted)
-              : AppColors.textMuted.withValues(alpha: 0.4);
-          return Container(
-            width: 22,
-            height: 22,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: hovering && enabled
-                  ? AppColors.surfaceHover
-                  : Colors.transparent,
-              borderRadius: Radii.brSm,
-            ),
-            child: Icon(icon, size: 14, color: fg),
-          );
-        },
-      ),
-    );
-  }
-}
 
 class _PendingChip extends StatelessWidget {
   const _PendingChip({required this.count, required this.onTap});

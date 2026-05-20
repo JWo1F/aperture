@@ -1,3 +1,4 @@
+import 'query_message.dart';
 import 'saved_query.dart';
 
 /// User-supplied details for one Postgres endpoint.
@@ -16,10 +17,12 @@ class ConnectionConfig {
     List<SavedQuery>? savedQueries,
     List<String>? recentTables,
     Map<String, Map<String, double>>? columnWidths,
+    Map<String, List<QueryMessage>>? queryMessages,
   })  : favoriteTables = favoriteTables ?? const {},
         savedQueries = savedQueries ?? const [],
         recentTables = recentTables ?? const [],
-        columnWidths = columnWidths ?? const {};
+        columnWidths = columnWidths ?? const {},
+        queryMessages = queryMessages ?? const {};
 
   final String id;
   final String name;
@@ -47,6 +50,11 @@ class ConnectionConfig {
   /// Rehydrated into the open tab's columnWidths on openTable.
   final Map<String, Map<String, double>> columnWidths;
 
+  /// Per-query-tab message log, keyed by tab/SavedQuery id. The list grows
+  /// newest-last; [TabsController] trims to [PerConnectionStore.maxMessages]
+  /// after every append.
+  final Map<String, List<QueryMessage>> queryMessages;
+
   String get summary => '$username@$host:$port/$database';
 
   Map<String, dynamic> toJson() => {
@@ -66,6 +74,11 @@ class ConnectionConfig {
           'queries': [for (final q in savedQueries) q.toJson()],
         if (recentTables.isNotEmpty) 'recentTables': recentTables,
         if (columnWidths.isNotEmpty) 'columnWidths': columnWidths,
+        if (queryMessages.isNotEmpty)
+          'queryMessages': {
+            for (final e in queryMessages.entries)
+              e.key: [for (final m in e.value) m.toJson()],
+          },
       };
 
   factory ConnectionConfig.fromJson(Map<String, dynamic> j) => ConnectionConfig(
@@ -102,6 +115,15 @@ class ConnectionConfig {
                   },
               }
             : null,
+        queryMessages: j['queryMessages'] is Map
+            ? <String, List<QueryMessage>>{
+                for (final e in (j['queryMessages'] as Map).entries)
+                  e.key as String: [
+                    for (final m in (e.value as List))
+                      QueryMessage.fromJson(m as Map<String, dynamic>),
+                  ],
+              }
+            : null,
       );
 
   ConnectionConfig copyWith({
@@ -117,6 +139,7 @@ class ConnectionConfig {
     List<SavedQuery>? savedQueries,
     List<String>? recentTables,
     Map<String, Map<String, double>>? columnWidths,
+    Map<String, List<QueryMessage>>? queryMessages,
   }) {
     return ConnectionConfig(
       id: id,
@@ -132,6 +155,7 @@ class ConnectionConfig {
       savedQueries: savedQueries ?? this.savedQueries,
       recentTables: recentTables ?? this.recentTables,
       columnWidths: columnWidths ?? this.columnWidths,
+      queryMessages: queryMessages ?? this.queryMessages,
     );
   }
 }

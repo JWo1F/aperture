@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/connection_config.dart';
 import '../models/db_object.dart';
+import '../models/query_message.dart';
 import '../models/saved_query.dart';
 import 'catalog_controller.dart';
 import 'connection_registry.dart';
@@ -38,6 +39,43 @@ class PerConnectionStore extends ChangeNotifier {
 
   List<SavedQuery> get savedQueries =>
       session.activeConnection?.savedQueries ?? const [];
+
+  /// Trim each per-query message list to this length on append. Keeps the
+  /// connections.json file small while preserving enough history to be
+  /// useful for debugging recent activity per tab.
+  static const int maxMessagesPerQuery = 100;
+
+  /// Return the persisted messages for a query tab id, or empty when no
+  /// entry exists. Caller may not mutate the result.
+  List<QueryMessage> messagesFor(String tabId) {
+    return session.activeConnection?.queryMessages[tabId] ?? const [];
+  }
+
+  /// Append [message] to the tab's persisted log, trimming to
+  /// [maxMessagesPerQuery]. No-op when no connection is active.
+  void appendQueryMessage(String tabId, QueryMessage message) {
+    _mutate((conn) {
+      final next = Map<String, List<QueryMessage>>.of(conn.queryMessages);
+      final list = List<QueryMessage>.of(next[tabId] ?? const []);
+      list.add(message);
+      if (list.length > maxMessagesPerQuery) {
+        list.removeRange(0, list.length - maxMessagesPerQuery);
+      }
+      next[tabId] = list;
+      return conn.copyWith(queryMessages: next);
+    });
+  }
+
+  /// Drop the persisted message log for a tab — called from "Clear
+  /// messages" in the message tab footer.
+  void clearQueryMessages(String tabId) {
+    _mutate((conn) {
+      if (!conn.queryMessages.containsKey(tabId)) return conn;
+      final next = Map<String, List<QueryMessage>>.of(conn.queryMessages)
+        ..remove(tabId);
+      return conn.copyWith(queryMessages: next);
+    });
+  }
 
   /// Materialise the active connection's favourite keys back into [DbTable]s
   /// that exist in the currently-loaded catalog.

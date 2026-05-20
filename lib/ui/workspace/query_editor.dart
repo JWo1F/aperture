@@ -8,14 +8,15 @@ import 'package:provider/provider.dart';
 
 import '../../models/db_object.dart';
 import '../../models/query_result.dart';
-import '../../models/time_ago.dart';
 import '../../services/sql_statements.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
-import '../export/export_dialog.dart';
 import '../widgets/common.dart';
+import '../widgets/pagebar.dart';
+import 'query_messages_view.dart';
+import 'query_plan_view.dart';
 import 'results_grid.dart';
 
 /// Syntax-highlighted SQL editor over the result grid.
@@ -24,7 +25,7 @@ import 'results_grid.dart';
 ///   debounce) so queries survive restarts.
 /// - Parses statements as you type; the gutter shows a ▶ icon next to each
 ///   statement's first line, click to run just that block.
-/// - ⌘↵ runs everything; ⌘⇧↵ runs the statement under the cursor.
+/// - ⌘↵ runs the statement under the cursor; ⌘⇧↵ runs every statement.
 class QueryEditor extends StatefulWidget {
   const QueryEditor({super.key, required this.tab});
 
@@ -74,8 +75,18 @@ class _QueryEditorState extends State<QueryEditor> {
     _controller = _SqlController(text: widget.tab.sql);
     _controller.addListener(_onControllerChange);
     _bodyScroll = ScrollController()..addListener(_onScroll);
+    // Per-tab fields (view, plan*, messages, lastRunSql, …) notify the
+    // tab directly. The TabsController only fires for things that mutate
+    // the tab list; without this listener, clicking a section tab would
+    // update `tab.view` but the editor wouldn't rebuild until the next
+    // unrelated AppState change.
+    widget.tab.addListener(_onTabChange);
     _recomputeStatements();
     _recomputeCursorStmt();
+  }
+
+  void _onTabChange() {
+    if (mounted) setState(() {});
   }
 
   void _onScroll() {
@@ -132,6 +143,7 @@ class _QueryEditorState extends State<QueryEditor> {
 
   Future<void> _runAll() async {
     widget.tab.sql = _controller.text;
+    widget.tab.view = QueryResultsView.results;
     final state = context.read<AppState>();
     final stmts = _statements.isNotEmpty
         ? _statements
@@ -152,6 +164,7 @@ class _QueryEditorState extends State<QueryEditor> {
   }
 
   void _runStatement(SqlStatement stmt) {
+    widget.tab.view = QueryResultsView.results;
     context.read<AppState>().runQuery(
           widget.tab,
           sqlOverride: stmt.text,
@@ -167,17 +180,36 @@ class _QueryEditorState extends State<QueryEditor> {
     _runStatement(stmt);
   }
 
-  void _openExport() {
-    final result = widget.tab.result;
-    if (result == null) return;
-    final timestamp = filenameTimestamp();
-    showExportDialog(
-      context,
-      target: ExportTarget(
-        suggestedFilename: 'query_$timestamp.csv',
-        currentResult: result,
-      ),
-    );
+  /// Picks the content widget for the current [QueryTab.view] selection.
+  /// Each section is responsible for its own empty-state copy so the
+  /// switch reads as a flat dispatch table.
+  Widget _buildContent(AppState state, QueryTab tab) {
+    switch (tab.view) {
+      case QueryResultsView.results:
+        if (tab.result == null) {
+          return const EmptyState(
+            icon: Icons.terminal,
+            title: 'Run a query',
+            message:
+                'Write SQL above and press ⌘↵ (or click ▶ in the gutter '
+                'for a single statement).',
+          );
+        }
+        return ResultsGrid(
+          result: tab.result!,
+          widths: tab.columnWidths,
+          foreignKeys: _resolveFks(state, tab.result!),
+          onFollowForeignKey: (fk, value) =>
+              state.followForeignKey(fk, value),
+          findRowOwner: (col) => _findRowOwner(state, tab.result!, col),
+          onFindRow: (table, col, value) =>
+              state.findRowInTable(table, col, value),
+        );
+      case QueryResultsView.plan:
+        return QueryPlanView(tab: tab);
+      case QueryResultsView.messages:
+        return QueryMessagesView(tab: tab);
+    }
   }
 
   @override
@@ -187,6 +219,7 @@ class _QueryEditorState extends State<QueryEditor> {
     _controller.dispose();
     _bodyScroll.removeListener(_onScroll);
     _bodyScroll.dispose();
+    widget.tab.removeListener(_onTabChange);
     _focusNode.dispose();
     super.dispose();
   }
@@ -200,22 +233,21 @@ class _QueryEditorState extends State<QueryEditor> {
       children: [
         _Toolbar(
           tab: tab,
-          statementCount: _statements.length,
-          cursorStmt: _cursorStmt,
-          onRun: tab.running ? null : _runAll,
-          onExport: tab.result == null ? null : _openExport,
+          onRunStatement:
+              tab.running || _statements.isEmpty ? null : _runAtCursor,
+          onRunAll: tab.running ? null : _runAll,
         ),
         Expanded(
           flex: 2,
           child: CallbackShortcuts(
             bindings: {
               const SingleActivator(LogicalKeyboardKey.enter, meta: true):
-                  _runAll,
+                  _runAtCursor,
               const SingleActivator(
                 LogicalKeyboardKey.enter,
                 meta: true,
                 shift: true,
-              ): _runAtCursor,
+              ): _runAll,
             },
             child: _SqlCodeEditor(
               controller: _controller,
@@ -234,29 +266,10 @@ class _QueryEditorState extends State<QueryEditor> {
           flex: 3,
           child: Container(
             color: AppColors.bg,
-            child: tab.result == null
-                ? const EmptyState(
-                    icon: Icons.terminal,
-                    title: 'Run a query',
-                    message:
-                        'Write SQL above and press ⌘↵ (or click ▶ in the gutter for a single statement).',
-                  )
-                : ResultsGrid(
-                    result: tab.result!,
-                    widths: tab.columnWidths,
-                    foreignKeys: _resolveFks(state, tab.result!),
-                    onFollowForeignKey: (fk, value) =>
-                        state.followForeignKey(fk, value),
-                    findRowOwner: (col) =>
-                        _findRowOwner(state, tab.result!, col),
-                    onFindRow: (table, col, value) =>
-                        state.findRowInTable(table, col, value),
-                  ),
+            child: _buildContent(state, tab),
           ),
         ),
-        // No bottom status footer here; the results divider above the grid
-        // and the unified sidebar/pagebar at the app shell foot already
-        // carry the rows/ms/connection readouts the design specifies.
+        _QueryPagebar(tab: tab),
       ],
     );
   }
@@ -268,22 +281,16 @@ class _QueryEditorState extends State<QueryEditor> {
 class _Toolbar extends StatelessWidget {
   const _Toolbar({
     required this.tab,
-    required this.statementCount,
-    required this.cursorStmt,
-    required this.onRun,
-    required this.onExport,
+    required this.onRunStatement,
+    required this.onRunAll,
   });
 
   final QueryTab tab;
-  final int statementCount;
-  final int? cursorStmt;
-  final VoidCallback? onRun;
-  final VoidCallback? onExport;
+  final VoidCallback? onRunStatement;
+  final VoidCallback? onRunAll;
 
   @override
   Widget build(BuildContext context) {
-    final multi = statementCount > 1;
-
     return Container(
       height: 38,
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -297,60 +304,14 @@ class _Toolbar extends StatelessWidget {
             label: tab.running ? 'Running…' : 'Run statement',
             icon: Icons.play_arrow,
             kbd: const ['⌘', '↵'],
-            onPressed: onRun,
+            onPressed: onRunStatement,
           ),
           const SizedBox(width: 4),
           _QtBorderButton(
             label: 'Run all',
             icon: Icons.bolt_outlined,
             kbd: const ['⌘', '⇧', '↵'],
-            onPressed: onRun,
-          ),
-          const _QtRail(),
-          _QtBorderButton(
-            label: 'Export',
-            icon: Icons.ios_share,
-            onPressed: onExport,
-          ),
-          const _QtRail(),
-          _ScratchBreadcrumb(
-            tab: tab,
-            statementCount: statementCount,
-            cursorStmt: cursorStmt,
-            multi: multi,
-          ),
-          const Spacer(),
-          Tooltip(
-            message: 'Format SQL',
-            child: Hoverable(
-              onTap: () {},
-              builder: (context, hovering) => _QtIconShell(
-                hovering: hovering,
-                child: Icon(
-                  Icons.format_align_left,
-                  size: 13,
-                  color: hovering
-                      ? AppColors.textPrimary
-                      : AppColors.textMuted,
-                ),
-              ),
-            ),
-          ),
-          Tooltip(
-            message: 'Save query…',
-            child: Hoverable(
-              onTap: () {},
-              builder: (context, hovering) => _QtIconShell(
-                hovering: hovering,
-                child: Icon(
-                  Icons.star_outline,
-                  size: 13,
-                  color: hovering
-                      ? AppColors.textPrimary
-                      : AppColors.textMuted,
-                ),
-              ),
-            ),
+            onPressed: onRunAll,
           ),
         ],
       ),
@@ -358,19 +319,6 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
-/// Hairline rail with 8px horizontal margin used between toolbar groups.
-class _QtRail extends StatelessWidget {
-  const _QtRail();
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 16,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      color: AppColors.hairline,
-    );
-  }
-}
 
 /// Filled-accent button used as the primary "Run" in the query toolbar.
 class _QtPrimaryButton extends StatelessWidget {
@@ -491,29 +439,6 @@ class _QtBorderButton extends StatelessWidget {
   }
 }
 
-/// Square icon-action shell used in the query toolbar.
-class _QtIconShell extends StatelessWidget {
-  const _QtIconShell({required this.hovering, required this.child});
-  final bool hovering;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 100),
-      width: 24,
-      height: 24,
-      margin: const EdgeInsets.symmetric(horizontal: 1),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: hovering ? AppColors.surfaceHover : Colors.transparent,
-        borderRadius: Radii.brSm,
-      ),
-      child: child,
-    );
-  }
-}
-
 /// Tiny mono kbd chip group; the `onAccent` variant uses a translucent white
 /// chip so it reads correctly on the primary button background.
 class _QtInlineKbd extends StatelessWidget {
@@ -559,93 +484,16 @@ class _QtInlineKbd extends StatelessWidget {
   }
 }
 
-/// `scratch · ● unsaved` + optional multi-statement cursor readout.
-class _ScratchBreadcrumb extends StatelessWidget {
-  const _ScratchBreadcrumb({
-    required this.tab,
-    required this.statementCount,
-    required this.cursorStmt,
-    required this.multi,
-  });
-
-  final QueryTab tab;
-  final int statementCount;
-  final int? cursorStmt;
-  final bool multi;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'scratch',
-          style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          width: 1,
-          height: 10,
-          color: AppColors.hairline,
-        ),
-        const SizedBox(width: 8),
-        Container(
-          width: 5,
-          height: 5,
-          decoration: BoxDecoration(
-            color: AppColors.accent,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 5),
-        Text(
-          'unsaved',
-          style: AppTheme.mono(size: 10.5, color: AppColors.accent),
-        ),
-        if (multi && cursorStmt != null) ...[
-          const SizedBox(width: 8),
-          Container(
-            width: 1,
-            height: 10,
-            color: AppColors.hairline,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'on ',
-            style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
-          ),
-          Text(
-            '#$cursorStmt',
-            style: AppTheme.mono(
-              size: 10.5,
-              color: AppColors.accent,
-              weight: FontWeight.w600,
-            ),
-          ),
-          Text(
-            ' of $statementCount',
-            style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// Bar between the editor and the result grid: tabs (Results / Plan /
-/// Messages), inline stats (rows · ms), and a success / error pill.
+/// Tab strip above the results pane: Results / Plan / Messages. The
+/// active section's content area swaps below; numeric readouts live in
+/// the footer pagebar so they don't double up here.
 class _ResultsDivider extends StatelessWidget {
   const _ResultsDivider({required this.tab});
   final QueryTab tab;
 
   @override
   Widget build(BuildContext context) {
-    final r = tab.result;
-    final isError = r?.isError == true;
-    final hasRows = r?.hasColumns == true;
-    final rowCount = hasRows ? r!.rows.length : 0;
-    final ms = r?.elapsed.inMilliseconds;
-
+    final messageCount = tab.messages.length;
     return Container(
       height: 24,
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -658,47 +506,24 @@ class _ResultsDivider extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _RdTab(label: 'Results', active: true),
+          _RdTab(
+            label: 'Results',
+            active: tab.view == QueryResultsView.results,
+            onTap: () => tab.view = QueryResultsView.results,
+          ),
           const SizedBox(width: 12),
-          _RdTab(label: 'Plan', active: false),
+          _RdTab(
+            label: 'Plan',
+            active: tab.view == QueryResultsView.plan,
+            onTap: () => tab.view = QueryResultsView.plan,
+          ),
           const SizedBox(width: 12),
-          _RdTab(label: 'Messages', active: false),
-          const SizedBox(width: 14),
-          if (r != null && hasRows)
-            _RdStat(
-              head: '$rowCount',
-              tail: ' rows',
-            ),
-          if (r != null && ms != null) ...[
-            const SizedBox(width: 6),
-            Text('·',
-                style: AppTheme.mono(size: 10.5, color: AppColors.text4)),
-            const SizedBox(width: 6),
-            _RdStat(head: '$ms', tail: 'ms'),
-          ],
-          const Spacer(),
-          if (r != null)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 5,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: isError ? AppColors.error : AppColors.success,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  isError ? 'error' : 'success',
-                  style: AppTheme.mono(
-                    size: 10.5,
-                    color: isError ? AppColors.error : AppColors.success,
-                  ),
-                ),
-              ],
-            ),
+          _RdTab(
+            label: 'Messages',
+            active: tab.view == QueryResultsView.messages,
+            onTap: () => tab.view = QueryResultsView.messages,
+            badge: messageCount == 0 ? null : '$messageCount',
+          ),
         ],
       ),
     );
@@ -706,107 +531,75 @@ class _ResultsDivider extends StatelessWidget {
 }
 
 class _RdTab extends StatelessWidget {
-  const _RdTab({required this.label, required this.active});
+  const _RdTab({
+    required this.label,
+    required this.active,
+    required this.onTap,
+    this.badge,
+  });
+
   final String label;
   final bool active;
+  final VoidCallback onTap;
+  final String? badge;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.center,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Text(
-            label.toUpperCase(),
-            style: AppTheme.mono(
-              size: 10.5,
-              color: active ? AppColors.textPrimary : AppColors.textMuted,
-              weight: FontWeight.w600,
-            ).copyWith(letterSpacing: 0.04 * 10.5),
-          ),
-        ),
-        if (active)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: -5,
-            child: Container(
-              height: 1,
-              color: AppColors.accent,
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _RdStat extends StatelessWidget {
-  const _RdStat({required this.head, required this.tail});
-  final String head;
-  final String tail;
-
-  @override
-  Widget build(BuildContext context) {
-    return RichText(
-      text: TextSpan(
-        style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+    return Hoverable(
+      cursor: SystemMouseCursors.click,
+      onTap: onTap,
+      builder: (context, hovering) => Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
         children: [
-          TextSpan(
-            text: head,
-            style: AppTheme.mono(
-              size: 10.5,
-              color: AppColors.textPrimary,
-              weight: FontWeight.w600,
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: AppTheme.mono(
+                    size: 10.5,
+                    color: active
+                        ? AppColors.textPrimary
+                        : (hovering
+                            ? AppColors.textSecondary
+                            : AppColors.textMuted),
+                    weight: FontWeight.w600,
+                  ).copyWith(letterSpacing: 0.04 * 10.5),
+                ),
+                if (badge != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    badge!,
+                    style: AppTheme.mono(
+                      size: 10,
+                      color: active
+                          ? AppColors.accent
+                          : AppColors.textMuted,
+                      weight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          TextSpan(text: tail),
-        ],
-      ),
-    );
-  }
-}
-
-/// Compact readout: `3 statements · on #2` — number bolded, rest muted.
-// ignore: unused_element
-class _StatementStatus extends StatelessWidget {
-  const _StatementStatus({required this.count, required this.cursorStmt});
-  final int count;
-  final int? cursorStmt;
-
-  @override
-  Widget build(BuildContext context) {
-    return RichText(
-      text: TextSpan(
-        style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
-        children: [
-          TextSpan(
-            text: '$count',
-            style: AppTheme.mono(
-              size: 10.5,
-              color: AppColors.textSecondary,
-              weight: FontWeight.w600,
-            ),
-          ),
-          const TextSpan(text: ' statements'),
-          if (cursorStmt != null) ...[
-            const TextSpan(text: '  ·  on '),
-            TextSpan(
-              text: '#$cursorStmt',
-              style: AppTheme.mono(
-                size: 10.5,
+          if (active)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: -5,
+              child: Container(
+                height: 1,
                 color: AppColors.accent,
-                weight: FontWeight.w600,
               ),
             ),
-          ],
         ],
       ),
     );
   }
 }
-
 
 /// Highlighted text editor — Flutter `TextField` with a controller that
 /// returns a pgsql-highlighted `TextSpan` tree, plus a hand-built gutter
@@ -1078,3 +871,112 @@ class _GutterLineNumber extends StatelessWidget {
     );
   }
 }
+
+/// Bottom status strip for a query tab — mirrors the table view's pagebar
+/// shape (28px, hairline top, bgDeep) but trades pagination chevrons and
+/// auto-refresh for the static run-summary a query produces: rows or
+/// affected count, elapsed ms, truncation flag, "refreshed HH:MM:SS", and
+/// a success/error indicator on the right.
+class _QueryPagebar extends StatelessWidget {
+  const _QueryPagebar({required this.tab});
+
+  final QueryTab tab;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final result = tab.result;
+    final refreshedAt = tab.lastRefreshedAt;
+    final lastRunSql = tab.lastRunSql;
+    final canRefresh = !tab.running && lastRunSql != null;
+
+    return Container(
+      height: pagebarHeight,
+      padding: const EdgeInsets.only(left: 12, right: 6),
+      decoration: BoxDecoration(
+        color: AppColors.bgDeep,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          if (result == null)
+            PbStat(head: tab.running ? 'running…' : 'idle')
+          else ...[
+            if (result.hasColumns)
+              PbStat(
+                head: withCommas(result.rows.length),
+                tail: ' rows',
+                headHighlight: true,
+              )
+            else if (result.affectedRows != null)
+              PbStat(
+                head: withCommas(result.affectedRows!),
+                tail: ' affected',
+                headHighlight: true,
+              )
+            else
+              const PbStat(head: 'done'),
+            const PbDot(),
+            PbStat(
+              head: '${result.elapsed.inMilliseconds}',
+              tail: 'ms',
+            ),
+            if (result.truncatedAt != null) ...[
+              const PbDot(),
+              PbStat(
+                head: 'truncated at ',
+                mid: withCommas(result.truncatedAt!),
+              ),
+            ],
+          ],
+          if (refreshedAt != null) ...[
+            const PbDot(),
+            PbStat(
+              head: 'refreshed ',
+              mid: formatPagebarClock(refreshedAt),
+            ),
+          ],
+          const Spacer(),
+          if (result != null) ...[
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: result.isError
+                        ? AppColors.error
+                        : AppColors.success,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  result.isError ? 'error' : 'success',
+                  style: AppTheme.mono(
+                    size: 10.5,
+                    color: result.isError
+                        ? AppColors.error
+                        : AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+            const PbDot(),
+          ],
+          RefreshDropdown(
+            interval: tab.autoRefreshInterval,
+            busy: tab.running,
+            canRefresh: canRefresh,
+            onManualRefresh: () =>
+                state.runQuery(tab, sqlOverride: lastRunSql),
+            onSetInterval: (d) => state.setQueryAutoRefresh(tab, d),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+

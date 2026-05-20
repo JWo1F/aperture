@@ -575,78 +575,10 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
   }
 
   Future<void> _renameDialog() async {
-    final controller = TextEditingController(text: widget.query.name);
     final next = await showDialog<String>(
       context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: Radii.brLg,
-          side: BorderSide(color: AppColors.borderStrong),
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Padding(
-            padding: const EdgeInsets.all(Insets.lg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Rename query',
-                  style: AppTheme.ui(size: 13.5, weight: FontWeight.w600),
-                ),
-                const SizedBox(height: Insets.md),
-                TextField(
-                  controller: controller,
-                  autofocus: true,
-                  cursorColor: AppColors.accent,
-                  style: AppTheme.ui(size: 13),
-                  onSubmitted: (v) => Navigator.of(ctx).pop(v),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    filled: true,
-                    fillColor: AppColors.bg,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 9,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: Radii.brSm,
-                      borderSide: BorderSide(color: AppColors.border),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: Radii.brSm,
-                      borderSide: BorderSide(color: AppColors.accent),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: Insets.lg),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    AppButton(
-                      label: 'Cancel',
-                      onPressed: () => Navigator.of(ctx).pop(),
-                    ),
-                    const SizedBox(width: Insets.sm),
-                    AppButton(
-                      label: 'Rename',
-                      icon: Icons.check,
-                      primary: true,
-                      onPressed: () =>
-                          Navigator.of(ctx).pop(controller.text),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      builder: (ctx) => _RenameQueryDialog(initial: widget.query.name),
     );
-    controller.dispose();
     if (next != null && next.trim().isNotEmpty) {
       widget.state.renameQuery(widget.query.id, next);
     }
@@ -960,6 +892,102 @@ class _MiniIcon extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(3),
         child: Icon(icon, size: 12, color: AppColors.textMuted),
+      ),
+    );
+  }
+}
+
+/// Owns the [TextEditingController] inside the rename dialog. Keeping the
+/// controller in a [State.dispose] frees it after Flutter has fully torn
+/// down the dialog's subtree — disposing it inline after [showDialog]
+/// returned would race the closing animation's last `didUpdateWidget`
+/// pass and trip "used after being disposed".
+class _RenameQueryDialog extends StatefulWidget {
+  const _RenameQueryDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_RenameQueryDialog> createState() => _RenameQueryDialogState();
+}
+
+class _RenameQueryDialogState extends State<_RenameQueryDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: AppColors.surface,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: Radii.brLg,
+        side: BorderSide(color: AppColors.borderStrong),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Padding(
+          padding: const EdgeInsets.all(Insets.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Rename query',
+                style: AppTheme.ui(size: 13.5, weight: FontWeight.w600),
+              ),
+              const SizedBox(height: Insets.md),
+              TextField(
+                controller: _controller,
+                autofocus: true,
+                cursorColor: AppColors.accent,
+                style: AppTheme.ui(size: 13),
+                onSubmitted: (v) => Navigator.of(context).pop(v),
+                decoration: InputDecoration(
+                  isDense: true,
+                  filled: true,
+                  fillColor: AppColors.bg,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 9,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: Radii.brSm,
+                    borderSide: BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: Radii.brSm,
+                    borderSide: BorderSide(color: AppColors.accent),
+                  ),
+                ),
+              ),
+              const SizedBox(height: Insets.lg),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  AppButton(
+                    label: 'Cancel',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  const SizedBox(width: Insets.sm),
+                  AppButton(
+                    label: 'Rename',
+                    icon: Icons.check,
+                    primary: true,
+                    onPressed: () =>
+                        Navigator.of(context).pop(_controller.text),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

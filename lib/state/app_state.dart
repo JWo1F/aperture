@@ -248,6 +248,8 @@ class AppState extends ChangeNotifier {
       tabsController.appendTableFilter(tab, fragment);
   void setTableAutoRefresh(TableTab tab, Duration? interval) =>
       tabsController.setTableAutoRefresh(tab, interval);
+  void setQueryAutoRefresh(QueryTab tab, Duration? interval) =>
+      tabsController.setQueryAutoRefresh(tab, interval);
 
   void setCellEdit(TableTab tab, int row, int column, CellEditValue value) =>
       tabsController.setCellEdit(tab, row, column, value);
@@ -260,6 +262,13 @@ class AppState extends ChangeNotifier {
 
   Future<void> runQuery(QueryTab tab, {String? sqlOverride}) =>
       tabsController.runQuery(tab, sqlOverride: sqlOverride);
+  Future<void> loadQueryPlan(QueryTab tab, {String? sqlOverride}) =>
+      tabsController.loadQueryPlan(tab, sqlOverride: sqlOverride);
+  void clearQueryMessages(QueryTab tab) {
+    tab.messages.clear();
+    perConnection.clearQueryMessages(tab.id);
+    tab.markChanged();
+  }
 
   void updateQuerySql(QueryTab tab, String sql) =>
       tabsController.updateQuerySql(tab, sql);

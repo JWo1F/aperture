@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -134,6 +135,10 @@ class TabsController extends ChangeNotifier {
       return;
     }
     final tab = QueryTab(q.id, name: q.name, sql: q.sql);
+    // Rehydrate the per-tab message log from the connection store so the
+    // Messages tab opens populated after a restart.
+    final persisted = perConnection.messagesFor(q.id);
+    if (persisted.isNotEmpty) tab.messages.addAll(persisted);
     _tabs.add(tab);
     _select(_tabs.length - 1);
   }
@@ -347,6 +352,21 @@ class TabsController extends ChangeNotifier {
     await setTableFilter(tab, next);
   }
 
+  void setQueryAutoRefresh(QueryTab tab, Duration? interval) {
+    _autoRefreshTimers.remove(tab.id)?.cancel();
+    tab.autoRefreshInterval = interval;
+    if (interval != null) {
+      _autoRefreshTimers[tab.id] = Timer.periodic(interval, (_) {
+        if (!_tabs.contains(tab)) return;
+        if (tab.running) return;
+        final sql = tab.lastRunSql;
+        if (sql == null) return;
+        unawaited(runQuery(tab, sqlOverride: sql));
+      });
+    }
+    notifyListeners();
+  }
+
   void setTableAutoRefresh(TableTab tab, Duration? interval) {
     _autoRefreshTimers.remove(tab.id)?.cancel();
     tab.autoRefreshInterval = interval;
@@ -447,8 +467,92 @@ class TabsController extends ChangeNotifier {
     if (service == null || sql.trim().isEmpty || tab.running) return;
     tab.running = true;
     notifyListeners();
-    tab.result = await service.runQuery(sql);
+    final result = await service.runQuery(sql);
+    tab.result = result;
+    tab.lastRunSql = sql;
+    tab.lastRefreshedAt = DateTime.now();
+    // Plan cache is keyed by SQL; a fresh run almost always invalidates it.
+    // Skip clearing if we just re-ran the exact statement the plan was
+    // computed against — keeps the Plan tab non-stale on auto-refresh.
+    if (tab.planSourceSql != sql) tab.clearPlan();
+    final message = QueryMessage(
+      timestamp: DateTime.now(),
+      sql: sql,
+      elapsedMs: result.elapsed.inMilliseconds,
+      affectedRows: result.affectedRows,
+      error: result.isError ? result.error : null,
+    );
+    tab.messages.add(message);
+    if (tab.messages.length > PerConnectionStore.maxMessagesPerQuery) {
+      tab.messages.removeRange(
+        0,
+        tab.messages.length - PerConnectionStore.maxMessagesPerQuery,
+      );
+    }
+    perConnection.appendQueryMessage(tab.id, message);
     tab.running = false;
     notifyListeners();
+  }
+
+  /// Loads or refreshes the EXPLAIN plan for [tab].
+  ///
+  /// When [sqlOverride] is given, plans that exact text instead of the
+  /// most-recent run. That powers the Plan tab's "Run as EXPLAIN"
+  /// affordance — the user can ask for a plan without having executed
+  /// the query first.
+  ///
+  /// Uses ANALYZE/BUFFERS for plain SELECT, WITH, VALUES, TABLE (so the
+  /// times are real numbers, not estimates); falls back to a non-executing
+  /// EXPLAIN for statements that would mutate data or aren't planned at all.
+  Future<void> loadQueryPlan(QueryTab tab, {String? sqlOverride}) async {
+    final service = session.service;
+    final sql = sqlOverride ?? tab.lastRunSql;
+    if (service == null || sql == null || sql.trim().isEmpty) return;
+    if (tab.planLoading) return;
+    if (tab.planSourceSql == sql && tab.planJson != null) return;
+
+    tab.beginPlan();
+
+    final trimmed = _stripTrailingSemicolon(sql);
+    final analyze = _isExplainAnalyzeSafe(trimmed);
+    final options = analyze
+        ? '(ANALYZE, BUFFERS, VERBOSE, FORMAT JSON)'
+        : '(VERBOSE, FORMAT JSON)';
+
+    try {
+      final result = await service.execute('EXPLAIN $options $trimmed');
+      final raw = result.first.first;
+      final decoded = raw is String ? jsonDecode(raw) : raw;
+      if (decoded is! List || decoded.isEmpty) {
+        tab.completePlan(
+          error: 'EXPLAIN returned an unexpected shape.',
+          sourceSql: sql,
+        );
+        return;
+      }
+      final top = decoded.first as Map<String, dynamic>;
+      tab.completePlan(json: top, sourceSql: sql);
+    } catch (e) {
+      tab.completePlan(error: e.toString(), sourceSql: sql);
+    }
+  }
+
+  /// Whether [sql] is safe to run under EXPLAIN ANALYZE — i.e. it's a
+  /// pure read. Anything else uses plain EXPLAIN so DML, DDL, and session
+  /// commands don't actually fire.
+  bool _isExplainAnalyzeSafe(String sql) {
+    final stripped = sql.trimLeft().toUpperCase();
+    return stripped.startsWith('SELECT') ||
+        stripped.startsWith('WITH') ||
+        stripped.startsWith('VALUES') ||
+        stripped.startsWith('TABLE ');
+  }
+
+  String _stripTrailingSemicolon(String sql) {
+    var s = sql.trimRight();
+    while (s.endsWith(';')) {
+      s = s.substring(0, s.length - 1).trimRight();
+    }
+    return s;
   }
 }
