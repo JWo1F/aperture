@@ -624,9 +624,10 @@ class _ClauseBar extends StatelessWidget {
         color: AppColors.bgDeep,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           // Left decorative strip — 18px wide, accent gradient.
           Container(
             width: 18,
@@ -686,6 +687,7 @@ class _ClauseBar extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }
