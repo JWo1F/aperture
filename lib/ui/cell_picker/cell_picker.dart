@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../widgets/code_editor.dart';
 import '../widgets/common.dart';
-import '../widgets/json_highlight_controller.dart';
 
 /// Opens an overlay editor anchored to the cell's top-left corner. The shape
 /// of the picker depends on the value type — text grows multi-line, JSON gets
@@ -477,7 +477,7 @@ class _PanelState extends State<_Panel> {
         _baselineText =
             _initialText(widget.originalValue, widget.pendingEdit);
         _text = k == _KindId.json
-            ? JsonHighlightController(text: _baselineText)
+            ? CodeEditorController(text: _baselineText, language: 'json')
             : TextEditingController(text: _baselineText);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _focus.requestFocus();
@@ -1112,25 +1112,17 @@ class _TextBody extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: TextField(
-                controller: controller,
-                focusNode: focus,
-                maxLines: multiline ? null : 1,
-                expands: multiline,
-                textAlignVertical: TextAlignVertical.top,
-                cursorColor: AppColors.accent,
-                onChanged: (_) => onChanged(),
-                inputFormatters: inputFormatters,
-                style:
-                    AppTheme.mono(size: 12, color: AppColors.textPrimary),
-                decoration: const InputDecoration(
-                  isCollapsed: true,
-                  border: InputBorder.none,
-                ),
+            child: CodeEditor(
+              controller: controller,
+              focusNode: focus,
+              singleLine: !multiline,
+              fontSize: 12,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
               ),
+              inputFormatters: inputFormatters,
+              onChanged: (_) => onChanged(),
             ),
           ),
           if (error != null)

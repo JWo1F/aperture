@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:highlight/highlight.dart' show highlight;
 import 'package:provider/provider.dart';
 
 import '../../models/db_object.dart';
@@ -12,7 +10,7 @@ import '../../services/sql_statements.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/code_theme.dart';
+import '../widgets/code_editor.dart';
 import '../widgets/common.dart';
 import '../widgets/pagebar.dart';
 import '../widgets/resize_handle.dart';
@@ -36,46 +34,18 @@ class QueryEditor extends StatefulWidget {
   State<QueryEditor> createState() => _QueryEditorState();
 }
 
-// Editor text metrics. Body text, gutter digits, and the ▶ overlay all
-// derive their Y position from these constants, so a digit at line `i`,
-// the icon at line `i`, and the source character at line `i` line up
-// on a single baseline.
-const double _editorFontSize = 13;
-const double _editorLineHeight = 1.45;
-const double _editorLineBox = _editorFontSize * _editorLineHeight;
-
-// Vertical padding we put inside the TextField's contentPadding. The
-// gutter overlay applies the same value to its first line's top — that
-// is the single knob that controls "how much breathing room above
-// line 1". Change here, both follow.
-const double _editorTopPad = 12;
-const double _editorBodyLeftPad = Insets.md;
-
-const double _gutterWidth = 56;
-const double _gutterRightPad = 8;
-const double _runIconColumnWidth = 18;
-const double _runIconLeft = _gutterWidth - _runIconColumnWidth - 2;
-
-// Y of the top of line `i`'s box, in Stack coordinates, after vertical
-// scroll. One source of truth for digit and ▶ overlays.
-double _lineTop(int i, double scrollOffset) =>
-    i * _editorLineBox + _editorTopPad - scrollOffset;
-
 class _QueryEditorState extends State<QueryEditor> {
-  late final _SqlController _controller;
-  late final ScrollController _bodyScroll;
+  late final CodeEditorController _controller;
   final FocusNode _focusNode = FocusNode();
   Timer? _saveTimer;
   List<SqlStatement> _statements = const [];
   int? _cursorStmt; // 1-based statement index containing the caret
-  double _scrollOffset = 0;
 
   @override
   void initState() {
     super.initState();
-    _controller = _SqlController(text: widget.tab.sql);
+    _controller = CodeEditorController(text: widget.tab.sql);
     _controller.addListener(_onControllerChange);
-    _bodyScroll = ScrollController()..addListener(_onScroll);
     // Per-tab fields (view, plan*, messages, lastRunSql, …) notify the
     // tab directly. The TabsController only fires for things that mutate
     // the tab list; without this listener, clicking a section tab would
@@ -88,13 +58,6 @@ class _QueryEditorState extends State<QueryEditor> {
 
   void _onTabChange() {
     if (mounted) setState(() {});
-  }
-
-  void _onScroll() {
-    final next = _bodyScroll.hasClients ? _bodyScroll.offset : 0.0;
-    if ((next - _scrollOffset).abs() > 0.5) {
-      setState(() => _scrollOffset = next);
-    }
   }
 
   void _onControllerChange() {
@@ -125,8 +88,6 @@ class _QueryEditorState extends State<QueryEditor> {
   void _recomputeStatements() {
     _statements = parseSqlStatements(_controller.text);
   }
-
-  int get _lineCount => '\n'.allMatches(_controller.text).length + 1;
 
   void _recomputeCursorStmt() {
     _cursorStmt = _computeCursorStmt();
@@ -218,8 +179,6 @@ class _QueryEditorState extends State<QueryEditor> {
     _saveTimer?.cancel();
     _controller.removeListener(_onControllerChange);
     _controller.dispose();
-    _bodyScroll.removeListener(_onScroll);
-    _bodyScroll.dispose();
     widget.tab.removeListener(_onTabChange);
     _focusNode.dispose();
     super.dispose();
@@ -229,6 +188,25 @@ class _QueryEditorState extends State<QueryEditor> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final tab = widget.tab;
+
+    final activeStmt = _cursorStmt != null &&
+            _cursorStmt! >= 1 &&
+            _cursorStmt! <= _statements.length
+        ? _statements[_cursorStmt! - 1]
+        : null;
+    final bands = <LineBand>[
+      if (activeStmt != null)
+        LineBand(
+          startLine: activeStmt.startLine,
+          endLine: activeStmt.startLine +
+              '\n'.allMatches(activeStmt.text).length,
+          color: AppColors.accent.withValues(alpha: 0.06),
+        ),
+    ];
+
+    final stmtByLine = <int, SqlStatement>{
+      for (final s in _statements) s.startLine: s,
+    };
 
     final editor = CallbackShortcuts(
       bindings: {
@@ -240,15 +218,28 @@ class _QueryEditorState extends State<QueryEditor> {
           shift: true,
         ): _runAll,
       },
-      child: _SqlCodeEditor(
+      child: CodeEditor(
         controller: _controller,
         focusNode: _focusNode,
-        bodyScroll: _bodyScroll,
-        scrollOffset: _scrollOffset,
-        lineCount: _lineCount,
-        statements: _statements,
-        cursorStmt: _cursorStmt,
-        onRunStatement: _runStatement,
+        showLineNumbers: true,
+        padding: const EdgeInsets.symmetric(
+          horizontal: Insets.md,
+          vertical: 12,
+        ),
+        lineBands: bands,
+        lineIcon: (line) {
+          final stmt = stmtByLine[line];
+          if (stmt == null) return null;
+          return LineIcon(
+            icon: Icon(
+              Icons.play_arrow_rounded,
+              size: 14,
+              color: AppColors.success,
+            ),
+            tooltip: 'Run statement (⌘⇧↵)',
+            onTap: () => _runStatement(stmt),
+          );
+        },
       ),
     );
 
@@ -685,160 +676,6 @@ class _RdTab extends StatelessWidget {
   }
 }
 
-/// Highlighted text editor — Flutter `TextField` with a controller that
-/// returns a pgsql-highlighted `TextSpan` tree, plus a hand-built gutter
-/// (line numbers + ▶ run icons) on the left.
-///
-/// We dropped `flutter_code_editor` because its gutter wraps content in
-/// hidden `Padding` + `Table` layout whose digit positions don't share
-/// metrics with the body `TextField`, so line numbers always drifted off
-/// the source baseline.  Owning the editor end-to-end means a digit at
-/// line `i`, the ▶ icon at line `i`, and the source character at line
-/// `i` all derive their Y from the same `_lineTop(i, scroll)` and the
-/// same body font metrics — alignment is guaranteed by construction.
-class _SqlCodeEditor extends StatelessWidget {
-  const _SqlCodeEditor({
-    required this.controller,
-    required this.focusNode,
-    required this.bodyScroll,
-    required this.scrollOffset,
-    required this.lineCount,
-    required this.statements,
-    required this.cursorStmt,
-    required this.onRunStatement,
-  });
-
-  final _SqlController controller;
-  final FocusNode focusNode;
-  final ScrollController bodyScroll;
-  final double scrollOffset;
-  final int lineCount;
-  final List<SqlStatement> statements;
-  final int? cursorStmt;
-  final void Function(SqlStatement) onRunStatement;
-
-  @override
-  Widget build(BuildContext context) {
-    final bodyStyle = GoogleFonts.jetBrainsMono(
-      fontSize: _editorFontSize,
-      height: _editorLineHeight,
-      color: AppColors.textPrimary,
-    );
-
-    final activeStmt = cursorStmt != null && cursorStmt! >= 1 &&
-            cursorStmt! <= statements.length
-        ? statements[cursorStmt! - 1]
-        : null;
-
-    return ClipRect(
-      child: Stack(
-        children: [
-          // Soft accent gradient on the lines of the active statement —
-          // the design's `.editor .code .line.active` rule, painted as one
-          // Positioned overlay across the statement's line range.
-          if (activeStmt != null)
-            Positioned(
-              left: _gutterWidth,
-              top: _lineTop(activeStmt.startLine, scrollOffset),
-              right: 0,
-              height: _editorLineBox *
-                  ('\n'.allMatches(activeStmt.text).length + 1),
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        AppColors.accent.withValues(alpha: 0.06),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.0, 0.8],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          // Body: gutter background + TextField with syntax highlighting.
-          // `decoration: null` skips the InputDecorator entirely so the
-          // EditableText underneath renders at the exact Y we wrap it at
-          // — no hidden contentPadding, no baseline alignment, no
-          // unaccounted offset between body and gutter overlay.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: _gutterWidth,
-                decoration: BoxDecoration(
-                  color: AppColors.bg,
-                  border: Border(
-                    right: BorderSide(color: AppColors.hairline, width: 1),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  color: AppColors.bg,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: _editorBodyLeftPad,
-                    vertical: _editorTopPad,
-                  ),
-                  child: TextField(
-                    controller: controller,
-                    focusNode: focusNode,
-                    scrollController: bodyScroll,
-                    maxLines: null,
-                    minLines: null,
-                    expands: true,
-                    cursorColor: AppColors.accent,
-                    style: bodyStyle,
-                    decoration: null,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          // Line-number digits — one Positioned per line, scroll-synced.
-          for (var i = 0; i < lineCount; i++)
-            _GutterLineNumber(
-              line: i + 1,
-              top: _lineTop(i, scrollOffset),
-            ),
-          // ▶ run icons — one per parsed statement.
-          for (final stmt in statements)
-            _RunStmtIcon(
-              stmt: stmt,
-              top: _lineTop(stmt.startLine, scrollOffset),
-              onTap: () => onRunStatement(stmt),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-/// `TextEditingController` that returns a pgsql-highlighted `TextSpan`
-/// tree from the `highlight` package. Same grammar + theme map the
-/// schema viewer uses, so SQL anywhere in the app reads the same way.
-class _SqlController extends TextEditingController {
-  _SqlController({super.text});
-
-  @override
-  TextSpan buildTextSpan({
-    required BuildContext context,
-    TextStyle? style,
-    required bool withComposing,
-  }) {
-    final base = style ?? const TextStyle();
-    if (text.isEmpty) return TextSpan(text: '', style: base);
-    final parsed = highlight.parse(text, language: 'pgsql');
-    return TextSpan(
-      style: base,
-      children: highlightNodesToSpans(parsed.nodes, base, apertureCodeStyles),
-    );
-  }
-}
-
 /// Builds a column-name → FK lookup for a raw query result. Prefers the
 /// source-relation OID exposed by the wire protocol so the FK action targets
 /// the *actual* table the column came from; falls back to the catalog-wide
@@ -870,90 +707,6 @@ DbTable? _findRowOwner(AppState state, QueryResult result, String columnName) {
     return state.findPrimaryKeyOwnerByOid(schema.tableOid, columnName);
   }
   return state.findPrimaryKeyOwner(columnName);
-}
-
-class _RunStmtIcon extends StatelessWidget {
-  const _RunStmtIcon({
-    required this.stmt,
-    required this.top,
-    required this.onTap,
-  });
-
-  final SqlStatement stmt;
-  final double top;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      left: _runIconLeft,
-      top: top,
-      width: _runIconColumnWidth,
-      height: _editorLineBox,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: onTap,
-          child: Tooltip(
-            message: 'Run statement (⌘⇧↵)',
-            waitDuration: const Duration(milliseconds: 400),
-            // Render the icon as a WidgetSpan inside a Text.rich that
-            // uses the body's text style.  PlaceholderAlignment.middle
-            // anchors the icon to the same alphabetic middle the source
-            // characters sit at, so ▶ lines up with the digit and the
-            // SELECT keyword on the same row.
-            child: Text.rich(
-              TextSpan(
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: _editorFontSize,
-                  height: _editorLineHeight,
-                ),
-                children: [
-                  WidgetSpan(
-                    alignment: PlaceholderAlignment.middle,
-                    child: Icon(
-                      Icons.play_arrow_rounded,
-                      size: 14,
-                      color: AppColors.success,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GutterLineNumber extends StatelessWidget {
-  const _GutterLineNumber({required this.line, required this.top});
-
-  final int line;
-  final double top;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      left: 0,
-      top: top,
-      width: _gutterWidth - _runIconColumnWidth - _gutterRightPad,
-      height: _editorLineBox,
-      child: Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: Text(
-          '$line',
-          textAlign: TextAlign.right,
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: _editorFontSize,
-            height: _editorLineHeight,
-            color: AppColors.text4,
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// Bottom status strip for a query tab — mirrors the table view's pagebar

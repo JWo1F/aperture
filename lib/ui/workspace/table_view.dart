@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/db_object.dart';
@@ -9,9 +8,9 @@ import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../edits/pending_edits_modal.dart';
+import '../widgets/code_editor.dart';
 import '../widgets/common.dart';
 import '../widgets/pagebar.dart';
-import '../widgets/sql_highlight_controller.dart';
 import 'results_grid.dart';
 
 /// Data view for a single relation: a toolbar with row filter, sort, and
@@ -151,9 +150,9 @@ class _TableToolbar extends StatefulWidget {
 }
 
 class _TableToolbarState extends State<_TableToolbar> {
-  late final SqlHighlightController _select;
-  late final SqlHighlightController _filter;
-  late final SqlHighlightController _order;
+  late final CodeEditorController _select;
+  late final CodeEditorController _filter;
+  late final CodeEditorController _order;
   final FocusNode _selectFocus = FocusNode();
   final FocusNode _filterFocus = FocusNode();
   final FocusNode _orderFocus = FocusNode();
@@ -161,9 +160,9 @@ class _TableToolbarState extends State<_TableToolbar> {
   @override
   void initState() {
     super.initState();
-    _select = SqlHighlightController(text: widget.tab.selectList);
-    _filter = SqlHighlightController(text: widget.tab.filter);
-    _order = SqlHighlightController(text: widget.tab.orderBy);
+    _select = CodeEditorController(text: widget.tab.selectList);
+    _filter = CodeEditorController(text: widget.tab.filter);
+    _order = CodeEditorController(text: widget.tab.orderBy);
   }
 
   @override
@@ -270,9 +269,9 @@ class _ClauseBar extends StatelessWidget {
     required this.orderActive,
   });
 
-  final SqlHighlightController selectController;
-  final SqlHighlightController filterController;
-  final SqlHighlightController orderController;
+  final CodeEditorController selectController;
+  final CodeEditorController filterController;
+  final CodeEditorController orderController;
   final FocusNode selectFocus;
   final FocusNode filterFocus;
   final FocusNode orderFocus;
@@ -378,7 +377,7 @@ class _ClauseRow extends StatefulWidget {
   });
 
   final String label;
-  final SqlHighlightController controller;
+  final CodeEditorController controller;
   final FocusNode focusNode;
   final VoidCallback onApply;
   final String hint;
@@ -460,36 +459,25 @@ class _ClauseRowState extends State<_ClauseRow> {
           ),
           // ── input ──
           Expanded(
-            child: CallbackShortcuts(
-              bindings: {
-                const SingleActivator(LogicalKeyboardKey.enter):
-                    widget.onApply,
-              },
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: TextField(
-                  controller: widget.controller,
-                  focusNode: widget.focusNode,
-                  cursorColor: AppColors.accent,
-                  cursorHeight: 12,
-                  style: AppTheme.mono(
-                    size: 11.5,
-                    color: AppColors.textPrimary,
-                  ),
-                  decoration: InputDecoration(
-                    isCollapsed: true,
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    hintText: widget.hint,
-                    hintStyle: AppTheme.mono(
-                      size: 11.5,
-                      color: AppColors.text4,
-                    ).copyWith(fontStyle: FontStyle.italic),
-                  ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: CodeEditor(
+                controller: widget.controller,
+                focusNode: widget.focusNode,
+                singleLine: true,
+                fontSize: 11.5,
+                cursorHeight: 12,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
                 ),
+                background: Colors.transparent,
+                hintText: widget.hint,
+                hintStyle: AppTheme.mono(
+                  size: 11.5,
+                  color: AppColors.text4,
+                ).copyWith(fontStyle: FontStyle.italic),
+                onSubmit: widget.onApply,
               ),
             ),
           ),
