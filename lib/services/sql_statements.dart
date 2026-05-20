@@ -19,11 +19,18 @@ class SqlStatement {
   final int startLine;
 }
 
-/// Splits [sql] into independent statements, respecting string literals
-/// (single/double quoted), line comments (`-- …`), and block comments
-/// (`/* … */`). Empty / whitespace-only fragments are dropped.
+/// Splits [sql] into independent statements while respecting:
 ///
-/// Trailing tail (no terminating `;`) is included as the last statement.
+///   - standard string literals (`'…'`, with doubled `''` for escaped quote)
+///   - E-strings and U&'…' strings (`\` is an escape, so `\'` stays inside)
+///   - dollar-quoted strings (`$$ … $$` and `$tag$ … $tag$`) used by
+///     `CREATE FUNCTION`, `DO`, plpgsql bodies — semicolons inside the
+///     dollar quotes are part of the statement, not separators.
+///   - double-quoted identifiers (`"…"`, with `""` for escaped quote)
+///   - line comments (`-- …`) and block comments (`/* … */`, non-nested)
+///
+/// Empty / whitespace-only fragments are dropped. A trailing statement
+/// without `;` is included as the last entry.
 List<SqlStatement> parseSqlStatements(String sql) {
   final out = <SqlStatement>[];
   final length = sql.length;
@@ -44,29 +51,94 @@ List<SqlStatement> parseSqlStatements(String sql) {
   while (i < length) {
     final c = sql.codeUnitAt(i);
 
-    // Single-quoted string.
+    // Standard single-quoted string. Handle doubled '' as an escaped
+    // quote (not a new string).
     if (c == 0x27) {
       i++;
       while (i < length) {
-        if (sql.codeUnitAt(i) == 0x27) {
+        final cc = sql.codeUnitAt(i);
+        if (cc == 0x27) {
+          if (i + 1 < length && sql.codeUnitAt(i + 1) == 0x27) {
+            i += 2; // doubled quote — part of the literal
+            continue;
+          }
           i++;
           break;
         }
-        if (sql.codeUnitAt(i) == 0x0A) line++;
+        if (cc == 0x0A) line++;
         i++;
       }
       continue;
     }
 
-    // Double-quoted identifier.
-    if (c == 0x22) {
-      i++;
+    // E'…' or U&'…' (and the lowercase variants): backslash is an escape,
+    // so a backslash-apostrophe does NOT close the string. Doubled ''
+    // remains an escape too.
+    if ((c == 0x45 || c == 0x65 || c == 0x55 || c == 0x75) &&
+        _isEscapeStringStart(sql, i)) {
+      // Skip the prefix to land on the opening quote.
+      while (i < length && sql.codeUnitAt(i) != 0x27) {
+        i++;
+      }
+      if (i >= length) break;
+      i++; // past opening '
       while (i < length) {
-        if (sql.codeUnitAt(i) == 0x22) {
+        final cc = sql.codeUnitAt(i);
+        if (cc == 0x5C && i + 1 < length) {
+          // backslash escapes the next char (including ')
+          if (sql.codeUnitAt(i + 1) == 0x0A) line++;
+          i += 2;
+          continue;
+        }
+        if (cc == 0x27) {
+          if (i + 1 < length && sql.codeUnitAt(i + 1) == 0x27) {
+            i += 2;
+            continue;
+          }
           i++;
           break;
         }
-        if (sql.codeUnitAt(i) == 0x0A) line++;
+        if (cc == 0x0A) line++;
+        i++;
+      }
+      continue;
+    }
+
+    // Dollar-quoted string $tag$ … $tag$ (or $$ … $$).
+    if (c == 0x24) {
+      final tagEnd = _scanDollarTag(sql, i);
+      if (tagEnd != -1) {
+        final tag = sql.substring(i, tagEnd + 1);
+        i = tagEnd + 1;
+        while (i < length) {
+          if (sql.codeUnitAt(i) == 0x24 &&
+              i + tag.length <= length &&
+              sql.substring(i, i + tag.length) == tag) {
+            i += tag.length;
+            break;
+          }
+          if (sql.codeUnitAt(i) == 0x0A) line++;
+          i++;
+        }
+        continue;
+      }
+      // Not a dollar tag — fall through to normal advance.
+    }
+
+    // Double-quoted identifier with doubled "" escape.
+    if (c == 0x22) {
+      i++;
+      while (i < length) {
+        final cc = sql.codeUnitAt(i);
+        if (cc == 0x22) {
+          if (i + 1 < length && sql.codeUnitAt(i + 1) == 0x22) {
+            i += 2;
+            continue;
+          }
+          i++;
+          break;
+        }
+        if (cc == 0x0A) line++;
         i++;
       }
       continue;
@@ -80,7 +152,7 @@ List<SqlStatement> parseSqlStatements(String sql) {
       continue;
     }
 
-    // Block comment /* … */
+    // Block comment /* … */ (non-nested for Postgres parser compatibility).
     if (c == 0x2F && i + 1 < length && sql.codeUnitAt(i + 1) == 0x2A) {
       i += 2;
       while (i + 1 < length) {
@@ -107,8 +179,6 @@ List<SqlStatement> parseSqlStatements(String sql) {
           startLine: currentStartLine,
         ));
       }
-      // Advance past blank space + newlines to the next statement's first
-      // meaningful character; that becomes the next startLine.
       while (i < length && _isBlank(sql.codeUnitAt(i))) {
         if (sql.codeUnitAt(i) == 0x0A) line++;
         i++;
@@ -147,5 +217,55 @@ SqlStatement? statementAtOffset(List<SqlStatement> stmts, int offset) {
   }
   return null;
 }
+
+/// True if the cursor [i] points at the start of an `E'…'` / `U&'…'`
+/// escape-string. Only matches when the prefix sits on a word boundary
+/// (so we don't mis-identify identifiers like `error` or `users`).
+bool _isEscapeStringStart(String sql, int i) {
+  if (i > 0) {
+    final prev = sql.codeUnitAt(i - 1);
+    if (_isIdentChar(prev)) return false;
+  }
+  final c = sql.codeUnitAt(i);
+  if (c == 0x45 || c == 0x65) {
+    // 'E' or 'e' followed by '
+    return i + 1 < sql.length && sql.codeUnitAt(i + 1) == 0x27;
+  }
+  // U&' — 'U' or 'u', '&', '
+  if (c == 0x55 || c == 0x75) {
+    return i + 2 < sql.length &&
+        sql.codeUnitAt(i + 1) == 0x26 &&
+        sql.codeUnitAt(i + 2) == 0x27;
+  }
+  return false;
+}
+
+/// If [i] points at a `$`, returns the index of the closing `$` of the
+/// tag (so the substring sql[i..end+1] = `$$` or `$tag$`); else -1.
+///
+/// A valid tag is `$ [A-Za-z_][A-Za-z0-9_]* $` or the empty `$$`.
+int _scanDollarTag(String sql, int i) {
+  if (i + 1 >= sql.length) return -1;
+  if (sql.codeUnitAt(i + 1) == 0x24) return i + 1;
+  var j = i + 1;
+  if (!_isTagStartChar(sql.codeUnitAt(j))) return -1;
+  j++;
+  while (j < sql.length) {
+    final c = sql.codeUnitAt(j);
+    if (c == 0x24) return j;
+    if (!_isIdentChar(c)) return -1;
+    j++;
+  }
+  return -1;
+}
+
+bool _isTagStartChar(int c) =>
+    (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) || c == 0x5F;
+
+bool _isIdentChar(int c) =>
+    (c >= 0x41 && c <= 0x5A) ||
+    (c >= 0x61 && c <= 0x7A) ||
+    (c >= 0x30 && c <= 0x39) ||
+    c == 0x5F;
 
 bool _isBlank(int c) => c == 0x20 || c == 0x09 || c == 0x0A || c == 0x0D;
