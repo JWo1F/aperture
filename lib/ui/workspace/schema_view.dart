@@ -161,10 +161,7 @@ class _Body extends StatelessWidget {
 
     return Container(
       color: AppColors.bg,
-      padding: const EdgeInsets.symmetric(
-        horizontal: Insets.lg,
-        vertical: Insets.md,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: Insets.md),
       child: SingleChildScrollView(
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -172,7 +169,7 @@ class _Body extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _LineNumbers(count: lineCount),
+              _LineNumbers(count: lineCount, baseStyle: base),
               const SizedBox(width: 14),
               SelectableText.rich(
                 TextSpan(
@@ -193,18 +190,26 @@ class _Body extends StatelessWidget {
 }
 
 class _LineNumbers extends StatelessWidget {
-  const _LineNumbers({required this.count});
+  const _LineNumbers({required this.count, required this.baseStyle});
   final int count;
+
+  /// Body text style. Line numbers inherit its size + height so each row
+  /// aligns exactly with its source line — different sizes drift over many
+  /// lines and make numbers look one short at the bottom.
+  final TextStyle baseStyle;
 
   @override
   Widget build(BuildContext context) {
-    final style = AppTheme.mono(size: 11.5, color: AppColors.textMuted);
+    final style = baseStyle.copyWith(color: AppColors.textMuted);
     return SelectionContainer.disabled(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          for (var i = 1; i <= count; i++) Text('$i', style: style),
-        ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (var i = 1; i <= count; i++) Text('$i', style: style),
+          ],
+        ),
       ),
     );
   }

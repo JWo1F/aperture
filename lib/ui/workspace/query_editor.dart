@@ -33,12 +33,19 @@ class QueryEditor extends StatefulWidget {
 }
 
 class _QueryEditorState extends State<QueryEditor> {
+  // Match these against the editor's text style — used to position run
+  // icons in the gutter at the right Y.
+  static const double _editorFontSize = 13;
+  static const double _editorLineHeight = 1.45;
+  static const double _editorVerticalPad = Insets.sm; // CodeField padding.y
+  static const double _gutterWidth = 60;
+
   late final CodeController _controller;
   String _lastDictKey = '';
   Timer? _saveTimer;
   List<SqlStatement> _statements = const [];
-  Set<int> _runnableLines = const {};
   int? _cursorStmt; // 1-based statement index containing the caret
+  double _scrollOffset = 0;
 
   @override
   void initState() {
@@ -76,7 +83,16 @@ class _QueryEditorState extends State<QueryEditor> {
 
   void _recomputeStatements() {
     _statements = parseSqlStatements(_controller.text);
-    _runnableLines = {for (final s in _statements) s.startLine + 1};
+  }
+
+  bool _onEditorScroll(ScrollNotification n) {
+    if (n.metrics.axis == Axis.vertical) {
+      final next = n.metrics.pixels;
+      if ((_scrollOffset - next).abs() > 0.5) {
+        setState(() => _scrollOffset = next);
+      }
+    }
+    return false;
   }
 
   void _recomputeCursorStmt() {
@@ -170,36 +186,6 @@ class _QueryEditorState extends State<QueryEditor> {
     super.dispose();
   }
 
-  /// Custom gutter line builder — line number first, then a play icon
-  /// (WidgetSpan) on each runnable line. Click runs just that statement.
-  TextSpan _gutterLine(int line, TextStyle? style) {
-    if (!_runnableLines.contains(line)) {
-      return TextSpan(text: '$line', style: style);
-    }
-    final stmt = _statements.firstWhere((s) => s.startLine + 1 == line);
-    return TextSpan(
-      children: [
-        TextSpan(text: '$line', style: style),
-        WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () => _runStatement(stmt),
-              child: const Padding(
-                padding: EdgeInsets.only(left: 4),
-                child: Icon(
-                  Icons.play_arrow_rounded,
-                  size: 13,
-                  color: AppColors.success,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -228,36 +214,55 @@ class _QueryEditorState extends State<QueryEditor> {
                 shift: true,
               ): _runAtCursor,
             },
-            child: Container(
-              color: AppColors.bg,
-              child: CodeTheme(
-                data: CodeThemeData(styles: apertureCodeStyles),
-                child: CodeField(
-                  controller: _controller,
-                  expands: true,
-                  wrap: false,
-                  background: AppColors.bg,
-                  cursorColor: AppColors.accent,
-                  lineNumberBuilder: _gutterLine,
-                  textStyle: GoogleFonts.jetBrainsMono(
-                    fontSize: 13,
-                    height: 1.45,
-                    color: AppColors.textPrimary,
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: Insets.md,
-                    vertical: Insets.sm,
-                  ),
-                  gutterStyle: GutterStyle(
-                    width: 60,
-                    margin: 8,
-                    background: AppColors.surface,
-                    textStyle: GoogleFonts.jetBrainsMono(
-                      fontSize: 11,
-                      color: AppColors.textMuted,
+            child: ClipRect(
+              child: Stack(
+                children: [
+                  Container(
+                    color: AppColors.bg,
+                    child: CodeTheme(
+                      data: CodeThemeData(styles: apertureCodeStyles),
+                      child: NotificationListener<ScrollNotification>(
+                        onNotification: _onEditorScroll,
+                        child: CodeField(
+                          controller: _controller,
+                          expands: true,
+                          wrap: false,
+                          background: AppColors.bg,
+                          cursorColor: AppColors.accent,
+                          textStyle: GoogleFonts.jetBrainsMono(
+                            fontSize: _editorFontSize,
+                            height: _editorLineHeight,
+                            color: AppColors.textPrimary,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: Insets.md,
+                            vertical: _editorVerticalPad,
+                          ),
+                          gutterStyle: GutterStyle(
+                            width: _gutterWidth,
+                            margin: 24, // leave room for the ▶ overlay
+                            background: AppColors.surface,
+                            textStyle: GoogleFonts.jetBrainsMono(
+                              fontSize: 11,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  // ▶ overlay — one per statement, positioned in the gutter
+                  // after the line number, scroll-synced via the
+                  // NotificationListener.
+                  for (final stmt in _statements)
+                    _RunStmtIcon(
+                      stmt: stmt,
+                      top: stmt.startLine * _editorFontSize * _editorLineHeight -
+                          _scrollOffset +
+                          _editorVerticalPad,
+                      onTap: () => _runStatement(stmt),
+                    ),
+                ],
               ),
             ),
           ),
@@ -517,6 +522,50 @@ class _StatusFooter extends StatelessWidget {
               style: AppTheme.mono(size: 11, color: AppColors.textMuted),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Positioned ▶ icon overlaid on the editor's gutter, aligned vertically with
+/// the line where a SQL statement begins. Lives outside the editor's own
+/// gutter so we can attach a click handler that flutter_code_editor's
+/// `lineNumberBuilder` doesn't expose.
+class _RunStmtIcon extends StatelessWidget {
+  const _RunStmtIcon({
+    required this.stmt,
+    required this.top,
+    required this.onTap,
+  });
+
+  final SqlStatement stmt;
+  final double top;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      // Pinned just inside the right edge of the gutter — i.e. after the
+      // line number, before the source code area. _gutterWidth (60) - 16
+      // leaves about 16 px for the icon + a hair of breathing room.
+      left: 44,
+      top: top,
+      width: 16,
+      height: 18,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Tooltip(
+            message: 'Run statement (⌘⇧↵)',
+            waitDuration: const Duration(milliseconds: 400),
+            child: const Icon(
+              Icons.play_arrow_rounded,
+              size: 14,
+              color: AppColors.success,
+            ),
+          ),
+        ),
       ),
     );
   }

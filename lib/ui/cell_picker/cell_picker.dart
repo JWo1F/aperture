@@ -990,15 +990,103 @@ class _CalendarBodyState extends State<_CalendarBody> {
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.bg,
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      child: CalendarDatePicker(
-        initialDate: _current,
-        firstDate: DateTime(1900),
-        lastDate: DateTime(2200),
-        onDateChanged: (d) {
+      child: _CalendarThemed(
+        initial: _current,
+        onChange: (d) {
           setState(() => _current = d);
           widget.onChange(d);
         },
+      ),
+    );
+  }
+}
+
+/// CalendarDatePicker wrapped in a tight Material 3 theme override so the
+/// selected / today states fit the Aperture palette and the smaller frame.
+class _CalendarThemed extends StatelessWidget {
+  const _CalendarThemed({required this.initial, required this.onChange});
+
+  final DateTime initial;
+  final ValueChanged<DateTime> onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = Theme.of(context);
+    final cal = DatePickerThemeData(
+      backgroundColor: AppColors.bg,
+      headerBackgroundColor: AppColors.bg,
+      headerForegroundColor: AppColors.textPrimary,
+      weekdayStyle: AppTheme.mono(
+        size: 10,
+        color: AppColors.textMuted,
+        weight: FontWeight.w600,
+      ),
+      dayStyle: AppTheme.mono(size: 11, color: AppColors.textSecondary),
+      yearStyle: AppTheme.mono(size: 12, color: AppColors.textSecondary),
+      dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return AppColors.accent;
+        return null;
+      }),
+      dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return AppColors.bg;
+        if (states.contains(WidgetState.disabled)) return AppColors.textMuted;
+        return AppColors.textPrimary;
+      }),
+      dayOverlayColor: WidgetStateProperty.all(
+        AppColors.accent.withValues(alpha: 0.12),
+      ),
+      dayShape: WidgetStateProperty.all(
+        const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(6)),
+        ),
+      ),
+      todayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return AppColors.accent;
+        return Colors.transparent;
+      }),
+      todayForegroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return AppColors.bg;
+        return AppColors.accent;
+      }),
+      todayBorder: const BorderSide(color: AppColors.accent, width: 1),
+      yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return AppColors.accent;
+        return null;
+      }),
+      yearForegroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return AppColors.bg;
+        return AppColors.textPrimary;
+      }),
+      yearOverlayColor: WidgetStateProperty.all(
+        AppColors.accent.withValues(alpha: 0.12),
+      ),
+      dividerColor: AppColors.border,
+    );
+
+    return Theme(
+      data: base.copyWith(
+        datePickerTheme: cal,
+        textTheme: base.textTheme.apply(
+          fontFamily: AppTheme.mono().fontFamily,
+          bodyColor: AppColors.textPrimary,
+          displayColor: AppColors.textPrimary,
+        ),
+        colorScheme: base.colorScheme.copyWith(
+          primary: AppColors.accent,
+          onPrimary: AppColors.bg,
+          surface: AppColors.bg,
+          onSurface: AppColors.textPrimary,
+        ),
+        iconTheme: const IconThemeData(
+          color: AppColors.textSecondary,
+          size: 16,
+        ),
+      ),
+      child: CalendarDatePicker(
+        initialDate: initial,
+        firstDate: DateTime(1900),
+        lastDate: DateTime(2200),
+        onDateChanged: onChange,
       ),
     );
   }
@@ -1100,14 +1188,9 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
       child: Column(
         children: [
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: CalendarDatePicker(
-                initialDate: _value,
-                firstDate: DateTime(1900),
-                lastDate: DateTime(2200),
-                onDateChanged: _setDate,
-              ),
+            child: _CalendarThemed(
+              initial: _value,
+              onChange: _setDate,
             ),
           ),
           const Divider(height: 1, color: AppColors.border),
