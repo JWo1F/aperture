@@ -338,7 +338,7 @@ class _CodeEditorState extends State<CodeEditor> {
   void _scheduleSuggest() {
     _suggestDebounce?.cancel();
     _suggestDebounce =
-        Timer(const Duration(milliseconds: 50), _requestSuggestions);
+        Timer(const Duration(milliseconds: 300), _requestSuggestions);
   }
 
   Future<void> _requestSuggestions() async {
@@ -356,6 +356,13 @@ class _CodeEditorState extends State<CodeEditor> {
 
     final tokenStart = _tokenStart(text, cursor);
     final token = text.substring(tokenStart, cursor);
+    // No prefix → no popup. Avoids the popup appearing every time the caret
+    // sits in whitespace, after punctuation, or right after accepting a
+    // previous suggestion.
+    if (token.isEmpty) {
+      _dismissPopup();
+      return;
+    }
 
     final seq = ++_suggestSeq;
     final res = await provider(SuggestRequest(
