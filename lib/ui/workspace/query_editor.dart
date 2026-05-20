@@ -82,9 +82,25 @@ class _QueryEditorState extends State<QueryEditor> {
     _controller.autocompleter.setCustomWords(words.toList());
   }
 
-  void _runAll() {
+  Future<void> _runAll() async {
     widget.tab.sql = _controller.text;
-    context.read<AppState>().runQuery(widget.tab);
+    final state = context.read<AppState>();
+    final stmts = _statements.isNotEmpty
+        ? _statements
+        : parseSqlStatements(_controller.text);
+
+    if (stmts.length <= 1) {
+      await state.runQuery(widget.tab);
+      return;
+    }
+
+    // The postgres extended query protocol doesn't allow multiple commands in
+    // one prepared statement. Send each statement separately and surface the
+    // last result; stop on the first failure so the user sees the error.
+    for (final s in stmts) {
+      await state.runQuery(widget.tab, sqlOverride: s.text);
+      if (widget.tab.result?.isError ?? false) break;
+    }
   }
 
   void _runStatement(SqlStatement stmt) {
