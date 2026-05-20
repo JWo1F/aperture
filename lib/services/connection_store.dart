@@ -1,46 +1,47 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:path_provider/path_provider.dart';
+import 'dart:developer' as developer;
 
 import '../models/connection_config.dart';
+import 'atomic_json.dart';
 
 /// Persists saved connections to a JSON file in the application support
-/// directory. Personal use only — passwords are stored in plain text, behind
-/// the macOS app-sandbox container which is per-user-account.
+/// directory. Personal use only — passwords live in the macOS Keychain
+/// (see [PasswordVault]); this file holds the rest of the config.
 class ConnectionStore {
-  static const _filename = 'connections.json';
+  ConnectionStore({AtomicJsonFile? file})
+      : _file = file ?? AtomicJsonFile('connections.json');
 
-  Future<File> _file() async {
-    final dir = await getApplicationSupportDirectory();
-    return File('${dir.path}/$_filename');
-  }
+  final AtomicJsonFile _file;
 
   Future<List<ConnectionConfig>> load() async {
+    final decoded = await _file.load();
+    if (decoded is! List) return [];
     try {
-      final file = await _file();
-      if (!await file.exists()) return [];
-      final raw = await file.readAsString();
-      if (raw.trim().isEmpty) return [];
-      final list = jsonDecode(raw) as List;
       return [
-        for (final item in list)
+        for (final item in decoded)
           ConnectionConfig.fromJson(item as Map<String, dynamic>),
       ];
-    } catch (_) {
+    } catch (e, st) {
+      developer.log(
+        'failed to parse connections list',
+        name: 'dbv.store',
+        error: e,
+        stackTrace: st,
+      );
       return [];
     }
   }
 
   Future<void> save(List<ConnectionConfig> connections) async {
     try {
-      final file = await _file();
-      await file.writeAsString(
-        jsonEncode([for (final c in connections) c.toJson()]),
+      await _file.save([for (final c in connections) c.toJson()]);
+    } catch (e, st) {
+      developer.log(
+        'failed to save connections',
+        name: 'dbv.store',
+        error: e,
+        stackTrace: st,
       );
-    } catch (_) {
-      // Best-effort: a write failure here only loses the index, not data.
     }
   }
 }
