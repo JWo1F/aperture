@@ -161,25 +161,32 @@ class _Body extends StatelessWidget {
 
     return Container(
       color: AppColors.bg,
-      padding: const EdgeInsets.symmetric(vertical: Insets.md),
       child: SingleChildScrollView(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
+        child: IntrinsicHeight(
           child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _LineNumbers(count: lineCount, baseStyle: base),
-              const SizedBox(width: 14),
-              SelectableText.rich(
-                TextSpan(
-                  children: highlightNodesToSpans(
-                    parsed.nodes,
-                    base,
-                    apertureCodeStyles,
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(
+                    14,
+                    Insets.md,
+                    Insets.md,
+                    Insets.md,
+                  ),
+                  child: SelectableText.rich(
+                    TextSpan(
+                      children: highlightNodesToSpans(
+                        parsed.nodes,
+                        base,
+                        apertureCodeStyles,
+                      ),
+                    ),
+                    style: base,
                   ),
                 ),
-                style: base,
               ),
             ],
           ),
@@ -203,7 +210,8 @@ class _LineNumbers extends StatelessWidget {
     final style = baseStyle.copyWith(color: AppColors.textMuted);
     return SelectionContainer.disabled(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        color: AppColors.surface,
+        padding: const EdgeInsets.fromLTRB(10, Insets.md, 10, Insets.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
