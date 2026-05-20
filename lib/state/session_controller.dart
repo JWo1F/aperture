@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/connection_config.dart';
+import '../models/log_event.dart';
 import '../services/postgres_service.dart';
+import 'event_log.dart';
 
 /// Lifecycle of the active connection from the UI's perspective.
 ///
@@ -19,9 +21,11 @@ enum ConnectionStatus { disconnected, connecting, connected, lost, error }
 class SessionController extends ChangeNotifier {
   SessionController({
     this.keepaliveInterval = const Duration(seconds: 30),
+    this.log,
   });
 
   final Duration keepaliveInterval;
+  final EventLog? log;
 
   PostgresService? _service;
   ConnectionConfig? _activeConnection;
@@ -42,7 +46,40 @@ class SessionController extends ChangeNotifier {
   Future<bool> connect(ConnectionConfig config) async {
     _cancelKeepalive();
     await _service?.close();
-    _service = PostgresService(config);
+    _service = PostgresService(
+      config,
+      onQueryRun: ({
+        required sql,
+        required elapsed,
+        required affectedRows,
+        required error,
+        required truncated,
+      }) {
+        log?.add(LogEvent(
+          timestamp: DateTime.now(),
+          kind: error == null ? LogEventKind.query : LogEventKind.error,
+          connectionName: config.name,
+          sql: sql,
+          elapsed: elapsed,
+          affectedRows: affectedRows,
+          error: error,
+        ));
+      },
+      onEditApplied: ({
+        required statementCount,
+        required elapsed,
+        required error,
+      }) {
+        log?.add(LogEvent(
+          timestamp: DateTime.now(),
+          kind: error == null ? LogEventKind.edit : LogEventKind.error,
+          connectionName: config.name,
+          sql: '$statementCount UPDATE statement(s)',
+          elapsed: elapsed,
+          error: error,
+        ));
+      },
+    );
     _activeConnection = config;
     _status = ConnectionStatus.connecting;
     _error = null;
@@ -52,12 +89,23 @@ class SessionController extends ChangeNotifier {
       await _service!.connect();
       _status = ConnectionStatus.connected;
       _startKeepalive();
+      log?.add(LogEvent(
+        timestamp: DateTime.now(),
+        kind: LogEventKind.connect,
+        connectionName: config.name,
+      ));
       notifyListeners();
       return true;
     } catch (e) {
       _status = ConnectionStatus.error;
       _error = e.toString();
       _service = null;
+      log?.add(LogEvent(
+        timestamp: DateTime.now(),
+        kind: LogEventKind.error,
+        connectionName: config.name,
+        error: e.toString(),
+      ));
       notifyListeners();
       return false;
     }
@@ -86,10 +134,16 @@ class SessionController extends ChangeNotifier {
   Future<void> disconnect() async {
     _cancelKeepalive();
     await _service?.close();
+    final name = _activeConnection?.name;
     _service = null;
     _activeConnection = null;
     _status = ConnectionStatus.disconnected;
     _error = null;
+    log?.add(LogEvent(
+      timestamp: DateTime.now(),
+      kind: LogEventKind.disconnect,
+      connectionName: name,
+    ));
     notifyListeners();
   }
 
@@ -106,6 +160,12 @@ class SessionController extends ChangeNotifier {
     _service = null;
     _status = ConnectionStatus.lost;
     _error = cause.toString();
+    log?.add(LogEvent(
+      timestamp: DateTime.now(),
+      kind: LogEventKind.lost,
+      connectionName: _activeConnection?.name,
+      error: cause.toString(),
+    ));
     notifyListeners();
   }
 

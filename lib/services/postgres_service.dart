@@ -25,9 +25,28 @@ List<Object?> _decodeRow(List<Object?> raw) =>
 /// catalog introspection lives on [Introspector] — both bound to the
 /// same open connection.
 class PostgresService {
-  PostgresService(this.config);
+  PostgresService(this.config, {this.onQueryRun, this.onEditApplied});
 
   final ConnectionConfig config;
+
+  /// Called after every ad-hoc statement, successful or not. The caller
+  /// can route events into the in-app log pane and / or persist them.
+  /// `truncated` indicates whether [defaultSelectLimit] was injected.
+  final void Function({
+    required String sql,
+    required Duration elapsed,
+    required int? affectedRows,
+    required String? error,
+    required bool truncated,
+  })? onQueryRun;
+
+  /// Called after every UPDATE batch from cell editing.
+  final void Function({
+    required int statementCount,
+    required Duration elapsed,
+    required String? error,
+  })? onEditApplied;
+
   Connection? _connection;
   TableRepository? _repository;
 
@@ -115,8 +134,28 @@ class PostgresService {
   Future<int> applyTableEdits(
     DbTable table,
     Map<String, Map<String, CellEditValue>> updatesByCtid,
-  ) =>
-      tableRepository.applyEdits(table, updatesByCtid);
+  ) async {
+    final watch = Stopwatch()..start();
+    try {
+      final affected =
+          await tableRepository.applyEdits(table, updatesByCtid);
+      watch.stop();
+      onEditApplied?.call(
+        statementCount: updatesByCtid.length,
+        elapsed: watch.elapsed,
+        error: null,
+      );
+      return affected;
+    } catch (e) {
+      watch.stop();
+      onEditApplied?.call(
+        statementCount: updatesByCtid.length,
+        elapsed: watch.elapsed,
+        error: e.toString(),
+      );
+      rethrow;
+    }
+  }
 
   /// Default cap applied to bare top-level `SELECT` statements that don't
   /// carry their own LIMIT. Prevents an unbounded `SELECT *` from
@@ -130,14 +169,27 @@ class PostgresService {
   Future<QueryResult> runQuery(String sql) async {
     final safe = applyDefaultLimit(sql, limit: defaultSelectLimit);
     final watch = Stopwatch()..start();
+    QueryResult buildAndLog(QueryResult result, {String? error}) {
+      onQueryRun?.call(
+        sql: safe.sql,
+        elapsed: result.elapsed,
+        affectedRows: result.affectedRows,
+        error: error,
+        truncated: safe.appliedLimit,
+      );
+      return result;
+    }
+
     try {
       final result = await _conn.execute(safe.sql);
       watch.stop();
 
       if (result.schema.columns.isEmpty) {
-        return QueryResult.command(
-          affectedRows: result.affectedRows,
-          elapsed: watch.elapsed,
+        return buildAndLog(
+          QueryResult.command(
+            affectedRows: result.affectedRows,
+            elapsed: watch.elapsed,
+          ),
         );
       }
 
@@ -155,20 +207,28 @@ class PostgresService {
           .toList();
       final rows = [for (final row in result) _decodeRow(row.toList())];
 
-      return QueryResult.rows(
-        columns: columns,
-        rows: rows,
-        elapsed: watch.elapsed,
-        affectedRows: result.affectedRows,
-        columnSchemas: columnSchemas,
-        truncatedAt: safe.appliedLimit ? defaultSelectLimit : null,
+      return buildAndLog(
+        QueryResult.rows(
+          columns: columns,
+          rows: rows,
+          elapsed: watch.elapsed,
+          affectedRows: result.affectedRows,
+          columnSchemas: columnSchemas,
+          truncatedAt: safe.appliedLimit ? defaultSelectLimit : null,
+        ),
       );
     } on ServerException catch (e) {
       watch.stop();
-      return QueryResult.failure(error: e.message, elapsed: watch.elapsed);
+      return buildAndLog(
+        QueryResult.failure(error: e.message, elapsed: watch.elapsed),
+        error: e.message,
+      );
     } catch (e) {
       watch.stop();
-      return QueryResult.failure(error: e.toString(), elapsed: watch.elapsed);
+      return buildAndLog(
+        QueryResult.failure(error: e.toString(), elapsed: watch.elapsed),
+        error: e.toString(),
+      );
     }
   }
 }

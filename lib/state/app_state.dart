@@ -10,6 +10,7 @@ import '../models/value_format.dart';
 import '../theme/app_theme.dart';
 import 'catalog_controller.dart';
 import 'connection_registry.dart';
+import 'event_log.dart';
 import 'navigation_history.dart';
 import 'per_connection_store.dart';
 import 'preferences_controller.dart';
@@ -44,6 +45,7 @@ class AppState extends ChangeNotifier {
       tabsController,
       history,
       ui,
+      eventLog,
     ];
     for (final c in _children) {
       c.addListener(notifyListeners);
@@ -53,7 +55,8 @@ class AppState extends ChangeNotifier {
 
   final PreferencesController preferences = PreferencesController();
   final ConnectionRegistry registry = ConnectionRegistry();
-  final SessionController session = SessionController();
+  final EventLog eventLog = EventLog();
+  late final SessionController session = SessionController(log: eventLog);
   final CatalogController catalog = CatalogController();
   final NavigationHistory history = NavigationHistory();
   final WorkspaceUi ui = WorkspaceUi();
@@ -329,6 +332,7 @@ class AppState extends ChangeNotifier {
     registry.dispose();
     preferences.dispose();
     ui.dispose();
+    eventLog.dispose();
     super.dispose();
   }
 }

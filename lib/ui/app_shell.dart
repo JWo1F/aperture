@@ -11,6 +11,7 @@ import '../theme/app_theme.dart';
 import 'command_palette/command_palette.dart';
 import 'connection/connection_dialog.dart';
 import 'connection/connection_menu.dart';
+import 'log/log_panel.dart';
 import 'sidebar/sidebar.dart';
 import 'widgets/common.dart';
 import 'workspace/workspace.dart';
@@ -74,6 +75,8 @@ class _AppShellState extends State<AppShell> {
         bindings: {
           const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
               showCommandPalette(context, state),
+          const SingleActivator(LogicalKeyboardKey.keyL, meta: true): () =>
+              state.eventLog.toggleVisible(),
           if (connected)
             const SingleActivator(LogicalKeyboardKey.keyR, meta: true):
                 () => state.refreshCatalog(),
@@ -105,6 +108,7 @@ class _AppShellState extends State<AppShell> {
                         ),
                       ),
                     ),
+                    const RepaintBoundary(child: LogPanel()),
                   ],
                 ),
               ),
