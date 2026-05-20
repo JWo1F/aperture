@@ -107,6 +107,7 @@ class AppState extends ChangeNotifier {
   ConnectionConfig? get activeConnection => session.activeConnection;
   ConnectionStatus get status => session.status;
   String? get connectionError => session.error;
+  String? get serverVersion => session.serverVersion;
 
   Future<void> connect(ConnectionConfig config) async {
     final gen = catalog.beginGeneration();

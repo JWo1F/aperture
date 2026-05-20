@@ -32,6 +32,7 @@ class SessionController extends ChangeNotifier {
   ConnectionConfig? _activeConnection;
   ConnectionStatus _status = ConnectionStatus.disconnected;
   String? _error;
+  String? _serverVersion;
   Timer? _keepaliveTimer;
   bool _keepalivePending = false;
 
@@ -39,6 +40,11 @@ class SessionController extends ChangeNotifier {
   ConnectionConfig? get activeConnection => _activeConnection;
   ConnectionStatus get status => _status;
   String? get error => _error;
+
+  /// Server version short-tag — e.g. `v16.4`. Populated right after a
+  /// successful connect via `SHOW server_version`. Null until the version
+  /// query lands or if it failed silently.
+  String? get serverVersion => _serverVersion;
 
   bool get isConnected => _status == ConnectionStatus.connected;
 
@@ -89,6 +95,7 @@ class SessionController extends ChangeNotifier {
     try {
       await _service!.connect();
       _status = ConnectionStatus.connected;
+      _serverVersion = null;
       _startKeepalive();
       log?.add(LogEvent(
         timestamp: DateTime.now(),
@@ -96,6 +103,9 @@ class SessionController extends ChangeNotifier {
         connectionName: config.name,
       ));
       notifyListeners();
+      // Fetch the server version out of band — failures are non-fatal,
+      // they just leave the header without a "v…" tag.
+      unawaited(_fetchServerVersion());
       return true;
     } catch (e) {
       final friendly = friendlyConnectError(e, config);
@@ -141,6 +151,7 @@ class SessionController extends ChangeNotifier {
     _activeConnection = null;
     _status = ConnectionStatus.disconnected;
     _error = null;
+    _serverVersion = null;
     log?.add(LogEvent(
       timestamp: DateTime.now(),
       kind: LogEventKind.disconnect,
@@ -169,6 +180,33 @@ class SessionController extends ChangeNotifier {
       error: cause.toString(),
     ));
     notifyListeners();
+  }
+
+  /// Reads `SHOW server_version` and reduces it to a `vMAJOR.MINOR` tag
+  /// suitable for the sidebar header (the design's `v16.4`). Postgres
+  /// returns something like `16.4 (Homebrew)`; we strip the parenthetical
+  /// and keep the first two segments.
+  Future<void> _fetchServerVersion() async {
+    final svc = _service;
+    if (svc == null || !svc.isConnected) return;
+    try {
+      final res = await svc.runQuery('SHOW server_version');
+      if (res.isError || res.rows.isEmpty) return;
+      final raw = res.rows.first.first;
+      final s = raw?.toString().trim() ?? '';
+      if (s.isEmpty) return;
+      // Strip everything from the first space onwards (e.g. "(Homebrew)"),
+      // then keep up to two version segments.
+      final head = s.split(' ').first;
+      final parts = head.split('.');
+      final tag = parts.length >= 2
+          ? 'v${parts[0]}.${parts[1]}'
+          : 'v${parts.first}';
+      _serverVersion = tag;
+      notifyListeners();
+    } catch (_) {
+      // Non-fatal — leave the header without a version tag.
+    }
   }
 
   void _startKeepalive() {

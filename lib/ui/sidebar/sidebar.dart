@@ -79,6 +79,7 @@ class _ConnHeader extends StatelessWidget {
         ),
     };
 
+    final version = state.serverVersion;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       decoration: BoxDecoration(
@@ -100,9 +101,9 @@ class _ConnHeader extends StatelessWidget {
               ),
             ),
           ),
-          if (conn != null)
+          if (version != null)
             Text(
-              conn.database,
+              version,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTheme.mono(
