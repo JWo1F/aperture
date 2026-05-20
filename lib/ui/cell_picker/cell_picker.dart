@@ -104,7 +104,7 @@ final _kBool = _Kind(
   id: _KindId.bool,
   label: 'bool',
   color: AppColors.tBool,
-  size: const Size(240, 130),
+  size: const Size(296, 130),
 );
 final _kJson = _Kind(
   id: _KindId.json,
@@ -124,46 +124,57 @@ final _kInt = _Kind(
   id: _KindId.text,
   label: 'int',
   color: AppColors.tNum,
-  size: const Size(260, 132),
+  size: const Size(296, 132),
   inputFormatters: [_intFilter],
 );
 final _kNumber = _Kind(
   id: _KindId.text,
   label: 'number',
   color: AppColors.tNum,
-  size: const Size(260, 132),
+  size: const Size(296, 132),
   inputFormatters: [_numberFilter],
 );
+// Widths and heights are sized to fit each picker's tightest constraint:
+//   - Width: the footer's pill cluster (set NULL · DEFAULT · cancel · save ⌘↵
+//     plus the optional `revert` chip) consistently wants ~290px before the
+//     `kindHint` Expanded text collapses, so every date/time variant lives at
+//     ≥ 296px; tz-bearing variants add room for the `@` punct + tz chip in
+//     the mono value line.
+//   - Height: header + value line + quick-actions row + body + footer must
+//     all fit without `Expanded` having to crush the calendar's fixed 30px
+//     rows. Datetime's body is just the calendar (~242) — h/m/s editing
+//     happens via the value-line segments above. The tz variant adds ~50 for
+//     a divider + TZ input row beneath the calendar.
 final _kDate = _Kind(
   id: _KindId.date,
   label: 'date',
   color: AppColors.tDate,
-  size: const Size(252, 296),
+  size: const Size(296, 384),
 );
 final _kTime = _Kind(
   id: _KindId.time,
   label: 'time',
   color: AppColors.tDate,
-  size: const Size(252, 126),
+  size: const Size(296, 200),
 );
 final _kTimeTz = _Kind(
   id: _KindId.time,
   label: 'timetz',
   color: AppColors.tDate,
-  size: const Size(252, 168),
+  size: const Size(320, 240),
   withTimezone: true,
 );
 final _kDatetime = _Kind(
   id: _KindId.datetime,
   label: 'timestamp',
   color: AppColors.tDate,
-  size: const Size(252, 360),
+  size: const Size(320, 400),
 );
 final _kDatetimeTz = _Kind(
   id: _KindId.datetime,
   label: 'timestamptz',
   color: AppColors.tDate,
-  size: const Size(252, 400),
+  size: const Size(340, 460),
   withTimezone: true,
 );
 final _kBytes = _Kind(
@@ -1807,22 +1818,12 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
     widget.onChange(next);
   }
 
-  void _setTime(int h, int m, int s, int ms) {
-    final next = DateTime(
-      _value.year,
-      _value.month,
-      _value.day,
-      h,
-      m,
-      s,
-      ms,
-    );
-    setState(() => _value = next);
-    widget.onChange(next);
-  }
-
   @override
   Widget build(BuildContext context) {
+    // The hours/minutes/seconds are edited via the arrow-key segments in the
+    // `_MonoValueLine` above the body, so the body itself only carries the
+    // calendar (plus an optional TZ input — kept here because the value line
+    // surfaces TZ as a small chip rather than an editable text field).
     return Container(
       color: AppColors.bg,
       child: Column(
@@ -1834,24 +1835,15 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
               onChange: _setDate,
             ),
           ),
-          Divider(height: 1, color: AppColors.border),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _TimeInput(
-                  key: ValueKey('time-${widget.resetTick}'),
-                  initial: _value,
-                  onChange: _setTime,
-                ),
-                if (widget.withTz) ...[
-                  const SizedBox(height: 8),
+          if (widget.withTz) ...[
+            Divider(height: 1, color: AppColors.border),
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child:
                   _TzInput(value: widget.tz, onChange: widget.onTzChange),
-                ],
-              ],
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -2083,35 +2075,38 @@ class _MonoValueLine extends StatelessWidget {
   final ValueChanged<DateTime> onChange;
   final ValueChanged<String> onTzChange;
 
-  void _bumpYear(int delta) {
-    onChange(DateTime(moment.year + delta, moment.month, moment.day,
-        moment.hour, moment.minute, moment.second, moment.millisecond));
-  }
+  int _daysInMonth(int y, int m) => DateTime(y, m + 1, 0).day;
 
-  void _bumpMonth(int delta) {
-    final m = moment.month + delta;
-    final y = moment.year + ((m - 1) ~/ 12);
-    final nm = ((m - 1) % 12) + 1;
-    final ny = m <= 0 ? y - 1 : y;
-    final clampedM = m <= 0 ? 12 + m : nm;
-    onChange(DateTime(ny, clampedM, moment.day.clamp(1, 28), moment.hour,
+  void _setYear(int v) {
+    onChange(DateTime(v, moment.month, moment.day, moment.hour,
         moment.minute, moment.second, moment.millisecond));
   }
 
-  void _bumpDay(int delta) {
-    onChange(moment.add(Duration(days: delta)));
+  void _setMonth(int v) {
+    final clampedDay = moment.day.clamp(1, _daysInMonth(moment.year, v));
+    onChange(DateTime(moment.year, v, clampedDay, moment.hour,
+        moment.minute, moment.second, moment.millisecond));
   }
 
-  void _bumpHour(int delta) {
-    onChange(moment.add(Duration(hours: delta)));
+  void _setDay(int v) {
+    final clampedDay = v.clamp(1, _daysInMonth(moment.year, moment.month));
+    onChange(DateTime(moment.year, moment.month, clampedDay, moment.hour,
+        moment.minute, moment.second, moment.millisecond));
   }
 
-  void _bumpMinute(int delta) {
-    onChange(moment.add(Duration(minutes: delta)));
+  void _setHour(int v) {
+    onChange(DateTime(moment.year, moment.month, moment.day, v,
+        moment.minute, moment.second, moment.millisecond));
   }
 
-  void _bumpSecond(int delta) {
-    onChange(moment.add(Duration(seconds: delta)));
+  void _setMinute(int v) {
+    onChange(DateTime(moment.year, moment.month, moment.day, moment.hour, v,
+        moment.second, moment.millisecond));
+  }
+
+  void _setSecond(int v) {
+    onChange(DateTime(moment.year, moment.month, moment.day, moment.hour,
+        moment.minute, v, moment.millisecond));
   }
 
   @override
@@ -2129,41 +2124,59 @@ class _MonoValueLine extends StatelessWidget {
         children: [
           if (hasDate) ...[
             _Seg(
-              text: moment.year.toString().padLeft(4, '0'),
+              value: moment.year,
               width: 44,
-              onBump: _bumpYear,
+              padTo: 4,
+              minValue: 1,
+              maxValue: 9999,
+              onChanged: _setYear,
             ),
             const _Punct('-'),
             _Seg(
-              text: _pad(moment.month),
+              value: moment.month,
               width: 26,
-              onBump: _bumpMonth,
+              padTo: 2,
+              minValue: 1,
+              maxValue: 12,
+              onChanged: _setMonth,
             ),
             const _Punct('-'),
             _Seg(
-              text: _pad(moment.day),
+              value: moment.day,
               width: 26,
-              onBump: _bumpDay,
+              padTo: 2,
+              minValue: 1,
+              maxValue: 31,
+              onChanged: _setDay,
             ),
           ],
           if (hasDate && hasTime) const SizedBox(width: 12),
           if (hasTime) ...[
             _Seg(
-              text: _pad(moment.hour),
+              value: moment.hour,
               width: 26,
-              onBump: _bumpHour,
+              padTo: 2,
+              minValue: 0,
+              maxValue: 23,
+              onChanged: _setHour,
             ),
             const _Punct(':'),
             _Seg(
-              text: _pad(moment.minute),
+              value: moment.minute,
               width: 26,
-              onBump: _bumpMinute,
+              padTo: 2,
+              minValue: 0,
+              maxValue: 59,
+              onChanged: _setMinute,
             ),
             const _Punct(':'),
             _Seg(
-              text: _pad(moment.second),
+              value: moment.second,
               width: 26,
-              onBump: _bumpSecond,
+              padTo: 2,
+              minValue: 0,
+              maxValue: 59,
+              onChanged: _setSecond,
             ),
           ],
           if (withTz && hasTime) ...[
@@ -2176,64 +2189,158 @@ class _MonoValueLine extends StatelessWidget {
   }
 }
 
+/// A single digit field inside the mono value line — click to focus and type
+/// (or paste) the new value. On blur or `Enter`, the entered number is
+/// clamped to [[minValue], [maxValue]], re-padded to [padTo] digits, and
+/// pushed back through [onChanged] so the parent's [DateTime] reconstruction
+/// runs once with a known-good value.
 class _Seg extends StatefulWidget {
   const _Seg({
-    required this.text,
+    required this.value,
     required this.width,
-    required this.onBump,
+    required this.padTo,
+    required this.minValue,
+    required this.maxValue,
+    required this.onChanged,
   });
 
-  final String text;
+  final int value;
   final double width;
-  final void Function(int delta) onBump;
+  final int padTo;
+  final int minValue;
+  final int maxValue;
+  final ValueChanged<int> onChanged;
 
   @override
   State<_Seg> createState() => _SegState();
 }
 
 class _SegState extends State<_Seg> {
-  bool _focused = false;
+  late final TextEditingController _c;
+  late final FocusNode _focus;
+  bool _editing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = TextEditingController(text: _formatted(widget.value));
+    _focus = FocusNode();
+    _focus.addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(_Seg old) {
+    super.didUpdateWidget(old);
+    if (!_editing && old.value != widget.value) {
+      _c.text = _formatted(widget.value);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocusChange);
+    _focus.dispose();
+    _c.dispose();
+    super.dispose();
+  }
+
+  String _formatted(int n) => n.toString().padLeft(widget.padTo, '0');
+
+  void _onFocusChange() {
+    if (!_focus.hasFocus && _editing) {
+      _commit();
+      setState(() => _editing = false);
+    }
+  }
+
+  void _startEditing() {
+    if (_editing) return;
+    _c.text = _formatted(widget.value);
+    setState(() => _editing = true);
+    // The TextField is built next frame — request focus after it's mounted.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _focus.requestFocus();
+      _c.selection =
+          TextSelection(baseOffset: 0, extentOffset: _c.text.length);
+    });
+  }
+
+  void _commit() {
+    final raw = _c.text.trim();
+    final parsed = int.tryParse(raw) ?? widget.value;
+    final clamped = parsed.clamp(widget.minValue, widget.maxValue);
+    if (clamped != widget.value) widget.onChanged(clamped);
+    final padded = _formatted(clamped);
+    if (_c.text != padded) _c.text = padded;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      onFocusChange: (f) => setState(() => _focused = f),
-      onKeyEvent: (node, event) {
-        if (event is KeyDownEvent) {
-          if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-            widget.onBump(1);
-            return KeyEventResult.handled;
-          }
-          if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-            widget.onBump(-1);
-            return KeyEventResult.handled;
-          }
-        }
-        return KeyEventResult.ignored;
-      },
-      child: Builder(
-        builder: (context) => Hoverable(
-          cursor: SystemMouseCursors.click,
-          onTap: () => FocusScope.of(context).requestFocus(Focus.of(context)),
-          builder: (context, hovering) => Container(
-            width: widget.width,
-            padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 1),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: _focused
-                  ? AppColors.accentSoft
-                  : (hovering ? AppColors.surfaceHover : Colors.transparent),
-              borderRadius: BorderRadius.circular(3),
-            ),
-            child: Text(
-              widget.text,
-              style: AppTheme.mono(
-                size: 14,
-                color: AppColors.textPrimary,
-                weight: FontWeight.w500,
-              ),
-            ),
+    // The mono value line is dense and the read-only path needs to be
+    // pixel-perfect; rendering a TextField full-time fights Material's
+    // internal layout (cursor reservation, scroll padding) and clips at
+    // tight widths. Default to a plain Text and only swap to a TextField
+    // while the user is actually editing.
+    if (_editing) return _editor();
+    return _readonly();
+  }
+
+  Widget _readonly() {
+    return Hoverable(
+      cursor: SystemMouseCursors.text,
+      onTap: _startEditing,
+      builder: (context, hovering) => Container(
+        width: widget.width,
+        height: 24,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color:
+              hovering ? AppColors.surfaceHover : Colors.transparent,
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Text(
+          _formatted(widget.value),
+          style: AppTheme.mono(
+            size: 14,
+            color: AppColors.textPrimary,
+            weight: FontWeight.w500,
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _editor() {
+    return Container(
+      width: widget.width,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.accentSoft,
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: EditableText(
+        controller: _c,
+        focusNode: _focus,
+        autofocus: true,
+        textAlign: TextAlign.center,
+        cursorColor: AppColors.accent,
+        backgroundCursorColor: AppColors.accent,
+        keyboardType: TextInputType.number,
+        scrollPhysics: const NeverScrollableScrollPhysics(),
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(widget.padTo),
+        ],
+        onSubmitted: (_) {
+          _commit();
+          _focus.unfocus();
+        },
+        style: AppTheme.mono(
+          size: 14,
+          color: AppColors.textPrimary,
+          weight: FontWeight.w500,
         ),
       ),
     );
