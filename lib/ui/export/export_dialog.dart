@@ -70,6 +70,7 @@ class _ExportBodyState extends State<_ExportBody> {
   _Destination _destination = _Destination.file;
   bool _busy = false;
   String? _error;
+  CancelToken? _cancel;
 
   @override
   void initState() {
@@ -81,9 +82,11 @@ class _ExportBodyState extends State<_ExportBody> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     final navigator = Navigator.of(context);
 
+    final cancel = CancelToken();
     setState(() {
       _busy = true;
       _error = null;
+      _cancel = cancel;
     });
 
     try {
@@ -132,7 +135,7 @@ class _ExportBodyState extends State<_ExportBody> {
           return;
         }
 
-        await _format.writeFile(File(location.path), data);
+        await _format.writeFile(File(location.path), data, cancel: cancel);
         snackText =
             'Exported ${data.rows.length} row${data.rows.length == 1 ? '' : 's'} '
             'to ${location.path}';
@@ -148,10 +151,17 @@ class _ExportBodyState extends State<_ExportBody> {
           ),
         ),
       );
+    } on ExportCancelledException {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _cancel = null;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
+        _cancel = null;
         _error = e.toString();
       });
     }
@@ -269,9 +279,10 @@ class _ExportBodyState extends State<_ExportBody> {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               AppButton(
-                label: 'Cancel',
-                onPressed:
-                    _busy ? null : () => Navigator.of(context).pop(),
+                label: _busy ? 'Stop export' : 'Cancel',
+                onPressed: _busy
+                    ? () => _cancel?.cancel()
+                    : () => Navigator.of(context).pop(),
               ),
               const SizedBox(width: Insets.sm),
               AppButton(

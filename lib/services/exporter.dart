@@ -1,15 +1,32 @@
+import 'dart:async';
 import 'dart:io';
 
 import '../models/query_result.dart';
 import '../models/value_format.dart';
 
+/// Lightweight cancel signal threaded through export pipelines. Tests
+/// can construct one directly; the UI flips [cancel] on a button press.
+class CancelToken {
+  bool _cancelled = false;
+  bool get isCancelled => _cancelled;
+  void cancel() => _cancelled = true;
+}
+
+/// Thrown by [ExportFormat.writeStream] when the cancel token fires.
+/// Callers should catch and delete the partial file.
+class ExportCancelledException implements Exception {
+  const ExportCancelledException();
+  @override
+  String toString() => 'Export cancelled';
+}
+
 /// One supported output format. Add a subclass + extend [exportFormats] to
 /// surface a new format in the export dialog — no other call sites change.
 ///
-/// Implementations return the full rendered text via [render]; the default
-/// [writeFile] just persists that string. This keeps a single code path for
-/// file save and clipboard copy and is fine for a personal tool — multi-million
-/// row exports would want streaming, but we don't have that use case.
+/// [render] returns the fully rendered text — used by the clipboard path
+/// where we have to hand the OS a single String. [writeStream] writes
+/// directly to an [IOSink] without materialising the whole output in the
+/// heap, used for file exports.
 abstract class ExportFormat {
   const ExportFormat();
 
@@ -19,8 +36,37 @@ abstract class ExportFormat {
 
   String render(QueryResult result);
 
-  Future<void> writeFile(File file, QueryResult result) =>
-      file.writeAsString(render(result));
+  Future<void> writeStream(
+    IOSink sink,
+    QueryResult result, {
+    CancelToken? cancel,
+  });
+
+  /// Stream the export to [file], deleting it on cancel. Defaults to
+  /// piping [writeStream] into a file-opened sink.
+  Future<void> writeFile(
+    File file,
+    QueryResult result, {
+    CancelToken? cancel,
+  }) async {
+    final sink = file.openWrite();
+    try {
+      await writeStream(sink, result, cancel: cancel);
+      await sink.flush();
+    } on ExportCancelledException {
+      await sink.close();
+      if (await file.exists()) await file.delete();
+      rethrow;
+    } finally {
+      await sink.close();
+    }
+  }
+
+  String cellText(Object? raw) => formatCellValue(raw) ?? '';
+
+  void checkCancelled(CancelToken? token) {
+    if (token?.isCancelled == true) throw const ExportCancelledException();
+  }
 }
 
 /// CSV — RFC 4180 quoting: only quote when a field contains a separator,
@@ -43,18 +89,34 @@ class CsvFormat extends ExportFormat {
     buf.write(_renderRow(result.columns));
     buf.write('\r\n');
     for (final row in result.rows) {
-      buf.write(_renderRow(row.map(_cellText).toList()));
+      buf.write(_renderRow(row.map(cellText).toList()));
       buf.write('\r\n');
     }
     return buf.toString();
   }
 
-  String _renderRow(List<String> cells) => cells.map(_escape).join(',');
+  @override
+  Future<void> writeStream(
+    IOSink sink,
+    QueryResult result, {
+    CancelToken? cancel,
+  }) async {
+    sink.write(_renderRow(result.columns));
+    sink.write('\r\n');
+    var i = 0;
+    for (final row in result.rows) {
+      if ((i++ & 1023) == 0) {
+        checkCancelled(cancel);
+        // Yield to the event loop every 1024 rows so the UI stays
+        // responsive and the cancel button can fire.
+        await Future<void>.delayed(Duration.zero);
+      }
+      sink.write(_renderRow(row.map(cellText).toList()));
+      sink.write('\r\n');
+    }
+  }
 
-  /// Renders a raw cell value using the same formatter the grid uses — so
-  /// JSON columns export as JSON, dates as ISO strings, etc. SQL NULL becomes
-  /// an empty cell (the most widely-compatible choice for CSV).
-  String _cellText(dynamic raw) => formatCellValue(raw) ?? '';
+  String _renderRow(List<String> cells) => cells.map(_escape).join(',');
 
   String _escape(String text) {
     final needsQuoting = text.contains(',') ||
@@ -71,6 +133,10 @@ class CsvFormat extends ExportFormat {
 /// Column widths are padded to the widest cell so the raw output is also
 /// readable in a plain editor. Pipes inside cells are escaped (`\|`) and
 /// embedded newlines collapse to `<br>` since GFM tables can't span lines.
+///
+/// Markdown requires a first pass over the data to compute widths, so
+/// the streaming variant isn't truly streaming for this format — the
+/// rendered cell table is held in memory before being written out.
 class MarkdownFormat extends ExportFormat {
   const MarkdownFormat();
 
@@ -90,7 +156,7 @@ class MarkdownFormat extends ExportFormat {
 
     final headerCells = columns.map(_escape).toList();
     final bodyCells = result.rows
-        .map((row) => row.map((c) => _escape(_cellText(c))).toList())
+        .map((row) => row.map((c) => _escape(cellText(c))).toList())
         .toList();
 
     final widths = List<int>.generate(columns.length, (i) {
@@ -98,7 +164,6 @@ class MarkdownFormat extends ExportFormat {
       for (final row in bodyCells) {
         if (i < row.length && row[i].length > max) max = row[i].length;
       }
-      // GFM requires at least three dashes in the separator row.
       return max < 3 ? 3 : max;
     });
 
@@ -109,6 +174,41 @@ class MarkdownFormat extends ExportFormat {
       _writeRow(buf, row, widths);
     }
     return buf.toString();
+  }
+
+  @override
+  Future<void> writeStream(
+    IOSink sink,
+    QueryResult result, {
+    CancelToken? cancel,
+  }) async {
+    final columns = result.columns;
+    if (columns.isEmpty) return;
+
+    final headerCells = columns.map(_escape).toList();
+    final bodyCells = <List<String>>[];
+    var i = 0;
+    for (final row in result.rows) {
+      if ((i++ & 1023) == 0) {
+        checkCancelled(cancel);
+        await Future<void>.delayed(Duration.zero);
+      }
+      bodyCells.add(row.map((c) => _escape(cellText(c))).toList());
+    }
+
+    final widths = List<int>.generate(columns.length, (i) {
+      var max = headerCells[i].length;
+      for (final row in bodyCells) {
+        if (i < row.length && row[i].length > max) max = row[i].length;
+      }
+      return max < 3 ? 3 : max;
+    });
+
+    _sinkRow(sink, headerCells, widths);
+    _sinkSeparator(sink, widths);
+    for (final row in bodyCells) {
+      _sinkRow(sink, row, widths);
+    }
   }
 
   void _writeRow(StringBuffer buf, List<String> cells, List<int> widths) {
@@ -132,7 +232,26 @@ class MarkdownFormat extends ExportFormat {
     buf.write('\n');
   }
 
-  String _cellText(dynamic raw) => formatCellValue(raw) ?? '';
+  void _sinkRow(IOSink sink, List<String> cells, List<int> widths) {
+    sink.write('|');
+    for (var i = 0; i < widths.length; i++) {
+      final cell = i < cells.length ? cells[i] : '';
+      sink.write(' ');
+      sink.write(cell.padRight(widths[i]));
+      sink.write(' |');
+    }
+    sink.write('\n');
+  }
+
+  void _sinkSeparator(IOSink sink, List<int> widths) {
+    sink.write('|');
+    for (final w in widths) {
+      sink.write(' ');
+      sink.write('-' * w);
+      sink.write(' |');
+    }
+    sink.write('\n');
+  }
 
   String _escape(String text) => text
       .replaceAll(r'\', r'\\')
