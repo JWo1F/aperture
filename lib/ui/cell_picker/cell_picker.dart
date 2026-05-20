@@ -134,32 +134,32 @@ const _kDate = _Kind(
   id: _KindId.date,
   label: 'date',
   color: AppColors.info,
-  size: Size(252, 328),
+  size: Size(252, 296),
 );
 const _kTime = _Kind(
   id: _KindId.time,
   label: 'time',
   color: AppColors.info,
-  size: Size(252, 156),
+  size: Size(252, 126),
 );
 const _kTimeTz = _Kind(
   id: _KindId.time,
   label: 'timetz',
   color: AppColors.info,
-  size: Size(252, 198),
+  size: Size(252, 168),
   withTimezone: true,
 );
 const _kDatetime = _Kind(
   id: _KindId.datetime,
   label: 'timestamp',
   color: AppColors.info,
-  size: Size(252, 392),
+  size: Size(252, 360),
 );
 const _kDatetimeTz = _Kind(
   id: _KindId.datetime,
   label: 'timestamptz',
   color: AppColors.info,
-  size: Size(252, 432),
+  size: Size(252, 400),
   withTimezone: true,
 );
 const _kBytes = _Kind(
@@ -524,6 +524,14 @@ class _PanelState extends State<_Panel> {
   void _setNull() => widget.onCommit(const CellLiteral(null));
   void _setDefault() => widget.onCommit(const CellDefault());
 
+  bool _supportsNow() => switch (widget.kind.id) {
+        _KindId.date || _KindId.time || _KindId.datetime => true,
+        _ => false,
+      };
+
+  String _nowTooltip() =>
+      widget.kind.id == _KindId.date ? 'Today' : 'Now';
+
   /// Resets the time/date state to "now". Bumps [_resetTick] so the calendar
   /// + time-input rebuild from scratch and reflect the new value, even if
   /// they're stateful with internal controllers.
@@ -574,11 +582,13 @@ class _PanelState extends State<_Panel> {
                 canSave: _isDirty,
                 canBeNull: widget.canBeNull,
                 hasDefault: widget.hasDefault,
+                nowTooltip: _nowTooltip(),
                 onSave: _save,
                 onCancel: widget.onClose,
                 onSetNull: _setNull,
                 onSetDefault: _setDefault,
                 onRevert: widget.onRevert,
+                onNow: _supportsNow() ? _setToNow : null,
               ),
             ],
           ),
@@ -601,7 +611,6 @@ class _PanelState extends State<_Panel> {
           onChange: (d) => setState(() {
             _moment = DateTime(d.year, d.month, d.day);
           }),
-          onToday: _setToNow,
         );
       case _KindId.time:
         return _TimeBody(
@@ -613,7 +622,6 @@ class _PanelState extends State<_Panel> {
             _moment = DateTime(1970, 1, 1, h, m, s, ms);
           }),
           onTzChange: (tz) => setState(() => _tz = tz),
-          onNow: _setToNow,
         );
       case _KindId.datetime:
         return _DateTimeBody(
@@ -623,7 +631,6 @@ class _PanelState extends State<_Panel> {
           resetTick: _resetTick,
           onChange: (dt) => setState(() => _moment = dt),
           onTzChange: (tz) => setState(() => _tz = tz),
-          onNow: _setToNow,
         );
       case _KindId.text:
       case _KindId.json:
@@ -745,22 +752,26 @@ class _Footer extends StatelessWidget {
     required this.canSave,
     required this.canBeNull,
     required this.hasDefault,
+    required this.nowTooltip,
     required this.onSave,
     required this.onCancel,
     required this.onSetNull,
     required this.onSetDefault,
     required this.onRevert,
+    required this.onNow,
   });
 
   final bool hasPending;
   final bool canSave;
   final bool canBeNull;
   final bool hasDefault;
+  final String nowTooltip;
   final VoidCallback onSave;
   final VoidCallback onCancel;
   final VoidCallback onSetNull;
   final VoidCallback onSetDefault;
   final VoidCallback? onRevert;
+  final VoidCallback? onNow;
 
   @override
   Widget build(BuildContext context) {
@@ -787,6 +798,14 @@ class _Footer extends StatelessWidget {
             tooltip: hasDefault ? 'Set DEFAULT' : 'Column has no default',
             onPressed: hasDefault ? onSetDefault : null,
           ),
+          if (onNow != null) ...[
+            const SizedBox(width: 2),
+            IconAction(
+              icon: Icons.bolt,
+              tooltip: nowTooltip,
+              onPressed: onNow,
+            ),
+          ],
           const Spacer(),
           GestureDetector(
             onTap: onCancel,
@@ -994,12 +1013,10 @@ class _CalendarBody extends StatefulWidget {
     required this.initial,
     required this.resetTick,
     required this.onChange,
-    required this.onToday,
   });
   final DateTime initial;
   final int resetTick;
   final ValueChanged<DateTime> onChange;
-  final VoidCallback onToday;
 
   @override
   State<_CalendarBody> createState() => _CalendarBodyState();
@@ -1026,29 +1043,13 @@ class _CalendarBodyState extends State<_CalendarBody> {
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.bg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: _CalendarThemed(
-              key: ValueKey('cal-${widget.resetTick}'),
-              initial: _current,
-              onChange: (d) {
-                setState(() => _current = d);
-                widget.onChange(d);
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-            child: Row(
-              children: [
-                const Spacer(),
-                _NowChip(label: 'Today', onTap: widget.onToday),
-              ],
-            ),
-          ),
-        ],
+      child: _CalendarThemed(
+        key: ValueKey('cal-${widget.resetTick}'),
+        initial: _current,
+        onChange: (d) {
+          setState(() => _current = d);
+          widget.onChange(d);
+        },
       ),
     );
   }
@@ -1157,7 +1158,6 @@ class _TimeBody extends StatelessWidget {
     required this.resetTick,
     required this.onChange,
     required this.onTzChange,
-    required this.onNow,
   });
 
   final DateTime initial;
@@ -1166,13 +1166,12 @@ class _TimeBody extends StatelessWidget {
   final int resetTick;
   final void Function(int hour, int minute, int second, int ms) onChange;
   final ValueChanged<String> onTzChange;
-  final VoidCallback onNow;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.bg,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1182,16 +1181,9 @@ class _TimeBody extends StatelessWidget {
             onChange: onChange,
           ),
           if (withTz) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             _TzInput(value: tz, onChange: onTzChange),
           ],
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const Spacer(),
-              _NowChip(label: 'Now', onTap: onNow),
-            ],
-          ),
         ],
       ),
     );
@@ -1206,7 +1198,6 @@ class _DateTimeBody extends StatefulWidget {
     required this.resetTick,
     required this.onChange,
     required this.onTzChange,
-    required this.onNow,
   });
 
   final DateTime initial;
@@ -1215,7 +1206,6 @@ class _DateTimeBody extends StatefulWidget {
   final int resetTick;
   final ValueChanged<DateTime> onChange;
   final ValueChanged<String> onTzChange;
-  final VoidCallback onNow;
 
   @override
   State<_DateTimeBody> createState() => _DateTimeBodyState();
@@ -1294,13 +1284,6 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
                   const SizedBox(height: 8),
                   _TzInput(value: widget.tz, onChange: widget.onTzChange),
                 ],
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Spacer(),
-                    _NowChip(label: 'Now', onTap: widget.onNow),
-                  ],
-                ),
               ],
             ),
           ),
@@ -1515,60 +1498,3 @@ class _TzInputState extends State<_TzInput> {
   }
 }
 
-/// "Today" / "Now" chip — small pill that snaps the picker to the current
-/// date/time. Sits in the bottom-right of the body so it's discoverable
-/// without crowding the input.
-class _NowChip extends StatefulWidget {
-  const _NowChip({required this.label, required this.onTap});
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  State<_NowChip> createState() => _NowChipState();
-}
-
-class _NowChipState extends State<_NowChip> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: _hover ? AppColors.accentSoft : AppColors.surfaceAlt,
-            borderRadius: Radii.brSm,
-            border: Border.all(
-              color: _hover ? AppColors.accent : AppColors.border,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.bolt,
-                size: 11,
-                color: _hover ? AppColors.accent : AppColors.textSecondary,
-              ),
-              const SizedBox(width: 5),
-              Text(
-                widget.label,
-                style: AppTheme.mono(
-                  size: 10.5,
-                  color: _hover ? AppColors.accent : AppColors.textSecondary,
-                  weight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
