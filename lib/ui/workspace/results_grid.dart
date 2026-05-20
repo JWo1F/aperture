@@ -698,6 +698,12 @@ class _ResultsGridState extends State<ResultsGrid> {
                                 controller: _vBody,
                                 itemCount: result.rows.length,
                                 itemExtent: _rowHeight,
+                                // Rows hold no local state (selection lives
+                                // in a ValueNotifier on the grid). Skipping
+                                // the per-child AutomaticKeepAlive wrapper
+                                // means one less widget allocated per row
+                                // that scrolls into view.
+                                addAutomaticKeepAlives: false,
                                 itemBuilder: (_, r) =>
                                     _buildRow(r, result.rows[r], bodyWidth),
                               ),
