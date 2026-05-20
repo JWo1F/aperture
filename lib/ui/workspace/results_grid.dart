@@ -93,10 +93,15 @@ class _ResultsGridState extends State<ResultsGrid> {
   /// default editing keybindings while no cell is active.
   final FocusNode _gridFocus = FocusNode(debugLabel: 'results-grid');
 
-  /// The active cell (row, column). `null` until the user clicks one; cleared
-  /// by Esc or when the underlying result changes (new page / filter).
-  int? _selRow;
-  int? _selCol;
+  /// The active cell. `(null, null)` until the user clicks one; cleared by
+  /// Esc or when the underlying result changes (new page / filter). Stored
+  /// as a ValueNotifier so a click only rebuilds the rows that listen to it
+  /// (the visible rows), not the whole grid build method.
+  final ValueNotifier<(int?, int?)> _selection =
+      ValueNotifier<(int?, int?)>((null, null));
+
+  int? get _selRow => _selection.value.$1;
+  int? get _selCol => _selection.value.$2;
 
   List<double> _widths = [];
   List<String> _widthKeys = [];
@@ -134,8 +139,7 @@ class _ResultsGridState extends State<ResultsGrid> {
     // A new result set invalidates the row/column indices we held; clearing
     // the selection avoids highlighting an arbitrary cell after pagination.
     if (!identical(old.result, widget.result)) {
-      _selRow = null;
-      _selCol = null;
+      _selection.value = (null, null);
     }
   }
 
@@ -200,25 +204,23 @@ class _ResultsGridState extends State<ResultsGrid> {
     _vBody.dispose();
     _gridFocus.dispose();
     _measurer.dispose();
+    _selection.dispose();
     super.dispose();
   }
 
   // --- selection -------------------------------------------------------
 
   void _selectCell(int row, int column) {
-    setState(() {
-      _selRow = row;
-      _selCol = column;
-    });
-    _gridFocus.requestFocus();
+    final current = _selection.value;
+    if (current.$1 != row || current.$2 != column) {
+      _selection.value = (row, column);
+    }
+    if (!_gridFocus.hasFocus) _gridFocus.requestFocus();
   }
 
   void _clearSelection() {
     if (_selRow == null && _selCol == null) return;
-    setState(() {
-      _selRow = null;
-      _selCol = null;
-    });
+    _selection.value = (null, null);
   }
 
   /// Returns the textual form of the selected cell — pending edit (if any)
@@ -621,45 +623,53 @@ class _ResultsGridState extends State<ResultsGrid> {
   }
 
   Widget _buildRow(int row, List<dynamic> values, double rowWidth) {
-    final isSelectedRow = _selRow == row;
-    final Color bg;
-    if (isSelectedRow) {
-      // ~10% accent — visible without competing with the focused cell's
-      // bolder border.
-      bg = const Color(0x1A5B7CFA);
-    } else if (row.isOdd) {
-      bg = AppColors.surfaceAlt;
-    } else {
-      bg = Colors.transparent;
-    }
-    return Container(
-      width: rowWidth,
-      decoration: BoxDecoration(
-        color: bg,
-        border: const Border(
-          bottom: BorderSide(color: AppColors.border),
-        ),
-      ),
-      child: Row(
-        children: [
-          _staticCell(
-            width: _indexWidth,
-            align: Alignment.centerRight,
-            child: Text(
-              '${row + 1}',
-              style: AppTheme.mono(
-                size: 10.5,
-                color: isSelectedRow
-                    ? AppColors.accent
-                    : AppColors.textMuted,
-                weight: isSelectedRow ? FontWeight.w600 : FontWeight.w400,
-              ),
+    // Cells are built once per row; their content doesn't depend on which
+    // row is selected. Only the row's background tint and the index cell's
+    // typography track the selection, so we wrap just that container in a
+    // ValueListenableBuilder. Clicking another row rebuilds the two
+    // affected rows' Containers, not their 10+ cells each.
+    final cells = <Widget>[
+      for (var c = 0; c < values.length; c++) _buildCell(row, c, values[c]),
+    ];
+
+    return ValueListenableBuilder<(int?, int?)>(
+      valueListenable: _selection,
+      builder: (_, sel, _) {
+        final isSelectedRow = sel.$1 == row;
+        final bg = isSelectedRow
+            ? const Color(0x1A5B7CFA)
+            : (row.isOdd ? AppColors.surfaceAlt : Colors.transparent);
+        return Container(
+          width: rowWidth,
+          decoration: BoxDecoration(
+            color: bg,
+            border: const Border(
+              bottom: BorderSide(color: AppColors.border),
             ),
           ),
-          for (var c = 0; c < values.length; c++)
-            _buildCell(row, c, values[c]),
-        ],
-      ),
+          child: Row(
+            children: [
+              _staticCell(
+                width: _indexWidth,
+                align: Alignment.centerRight,
+                child: Text(
+                  '${row + 1}',
+                  style: AppTheme.mono(
+                    size: 10.5,
+                    color: isSelectedRow
+                        ? AppColors.accent
+                        : AppColors.textMuted,
+                    weight: isSelectedRow
+                        ? FontWeight.w600
+                        : FontWeight.w400,
+                  ),
+                ),
+              ),
+              ...cells,
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -730,8 +740,6 @@ class _ResultsGridState extends State<ResultsGrid> {
       );
     }
 
-    final isSelected = _selRow == row && _selCol == column;
-
     final cellBody = Container(
       width: _widths[column],
       height: _rowHeight,
@@ -748,54 +756,62 @@ class _ResultsGridState extends State<ResultsGrid> {
       child: rendered,
     );
 
-    // The selection ring is drawn as an overlay so it doesn't shift the
-    // cell's text or interfere with the edited-state left stripe.
-    final Widget cell = isSelected
-        ? Stack(
-            children: [
-              cellBody,
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: AppColors.accent,
-                        width: 1.5,
-                      ),
+    // The selection ring overlays the static cell body. Wrapping just the
+    // ring in a ValueListenableBuilder means clicking another cell rebuilds
+    // only the previously-selected cell's ring (hides) and the new one's
+    // ring (shows) — the cell content stays untouched.
+    final Widget cell = Stack(
+      children: [
+        cellBody,
+        Positioned.fill(
+          child: ValueListenableBuilder<(int?, int?)>(
+            valueListenable: _selection,
+            builder: (_, sel, _) {
+              final isSelected = sel.$1 == row && sel.$2 == column;
+              if (!isSelected) return const SizedBox.shrink();
+              return const IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.fromBorderSide(
+                      BorderSide(color: AppColors.accent, width: 1.5),
                     ),
                   ),
                 ),
-              ),
-            ],
-          )
-        : cellBody;
+              );
+            },
+          ),
+        ),
+      ],
+    );
 
-    // GestureDetector defers `onTap` until the double-tap window closes
-    // (~250 ms), which feels like the cell takes a beat to respond. Selecting
-    // on `onTapDown` instead fires the highlight the instant the pointer
-    // lands while still letting onDoubleTap fire after the second press.
+    // Listener.onPointerDown fires synchronously on the raw pointer event,
+    // before the gesture arena starts disambiguating taps from double taps.
+    // GestureDetector.onTapDown is gated by the tap recognizer's deadline
+    // (~kPressTimeout) when onDoubleTap is also registered, which is what
+    // made the selection visibly trail the click. The GestureDetector below
+    // still owns double-click (open the picker) and secondary tap.
     return Builder(
       builder: (cellCtx) => MouseRegion(
         cursor: widget.editable
             ? SystemMouseCursors.text
             : SystemMouseCursors.basic,
-        child: GestureDetector(
+        child: Listener(
           behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => _selectCell(row, column),
-          onDoubleTap: widget.editable
-              ? () => _openCellPicker(cellCtx, row, column, original)
-              : null,
-          onSecondaryTapDown: (d) {
-            _selectCell(row, column);
-            _openCellMenu(
+          onPointerDown: (_) => _selectCell(row, column),
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onDoubleTap: widget.editable
+                ? () => _openCellPicker(cellCtx, row, column, original)
+                : null,
+            onSecondaryTapDown: (d) => _openCellMenu(
               cellCtx,
               d.globalPosition,
               row,
               column,
               original,
-            );
-          },
-          child: cell,
+            ),
+            child: cell,
+          ),
         ),
       ),
     );
