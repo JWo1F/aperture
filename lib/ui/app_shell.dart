@@ -194,8 +194,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   ],
                 ),
               ),
-              Divider(height: 1, color: AppColors.hairline),
-              RepaintBoundary(child: _StatusBar(state: state)),
             ],
           ),
           ),
@@ -1562,44 +1560,3 @@ class _ErrorBox extends StatelessWidget {
   }
 }
 
-class _StatusBar extends StatelessWidget {
-  const _StatusBar({required this.state});
-
-  final AppState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final conn = state.activeConnection;
-    final connected = state.status == ConnectionStatus.connected;
-    final tableCount = state.schemas.fold<int>(
-      0,
-      (sum, s) => sum + s.tables.length,
-    );
-
-    return Container(
-      height: 24,
-      color: AppColors.surface,
-      padding: const EdgeInsets.symmetric(horizontal: Insets.md),
-      child: Row(
-        children: [
-          Icon(
-            Icons.lan_outlined,
-            size: 12,
-            color: connected ? AppColors.success : AppColors.textMuted,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            connected && conn != null ? conn.summary : 'Disconnected',
-            style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
-          ),
-          const Spacer(),
-          if (connected)
-            Text(
-              '${state.schemas.length} schemas · $tableCount relations',
-              style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
-            ),
-        ],
-      ),
-    );
-  }
-}

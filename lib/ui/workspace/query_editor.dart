@@ -254,7 +254,9 @@ class _QueryEditorState extends State<QueryEditor> {
                   ),
           ),
         ),
-        _StatusFooter(tab: tab, connected: state.activeConnection != null),
+        // No bottom status footer here; the results divider above the grid
+        // and the unified sidebar/pagebar at the app shell foot already
+        // carry the rows/ms/connection readouts the design specifies.
       ],
     );
   }
@@ -805,68 +807,6 @@ class _StatementStatus extends StatelessWidget {
   }
 }
 
-
-class _StatusFooter extends StatelessWidget {
-  const _StatusFooter({required this.tab, required this.connected});
-
-  final QueryTab tab;
-  final bool connected;
-
-  @override
-  Widget build(BuildContext context) {
-    final result = tab.result;
-    String message;
-    Color color;
-    if (!connected) {
-      message = 'Not connected';
-      color = AppColors.textMuted;
-    } else if (result == null) {
-      message = 'Ready';
-      color = AppColors.textMuted;
-    } else if (result.isError) {
-      message = 'Error';
-      color = AppColors.error;
-    } else if (result.hasColumns) {
-      final cap = result.truncatedAt;
-      message = cap == null
-          ? '${result.rows.length} rows'
-          : '${result.rows.length} rows · truncated to $cap (add LIMIT to override)';
-      color = cap == null ? AppColors.success : AppColors.warning;
-    } else {
-      message = '${result.affectedRows ?? 0} rows affected';
-      color = AppColors.success;
-    }
-
-    return Container(
-      height: 28,
-      padding: const EdgeInsets.symmetric(horizontal: Insets.md),
-      decoration: BoxDecoration(
-        color: AppColors.bgDeep,
-        border: Border(top: BorderSide(color: AppColors.hairline)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            message,
-            style: AppTheme.mono(size: 11, color: AppColors.textSecondary),
-          ),
-          const Spacer(),
-          if (result != null)
-            Text(
-              '${result.elapsed.inMilliseconds} ms',
-              style: AppTheme.mono(size: 11, color: AppColors.textMuted),
-            ),
-        ],
-      ),
-    );
-  }
-}
 
 /// Highlighted text editor — Flutter `TextField` with a controller that
 /// returns a pgsql-highlighted `TextSpan` tree, plus a hand-built gutter

@@ -38,11 +38,12 @@ class Sidebar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _ConnHeader(state: state),
-          if (connected) ...[
-            Expanded(child: _Body(state: state)),
-            _FooterStatus(state: state),
-          ] else
-            Expanded(child: _AllConnectionsList(state: state)),
+          Expanded(
+            child: connected
+                ? _Body(state: state)
+                : _AllConnectionsList(state: state),
+          ),
+          _FooterStatus(state: state),
         ],
       ),
     );
@@ -634,10 +635,15 @@ class _FooterStatus extends StatelessWidget {
       ConnectionStatus.error => 'error',
       ConnectionStatus.disconnected => 'disconnected',
     };
+    // Heights / bg match the workspace's pagination bar so the two surfaces
+    // form one continuous bottom rail across the app (per the design's
+    // single `.pagebar` / sidebar footer pair).
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: AppColors.hairline)),
+        color: AppColors.bgDeep,
+        border: Border(top: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
@@ -660,10 +666,26 @@ class _FooterStatus extends StatelessWidget {
           Text(
             label,
             style: AppTheme.mono(
-              size: 10,
+              size: 10.5,
               color: AppColors.textMuted,
             ),
           ),
+          if (connected) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                '·',
+                style: AppTheme.mono(size: 10.5, color: AppColors.text4),
+              ),
+            ),
+            Text(
+              '${state.schemas.length} schemas',
+              style: AppTheme.mono(
+                size: 10.5,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ],
         ],
       ),
     );
