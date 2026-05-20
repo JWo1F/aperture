@@ -598,18 +598,28 @@ class _ResultsGridState extends State<ResultsGrid> {
                 // The outer RepaintBoundary isolates the body's pixels
                 // from the scrollbar thumb overlay so vertical thumb
                 // drags don't force a repaint of every visible row.
+                //
+                // The MouseRegion sets the cell-text cursor once for the
+                // whole grid instead of attaching one per cell — the cursor
+                // is the same value for every cell, so per-cell hover
+                // tracking was just overhead during scroll.
                 return RepaintBoundary(
-                  child: SingleChildScrollView(
-                    controller: _hBody,
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: bodyWidth,
-                      child: ListView.builder(
-                        controller: _vBody,
-                        itemCount: result.rows.length,
-                        itemExtent: _rowHeight,
-                        itemBuilder: (_, r) =>
-                            _buildRow(r, result.rows[r], bodyWidth),
+                  child: MouseRegion(
+                    cursor: widget.editable
+                        ? SystemMouseCursors.text
+                        : SystemMouseCursors.basic,
+                    child: SingleChildScrollView(
+                      controller: _hBody,
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: bodyWidth,
+                        child: ListView.builder(
+                          controller: _vBody,
+                          itemCount: result.rows.length,
+                          itemExtent: _rowHeight,
+                          itemBuilder: (_, r) =>
+                              _buildRow(r, result.rows[r], bodyWidth),
+                        ),
                       ),
                     ),
                   ),
@@ -623,11 +633,12 @@ class _ResultsGridState extends State<ResultsGrid> {
   }
 
   Widget _buildRow(int row, List<dynamic> values, double rowWidth) {
-    // Cells are built once per row; their content doesn't depend on which
-    // row is selected. Only the row's background tint and the index cell's
-    // typography track the selection, so we wrap just that container in a
-    // ValueListenableBuilder. Clicking another row rebuilds the two
-    // affected rows' Containers, not their 10+ cells each.
+    // Cells are built once per row. Their content doesn't depend on the
+    // selection, so we don't put them inside the ValueListenableBuilder.
+    // The selection ring overlay is drawn once at the row level (a single
+    // Positioned widget over the active column) instead of giving every
+    // visible cell its own ValueListenableBuilder + Stack — that previously
+    // meant ~200 listener subscriptions churning on each scroll tick.
     final cells = <Widget>[
       for (var c = 0; c < values.length; c++) _buildCell(row, c, values[c]),
     ];
@@ -639,7 +650,8 @@ class _ResultsGridState extends State<ResultsGrid> {
         final bg = isSelectedRow
             ? const Color(0x1A5B7CFA)
             : (row.isOdd ? AppColors.surfaceAlt : Colors.transparent);
-        return Container(
+
+        final body = Container(
           width: rowWidth,
           decoration: BoxDecoration(
             color: bg,
@@ -668,6 +680,36 @@ class _ResultsGridState extends State<ResultsGrid> {
               ...cells,
             ],
           ),
+        );
+
+        if (!isSelectedRow || sel.$2 == null) return body;
+        final selCol = sel.$2!;
+        if (selCol >= _widths.length) return body;
+
+        var x = _indexWidth;
+        for (var c = 0; c < selCol; c++) {
+          x += _widths[c];
+        }
+
+        return Stack(
+          children: [
+            body,
+            Positioned(
+              left: x,
+              top: 0,
+              width: _widths[selCol],
+              height: _rowHeight,
+              child: const IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.fromBorderSide(
+                      BorderSide(color: AppColors.accent, width: 1.5),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -756,62 +798,34 @@ class _ResultsGridState extends State<ResultsGrid> {
       child: rendered,
     );
 
-    // The selection ring overlays the static cell body. Wrapping just the
-    // ring in a ValueListenableBuilder means clicking another cell rebuilds
-    // only the previously-selected cell's ring (hides) and the new one's
-    // ring (shows) — the cell content stays untouched.
-    final Widget cell = Stack(
-      children: [
-        cellBody,
-        Positioned.fill(
-          child: ValueListenableBuilder<(int?, int?)>(
-            valueListenable: _selection,
-            builder: (_, sel, _) {
-              final isSelected = sel.$1 == row && sel.$2 == column;
-              if (!isSelected) return const SizedBox.shrink();
-              return const IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: Border.fromBorderSide(
-                      BorderSide(color: AppColors.accent, width: 1.5),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-
     // Listener.onPointerDown fires synchronously on the raw pointer event,
     // before the gesture arena starts disambiguating taps from double taps.
     // GestureDetector.onTapDown is gated by the tap recognizer's deadline
     // (~kPressTimeout) when onDoubleTap is also registered, which is what
     // made the selection visibly trail the click. The GestureDetector below
     // still owns double-click (open the picker) and secondary tap.
+    //
+    // No MouseRegion here — the cursor is set once at the body level for the
+    // whole grid since it's the same for every cell. Dropping 200 per-cell
+    // MouseRegions removed a significant chunk of hover-tracking work that
+    // was firing on every mouse-move event during scroll.
     return Builder(
-      builder: (cellCtx) => MouseRegion(
-        cursor: widget.editable
-            ? SystemMouseCursors.text
-            : SystemMouseCursors.basic,
-        child: Listener(
-          behavior: HitTestBehavior.opaque,
-          onPointerDown: (_) => _selectCell(row, column),
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onDoubleTap: widget.editable
-                ? () => _openCellPicker(cellCtx, row, column, original)
-                : null,
-            onSecondaryTapDown: (d) => _openCellMenu(
-              cellCtx,
-              d.globalPosition,
-              row,
-              column,
-              original,
-            ),
-            child: cell,
+      builder: (cellCtx) => Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: (_) => _selectCell(row, column),
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onDoubleTap: widget.editable
+              ? () => _openCellPicker(cellCtx, row, column, original)
+              : null,
+          onSecondaryTapDown: (d) => _openCellMenu(
+            cellCtx,
+            d.globalPosition,
+            row,
+            column,
+            original,
           ),
+          child: cellBody,
         ),
       ),
     );
