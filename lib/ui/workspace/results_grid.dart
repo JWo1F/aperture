@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 
 import '../../models/db_object.dart';
 import '../../models/order_term.dart';
@@ -80,9 +79,12 @@ class _ResultsGridState extends State<ResultsGrid> {
   static const double _indexWidth = 56;
   static const double _handleWidth = 7;
 
-  late final LinkedScrollControllerGroup _hGroup;
-  late final ScrollController _hHeader;
-  late final ScrollController _hBody;
+  // The body owns horizontal scroll outright; the header reads its offset
+  // through an AnimatedBuilder so it tracks every pixel of the gesture in
+  // the same frame. LinkedScrollControllerGroup syncs through a microtask
+  // and adds a visible one-frame lag that made trackpad scrolling feel
+  // rubbery on macOS.
+  final ScrollController _hBody = ScrollController();
   final ScrollController _vBody = ScrollController();
 
   /// Focus node for the grid body — owns keyboard shortcuts (⌘C / Ctrl-C
@@ -118,9 +120,6 @@ class _ResultsGridState extends State<ResultsGrid> {
   @override
   void initState() {
     super.initState();
-    _hGroup = LinkedScrollControllerGroup();
-    _hHeader = _hGroup.addAndGet();
-    _hBody = _hGroup.addAndGet();
     _syncWidths();
   }
 
@@ -197,7 +196,6 @@ class _ResultsGridState extends State<ResultsGrid> {
 
   @override
   void dispose() {
-    _hHeader.dispose();
     _hBody.dispose();
     _vBody.dispose();
     _gridFocus.dispose();
@@ -503,47 +501,55 @@ class _ResultsGridState extends State<ResultsGrid> {
   }
 
   Widget _buildHeader(List<String> columns, double totalWidth) {
+    final headerRow = SizedBox(
+      width: totalWidth,
+      child: Row(
+        children: [
+          _staticCell(
+            width: _indexWidth,
+            align: Alignment.center,
+            child: Text('#', style: AppTheme.eyebrow()),
+          ),
+          for (var i = 0; i < columns.length; i++)
+            _HeaderCell(
+              label: columns[i],
+              width: _widths[i],
+              handleWidth: _handleWidth,
+              sort: _sortFor(columns[i]),
+              sortPriority: _sortPriority(columns[i]),
+              isForeignKey:
+                  widget.foreignKeys?.containsKey(columns[i]) ?? false,
+              onSort: widget.onSortColumn == null
+                  ? null
+                  : () => widget.onSortColumn!(columns[i]),
+              onResize: (delta) {
+                final next = (_widths[i] + delta).clamp(64.0, 900.0);
+                setState(() => _widths[i] = next);
+                widget.widths?[columns[i]] = next;
+                widget.onWidthChanged?.call(columns[i], next);
+              },
+            ),
+        ],
+      ),
+    );
+
     return Container(
       height: _rowHeight,
       decoration: const BoxDecoration(
         color: AppColors.surfaceAlt,
         border: Border(bottom: BorderSide(color: AppColors.borderStrong)),
       ),
-      child: SingleChildScrollView(
-        controller: _hHeader,
-        scrollDirection: Axis.horizontal,
-        physics: const NeverScrollableScrollPhysics(),
-        child: SizedBox(
-          width: totalWidth,
-          child: Row(
-            children: [
-              _staticCell(
-                width: _indexWidth,
-                align: Alignment.center,
-                child: Text('#', style: AppTheme.eyebrow()),
-              ),
-              for (var i = 0; i < columns.length; i++)
-                _HeaderCell(
-                  label: columns[i],
-                  width: _widths[i],
-                  handleWidth: _handleWidth,
-                  sort: _sortFor(columns[i]),
-                  sortPriority: _sortPriority(columns[i]),
-                  isForeignKey:
-                      widget.foreignKeys?.containsKey(columns[i]) ?? false,
-                  onSort: widget.onSortColumn == null
-                      ? null
-                      : () => widget.onSortColumn!(columns[i]),
-                  onResize: (delta) {
-                    final next =
-                        (_widths[i] + delta).clamp(64.0, 900.0);
-                    setState(() => _widths[i] = next);
-                    widget.widths?[columns[i]] = next;
-                    widget.onWidthChanged?.call(columns[i], next);
-                  },
-                ),
-            ],
-          ),
+      child: ClipRect(
+        child: AnimatedBuilder(
+          animation: _hBody,
+          builder: (_, child) {
+            final offset = _hBody.hasClients ? _hBody.offset : 0.0;
+            return Transform.translate(
+              offset: Offset(-offset, 0),
+              child: child,
+            );
+          },
+          child: headerRow,
         ),
       ),
     );
@@ -577,17 +583,22 @@ class _ResultsGridState extends State<ResultsGrid> {
                 final bodyWidth = totalWidth < constraints.maxWidth
                     ? constraints.maxWidth
                     : totalWidth;
-                return SingleChildScrollView(
-                  controller: _hBody,
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: bodyWidth,
-                    child: ListView.builder(
-                      controller: _vBody,
-                      itemCount: result.rows.length,
-                      itemExtent: _rowHeight,
-                      itemBuilder: (_, r) =>
-                          _buildRow(r, result.rows[r], bodyWidth),
+                // The outer RepaintBoundary isolates the body's pixels
+                // from the scrollbar thumb overlay so vertical thumb
+                // drags don't force a repaint of every visible row.
+                return RepaintBoundary(
+                  child: SingleChildScrollView(
+                    controller: _hBody,
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: bodyWidth,
+                      child: ListView.builder(
+                        controller: _vBody,
+                        itemCount: result.rows.length,
+                        itemExtent: _rowHeight,
+                        itemBuilder: (_, r) =>
+                            _buildRow(r, result.rows[r], bodyWidth),
+                      ),
                     ),
                   ),
                 );
