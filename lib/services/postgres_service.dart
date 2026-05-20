@@ -4,8 +4,12 @@ import '../models/cell_edit.dart';
 import '../models/connection_config.dart';
 import '../models/db_object.dart';
 import '../models/query_result.dart';
+import 'driver_decoder.dart';
 import 'introspector.dart';
 import 'sql_identifier.dart';
+
+List<Object?> _decodeRow(List<Object?> raw) =>
+    [for (final v in raw) decodeDriverValue(v)];
 
 /// Wraps a single live Postgres connection: opening it, introspecting the
 /// catalog, and running statements. One instance maps to one open connection.
@@ -118,7 +122,7 @@ class PostgresService {
       for (final row in result) {
         final values = row.toList();
         rowIds.add(values.first as String);
-        rows.add(values.sublist(1));
+        rows.add(_decodeRow(values.sublist(1)));
       }
 
       return QueryResult.rows(
@@ -158,7 +162,7 @@ class PostgresService {
     final columns = result.schema.columns
         .map((c) => c.columnName ?? 'column')
         .toList();
-    final rows = result.map((r) => r.toList()).toList();
+    final rows = [for (final r in result) _decodeRow(r.toList())];
     return QueryResult.rows(
       columns: columns,
       rows: rows,
@@ -319,7 +323,7 @@ class PostgresService {
             ),
           )
           .toList();
-      final rows = result.map((row) => row.toList()).toList();
+      final rows = [for (final row in result) _decodeRow(row.toList())];
 
       return QueryResult.rows(
         columns: columns,

@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:postgres/postgres.dart';
 
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
@@ -218,7 +217,7 @@ _Kind _kindFor(dynamic v, String? dataType) {
   if (v is int || v is BigInt) return _kInt;
   if (v is num) return _kNumber;
   if (v is DateTime) return _kDatetime;
-  if (v is UndecodedBytes) return _kBytes;
+  if (v is Uint8List) return _kBytes;
   return _kString;
 }
 
@@ -235,7 +234,7 @@ String _initialText(dynamic raw, CellEditValue? pending) {
       return raw.toString();
     }
   }
-  if (raw is UndecodedBytes) return raw.isBinary ? '' : raw.asString;
+  if (raw is Uint8List) return '';
   if (raw is DateTime) return raw.toIso8601String();
   return raw.toString();
 }
