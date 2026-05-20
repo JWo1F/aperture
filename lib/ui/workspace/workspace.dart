@@ -79,50 +79,48 @@ class _TabStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       height: 32,
-      color: AppColors.bgDeep,
-      child: Row(
+      child: Stack(
         children: [
-          // The tab cluster sizes to its content (`Flexible`) and scrolls
-          // horizontally when there are more tabs than fit. The new-tab
-          // button rides at the end of that cluster — flush against the
-          // last tab — instead of getting marooned in the middle by an
-          // Expanded ListView.
-          Flexible(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var i = 0; i < state.tabs.length; i++)
-                    _Tab(
-                      tab: state.tabs[i],
-                      active: i == state.activeTabIndex,
-                      onTap: () => state.selectTab(i),
-                      onClose: () => state.closeTab(state.tabs[i].id),
-                      onContextMenu: (pos) => _showTabMenu(
-                        context,
-                        state: state,
-                        tab: state.tabs[i],
-                        position: pos,
-                        canCloseRight: i < state.tabs.length - 1,
-                      ),
-                    ),
-                  _NewTabButton(onTap: state.newQueryTab),
-                ],
-              ),
-            ),
+          // 1. Full-width strip background.
+          Positioned.fill(
+            child: ColoredBox(color: AppColors.bgDeep),
           ),
-          // Trailing fill — carries the strip's bottom rule across the
-          // empty area to the right of the new-tab button.
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: AppColors.border, width: 1),
-                ),
-              ),
+          // 2. Full-width bottom hairline. Each active tab paints over the
+          //    1px row underneath it (via its own `bg`-colored fill at
+          //    full 32px height) so the rule reads as if it ducks under
+          //    the active tab and continues either side.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(height: 1, color: AppColors.border),
+          ),
+          // 3. Tabs + new-tab button. The Row sizes to its content and
+          //    scrolls horizontally when overflowing the viewport (matches
+          //    the design's `overflow-x: auto` on `.tabs`).
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < state.tabs.length; i++)
+                  _Tab(
+                    tab: state.tabs[i],
+                    active: i == state.activeTabIndex,
+                    onTap: () => state.selectTab(i),
+                    onClose: () => state.closeTab(state.tabs[i].id),
+                    onContextMenu: (pos) => _showTabMenu(
+                      context,
+                      state: state,
+                      tab: state.tabs[i],
+                      position: pos,
+                      canCloseRight: i < state.tabs.length - 1,
+                    ),
+                  ),
+                _NewTabButton(onTap: state.newQueryTab),
+              ],
             ),
           ),
         ],
@@ -149,12 +147,10 @@ class _NewTabButton extends StatelessWidget {
           width: 32,
           height: 32,
           alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: hovering ? AppColors.surfaceHover : Colors.transparent,
-            border: Border(
-              bottom: BorderSide(color: AppColors.border, width: 1),
-            ),
-          ),
+          // No bottom border — the strip paints a full-width hairline
+          // behind every tab and this button alike, so the rule continues
+          // uninterrupted to the right edge of the window.
+          color: hovering ? AppColors.surfaceHover : Colors.transparent,
           child: Icon(
             Icons.add,
             size: 13,
@@ -245,6 +241,9 @@ class _TabState extends State<_Tab> {
           constraints: const BoxConstraints(minWidth: 120, maxWidth: 200),
           height: 32,
           decoration: BoxDecoration(
+            // Active tab paints a solid `bg` fill so the strip's bottom
+            // rule (rendered behind every tab) is masked underneath it.
+            // Inactive tabs stay transparent so the rule reads through.
             color: widget.active
                 ? AppColors.bg
                 : (hovering
@@ -255,12 +254,6 @@ class _TabState extends State<_Tab> {
               top: widget.active
                   ? BorderSide(color: AppColors.accent, width: 1)
                   : BorderSide.none,
-              // Inactive tabs carry the strip's bottom rule on their own
-              // bottom edge; the active tab leaves it off so its body blends
-              // into the workspace bg without a hairline cap.
-              bottom: widget.active
-                  ? BorderSide.none
-                  : BorderSide(color: AppColors.border, width: 1),
             ),
           ),
           padding: const EdgeInsets.only(left: 10, right: 8),
