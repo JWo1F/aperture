@@ -59,24 +59,12 @@ class _ConnHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final conn = state.activeConnection;
-    final (Color dot, String name) = switch (state.status) {
-      ConnectionStatus.connected => (
-          AppColors.accent,
-          conn?.name ?? 'connected',
-        ),
-      ConnectionStatus.connecting => (AppColors.accent, 'connecting…'),
-      ConnectionStatus.lost => (
-          AppColors.warning,
-          conn?.name ?? 'lost',
-        ),
-      ConnectionStatus.error => (
-          AppColors.error,
-          'connection failed',
-        ),
-      ConnectionStatus.disconnected => (
-          AppColors.textMuted,
-          'no connection',
-        ),
+    final label = switch (state.status) {
+      ConnectionStatus.connected => conn?.database ?? 'connected',
+      ConnectionStatus.connecting => 'connecting…',
+      ConnectionStatus.lost => conn?.database ?? 'lost',
+      ConnectionStatus.error => 'connection failed',
+      ConnectionStatus.disconnected => 'no connection',
     };
 
     final version = state.serverVersion;
@@ -87,11 +75,13 @@ class _ConnHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.storage_rounded, size: 12, color: dot),
+          // Icon stays in the accent the design uses regardless of state;
+          // connection liveness is surfaced by the footer dot.
+          Icon(Icons.storage_rounded, size: 12, color: AppColors.accent),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              name,
+              label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTheme.mono(
@@ -272,6 +262,8 @@ class _Section extends StatelessWidget {
 }
 
 /// Eyebrow rule inside a schema separating tables / views / functions.
+/// Mirrors the design's inline style: `padding:'4px 0 2px 24px'`, mono 9.5,
+/// uppercase letter-spacing 0.06em, text-4.
 class _SubEyebrow extends StatelessWidget {
   const _SubEyebrow({required this.label, required this.count});
   final String label;
@@ -280,7 +272,7 @@ class _SubEyebrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(left: 28, right: 14, top: 8, bottom: 2),
+      padding: const EdgeInsets.only(left: 24, top: 4, bottom: 2),
       child: Text(
         '$label · $count',
         style: AppTheme.mono(
@@ -607,11 +599,13 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
 
   @override
   Widget build(BuildContext context) {
+    final ts = widget.query.updatedAt;
     return _TreeRow(
       indent: 0,
       twisty: Icon(Icons.description_outlined,
           size: 10, color: AppColors.text4),
       name: widget.query.name,
+      meta: ts == null ? null : timeAgo(ts),
       active: widget.active,
       onTap: () => widget.state.openSavedQuery(widget.query),
       onSecondaryTapDown: (d) => _openMenu(d.globalPosition),
@@ -667,26 +661,10 @@ class _FooterStatus extends StatelessWidget {
           Text(
             label,
             style: AppTheme.mono(
-              size: 10.5,
+              size: 10,
               color: AppColors.textMuted,
             ),
           ),
-          if (connected) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                '·',
-                style: AppTheme.mono(size: 10.5, color: AppColors.text4),
-              ),
-            ),
-            Text(
-              '${state.schemas.length} schemas',
-              style: AppTheme.mono(
-                size: 10.5,
-                color: AppColors.textMuted,
-              ),
-            ),
-          ],
         ],
       ),
     );
