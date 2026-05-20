@@ -134,32 +134,32 @@ const _kDate = _Kind(
   id: _KindId.date,
   label: 'date',
   color: AppColors.info,
-  size: Size(252, 296),
+  size: Size(252, 328),
 );
 const _kTime = _Kind(
   id: _KindId.time,
   label: 'time',
   color: AppColors.info,
-  size: Size(252, 126),
+  size: Size(252, 156),
 );
 const _kTimeTz = _Kind(
   id: _KindId.time,
   label: 'timetz',
   color: AppColors.info,
-  size: Size(252, 168),
+  size: Size(252, 198),
   withTimezone: true,
 );
 const _kDatetime = _Kind(
   id: _KindId.datetime,
   label: 'timestamp',
   color: AppColors.info,
-  size: Size(252, 360),
+  size: Size(252, 392),
 );
 const _kDatetimeTz = _Kind(
   id: _KindId.datetime,
   label: 'timestamptz',
   color: AppColors.info,
-  size: Size(252, 400),
+  size: Size(252, 432),
   withTimezone: true,
 );
 const _kBytes = _Kind(
@@ -412,6 +412,10 @@ class _PanelState extends State<_Panel> {
   // Date/time/datetime state
   DateTime? _moment;
   DateTime? _baselineMoment;
+  // Bumped whenever Now/Today resets the moment; passed as a Key to the
+  // time/calendar sub-widgets so they refresh their internal state without
+  // losing the cursor during normal user typing.
+  int _resetTick = 0;
 
   // Timezone (only relevant when widget.kind.withTimezone)
   String _tz = '';
@@ -520,6 +524,17 @@ class _PanelState extends State<_Panel> {
   void _setNull() => widget.onCommit(const CellLiteral(null));
   void _setDefault() => widget.onCommit(const CellDefault());
 
+  /// Resets the time/date state to "now". Bumps [_resetTick] so the calendar
+  /// + time-input rebuild from scratch and reflect the new value, even if
+  /// they're stateful with internal controllers.
+  void _setToNow() {
+    setState(() {
+      _moment = DateTime.now();
+      if (widget.kind.withTimezone) _tz = '';
+      _resetTick++;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return CallbackShortcuts(
@@ -582,27 +597,33 @@ class _PanelState extends State<_Panel> {
       case _KindId.date:
         return _CalendarBody(
           initial: _moment!,
+          resetTick: _resetTick,
           onChange: (d) => setState(() {
             _moment = DateTime(d.year, d.month, d.day);
           }),
+          onToday: _setToNow,
         );
       case _KindId.time:
         return _TimeBody(
           initial: _moment!,
           withTz: widget.kind.withTimezone,
           tz: _tz,
+          resetTick: _resetTick,
           onChange: (h, m, s, ms) => setState(() {
             _moment = DateTime(1970, 1, 1, h, m, s, ms);
           }),
           onTzChange: (tz) => setState(() => _tz = tz),
+          onNow: _setToNow,
         );
       case _KindId.datetime:
         return _DateTimeBody(
           initial: _moment!,
           withTz: widget.kind.withTimezone,
           tz: _tz,
+          resetTick: _resetTick,
           onChange: (dt) => setState(() => _moment = dt),
           onTzChange: (tz) => setState(() => _tz = tz),
+          onNow: _setToNow,
         );
       case _KindId.text:
       case _KindId.json:
@@ -969,9 +990,16 @@ class _BoolChoiceState extends State<_BoolChoice> {
 // --- Date / time bodies -----------------------------------------------
 
 class _CalendarBody extends StatefulWidget {
-  const _CalendarBody({required this.initial, required this.onChange});
+  const _CalendarBody({
+    required this.initial,
+    required this.resetTick,
+    required this.onChange,
+    required this.onToday,
+  });
   final DateTime initial;
+  final int resetTick;
   final ValueChanged<DateTime> onChange;
+  final VoidCallback onToday;
 
   @override
   State<_CalendarBody> createState() => _CalendarBodyState();
@@ -987,15 +1015,40 @@ class _CalendarBodyState extends State<_CalendarBody> {
   }
 
   @override
+  void didUpdateWidget(_CalendarBody old) {
+    super.didUpdateWidget(old);
+    if (old.resetTick != widget.resetTick) {
+      _current = widget.initial;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.bg,
-      child: _CalendarThemed(
-        initial: _current,
-        onChange: (d) {
-          setState(() => _current = d);
-          widget.onChange(d);
-        },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _CalendarThemed(
+              key: ValueKey('cal-${widget.resetTick}'),
+              initial: _current,
+              onChange: (d) {
+                setState(() => _current = d);
+                widget.onChange(d);
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+            child: Row(
+              children: [
+                const Spacer(),
+                _NowChip(label: 'Today', onTap: widget.onToday),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1004,7 +1057,11 @@ class _CalendarBodyState extends State<_CalendarBody> {
 /// CalendarDatePicker wrapped in a tight Material 3 theme override so the
 /// selected / today states fit the Aperture palette and the smaller frame.
 class _CalendarThemed extends StatelessWidget {
-  const _CalendarThemed({required this.initial, required this.onChange});
+  const _CalendarThemed({
+    super.key,
+    required this.initial,
+    required this.onChange,
+  });
 
   final DateTime initial;
   final ValueChanged<DateTime> onChange;
@@ -1097,28 +1154,44 @@ class _TimeBody extends StatelessWidget {
     required this.initial,
     required this.withTz,
     required this.tz,
+    required this.resetTick,
     required this.onChange,
     required this.onTzChange,
+    required this.onNow,
   });
 
   final DateTime initial;
   final bool withTz;
   final String tz;
+  final int resetTick;
   final void Function(int hour, int minute, int second, int ms) onChange;
   final ValueChanged<String> onTzChange;
+  final VoidCallback onNow;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.bg,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _TimeInput(initial: initial, onChange: onChange),
+          _TimeInput(
+            key: ValueKey('time-$resetTick'),
+            initial: initial,
+            onChange: onChange,
+          ),
           if (withTz) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _TzInput(value: tz, onChange: onTzChange),
           ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Spacer(),
+              _NowChip(label: 'Now', onTap: onNow),
+            ],
+          ),
         ],
       ),
     );
@@ -1130,15 +1203,19 @@ class _DateTimeBody extends StatefulWidget {
     required this.initial,
     required this.withTz,
     required this.tz,
+    required this.resetTick,
     required this.onChange,
     required this.onTzChange,
+    required this.onNow,
   });
 
   final DateTime initial;
   final bool withTz;
   final String tz;
+  final int resetTick;
   final ValueChanged<DateTime> onChange;
   final ValueChanged<String> onTzChange;
+  final VoidCallback onNow;
 
   @override
   State<_DateTimeBody> createState() => _DateTimeBodyState();
@@ -1151,6 +1228,14 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
   void initState() {
     super.initState();
     _value = widget.initial;
+  }
+
+  @override
+  void didUpdateWidget(_DateTimeBody old) {
+    super.didUpdateWidget(old);
+    if (old.resetTick != widget.resetTick) {
+      _value = widget.initial;
+    }
   }
 
   void _setDate(DateTime d) {
@@ -1189,6 +1274,7 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
         children: [
           Expanded(
             child: _CalendarThemed(
+              key: ValueKey('cal-${widget.resetTick}'),
               initial: _value,
               onChange: _setDate,
             ),
@@ -1197,12 +1283,24 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _TimeInput(initial: _value, onChange: _setTime),
+                _TimeInput(
+                  key: ValueKey('time-${widget.resetTick}'),
+                  initial: _value,
+                  onChange: _setTime,
+                ),
                 if (widget.withTz) ...[
                   const SizedBox(height: 8),
                   _TzInput(value: widget.tz, onChange: widget.onTzChange),
                 ],
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Spacer(),
+                    _NowChip(label: 'Now', onTap: widget.onNow),
+                  ],
+                ),
               ],
             ),
           ),
@@ -1214,7 +1312,11 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
 
 /// Four small numeric fields HH : MM : SS . MS, value flows out via [onChange].
 class _TimeInput extends StatefulWidget {
-  const _TimeInput({required this.initial, required this.onChange});
+  const _TimeInput({
+    super.key,
+    required this.initial,
+    required this.onChange,
+  });
   final DateTime initial;
   final void Function(int hour, int minute, int second, int ms) onChange;
 
@@ -1409,6 +1511,64 @@ class _TzInputState extends State<_TzInput> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// "Today" / "Now" chip — small pill that snaps the picker to the current
+/// date/time. Sits in the bottom-right of the body so it's discoverable
+/// without crowding the input.
+class _NowChip extends StatefulWidget {
+  const _NowChip({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  State<_NowChip> createState() => _NowChipState();
+}
+
+class _NowChipState extends State<_NowChip> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: _hover ? AppColors.accentSoft : AppColors.surfaceAlt,
+            borderRadius: Radii.brSm,
+            border: Border.all(
+              color: _hover ? AppColors.accent : AppColors.border,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.bolt,
+                size: 11,
+                color: _hover ? AppColors.accent : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                widget.label,
+                style: AppTheme.mono(
+                  size: 10.5,
+                  color: _hover ? AppColors.accent : AppColors.textSecondary,
+                  weight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

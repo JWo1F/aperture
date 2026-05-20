@@ -253,13 +253,18 @@ class _QueryEditorState extends State<QueryEditor> {
                   ),
                   // ▶ overlay — one per statement, positioned in the gutter
                   // after the line number, scroll-synced via the
-                  // NotificationListener.
+                  // NotificationListener. Each icon occupies a box exactly
+                  // one source line tall and centers itself vertically so it
+                  // aligns with its line number regardless of font metrics.
                   for (final stmt in _statements)
                     _RunStmtIcon(
                       stmt: stmt,
-                      top: stmt.startLine * _editorFontSize * _editorLineHeight -
-                          _scrollOffset +
-                          _editorVerticalPad,
+                      top: stmt.startLine *
+                              _editorFontSize *
+                              _editorLineHeight +
+                          _editorVerticalPad -
+                          _scrollOffset,
+                      lineHeight: _editorFontSize * _editorLineHeight,
                       onTap: () => _runStatement(stmt),
                     ),
                 ],
@@ -535,34 +540,38 @@ class _RunStmtIcon extends StatelessWidget {
   const _RunStmtIcon({
     required this.stmt,
     required this.top,
+    required this.lineHeight,
     required this.onTap,
   });
 
   final SqlStatement stmt;
   final double top;
+  final double lineHeight;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      // Pinned just inside the right edge of the gutter — i.e. after the
-      // line number, before the source code area. _gutterWidth (60) - 16
-      // leaves about 16 px for the icon + a hair of breathing room.
+      // Pinned just inside the right edge of the gutter — after the line
+      // number, before the source. The Positioned box is exactly one line
+      // tall so the Center child lands on the same baseline as the digit.
       left: 44,
       top: top,
       width: 16,
-      height: 18,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: onTap,
-          child: Tooltip(
-            message: 'Run statement (⌘⇧↵)',
-            waitDuration: const Duration(milliseconds: 400),
-            child: const Icon(
-              Icons.play_arrow_rounded,
-              size: 14,
-              color: AppColors.success,
+      height: lineHeight,
+      child: Center(
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            onTap: onTap,
+            child: Tooltip(
+              message: 'Run statement (⌘⇧↵)',
+              waitDuration: const Duration(milliseconds: 400),
+              child: const Icon(
+                Icons.play_arrow_rounded,
+                size: 14,
+                color: AppColors.success,
+              ),
             ),
           ),
         ),
