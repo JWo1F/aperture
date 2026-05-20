@@ -246,6 +246,7 @@ class TabsController extends ChangeNotifier {
     tab.loading = true;
     tab.page = page;
     tab.edits.clear();
+    tab.markChanged();
     notifyListeners();
 
     try {
@@ -287,6 +288,7 @@ class TabsController extends ChangeNotifier {
     if (next == tab.selectList) return;
     tab.selectList = next;
     tab.columnWidths.clear();
+    tab.markChanged();
     history.pushTab(tab);
     await loadTablePage(tab, 0);
   }
@@ -362,16 +364,19 @@ class TabsController extends ChangeNotifier {
     } else {
       tab.edits[key] = value;
     }
+    tab.markChanged();
     notifyListeners();
   }
 
   void revertCellEdit(TableTab tab, int row, int column) {
     tab.edits.remove(CellEdit(row, column));
+    tab.markChanged();
     notifyListeners();
   }
 
   void resetTableEdits(TableTab tab) {
     tab.edits.clear();
+    tab.markChanged();
     notifyListeners();
   }
 
