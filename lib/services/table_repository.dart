@@ -34,10 +34,14 @@ class TableRepository {
     return trimmed;
   }
 
+  static const _pageQueryTimeout = Duration(seconds: 60);
+  static const _ddlQueryTimeout = Duration(seconds: 30);
+
   /// Total row count for a relation under the active filter.
   Future<int> countRows(DbTable table, {String filter = ''}) async {
     final result = await _conn.execute(
       'SELECT count(*) FROM ${table.qualifiedName}${_whereClause(filter)}',
+      timeout: _pageQueryTimeout,
     );
     return (result.first.first as int?) ?? 0;
   }
@@ -63,6 +67,7 @@ class TableRepository {
         '${_whereClause(filter)}'
         '$order '
         'LIMIT $limit OFFSET $offset',
+        timeout: _pageQueryTimeout,
       );
       watch.stop();
 
@@ -151,6 +156,7 @@ class TableRepository {
       '  ON d.adrelid = a.attrelid AND d.adnum = a.attnum '
       'WHERE a.attrelid = $regclass AND a.attnum > 0 AND NOT a.attisdropped '
       'ORDER BY a.attnum',
+      timeout: _ddlQueryTimeout,
     );
 
     final constraints = await _conn.execute(
@@ -160,6 +166,7 @@ class TableRepository {
       'ORDER BY CASE contype '
       "WHEN 'p' THEN 1 WHEN 'u' THEN 2 WHEN 'f' THEN 3 ELSE 4 END, "
       'conname',
+      timeout: _ddlQueryTimeout,
     );
 
     final indexes = await _conn.execute(
@@ -174,10 +181,12 @@ class TableRepository {
         'ORDER BY indexname',
       ),
       parameters: {'schema': table.schema, 'table': table.name},
+      timeout: _ddlQueryTimeout,
     );
 
     final comment = await _conn.execute(
       'SELECT obj_description($regclass, \'pg_class\')',
+      timeout: _ddlQueryTimeout,
     );
 
     final colNames = [for (final r in columns) quoteIdent(r[0] as String)];
