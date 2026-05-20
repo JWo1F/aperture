@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
+import '../about/about_dialog.dart';
 
 /// Opens the global command palette. Resolves when it closes.
 Future<void> showCommandPalette(BuildContext context, AppState state) {
@@ -129,6 +130,21 @@ class _PaletteState extends State<_Palette> {
         run: state.disconnect,
       ));
     }
+
+    cmds.add(_Cmd(
+      kind: _CmdKind.action,
+      label: 'Activity log',
+      subtitle: 'Show / hide  ⌘L',
+      icon: Icons.subject,
+      run: state.eventLog.toggleVisible,
+    ));
+    cmds.add(_Cmd(
+      kind: _CmdKind.action,
+      label: 'About dbv',
+      subtitle: 'Version + shortcuts',
+      icon: Icons.info_outline,
+      run: () => showAboutDbv(context),
+    ));
 
     // Connections
     for (final conn in state.connections) {

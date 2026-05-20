@@ -9,6 +9,7 @@ import '../models/connection_config.dart';
 import '../models/time_ago.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import 'about/about_dialog.dart';
 import 'command_palette/command_palette.dart';
 import 'connection/connection_dialog.dart';
 import 'connection/connection_menu.dart';
@@ -700,6 +701,19 @@ class _WelcomePanel extends StatelessWidget {
                   const SizedBox(height: Insets.xl),
                   _ErrorBox(message: state.connectionError!),
                 ],
+                const SizedBox(height: Insets.xl),
+                Hoverable(
+                  onTap: () => showAboutDbv(context),
+                  builder: (context, hovering) => Text(
+                    'About dbv',
+                    style: AppTheme.mono(
+                      size: 10.5,
+                      color: hovering
+                          ? AppColors.textSecondary
+                          : AppColors.textMuted,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -763,6 +777,15 @@ class _RecentsBlock extends StatelessWidget {
   final void Function(ConnectionConfig) onConnect;
   final VoidCallback onNew;
 
+  Future<void> _editConnection(
+    BuildContext context,
+    ConnectionConfig config,
+  ) async {
+    final state = context.read<AppState>();
+    final updated = await showConnectionDialog(context, existing: config);
+    if (updated != null) state.updateConnection(updated);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -795,7 +818,11 @@ class _RecentsBlock extends StatelessWidget {
           alignment: WrapAlignment.center,
           children: [
             for (final c in recents)
-              _RecentCard(config: c, onTap: () => onConnect(c)),
+              _RecentCard(
+                config: c,
+                onTap: () => onConnect(c),
+                onEdit: () => _editConnection(context, c),
+              ),
           ],
         ),
         const SizedBox(height: 18),
@@ -806,9 +833,14 @@ class _RecentsBlock extends StatelessWidget {
 }
 
 class _RecentCard extends StatelessWidget {
-  const _RecentCard({required this.config, required this.onTap});
+  const _RecentCard({
+    required this.config,
+    required this.onTap,
+    required this.onEdit,
+  });
   final ConnectionConfig config;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -861,7 +893,20 @@ class _RecentCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (ts != null)
+                if (hovering)
+                  Hoverable(
+                    cursor: SystemMouseCursors.click,
+                    onTap: onEdit,
+                    builder: (context, _) => Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(
+                        Icons.edit_outlined,
+                        size: 13,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  )
+                else if (ts != null)
                   Text(
                     timeAgo(ts),
                     style: AppTheme.mono(
