@@ -98,66 +98,66 @@ final _numberFilter =
 final _kBool = _Kind(
   id: _KindId.bool,
   label: 'bool',
-  color: AppColors.sqlFunction,
+  color: AppColors.tBool,
   size: const Size(240, 130),
 );
 final _kJson = _Kind(
   id: _KindId.json,
   label: 'json',
-  color: AppColors.sqlString,
+  color: AppColors.tJson,
   size: const Size(540, 340),
   multiline: true,
 );
 final _kArray = _Kind(
   id: _KindId.json,
   label: 'array',
-  color: AppColors.sqlString,
+  color: AppColors.tJson,
   size: const Size(540, 340),
   multiline: true,
 );
 final _kInt = _Kind(
   id: _KindId.text,
   label: 'int',
-  color: AppColors.sqlNumber,
+  color: AppColors.tNum,
   size: const Size(260, 132),
   inputFormatters: [_intFilter],
 );
 final _kNumber = _Kind(
   id: _KindId.text,
   label: 'number',
-  color: AppColors.sqlNumber,
+  color: AppColors.tNum,
   size: const Size(260, 132),
   inputFormatters: [_numberFilter],
 );
 final _kDate = _Kind(
   id: _KindId.date,
   label: 'date',
-  color: AppColors.info,
+  color: AppColors.tDate,
   size: const Size(252, 296),
 );
 final _kTime = _Kind(
   id: _KindId.time,
   label: 'time',
-  color: AppColors.info,
+  color: AppColors.tDate,
   size: const Size(252, 126),
 );
 final _kTimeTz = _Kind(
   id: _KindId.time,
   label: 'timetz',
-  color: AppColors.info,
+  color: AppColors.tDate,
   size: const Size(252, 168),
   withTimezone: true,
 );
 final _kDatetime = _Kind(
   id: _KindId.datetime,
   label: 'timestamp',
-  color: AppColors.info,
+  color: AppColors.tDate,
   size: const Size(252, 360),
 );
 final _kDatetimeTz = _Kind(
   id: _KindId.datetime,
   label: 'timestamptz',
-  color: AppColors.info,
+  color: AppColors.tDate,
   size: const Size(252, 400),
   withTimezone: true,
 );
@@ -171,7 +171,7 @@ final _kBytes = _Kind(
 final _kString = _Kind(
   id: _KindId.text,
   label: 'string',
-  color: AppColors.textSecondary,
+  color: AppColors.tStr,
   size: const Size(380, 220),
   multiline: true,
 );
@@ -554,13 +554,18 @@ class _PanelState extends State<_Panel> {
         child: Container(
           decoration: BoxDecoration(
             color: AppColors.surface,
-            borderRadius: Radii.brMd,
-            border: Border.all(color: AppColors.borderStrong),
-            boxShadow: const [
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: AppColors.accent, width: 1.5),
+            boxShadow: [
+              const BoxShadow(
+                color: Color(0x66000000),
+                blurRadius: 24,
+                offset: Offset(0, 8),
+              ),
               BoxShadow(
-                color: Color(0xAA000000),
-                blurRadius: 30,
-                offset: Offset(0, 12),
+                color: AppColors.accentSoft,
+                blurRadius: 0,
+                spreadRadius: 4,
               ),
             ],
           ),
@@ -602,6 +607,7 @@ class _PanelState extends State<_Panel> {
         return _BoolBody(
           value: _bool,
           onChange: (v) => setState(() => _bool = v),
+          onNull: () => widget.onCommit(const CellLiteral(null)),
         );
       case _KindId.date:
         return _CalendarBody(
@@ -686,8 +692,10 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pending = _pendingLabel();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+    return Container(
+      color: AppColors.surface2,
+      child: Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
       child: Row(
         children: [
           Container(
@@ -718,6 +726,7 @@ class _Header extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -774,7 +783,9 @@ class _Footer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
+      color: AppColors.bgDeep,
+      child: Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
       child: Row(
         children: [
@@ -827,6 +838,7 @@ class _Footer extends StatelessWidget {
             onPressed: canSave ? onSave : null,
           ),
         ],
+      ),
       ),
     );
   }
@@ -918,63 +930,42 @@ class _TextBody extends StatelessWidget {
 }
 
 class _BoolBody extends StatelessWidget {
-  const _BoolBody({required this.value, required this.onChange});
+  const _BoolBody({required this.value, required this.onChange, required this.onNull});
 
   final bool? value;
   final ValueChanged<bool> onChange;
+  final VoidCallback onNull;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.bg,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.all(6),
       child: Row(
         children: [
-          Expanded(
-            child: _BoolChoice(
-              label: 'true',
-              selected: value == true,
-              onTap: () => onChange(true),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _BoolChoice(
-              label: 'false',
-              selected: value == false,
-              onTap: () => onChange(false),
-            ),
-          ),
+          _boolOpt('true', value == true, () => onChange(true)),
+          const SizedBox(width: 4),
+          _boolOpt('false', value == false, () => onChange(false)),
+          const SizedBox(width: 4),
+          _boolOpt('NULL', value == null, onNull),
         ],
       ),
     );
   }
 }
 
-class _BoolChoice extends StatelessWidget {
-  const _BoolChoice({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Hoverable(
+Widget _boolOpt(String label, bool selected, VoidCallback onTap) {
+  return Expanded(
+    child: Hoverable(
       onTap: onTap,
-      builder: (context, hovering) => AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        height: 44,
+      builder: (_, hover) => Container(
+        height: 28,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected
               ? AppColors.accentSoft
-              : (hovering ? AppColors.surfaceHover : AppColors.surface),
-          borderRadius: Radii.brMd,
+              : (hover ? AppColors.surfaceHover : Colors.transparent),
+          borderRadius: BorderRadius.circular(4),
           border: Border.all(
             color: selected ? AppColors.accent : AppColors.border,
           ),
@@ -982,14 +973,13 @@ class _BoolChoice extends StatelessWidget {
         child: Text(
           label,
           style: AppTheme.mono(
-            size: 13,
-            color: selected ? AppColors.accent : AppColors.textSecondary,
-            weight: FontWeight.w600,
+            size: 11,
+            color: selected ? AppColors.textPrimary : AppColors.textSecondary,
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 // --- Date / time bodies -----------------------------------------------
