@@ -74,6 +74,7 @@ class _Kind {
     required this.size,
     this.multiline = false,
     this.inputFormatters,
+    this.withTimezone = false,
   });
 
   final _KindId id;
@@ -82,6 +83,9 @@ class _Kind {
   final Size size;
   final bool multiline;
   final List<TextInputFormatter>? inputFormatters;
+
+  /// Whether to show a timezone input row — set for `*tz` Postgres types.
+  final bool withTimezone;
 }
 
 // Regexes for numeric input — `FilteringTextInputFormatter.allow` runs
@@ -130,19 +134,33 @@ const _kDate = _Kind(
   id: _KindId.date,
   label: 'date',
   color: AppColors.info,
-  size: Size(340, 410),
+  size: Size(312, 360),
 );
 const _kTime = _Kind(
   id: _KindId.time,
   label: 'time',
   color: AppColors.info,
-  size: Size(280, 160),
+  size: Size(320, 158),
+);
+const _kTimeTz = _Kind(
+  id: _KindId.time,
+  label: 'timetz',
+  color: AppColors.info,
+  size: Size(320, 208),
+  withTimezone: true,
 );
 const _kDatetime = _Kind(
   id: _KindId.datetime,
   label: 'timestamp',
   color: AppColors.info,
-  size: Size(340, 480),
+  size: Size(320, 444),
+);
+const _kDatetimeTz = _Kind(
+  id: _KindId.datetime,
+  label: 'timestamptz',
+  color: AppColors.info,
+  size: Size(320, 492),
+  withTimezone: true,
 );
 const _kBytes = _Kind(
   id: _KindId.text,
@@ -166,8 +184,16 @@ _Kind _kindFor(dynamic v, String? dataType) {
   if (dataType != null) {
     final dt = dataType.toLowerCase();
     if (dt == 'date') return _kDate;
-    if (dt.startsWith('timestamp')) return _kDatetime;
-    if (dt.startsWith('time')) return _kTime;
+    if (dt.startsWith('timestamp')) {
+      return dt.contains('with time zone') || dt == 'timestamptz'
+          ? _kDatetimeTz
+          : _kDatetime;
+    }
+    if (dt.startsWith('time')) {
+      return dt.contains('with time zone') || dt == 'timetz'
+          ? _kTimeTz
+          : _kTime;
+    }
     if (dt == 'boolean') return _kBool;
     if (dt == 'json' || dt == 'jsonb') return _kJson;
     if (dt == 'array' || dt.endsWith('[]')) return _kArray;
@@ -232,17 +258,19 @@ DateTime _initialMoment(dynamic raw, CellEditValue? pending) {
     if (s != null && s.isNotEmpty) {
       final parsed = DateTime.tryParse(s);
       if (parsed != null) return parsed;
-      // Try time-only "HH:MM:SS"
-      final tm = RegExp(r'^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$').firstMatch(s);
+      // Try time-only "HH:MM:SS(.mmm)?(<space>tz)?"
+      final tm = RegExp(
+        r'^(\d{1,2}):(\d{1,2})(?::(\d{1,2})(?:\.(\d{1,3}))?)?',
+      ).firstMatch(s);
       if (tm != null) {
-        return DateTime(
-          1970,
-          1,
-          1,
-          int.parse(tm.group(1)!),
-          int.parse(tm.group(2)!),
-          int.parse(tm.group(3) ?? '0'),
-        );
+        final h = int.parse(tm.group(1)!);
+        final m = int.parse(tm.group(2)!);
+        final sec = int.parse(tm.group(3) ?? '0');
+        final msStr = tm.group(4);
+        final ms = msStr == null
+            ? 0
+            : int.parse(msStr.padRight(3, '0').substring(0, 3));
+        return DateTime(1970, 1, 1, h, m, sec, ms);
       }
     }
   }
@@ -252,6 +280,24 @@ DateTime _initialMoment(dynamic raw, CellEditValue? pending) {
     if (p != null) return p;
   }
   return DateTime.now();
+}
+
+/// Extracts a trailing timezone hint from a pending literal so re-opening a
+/// staged edit pre-fills the TZ field. Falls back to empty (server default).
+String _initialTz(dynamic raw, CellEditValue? pending) {
+  if (pending is CellLiteral) {
+    final s = pending.value;
+    if (s != null) {
+      final m = RegExp(r'(?:[+-]\d{2}(?::?\d{2})?|\b[A-Z][A-Za-z_/+\-0-9]{1,})$')
+          .firstMatch(s.trim());
+      if (m != null) {
+        final hit = m.group(0)!;
+        // Don't mistake the date's first 4-digit year for a tz.
+        if (hit.length >= 2 && !RegExp(r'^\d').hasMatch(hit)) return hit;
+      }
+    }
+  }
+  return '';
 }
 
 // --- Overlay -----------------------------------------------------------
@@ -367,6 +413,10 @@ class _PanelState extends State<_Panel> {
   DateTime? _moment;
   DateTime? _baselineMoment;
 
+  // Timezone (only relevant when widget.kind.withTimezone)
+  String _tz = '';
+  String _baselineTz = '';
+
   final FocusNode _focus = FocusNode();
 
   @override
@@ -384,6 +434,10 @@ class _PanelState extends State<_Panel> {
         _baselineMoment =
             _initialMoment(widget.originalValue, widget.pendingEdit);
         _moment = _baselineMoment;
+        if (widget.kind.withTimezone) {
+          _baselineTz = _initialTz(widget.originalValue, widget.pendingEdit);
+          _tz = _baselineTz;
+        }
       case _KindId.text:
       case _KindId.json:
         _baselineText =
@@ -411,7 +465,9 @@ class _PanelState extends State<_Panel> {
       case _KindId.date:
       case _KindId.time:
       case _KindId.datetime:
-        return _moment != _baselineMoment;
+        if (_moment != _baselineMoment) return true;
+        if (widget.kind.withTimezone && _tz != _baselineTz) return true;
+        return false;
       case _KindId.text:
       case _KindId.json:
         return _text!.text != _baselineText;
@@ -426,9 +482,13 @@ class _PanelState extends State<_Panel> {
       case _KindId.date:
         widget.onCommit(CellLiteral(_formatDate(_moment!)));
       case _KindId.time:
-        widget.onCommit(CellLiteral(_formatTime(_moment!)));
+        widget.onCommit(CellLiteral(
+          _formatTime(_moment!, tz: widget.kind.withTimezone ? _tz : null),
+        ));
       case _KindId.datetime:
-        widget.onCommit(CellLiteral(_formatDateTime(_moment!)));
+        widget.onCommit(CellLiteral(
+          _formatDateTime(_moment!, tz: widget.kind.withTimezone ? _tz : null),
+        ));
       case _KindId.json:
         // Validate before committing — empty input is allowed (and means
         // "send the empty string", e.g. for an empty jsonb column).
@@ -529,14 +589,20 @@ class _PanelState extends State<_Panel> {
       case _KindId.time:
         return _TimeBody(
           initial: _moment!,
-          onChange: (h, m, s) => setState(() {
-            _moment = DateTime(1970, 1, 1, h, m, s);
+          withTz: widget.kind.withTimezone,
+          tz: _tz,
+          onChange: (h, m, s, ms) => setState(() {
+            _moment = DateTime(1970, 1, 1, h, m, s, ms);
           }),
+          onTzChange: (tz) => setState(() => _tz = tz),
         );
       case _KindId.datetime:
         return _DateTimeBody(
           initial: _moment!,
+          withTz: widget.kind.withTimezone,
+          tz: _tz,
           onChange: (dt) => setState(() => _moment = dt),
+          onTzChange: (tz) => setState(() => _tz = tz),
         );
       case _KindId.text:
       case _KindId.json:
@@ -556,10 +622,17 @@ class _PanelState extends State<_Panel> {
 }
 
 String _pad(int n) => n.toString().padLeft(2, '0');
+String _pad3(int n) => n.toString().padLeft(3, '0');
 String _formatDate(DateTime d) => '${d.year}-${_pad(d.month)}-${_pad(d.day)}';
-String _formatTime(DateTime d) =>
-    '${_pad(d.hour)}:${_pad(d.minute)}:${_pad(d.second)}';
-String _formatDateTime(DateTime d) => '${_formatDate(d)} ${_formatTime(d)}';
+String _formatTime(DateTime d, {String? tz}) {
+  final base = '${_pad(d.hour)}:${_pad(d.minute)}:${_pad(d.second)}'
+      '.${_pad3(d.millisecond)}';
+  final t = tz?.trim() ?? '';
+  return t.isEmpty ? base : '$base $t';
+}
+
+String _formatDateTime(DateTime d, {String? tz}) =>
+    '${_formatDate(d)} ${_formatTime(d, tz: tz)}';
 
 // --- Header / Footer ---------------------------------------------------
 
@@ -932,24 +1005,52 @@ class _CalendarBodyState extends State<_CalendarBody> {
 }
 
 class _TimeBody extends StatelessWidget {
-  const _TimeBody({required this.initial, required this.onChange});
+  const _TimeBody({
+    required this.initial,
+    required this.withTz,
+    required this.tz,
+    required this.onChange,
+    required this.onTzChange,
+  });
+
   final DateTime initial;
-  final void Function(int hour, int minute, int second) onChange;
+  final bool withTz;
+  final String tz;
+  final void Function(int hour, int minute, int second, int ms) onChange;
+  final ValueChanged<String> onTzChange;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.bg,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-      child: _TimeInput(initial: initial, onChange: onChange),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Column(
+        children: [
+          _TimeInput(initial: initial, onChange: onChange),
+          if (withTz) ...[
+            const SizedBox(height: 10),
+            _TzInput(value: tz, onChange: onTzChange),
+          ],
+        ],
+      ),
     );
   }
 }
 
 class _DateTimeBody extends StatefulWidget {
-  const _DateTimeBody({required this.initial, required this.onChange});
+  const _DateTimeBody({
+    required this.initial,
+    required this.withTz,
+    required this.tz,
+    required this.onChange,
+    required this.onTzChange,
+  });
+
   final DateTime initial;
+  final bool withTz;
+  final String tz;
   final ValueChanged<DateTime> onChange;
+  final ValueChanged<String> onTzChange;
 
   @override
   State<_DateTimeBody> createState() => _DateTimeBodyState();
@@ -972,13 +1073,22 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
       _value.hour,
       _value.minute,
       _value.second,
+      _value.millisecond,
     );
     setState(() => _value = next);
     widget.onChange(next);
   }
 
-  void _setTime(int h, int m, int s) {
-    final next = DateTime(_value.year, _value.month, _value.day, h, m, s);
+  void _setTime(int h, int m, int s, int ms) {
+    final next = DateTime(
+      _value.year,
+      _value.month,
+      _value.day,
+      h,
+      m,
+      s,
+      ms,
+    );
     setState(() => _value = next);
     widget.onChange(next);
   }
@@ -991,7 +1101,7 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
         children: [
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 2),
               child: CalendarDatePicker(
                 initialDate: _value,
                 firstDate: DateTime(1900),
@@ -1002,8 +1112,16 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
           ),
           const Divider(height: 1, color: AppColors.border),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: _TimeInput(initial: _value, onChange: _setTime),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Column(
+              children: [
+                _TimeInput(initial: _value, onChange: _setTime),
+                if (widget.withTz) ...[
+                  const SizedBox(height: 8),
+                  _TzInput(value: widget.tz, onChange: widget.onTzChange),
+                ],
+              ],
+            ),
           ),
         ],
       ),
@@ -1011,11 +1129,11 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
   }
 }
 
-/// Three small numeric fields HH : MM : SS, value flows out via [onChange].
+/// Four small numeric fields HH : MM : SS . MS, value flows out via [onChange].
 class _TimeInput extends StatefulWidget {
   const _TimeInput({required this.initial, required this.onChange});
   final DateTime initial;
-  final void Function(int hour, int minute, int second) onChange;
+  final void Function(int hour, int minute, int second, int ms) onChange;
 
   @override
   State<_TimeInput> createState() => _TimeInputState();
@@ -1025,6 +1143,7 @@ class _TimeInputState extends State<_TimeInput> {
   late final TextEditingController _h;
   late final TextEditingController _m;
   late final TextEditingController _s;
+  late final TextEditingController _ms;
 
   @override
   void initState() {
@@ -1032,6 +1151,7 @@ class _TimeInputState extends State<_TimeInput> {
     _h = TextEditingController(text: _pad(widget.initial.hour));
     _m = TextEditingController(text: _pad(widget.initial.minute));
     _s = TextEditingController(text: _pad(widget.initial.second));
+    _ms = TextEditingController(text: _pad3(widget.initial.millisecond));
   }
 
   @override
@@ -1039,6 +1159,7 @@ class _TimeInputState extends State<_TimeInput> {
     _h.dispose();
     _m.dispose();
     _s.dispose();
+    _ms.dispose();
     super.dispose();
   }
 
@@ -1046,7 +1167,8 @@ class _TimeInputState extends State<_TimeInput> {
     final h = (int.tryParse(_h.text) ?? 0).clamp(0, 23);
     final m = (int.tryParse(_m.text) ?? 0).clamp(0, 59);
     final s = (int.tryParse(_s.text) ?? 0).clamp(0, 59);
-    widget.onChange(h, m, s);
+    final ms = (int.tryParse(_ms.text) ?? 0).clamp(0, 999);
+    widget.onChange(h, m, s, ms);
   }
 
   @override
@@ -1054,18 +1176,25 @@ class _TimeInputState extends State<_TimeInput> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _segment(_h, 'HH'),
-        _colon(),
-        _segment(_m, 'MM'),
-        _colon(),
-        _segment(_s, 'SS'),
+        _segment(_h, 'HH', width: 46, maxLen: 2),
+        _sep(':'),
+        _segment(_m, 'MM', width: 46, maxLen: 2),
+        _sep(':'),
+        _segment(_s, 'SS', width: 46, maxLen: 2),
+        _sep('.'),
+        _segment(_ms, 'MS', width: 56, maxLen: 3),
       ],
     );
   }
 
-  Widget _segment(TextEditingController c, String hint) {
+  Widget _segment(
+    TextEditingController c,
+    String hint, {
+    required double width,
+    required int maxLen,
+  }) {
     return SizedBox(
-      width: 52,
+      width: width,
       child: TextField(
         controller: c,
         textAlign: TextAlign.center,
@@ -1073,16 +1202,16 @@ class _TimeInputState extends State<_TimeInput> {
         keyboardType: TextInputType.number,
         inputFormatters: [
           FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(2),
+          LengthLimitingTextInputFormatter(maxLen),
         ],
         onChanged: (_) => _emit(),
         onSubmitted: (_) => _emit(),
-        style: AppTheme.mono(size: 18, weight: FontWeight.w600),
+        style: AppTheme.mono(size: 15, weight: FontWeight.w600),
         decoration: InputDecoration(
           isCollapsed: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(vertical: 6),
           hintText: hint,
-          hintStyle: AppTheme.mono(size: 14, color: AppColors.textMuted),
+          hintStyle: AppTheme.mono(size: 12, color: AppColors.textMuted),
           filled: true,
           fillColor: AppColors.surface,
           border: OutlineInputBorder(
@@ -1102,11 +1231,101 @@ class _TimeInputState extends State<_TimeInput> {
     );
   }
 
-  Widget _colon() => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
+  Widget _sep(String c) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Text(
-          ':',
-          style: AppTheme.mono(size: 18, color: AppColors.textMuted),
+          c,
+          style: AppTheme.mono(size: 15, color: AppColors.textMuted),
         ),
       );
+}
+
+/// Timezone text input — accepts free-form `UTC`, `+02:00`, `Europe/Berlin`, …
+class _TzInput extends StatefulWidget {
+  const _TzInput({required this.value, required this.onChange});
+  final String value;
+  final ValueChanged<String> onChange;
+
+  @override
+  State<_TzInput> createState() => _TzInputState();
+}
+
+class _TzInputState extends State<_TzInput> {
+  late final TextEditingController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(_TzInput old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value && _c.text != widget.value) {
+      _c.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt,
+            borderRadius: Radii.brSm,
+          ),
+          child: Text(
+            'TZ',
+            style: AppTheme.mono(
+              size: 10,
+              color: AppColors.textMuted,
+              weight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: TextField(
+            controller: _c,
+            cursorColor: AppColors.accent,
+            onChanged: widget.onChange,
+            style: AppTheme.mono(size: 12),
+            decoration: InputDecoration(
+              isCollapsed: true,
+              hintText: 'UTC / +02:00 / Europe/Berlin',
+              hintStyle:
+                  AppTheme.mono(size: 11.5, color: AppColors.textMuted),
+              filled: true,
+              fillColor: AppColors.surface,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 6,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: Radii.brSm,
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: Radii.brSm,
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: Radii.brSm,
+                borderSide: const BorderSide(color: AppColors.accent),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
