@@ -4,6 +4,7 @@ import '../models/cell_edit.dart';
 import '../models/db_object.dart';
 import '../models/query_result.dart';
 import 'driver_decoder.dart';
+import 'postgres_service.dart';
 import 'sql_identifier.dart';
 
 List<Object?> _decodeRow(List<Object?> raw) =>
@@ -12,13 +13,12 @@ List<Object?> _decodeRow(List<Object?> raw) =>
 /// Per-relation database operations: paging, exporting, applying cell
 /// edits, building the DDL for the schema viewer.
 ///
-/// Split out of [PostgresService] so tests can drive a fake `Connection`
-/// without spinning up a real server, and so the connection-lifecycle
-/// concerns (open / close / runQuery / health checks) stay focused.
+/// All statements run through [PostgresService.execute] / [runTx] — the
+/// single SQL channel that captures every query in the activity log.
 class TableRepository {
-  TableRepository(this._conn);
+  TableRepository(this._db);
 
-  final Connection _conn;
+  final PostgresService _db;
 
   String _whereClause(String filter) {
     final trimmed = filter.trim();
@@ -39,7 +39,7 @@ class TableRepository {
 
   /// Total row count for a relation under the active filter.
   Future<int> countRows(DbTable table, {String filter = ''}) async {
-    final result = await _conn.execute(
+    final result = await _db.execute(
       'SELECT count(*) FROM ${table.qualifiedName}${_whereClause(filter)}',
       timeout: _pageQueryTimeout,
     );
@@ -61,7 +61,7 @@ class TableRepository {
     final order = orderBy.trim().isEmpty ? '' : ' ORDER BY ${orderBy.trim()}';
     final projection = _projection(selectList);
     try {
-      final result = await _conn.execute(
+      final result = await _db.execute(
         'SELECT t.ctid::text AS __ctid, $projection '
         'FROM ${table.qualifiedName} AS t'
         '${_whereClause(filter)}'
@@ -121,7 +121,7 @@ class TableRepository {
         orderBy.trim().isEmpty ? '' : ' ORDER BY ${orderBy.trim()}';
     final watch = Stopwatch()..start();
     final projection = _projection(selectList, aliased: false);
-    final result = await _conn.execute(
+    final result = await _db.execute(
       'SELECT $projection FROM ${table.qualifiedName}'
       '${_whereClause(filter)}$order',
     );
@@ -146,7 +146,7 @@ class TableRepository {
     // pg_catalog columns of type `name` (OID 19) have no built-in codec in
     // the postgres driver, so they come back as UndecodedBytes — explicit
     // `::text` casts force textual output and a clean String in Dart.
-    final columns = await _conn.execute(
+    final columns = await _db.execute(
       'SELECT a.attname::text, format_type(a.atttypid, a.atttypmod), '
       'NOT a.attnotnull, '
       'pg_get_expr(d.adbin, d.adrelid), '
@@ -159,7 +159,7 @@ class TableRepository {
       timeout: _ddlQueryTimeout,
     );
 
-    final constraints = await _conn.execute(
+    final constraints = await _db.execute(
       'SELECT conname::text, contype::text, pg_get_constraintdef(oid) '
       'FROM pg_constraint '
       "WHERE conrelid = $regclass AND contype IN ('p', 'f', 'u', 'c') "
@@ -169,22 +169,20 @@ class TableRepository {
       timeout: _ddlQueryTimeout,
     );
 
-    final indexes = await _conn.execute(
-      Sql.named(
-        'SELECT indexname::text, indexdef FROM pg_indexes '
-        'WHERE schemaname = @schema AND tablename = @table '
-        '  AND indexname NOT IN ('
-        '    SELECT conname::text FROM pg_constraint '
-        "    WHERE conrelid = (quote_ident(@schema) || '.' || quote_ident(@table))::regclass "
-        "      AND contype IN ('p', 'u')"
-        '  ) '
-        'ORDER BY indexname',
-      ),
+    final indexes = await _db.execute(
+      'SELECT indexname::text, indexdef FROM pg_indexes '
+      'WHERE schemaname = @schema AND tablename = @table '
+      '  AND indexname NOT IN ('
+      '    SELECT conname::text FROM pg_constraint '
+      "    WHERE conrelid = (quote_ident(@schema) || '.' || quote_ident(@table))::regclass "
+      "      AND contype IN ('p', 'u')"
+      '  ) '
+      'ORDER BY indexname',
       parameters: {'schema': table.schema, 'table': table.name},
       timeout: _ddlQueryTimeout,
     );
 
-    final comment = await _conn.execute(
+    final comment = await _db.execute(
       'SELECT obj_description($regclass, \'pg_class\')',
       timeout: _ddlQueryTimeout,
     );
@@ -278,11 +276,11 @@ class TableRepository {
     final ctids = updatesByCtid.keys.toList(growable: false);
     final statements = buildEditStatements(table, updatesByCtid);
     try {
-      return await _conn.runTx(
-        (session) async {
+      return await _db.runTx<int>(
+        (scope) async {
           var affected = 0;
           for (var i = 0; i < statements.length; i++) {
-            final result = await session.execute(statements[i]);
+            final result = await scope.execute(statements[i]);
             if (result.affectedRows != 1) {
               throw StaleRowException(
                 ctid: ctids[i],

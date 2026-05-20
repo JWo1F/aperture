@@ -60,7 +60,6 @@ class SessionController extends ChangeNotifier {
         required elapsed,
         required affectedRows,
         required error,
-        required truncated,
       }) {
         log?.add(LogEvent(
           timestamp: DateTime.now(),

@@ -19,26 +19,93 @@ export 'table_repository.dart'
 List<Object?> _decodeRow(List<Object?> raw) =>
     [for (final v in raw) decodeDriverValue(v)];
 
+/// Called for every SQL statement that crosses the driver — successful or
+/// not. Lives on a single channel so swapping in a different driver (SQLite,
+/// future remote backends) is a matter of providing a new implementation
+/// of [PostgresService.execute] and [PostgresService.runTx], not chasing
+/// scattered `Connection.execute` calls.
+typedef QueryLogger = void Function({
+  required String sql,
+  required Duration elapsed,
+  required int? affectedRows,
+  required String? error,
+});
+
+/// Runs [sql] on [session], times it, and reports the outcome to [logger]
+/// before either returning the [Result] or rethrowing. The single point
+/// every SQL statement in the app flows through.
+Future<Result> _logged(
+  Session session,
+  String sql, {
+  Map<String, dynamic>? parameters,
+  Duration? timeout,
+  required QueryLogger? logger,
+}) async {
+  final watch = Stopwatch()..start();
+  try {
+    final result = parameters == null
+        ? await session.execute(sql, timeout: timeout)
+        : await session.execute(
+            Sql.named(sql),
+            parameters: parameters,
+            timeout: timeout,
+          );
+    watch.stop();
+    logger?.call(
+      sql: sql,
+      elapsed: watch.elapsed,
+      affectedRows: result.affectedRows,
+      error: null,
+    );
+    return result;
+  } catch (e) {
+    watch.stop();
+    logger?.call(
+      sql: sql,
+      elapsed: watch.elapsed,
+      affectedRows: null,
+      error: e.toString(),
+    );
+    rethrow;
+  }
+}
+
+/// Transaction-scoped view of the SQL channel. Every [execute] inside a
+/// transaction logs through the same [QueryLogger] as standalone calls.
+class TxScope {
+  TxScope._(this._session, this._logger);
+
+  final Session _session;
+  final QueryLogger? _logger;
+
+  Future<Result> execute(
+    String sql, {
+    Map<String, dynamic>? parameters,
+    Duration? timeout,
+  }) =>
+      _logged(
+        _session,
+        sql,
+        parameters: parameters,
+        timeout: timeout,
+        logger: _logger,
+      );
+}
+
 /// Facade over a single live Postgres connection. Owns the connection
-/// lifecycle ([connect] / [close]) and free-form statement execution
-/// ([runQuery]). Per-relation operations live on [TableRepository];
-/// catalog introspection lives on [Introspector] — both bound to the
-/// same open connection.
+/// lifecycle ([connect] / [close]) and is the single SQL channel for the
+/// rest of the app — [TableRepository] and [Introspector] both run their
+/// statements through [execute] / [runTx] so every query passes the same
+/// logging point.
 class PostgresService {
   PostgresService(this.config, {this.onQueryRun, this.onEditApplied});
 
   final ConnectionConfig config;
 
-  /// Called after every ad-hoc statement, successful or not. The caller
-  /// can route events into the in-app log pane and / or persist them.
-  /// `truncated` indicates whether [defaultSelectLimit] was injected.
-  final void Function({
-    required String sql,
-    required Duration elapsed,
-    required int? affectedRows,
-    required String? error,
-    required bool truncated,
-  })? onQueryRun;
+  /// Fires for every SQL statement executed through this service, whether
+  /// it originated in [runQuery], in [TableRepository], in [Introspector],
+  /// or inside a transaction via [runTx].
+  final QueryLogger? onQueryRun;
 
   /// Called after every UPDATE batch from cell editing.
   final void Function({
@@ -67,7 +134,7 @@ class PostgresService {
         applicationName: 'dbv',
       ),
     );
-    _repository = TableRepository(_connection!);
+    _repository = TableRepository(this);
   }
 
   Future<void> close() async {
@@ -91,7 +158,33 @@ class PostgresService {
   }
 
   /// Catalog introspector bound to this connection.
-  Introspector get introspector => Introspector(_conn);
+  Introspector get introspector => Introspector(this);
+
+  /// The single SQL channel. Every statement issued by the app flows
+  /// through here so [onQueryRun] sees it before it hits the wire.
+  Future<Result> execute(
+    String sql, {
+    Map<String, dynamic>? parameters,
+    Duration? timeout,
+  }) =>
+      _logged(
+        _conn,
+        sql,
+        parameters: parameters,
+        timeout: timeout,
+        logger: onQueryRun,
+      );
+
+  /// Runs [action] inside a real transaction. Statements executed on the
+  /// supplied [TxScope] log through the same channel as standalone calls.
+  Future<T> runTx<T>(
+    Future<T> Function(TxScope) action, {
+    TransactionSettings? settings,
+  }) =>
+      _conn.runTx<T>(
+        (session) => action(TxScope._(session, onQueryRun)),
+        settings: settings,
+      );
 
   // --- Delegations preserved so existing call sites compile ----------
 
@@ -164,32 +257,21 @@ class PostgresService {
   /// DDL, etc. — pass through untouched.
   static const defaultSelectLimit = 10000;
 
-  /// Executes an arbitrary statement, capturing timing and errors so the UI
-  /// never has to deal with raised exceptions directly.
+  /// Executes a user-supplied statement, applying [defaultSelectLimit]
+  /// to bare SELECTs and shaping the driver result into a [QueryResult].
+  /// Logging happens in [execute] so this method just translates the
+  /// outcome — no separate log entry is emitted here.
   Future<QueryResult> runQuery(String sql) async {
     final safe = applyDefaultLimit(sql, limit: defaultSelectLimit);
     final watch = Stopwatch()..start();
-    QueryResult buildAndLog(QueryResult result, {String? error}) {
-      onQueryRun?.call(
-        sql: safe.sql,
-        elapsed: result.elapsed,
-        affectedRows: result.affectedRows,
-        error: error,
-        truncated: safe.appliedLimit,
-      );
-      return result;
-    }
-
     try {
-      final result = await _conn.execute(safe.sql);
+      final result = await execute(safe.sql);
       watch.stop();
 
       if (result.schema.columns.isEmpty) {
-        return buildAndLog(
-          QueryResult.command(
-            affectedRows: result.affectedRows,
-            elapsed: watch.elapsed,
-          ),
+        return QueryResult.command(
+          affectedRows: result.affectedRows,
+          elapsed: watch.elapsed,
         );
       }
 
@@ -207,28 +289,20 @@ class PostgresService {
           .toList();
       final rows = [for (final row in result) _decodeRow(row.toList())];
 
-      return buildAndLog(
-        QueryResult.rows(
-          columns: columns,
-          rows: rows,
-          elapsed: watch.elapsed,
-          affectedRows: result.affectedRows,
-          columnSchemas: columnSchemas,
-          truncatedAt: safe.appliedLimit ? defaultSelectLimit : null,
-        ),
+      return QueryResult.rows(
+        columns: columns,
+        rows: rows,
+        elapsed: watch.elapsed,
+        affectedRows: result.affectedRows,
+        columnSchemas: columnSchemas,
+        truncatedAt: safe.appliedLimit ? defaultSelectLimit : null,
       );
     } on ServerException catch (e) {
       watch.stop();
-      return buildAndLog(
-        QueryResult.failure(error: e.message, elapsed: watch.elapsed),
-        error: e.message,
-      );
+      return QueryResult.failure(error: e.message, elapsed: watch.elapsed);
     } catch (e) {
       watch.stop();
-      return buildAndLog(
-        QueryResult.failure(error: e.toString(), elapsed: watch.elapsed),
-        error: e.toString(),
-      );
+      return QueryResult.failure(error: e.toString(), elapsed: watch.elapsed);
     }
   }
 }

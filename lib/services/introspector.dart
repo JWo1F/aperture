@@ -1,6 +1,5 @@
-import 'package:postgres/postgres.dart';
-
 import '../models/db_object.dart';
+import 'postgres_service.dart';
 
 /// Runs catalog-wide introspection queries against an open connection.
 ///
@@ -10,11 +9,12 @@ import '../models/db_object.dart';
 ///
 /// All identifier columns from `pg_catalog` are cast to `text` because their
 /// native `name` type (OID 19) has no codec in the postgres driver and would
-/// otherwise come back as `UndecodedBytes`.
+/// otherwise come back as `UndecodedBytes`. Every query runs through
+/// [PostgresService.execute] so it shows up in the activity log.
 class Introspector {
-  Introspector(this._conn);
+  Introspector(this._db);
 
-  final Connection _conn;
+  final PostgresService _db;
 
   static const String _systemSchemaFilter =
       "n.nspname NOT IN ('pg_catalog', 'information_schema') "
@@ -25,7 +25,7 @@ class Introspector {
   /// one query. Equivalent to the legacy `loadSchemas` but enriched with
   /// `oid` and table comments so the result can serve as the catalog spine.
   Future<List<DbSchema>> loadSchemas() async {
-    final result = await _conn.execute(
+    final result = await _db.execute(
       'SELECT n.nspname::text AS schema, '
       '       c.oid::bigint AS oid, '
       '       c.relname::text AS name, '
@@ -66,7 +66,7 @@ class Introspector {
   /// `pg_constraint` so the catalog can answer "is this column a PK?"
   /// without a second query.
   Future<Map<int, List<DbColumn>>> loadAllColumns() async {
-    final result = await _conn.execute(
+    final result = await _db.execute(
       'SELECT a.attrelid::bigint, '
       '       a.attname::text, '
       '       format_type(a.atttypid, a.atttypmod), '
@@ -114,7 +114,7 @@ class Introspector {
   Future<Map<int, List<DbForeignKey>>> loadAllForeignKeys() async {
     // For each FK, expand `conkey` / `confkey` into ordered column name
     // arrays via correlated subqueries — keeps everything in one round trip.
-    final result = await _conn.execute(
+    final result = await _db.execute(
       'SELECT c.conrelid::bigint AS src_oid, '
       '       c.conname::text AS name, '
       '       c.confrelid::bigint AS ref_oid, '
@@ -175,7 +175,7 @@ class Introspector {
   /// those via columns / future unique constraints), leaving the "extra"
   /// indexes that are meaningful in DDL view.
   Future<Map<int, List<DbIndex>>> loadAllIndexes() async {
-    final result = await _conn.execute(
+    final result = await _db.execute(
       'SELECT c.oid::bigint AS rel_oid, '
       '       i.relname::text AS index_name, '
       '       ix.indisunique AS is_unique, '
@@ -218,7 +218,7 @@ class Introspector {
 
   /// All user-defined enum types with their labels in `enumsortorder`.
   Future<List<DbEnum>> loadAllEnums() async {
-    final result = await _conn.execute(
+    final result = await _db.execute(
       'SELECT n.nspname::text AS schema, '
       '       t.typname::text AS name, '
       '       array_agg(e.enumlabel::text ORDER BY e.enumsortorder) AS labels '
@@ -243,7 +243,7 @@ class Introspector {
 
   /// All user-defined domain types.
   Future<List<DbDomain>> loadAllDomains() async {
-    final result = await _conn.execute(
+    final result = await _db.execute(
       'SELECT n.nspname::text AS schema, '
       '       t.typname::text AS name, '
       '       format_type(t.typbasetype, t.typtypmod) AS base_type, '
