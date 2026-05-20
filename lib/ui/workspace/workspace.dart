@@ -79,51 +79,66 @@ class _TabStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 32,
-      child: Stack(
-        children: [
-          // 1. Full-width strip background.
-          Positioned.fill(
-            child: ColoredBox(color: AppColors.bgDeep),
-          ),
-          // 2. Full-width bottom hairline. Each active tab paints over the
-          //    1px row underneath it (via its own `bg`-colored fill at
-          //    full 32px height) so the rule reads as if it ducks under
-          //    the active tab and continues either side.
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(height: 1, color: AppColors.border),
-          ),
-          // 3. Tabs + new-tab button. The Row sizes to its content and
-          //    scrolls horizontally when overflowing the viewport (matches
-          //    the design's `overflow-x: auto` on `.tabs`).
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (var i = 0; i < state.tabs.length; i++)
-                  _Tab(
-                    tab: state.tabs[i],
-                    active: i == state.activeTabIndex,
-                    onTap: () => state.selectTab(i),
-                    onClose: () => state.closeTab(state.tabs[i].id),
-                    onContextMenu: (pos) => _showTabMenu(
-                      context,
-                      state: state,
-                      tab: state.tabs[i],
-                      position: pos,
-                      canCloseRight: i < state.tabs.length - 1,
-                    ),
-                  ),
-                _NewTabButton(onTap: state.newQueryTab),
-              ],
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.bgDeep,
+      ),
+      child: SizedBox(
+        height: 32,
+        child: Stack(
+          // Force every non-positioned child to top-left, regardless of
+          // its intrinsic alignment behavior — without this, a horizontal
+          // SingleChildScrollView in a Stack centers its viewport when it
+          // can't decide where to anchor.
+          alignment: AlignmentDirectional.topStart,
+          fit: StackFit.expand,
+          children: [
+            // 1. Full-width bottom hairline. Active tabs paint a
+            //    solid bg fill that covers the rule under them; inactive
+            //    tabs stay transparent so the rule reads through.
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(height: 1, color: AppColors.border),
             ),
-          ),
-        ],
+            // 2. Tabs cluster — anchored to the left, sized to its
+            //    content, with horizontal scrolling once it overflows.
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              right: 0,
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var i = 0; i < state.tabs.length; i++)
+                        _Tab(
+                          tab: state.tabs[i],
+                          active: i == state.activeTabIndex,
+                          onTap: () => state.selectTab(i),
+                          onClose: () =>
+                              state.closeTab(state.tabs[i].id),
+                          onContextMenu: (pos) => _showTabMenu(
+                            context,
+                            state: state,
+                            tab: state.tabs[i],
+                            position: pos,
+                            canCloseRight: i < state.tabs.length - 1,
+                          ),
+                        ),
+                      _NewTabButton(onTap: state.newQueryTab),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
