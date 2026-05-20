@@ -113,6 +113,7 @@ class _ResultsGridState extends State<ResultsGrid> {
   static const double _autoMax = 200;
   static const double _cellPad = 20; // 9px each side + 2 fudge
   static const double _headerExtra = 28; // sort icon + spacing + resize handle
+  static const int _autoSampleRows = 50;
 
   @override
   void initState() {
@@ -150,6 +151,12 @@ class _ResultsGridState extends State<ResultsGrid> {
   /// Default width = widest visible cell (and the header) in this column,
   /// clamped between [_autoMin] and [_autoMax]. Cells already ellipsize, so
   /// we measure at most the first 200 chars of each value to keep this cheap.
+  ///
+  /// We only sample the first [_autoSampleRows] rows: pages can hit several
+  /// thousand rows and measuring every one ran formatCellValue + layout in a
+  /// tight loop on the UI thread, blocking the first frame for ~500 ms+. A
+  /// fixed sample is enough to pick a reasonable default — the user can drag
+  /// the handle if it guesses short.
   double _autoWidth(String column, int columnIndex) {
     final headerStyle = AppTheme.mono(
       size: 11.5,
@@ -161,8 +168,10 @@ class _ResultsGridState extends State<ResultsGrid> {
       ..layout();
     var widest = _measurer.width + _headerExtra;
 
-    for (final row in widget.result.rows) {
-      final raw = row[columnIndex];
+    final rows = widget.result.rows;
+    final n = rows.length < _autoSampleRows ? rows.length : _autoSampleRows;
+    for (var r = 0; r < n; r++) {
+      final raw = rows[r][columnIndex];
       final formatted = formatCellValue(raw);
       final text = formatted ?? 'NULL';
       final sample = text.length > 200 ? text.substring(0, 200) : text;
@@ -740,6 +749,10 @@ class _ResultsGridState extends State<ResultsGrid> {
           )
         : cellBody;
 
+    // GestureDetector defers `onTap` until the double-tap window closes
+    // (~250 ms), which feels like the cell takes a beat to respond. Selecting
+    // on `onTapDown` instead fires the highlight the instant the pointer
+    // lands while still letting onDoubleTap fire after the second press.
     return Builder(
       builder: (cellCtx) => MouseRegion(
         cursor: widget.editable
@@ -747,7 +760,7 @@ class _ResultsGridState extends State<ResultsGrid> {
             : SystemMouseCursors.basic,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => _selectCell(row, column),
+          onTapDown: (_) => _selectCell(row, column),
           onDoubleTap: widget.editable
               ? () => _openCellPicker(cellCtx, row, column, original)
               : null,
