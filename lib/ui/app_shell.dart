@@ -266,11 +266,8 @@ class _Toolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final connected = state.status == ConnectionStatus.connected;
     final pending = state.unappliedEditCount;
     final activeTab = state.activeTab;
-    final isQueryTab = activeTab is QueryTab;
-    final queryRunning = isQueryTab && (activeTab).running;
     final tableTab = activeTab is TableTab ? activeTab : null;
     final canExport = tableTab?.result != null;
 
@@ -319,23 +316,6 @@ class _Toolbar extends StatelessWidget {
             const SizedBox(width: 8),
             const _TbGroupRail(),
             const SizedBox(width: 8),
-            _TbPrimary(
-              label: 'Run',
-              icon: Icons.play_arrow,
-              kbd: const ['⌘', '↵'],
-              onPressed: isQueryTab && !queryRunning
-                  ? () => state.runQuery(activeTab)
-                  : (connected ? state.newQueryTab : null),
-            ),
-            const SizedBox(width: 2),
-            _TbIcon(
-              icon: Icons.bolt_outlined,
-              tooltip: 'Run all  ⌘⇧↵',
-              onPressed: isQueryTab && !queryRunning
-                  ? () => state.runQuery(activeTab)
-                  : null,
-            ),
-            const _TbRail(),
             _TbIcon(
               icon: Icons.ios_share,
               tooltip: 'Export…',
@@ -506,94 +486,6 @@ class _TbIcon extends StatelessWidget {
           );
         },
       ),
-    );
-  }
-}
-
-/// Filled-accent primary button for the toolbar's Run action.
-class _TbPrimary extends StatelessWidget {
-  const _TbPrimary({
-    required this.label,
-    required this.icon,
-    required this.kbd,
-    required this.onPressed,
-  });
-
-  final String label;
-  final IconData icon;
-  final List<String> kbd;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onPressed != null;
-    return Hoverable(
-      cursor:
-          enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-      onTap: onPressed,
-      builder: (context, hovering) {
-        final bg = !enabled
-            ? AppColors.accent.withValues(alpha: 0.4)
-            : (hovering ? AppColors.accentHover : AppColors.accent);
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          height: 24,
-          padding: const EdgeInsets.only(left: 8, right: 6),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: Radii.brSm,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(icon, size: 12, color: Colors.white),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: AppTheme.ui(
-                  size: 11.5,
-                  color: Colors.white,
-                  weight: FontWeight.w600,
-                  letterSpacing: -0.005 * 11.5,
-                ),
-              ),
-              const SizedBox(width: 6),
-              _PrimaryKbd(parts: kbd),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// Mono shortcut hint rendered on the accent Run button. The handoff's
-/// literal kbd styling (dark surface-2 tiles + dark border) reads as black
-/// holes on indigo, so the keys are drawn as plain bright-white glyphs with
-/// a thin spacer between parts — the surrounding accent fill carries the
-/// "key" affordance.
-class _PrimaryKbd extends StatelessWidget {
-  const _PrimaryKbd({required this.parts});
-  final List<String> parts;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < parts.length; i++) ...[
-          if (i > 0) const SizedBox(width: 3),
-          Text(
-            parts[i],
-            style: AppTheme.mono(
-              size: 10.5,
-              color: Colors.white.withValues(alpha: 0.85),
-              weight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ],
     );
   }
 }
