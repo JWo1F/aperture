@@ -1084,9 +1084,6 @@ class _HeaderCellState extends State<_HeaderCell> {
                 : SystemMouseCursors.basic,
             onTap: widget.onSort,
             builder: (context, hovering) => Container(
-              color: hovering && sortable
-                  ? AppColors.surfaceHover
-                  : AppColors.bgDeep,
               decoration: BoxDecoration(
                 color: hovering && sortable
                     ? AppColors.surfaceHover

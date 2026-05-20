@@ -150,7 +150,23 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         },
         child: FocusScope(
           autofocus: true,
-          child: Column(
+          child: DecoratedBox(
+            // Soft accent halo above the toolbar, matching the design's
+            // `radial-gradient(1200px 600px at 20% -10%, accent 5%, transparent)`
+            // on `.app`. Sits below every surface so the toolbar/sidebar tint
+            // takes precedence; only the bare workspace bg ever surfaces it.
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(-0.6, -1.4),
+                radius: 1.4,
+                colors: [
+                  AppColors.accent.withValues(alpha: 0.05),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.6],
+              ),
+            ),
+            child: Column(
             children: [
               const RepaintBoundary(child: _Toolbar()),
               if (lost) _ConnectionLostBanner(state: state),
@@ -181,6 +197,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               Divider(height: 1, color: AppColors.hairline),
               RepaintBoundary(child: _StatusBar(state: state)),
             ],
+          ),
           ),
         ),
       ),
@@ -262,7 +279,11 @@ class _Toolbar extends StatelessWidget {
       child: Container(
         height: 36,
         decoration: BoxDecoration(
-          color: AppColors.bg.withValues(alpha: 0.94),
+          // Match the design's `var(--toolbar)` (bg at 72% alpha) so the
+          // app's radial accent halo bleeds through. backdrop-filter blur is
+          // not feasible to layer cheaply per-frame; the alpha is the visual
+          // tell here, not the blur.
+          color: AppColors.bg.withValues(alpha: 0.72),
           border: Border(
             bottom: BorderSide(color: AppColors.hairline, width: 1),
           ),

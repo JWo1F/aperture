@@ -31,7 +31,9 @@ class Sidebar extends StatelessWidget {
 
     return Container(
       width: 248,
-      color: AppColors.sidebarTint,
+      // Match `var(--sidebar)` — sidebarTint at 86% alpha so the app's accent
+      // halo and the workspace deep bg both bleed through slightly.
+      color: AppColors.sidebarTint.withValues(alpha: 0.86),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -393,6 +395,7 @@ class _TreeRow extends StatelessWidget {
             ? AppColors.sidebarRowActive
             : (hovering ? AppColors.sidebarRowHover : Colors.transparent);
         return Stack(
+          clipBehavior: Clip.none,
           children: [
             Container(
               height: AppLayout.treeRowHeight,
@@ -445,7 +448,7 @@ class _TreeRow extends StatelessWidget {
             ),
             if (active)
               Positioned(
-                left: 4,
+                left: 0,
                 top: 4,
                 bottom: 4,
                 child: Container(

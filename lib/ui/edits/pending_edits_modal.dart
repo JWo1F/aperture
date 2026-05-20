@@ -41,41 +41,38 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mono = AppTheme.mono(size: 12, color: AppColors.textPrimary);
+    final mono = AppTheme.mono(size: 11.5, color: AppColors.textPrimary);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(Insets.lg, 12, 10, 12),
+          padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
           child: Row(
             children: [
+              Text(
+                'Pending edits',
+                style: AppTheme.ui(
+                  size: 13,
+                  weight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 10),
               Container(
-                width: 22,
-                height: 22,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppColors.accentSoft,
-                  borderRadius: Radii.brSm,
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                alignment: Alignment.center,
                 child: Text(
                   '${statements.length}',
                   style: AppTheme.mono(
                     size: 11,
                     color: AppColors.accent,
-                    weight: FontWeight.w700,
+                    weight: FontWeight.w600,
                   ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                statements.length == 1
-                    ? 'Pending statement'
-                    : 'Pending statements',
-                style: AppTheme.ui(
-                  size: 13.5,
-                  weight: FontWeight.w600,
-                  color: AppColors.textPrimary,
                 ),
               ),
               const Spacer(),
@@ -104,38 +101,36 @@ class _Body extends StatelessWidget {
                     ),
                   ),
                 )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(Insets.md),
+              : ListView.builder(
+                  padding: EdgeInsets.zero,
                   itemCount: statements.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) => _StatementCard(
-                    index: i + 1,
+                  itemBuilder: (_, i) => _StatementItem(
                     sql: statements[i],
                     monoStyle: mono,
                   ),
                 ),
         ),
-        Divider(height: 1, color: AppColors.hairline),
-        ColoredBox(
-          color: AppColors.bgDeep,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Insets.md,
-              vertical: 10,
-            ),
-            child: Row(
-              children: [
-                Text(
-                  'These statements run in a single transaction when you click Apply.',
-                  style: AppTheme.ui(size: 11, color: AppColors.textMuted),
-                ),
-                const Spacer(),
-                AppButton(
-                  label: 'Close',
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 12,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.bgDeep,
+            border: Border(top: BorderSide(color: AppColors.hairline)),
+          ),
+          child: Row(
+            children: [
+              Text(
+                'Runs in a single transaction on Apply.',
+                style: AppTheme.ui(size: 11, color: AppColors.textMuted),
+              ),
+              const Spacer(),
+              AppButton(
+                label: 'Close',
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
           ),
         ),
       ],
@@ -143,82 +138,91 @@ class _Body extends StatelessWidget {
   }
 }
 
-class _StatementCard extends StatelessWidget {
-  const _StatementCard({
-    required this.index,
-    required this.sql,
-    required this.monoStyle,
-  });
+/// One row of the design's `.pe-item` — relation name + ctid header, then a
+/// surface-bg SQL block with syntax highlighting.
+class _StatementItem extends StatelessWidget {
+  const _StatementItem({required this.sql, required this.monoStyle});
 
-  final int index;
   final String sql;
   final TextStyle monoStyle;
+
+  static final _relRe =
+      RegExp(r'UPDATE\s+("?[\w.]+"?\."?[\w.]+"?|"?[\w.]+"?)\s', caseSensitive: false);
+  static final _ctidRe =
+      RegExp(r"ctid\s*=\s*'\(([\d,]+)\)'", caseSensitive: false);
+
+  ({String? relation, String? ctid}) _meta() {
+    final r = _relRe.firstMatch(sql)?.group(1);
+    final c = _ctidRe.firstMatch(sql)?.group(1);
+    return (relation: r, ctid: c == null ? null : '($c)');
+  }
 
   void _copy() => Clipboard.setData(ClipboardData(text: sql));
 
   @override
   Widget build(BuildContext context) {
+    final meta = _meta();
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.bgDeep,
-        borderRadius: Radii.brMd,
-        border: Border.all(color: AppColors.border),
+        border: Border(bottom: BorderSide(color: AppColors.hairline)),
       ),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            height: 26,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceAlt,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radii.sm,
-                topRight: Radii.sm,
+          Row(
+            children: [
+              Icon(Icons.edit_outlined, size: 11, color: AppColors.accent),
+              const SizedBox(width: 6),
+              Text(
+                meta.relation ?? 'unknown',
+                style: AppTheme.mono(
+                  size: 11,
+                  color: AppColors.textPrimary,
+                  weight: FontWeight.w600,
+                ),
               ),
-              border: Border(
-                bottom: BorderSide(color: AppColors.border),
+              const Spacer(),
+              if (meta.ctid != null)
+                Text(
+                  'ctid ${meta.ctid}',
+                  style: AppTheme.mono(
+                    size: 10.5,
+                    color: AppColors.text4,
+                  ),
+                ),
+              const SizedBox(width: 8),
+              Hoverable(
+                onTap: _copy,
+                builder: (context, hovering) => Container(
+                  width: 18,
+                  height: 18,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: hovering
+                        ? AppColors.surfaceHover
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Icon(
+                    Icons.copy,
+                    size: 11,
+                    color: hovering
+                        ? AppColors.textPrimary
+                        : AppColors.textMuted,
+                  ),
+                ),
               ),
-            ),
-            child: Row(
-              children: [
-                Text(
-                  '#$index',
-                  style: AppTheme.mono(
-                    size: 10,
-                    color: AppColors.textMuted,
-                    weight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  'UPDATE',
-                  style: AppTheme.mono(
-                    size: 10,
-                    color: AppColors.sqlKeyword,
-                    weight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: GestureDetector(
-                    onTap: _copy,
-                    child: Padding(
-                      padding: const EdgeInsets.all(2),
-                      child: Icon(
-                        Icons.copy,
-                        size: 12,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(12),
+          const SizedBox(height: 6),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.bgDeep,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(color: AppColors.border),
+            ),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             child: SelectionArea(
               child: HighlightView(
                 sql,

@@ -26,6 +26,8 @@ void showCellPicker(
   bool canBeNull = true,
   bool hasDefault = false,
   String? columnDataType,
+  bool isPrimaryKey = false,
+  bool isForeignKey = false,
 }) {
   final kind = _kindFor(originalValue, columnDataType);
   final overlay = Overlay.of(context);
@@ -44,6 +46,9 @@ void showCellPicker(
       pendingEdit: pendingEdit,
       canBeNull: canBeNull,
       hasDefault: hasDefault,
+      columnDataType: columnDataType,
+      isPrimaryKey: isPrimaryKey,
+      isForeignKey: isForeignKey,
       onCommit: (value) {
         close();
         onCommit(value);
@@ -310,6 +315,9 @@ class _PickerOverlay extends StatelessWidget {
     required this.pendingEdit,
     required this.canBeNull,
     required this.hasDefault,
+    required this.columnDataType,
+    required this.isPrimaryKey,
+    required this.isForeignKey,
     required this.onCommit,
     required this.onRevert,
     required this.onClose,
@@ -322,6 +330,9 @@ class _PickerOverlay extends StatelessWidget {
   final CellEditValue? pendingEdit;
   final bool canBeNull;
   final bool hasDefault;
+  final String? columnDataType;
+  final bool isPrimaryKey;
+  final bool isForeignKey;
   final ValueChanged<CellEditValue> onCommit;
   final VoidCallback? onRevert;
   final VoidCallback onClose;
@@ -359,6 +370,9 @@ class _PickerOverlay extends StatelessWidget {
             pendingEdit: pendingEdit,
             canBeNull: canBeNull,
             hasDefault: hasDefault,
+            columnDataType: columnDataType,
+            isPrimaryKey: isPrimaryKey,
+            isForeignKey: isForeignKey,
             onCommit: onCommit,
             onRevert: onRevert,
             onClose: onClose,
@@ -379,6 +393,9 @@ class _Panel extends StatefulWidget {
     required this.pendingEdit,
     required this.canBeNull,
     required this.hasDefault,
+    required this.columnDataType,
+    required this.isPrimaryKey,
+    required this.isForeignKey,
     required this.onCommit,
     required this.onRevert,
     required this.onClose,
@@ -390,6 +407,9 @@ class _Panel extends StatefulWidget {
   final CellEditValue? pendingEdit;
   final bool canBeNull;
   final bool hasDefault;
+  final String? columnDataType;
+  final bool isPrimaryKey;
+  final bool isForeignKey;
   final ValueChanged<CellEditValue> onCommit;
   final VoidCallback? onRevert;
   final VoidCallback onClose;
@@ -523,13 +543,23 @@ class _PanelState extends State<_Panel> {
   void _setNull() => widget.onCommit(const CellLiteral(null));
   void _setDefault() => widget.onCommit(const CellDefault());
 
-  bool _supportsNow() => switch (widget.kind.id) {
-        _KindId.date || _KindId.time || _KindId.datetime => true,
-        _ => false,
-      };
-
-  String _nowTooltip() =>
-      widget.kind.id == _KindId.date ? 'Today' : 'Now';
+  /// Footer hint string, mirroring the design's `.ce-hint`: commit affordance
+  /// changes for one-line kinds (Enter commits) vs multi-line / picker kinds
+  /// (⌘↵ commits).
+  String _footerHint() {
+    if (widget.isPrimaryKey) return 'cannot edit primary key';
+    switch (widget.kind.id) {
+      case _KindId.text:
+        return '↵ commit · esc cancel';
+      case _KindId.bool:
+        return 'esc cancel';
+      case _KindId.json:
+      case _KindId.date:
+      case _KindId.time:
+      case _KindId.datetime:
+        return '⌘↵ commit · esc cancel';
+    }
+  }
 
   /// Resets the time/date state to "now". Bumps [_resetTick] so the calendar
   /// + time-input rebuild from scratch and reflect the new value, even if
@@ -576,29 +606,64 @@ class _PanelState extends State<_Panel> {
                 columnName: widget.columnName,
                 kind: widget.kind,
                 pendingEdit: widget.pendingEdit,
-                onClose: widget.onClose,
+                columnDataType: widget.columnDataType,
+                isPrimaryKey: widget.isPrimaryKey,
+                isForeignKey: widget.isForeignKey,
               ),
-              Divider(height: 1, color: AppColors.border),
               Expanded(child: _buildBody()),
-              Divider(height: 1, color: AppColors.border),
               _Footer(
                 hasPending: widget.pendingEdit != null,
                 canSave: _isDirty,
                 canBeNull: widget.canBeNull,
                 hasDefault: widget.hasDefault,
-                nowTooltip: _nowTooltip(),
+                kindHint: _footerHint(),
                 onSave: _save,
                 onCancel: widget.onClose,
                 onSetNull: _setNull,
                 onSetDefault: _setDefault,
                 onRevert: widget.onRevert,
-                onNow: _supportsNow() ? _setToNow : null,
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  void _shiftDate({int days = 0}) {
+    setState(() {
+      final m = _moment ?? DateTime.now();
+      _moment = m.add(Duration(days: days));
+      _resetTick++;
+    });
+  }
+
+  void _shiftHour({int hours = 0}) {
+    setState(() {
+      final m = _moment ?? DateTime.now();
+      _moment = m.add(Duration(hours: hours));
+      _resetTick++;
+    });
+  }
+
+  void _roundHour() {
+    setState(() {
+      final m = _moment ?? DateTime.now();
+      _moment = DateTime(m.year, m.month, m.day, m.hour);
+      _resetTick++;
+    });
+  }
+
+  void _setToday({bool zeroTime = false}) {
+    setState(() {
+      final n = DateTime.now();
+      final m = _moment ?? n;
+      _moment = zeroTime
+          ? DateTime(n.year, n.month, n.day)
+          : DateTime(n.year, n.month, n.day, m.hour, m.minute, m.second,
+              m.millisecond);
+      _resetTick++;
+    });
   }
 
   Widget _buildBody() {
@@ -610,35 +675,144 @@ class _PanelState extends State<_Panel> {
           onNull: () => widget.onCommit(const CellLiteral(null)),
         );
       case _KindId.date:
-        return _CalendarBody(
-          initial: _moment!,
-          resetTick: _resetTick,
-          onChange: (d) => setState(() {
-            _moment = DateTime(d.year, d.month, d.day);
-          }),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _MonoValueLine(
+              kind: _KindId.date,
+              moment: _moment!,
+              tz: _tz,
+              withTz: false,
+              onChange: (dt) => setState(() => _moment = dt),
+              onTzChange: (_) {},
+            ),
+            _QuickActionsRow(
+              children: [
+                _QuickAction(
+                  label: 'Today',
+                  icon: Icons.today_outlined,
+                  primary: true,
+                  onTap: () => _setToday(zeroTime: true),
+                ),
+                _QuickAction(
+                  label: '−1 day',
+                  onTap: () => _shiftDate(days: -1),
+                ),
+                _QuickAction(
+                  label: '+1 day',
+                  onTap: () => _shiftDate(days: 1),
+                ),
+              ],
+            ),
+            Expanded(
+              child: _CalendarBody(
+                initial: _moment!,
+                resetTick: _resetTick,
+                onChange: (d) => setState(() {
+                  _moment = DateTime(d.year, d.month, d.day);
+                }),
+              ),
+            ),
+          ],
         );
       case _KindId.time:
-        return _TimeBody(
-          initial: _moment!,
-          withTz: widget.kind.withTimezone,
-          tz: _tz,
-          resetTick: _resetTick,
-          onChange: (h, m, s, ms) => setState(() {
-            _moment = DateTime(1970, 1, 1, h, m, s, ms);
-          }),
-          onTzChange: (tz) => setState(() => _tz = tz),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _MonoValueLine(
+              kind: _KindId.time,
+              moment: _moment!,
+              tz: _tz,
+              withTz: widget.kind.withTimezone,
+              onChange: (dt) => setState(() => _moment = dt),
+              onTzChange: (tz) => setState(() => _tz = tz),
+            ),
+            _QuickActionsRow(
+              children: [
+                _QuickAction(
+                  label: 'Now',
+                  icon: Icons.bolt,
+                  primary: true,
+                  onTap: _setToNow,
+                ),
+                _QuickAction(
+                  label: 'round :00',
+                  onTap: _roundHour,
+                ),
+                _QuickAction(
+                  label: '+1 hour',
+                  onTap: () => _shiftHour(hours: 1),
+                ),
+              ],
+            ),
+            Expanded(
+              child: _TimeBody(
+                initial: _moment!,
+                withTz: widget.kind.withTimezone,
+                tz: _tz,
+                resetTick: _resetTick,
+                onChange: (h, m, s, ms) => setState(() {
+                  _moment = DateTime(1970, 1, 1, h, m, s, ms);
+                }),
+                onTzChange: (tz) => setState(() => _tz = tz),
+              ),
+            ),
+          ],
         );
       case _KindId.datetime:
-        return _DateTimeBody(
-          initial: _moment!,
-          withTz: widget.kind.withTimezone,
-          tz: _tz,
-          resetTick: _resetTick,
-          onChange: (dt) => setState(() => _moment = dt),
-          onTzChange: (tz) => setState(() => _tz = tz),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _MonoValueLine(
+              kind: _KindId.datetime,
+              moment: _moment!,
+              tz: _tz,
+              withTz: widget.kind.withTimezone,
+              onChange: (dt) => setState(() => _moment = dt),
+              onTzChange: (tz) => setState(() => _tz = tz),
+            ),
+            _QuickActionsRow(
+              children: [
+                _QuickAction(
+                  label: 'Now',
+                  icon: Icons.bolt,
+                  primary: true,
+                  onTap: _setToNow,
+                ),
+                _QuickAction(
+                  label: 'Today 00:00',
+                  onTap: () => _setToday(zeroTime: true),
+                ),
+                _QuickAction(
+                  label: 'Tomorrow',
+                  onTap: () => _shiftDate(days: 1),
+                ),
+              ],
+            ),
+            Expanded(
+              child: _DateTimeBody(
+                initial: _moment!,
+                withTz: widget.kind.withTimezone,
+                tz: _tz,
+                resetTick: _resetTick,
+                onChange: (dt) => setState(() => _moment = dt),
+                onTzChange: (tz) => setState(() => _tz = tz),
+              ),
+            ),
+          ],
         );
       case _KindId.text:
       case _KindId.json:
+        final isNumber = widget.kind.label == 'number' ||
+            widget.kind.label == 'int';
+        if (isNumber) {
+          return _NumberBody(
+            controller: _text!,
+            focus: _focus,
+            intOnly: widget.kind.label == 'int',
+            onChanged: () => setState(() {}),
+          );
+        }
         return _TextBody(
           controller: _text!,
           focus: _focus,
@@ -674,81 +848,84 @@ class _Header extends StatelessWidget {
     required this.columnName,
     required this.kind,
     required this.pendingEdit,
-    required this.onClose,
+    required this.columnDataType,
+    required this.isPrimaryKey,
+    required this.isForeignKey,
   });
 
   final String columnName;
   final _Kind kind;
   final CellEditValue? pendingEdit;
-  final VoidCallback onClose;
+  final String? columnDataType;
+  final bool isPrimaryKey;
+  final bool isForeignKey;
 
-  String? _pendingLabel() => switch (pendingEdit) {
-        CellLiteral(:final value) when value == null => 'NULL',
-        CellLiteral() => 'edited',
-        CellDefault() => 'DEFAULT',
-        null => null,
-      };
+  ({String label, Color color})? _flag() {
+    if (isPrimaryKey) return (label: 'read-only', color: AppColors.warn);
+    return switch (pendingEdit) {
+      CellLiteral(:final value) when value == null =>
+        (label: 'NULL', color: AppColors.accent),
+      CellLiteral() => (label: 'edited', color: AppColors.accent),
+      CellDefault() => (label: 'DEFAULT', color: AppColors.accent),
+      null => null,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
-    final pending = _pendingLabel();
+    final flag = _flag();
+    final typeLabel = columnDataType ?? kind.label;
     return Container(
-      color: AppColors.surface2,
-      child: Padding(
-      padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
       child: Row(
         children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration:
-                BoxDecoration(color: kind.color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 7),
-          Expanded(
+          if (isPrimaryKey) ...[
+            Icon(Icons.vpn_key, size: 10, color: AppColors.accent),
+            const SizedBox(width: 6),
+          ] else if (isForeignKey) ...[
+            Icon(Icons.north_east, size: 10, color: AppColors.tFk),
+            const SizedBox(width: 6),
+          ],
+          Flexible(
             child: Text(
               columnName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTheme.mono(size: 11.5, weight: FontWeight.w600),
+              style: AppTheme.mono(
+                size: 10.5,
+                color: AppColors.textPrimary,
+                weight: FontWeight.w600,
+              ),
             ),
           ),
-          _Tag(label: kind.label, color: kind.color),
-          if (pending != null) ...[
-            const SizedBox(width: 4),
-            _Tag(label: pending, color: AppColors.accent),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              typeLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.mono(
+                size: 10.5,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          if (flag != null) ...[
+            const Spacer(),
+            Text(
+              flag.label,
+              style: AppTheme.mono(
+                size: 10,
+                color: flag.color,
+                weight: FontWeight.w500,
+              ),
+            ),
           ],
-          GestureDetector(
-            onTap: onClose,
-            child: Padding(
-              padding: const EdgeInsets.all(6),
-              child: Icon(Icons.close, size: 13, color: AppColors.textMuted),
-            ),
-          ),
         ],
-      ),
-      ),
-    );
-  }
-}
-
-class _Tag extends StatelessWidget {
-  const _Tag({required this.label, required this.color});
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: Radii.brSm,
-      ),
-      child: Text(
-        label,
-        style:
-            AppTheme.mono(size: 9.5, color: color, weight: FontWeight.w700),
       ),
     );
   }
@@ -760,86 +937,139 @@ class _Footer extends StatelessWidget {
     required this.canSave,
     required this.canBeNull,
     required this.hasDefault,
-    required this.nowTooltip,
+    required this.kindHint,
     required this.onSave,
     required this.onCancel,
     required this.onSetNull,
     required this.onSetDefault,
     required this.onRevert,
-    required this.onNow,
   });
 
   final bool hasPending;
   final bool canSave;
   final bool canBeNull;
   final bool hasDefault;
-  final String nowTooltip;
+  final String kindHint;
   final VoidCallback onSave;
   final VoidCallback onCancel;
   final VoidCallback onSetNull;
   final VoidCallback onSetDefault;
   final VoidCallback? onRevert;
-  final VoidCallback? onNow;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.bgDeep,
-      child: Padding(
+      decoration: BoxDecoration(
+        color: AppColors.bgDeep,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
       child: Row(
         children: [
-          if (hasPending) ...[
-            IconAction(
-              icon: Icons.undo,
-              tooltip: 'Revert',
-              onPressed: onRevert,
-            ),
-            const SizedBox(width: 2),
-          ],
-          IconAction(
-            icon: Icons.not_interested,
-            tooltip: canBeNull ? 'Set NULL' : 'Column is NOT NULL',
-            onPressed: canBeNull ? onSetNull : null,
-          ),
-          const SizedBox(width: 2),
-          IconAction(
-            icon: Icons.settings_backup_restore,
-            tooltip: hasDefault ? 'Set DEFAULT' : 'Column has no default',
-            onPressed: hasDefault ? onSetDefault : null,
-          ),
-          if (onNow != null) ...[
-            const SizedBox(width: 2),
-            IconAction(
-              icon: Icons.bolt,
-              tooltip: nowTooltip,
-              onPressed: onNow,
-            ),
-          ],
-          const Spacer(),
-          GestureDetector(
-            onTap: onCancel,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Text(
-                'Cancel',
-                style: AppTheme.ui(
-                  size: 12,
-                  color: AppColors.textSecondary,
-                  weight: FontWeight.w500,
-                ),
+          Expanded(
+            child: Text(
+              kindHint,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.mono(
+                size: 10.5,
+                color: AppColors.textMuted,
               ),
             ),
           ),
-          IconAction(
-            icon: Icons.check,
-            tooltip: 'Save (⌘↵)',
+          if (hasPending) ...[
+            _PillButton(
+              label: 'revert',
+              onPressed: onRevert,
+            ),
+            const SizedBox(width: 4),
+          ],
+          _PillButton(
+            label: 'set NULL',
+            disabled: !canBeNull,
+            onPressed: canBeNull ? onSetNull : null,
+          ),
+          const SizedBox(width: 4),
+          _PillButton(
+            label: 'DEFAULT',
+            disabled: !hasDefault,
+            onPressed: hasDefault ? onSetDefault : null,
+          ),
+          const SizedBox(width: 6),
+          _PillButton(
+            label: 'cancel',
+            onPressed: onCancel,
+          ),
+          const SizedBox(width: 4),
+          _PillButton(
+            label: 'save  ⌘↵',
             primary: true,
             onPressed: canSave ? onSave : null,
           ),
         ],
       ),
-      ),
+    );
+  }
+}
+
+/// Small mono pill button used in the cell editor footer for set NULL /
+/// DEFAULT / cancel / save. Primary variant lights the accent.
+class _PillButton extends StatelessWidget {
+  const _PillButton({
+    required this.label,
+    required this.onPressed,
+    this.disabled = false,
+    this.primary = false,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool disabled;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null && !disabled;
+    return Hoverable(
+      cursor:
+          enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onTap: enabled ? onPressed : null,
+      builder: (context, hovering) {
+        final Color bg = primary
+            ? (enabled
+                ? (hovering ? AppColors.accentHover : AppColors.accent)
+                : AppColors.accent.withValues(alpha: 0.4))
+            : (hovering && enabled
+                ? AppColors.surfaceHover
+                : Colors.transparent);
+        final Color border = primary
+            ? Colors.transparent
+            : (enabled ? AppColors.border : AppColors.border);
+        final Color fg = primary
+            ? Colors.white
+            : (enabled
+                ? (hovering
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary)
+                : AppColors.text4);
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: border),
+          ),
+          child: Text(
+            label,
+            style: AppTheme.mono(
+              size: 10.5,
+              color: fg,
+              weight: primary ? FontWeight.w600 : FontWeight.w500,
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -943,18 +1173,38 @@ class _BoolBody extends StatelessWidget {
       padding: const EdgeInsets.all(6),
       child: Row(
         children: [
-          _boolOpt('true', value == true, () => onChange(true)),
+          _boolOpt(
+            label: 'true',
+            icon: Icons.check,
+            selected: value == true,
+            onTap: () => onChange(true),
+          ),
           const SizedBox(width: 4),
-          _boolOpt('false', value == false, () => onChange(false)),
+          _boolOpt(
+            label: 'false',
+            icon: Icons.close,
+            selected: value == false,
+            onTap: () => onChange(false),
+          ),
           const SizedBox(width: 4),
-          _boolOpt('NULL', value == null, onNull),
+          _boolOpt(
+            label: 'NULL',
+            icon: Icons.horizontal_rule,
+            selected: value == null,
+            onTap: onNull,
+          ),
         ],
       ),
     );
   }
 }
 
-Widget _boolOpt(String label, bool selected, VoidCallback onTap) {
+Widget _boolOpt({
+  required String label,
+  required IconData icon,
+  required bool selected,
+  required VoidCallback onTap,
+}) {
   return Expanded(
     child: Hoverable(
       onTap: onTap,
@@ -970,12 +1220,25 @@ Widget _boolOpt(String label, bool selected, VoidCallback onTap) {
             color: selected ? AppColors.accent : AppColors.border,
           ),
         ),
-        child: Text(
-          label,
-          style: AppTheme.mono(
-            size: 11,
-            color: selected ? AppColors.textPrimary : AppColors.textSecondary,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 10,
+              color: selected ? AppColors.textPrimary : AppColors.textMuted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: AppTheme.mono(
+                size: 11,
+                color: selected
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+              ),
+            ),
+          ],
         ),
       ),
     ),
@@ -1800,3 +2063,564 @@ class _TzInputState extends State<_TzInput> {
   }
 }
 
+/// Mono value line shown above date / time / datetime pickers — the design's
+/// `.dt-valueline`, one tabular row showing the chosen moment in
+/// `yyyy-mm-dd hh:mm:ss[@tz]` form with arrow-key bump on focused segments.
+class _MonoValueLine extends StatelessWidget {
+  const _MonoValueLine({
+    required this.kind,
+    required this.moment,
+    required this.tz,
+    required this.withTz,
+    required this.onChange,
+    required this.onTzChange,
+  });
+
+  final _KindId kind;
+  final DateTime moment;
+  final String tz;
+  final bool withTz;
+  final ValueChanged<DateTime> onChange;
+  final ValueChanged<String> onTzChange;
+
+  void _bumpYear(int delta) {
+    onChange(DateTime(moment.year + delta, moment.month, moment.day,
+        moment.hour, moment.minute, moment.second, moment.millisecond));
+  }
+
+  void _bumpMonth(int delta) {
+    final m = moment.month + delta;
+    final y = moment.year + ((m - 1) ~/ 12);
+    final nm = ((m - 1) % 12) + 1;
+    final ny = m <= 0 ? y - 1 : y;
+    final clampedM = m <= 0 ? 12 + m : nm;
+    onChange(DateTime(ny, clampedM, moment.day.clamp(1, 28), moment.hour,
+        moment.minute, moment.second, moment.millisecond));
+  }
+
+  void _bumpDay(int delta) {
+    onChange(moment.add(Duration(days: delta)));
+  }
+
+  void _bumpHour(int delta) {
+    onChange(moment.add(Duration(hours: delta)));
+  }
+
+  void _bumpMinute(int delta) {
+    onChange(moment.add(Duration(minutes: delta)));
+  }
+
+  void _bumpSecond(int delta) {
+    onChange(moment.add(Duration(seconds: delta)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasDate = kind == _KindId.date || kind == _KindId.datetime;
+    final hasTime = kind == _KindId.time || kind == _KindId.datetime;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bgDeep,
+        border: Border(bottom: BorderSide(color: AppColors.hairline)),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      child: Row(
+        children: [
+          if (hasDate) ...[
+            _Seg(
+              text: moment.year.toString().padLeft(4, '0'),
+              width: 44,
+              onBump: _bumpYear,
+            ),
+            const _Punct('-'),
+            _Seg(
+              text: _pad(moment.month),
+              width: 26,
+              onBump: _bumpMonth,
+            ),
+            const _Punct('-'),
+            _Seg(
+              text: _pad(moment.day),
+              width: 26,
+              onBump: _bumpDay,
+            ),
+          ],
+          if (hasDate && hasTime) const SizedBox(width: 12),
+          if (hasTime) ...[
+            _Seg(
+              text: _pad(moment.hour),
+              width: 26,
+              onBump: _bumpHour,
+            ),
+            const _Punct(':'),
+            _Seg(
+              text: _pad(moment.minute),
+              width: 26,
+              onBump: _bumpMinute,
+            ),
+            const _Punct(':'),
+            _Seg(
+              text: _pad(moment.second),
+              width: 26,
+              onBump: _bumpSecond,
+            ),
+          ],
+          if (withTz && hasTime) ...[
+            const _AtPunct(),
+            _TzChip(value: tz, onChange: onTzChange),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Seg extends StatefulWidget {
+  const _Seg({
+    required this.text,
+    required this.width,
+    required this.onBump,
+  });
+
+  final String text;
+  final double width;
+  final void Function(int delta) onBump;
+
+  @override
+  State<_Seg> createState() => _SegState();
+}
+
+class _SegState extends State<_Seg> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onFocusChange: (f) => setState(() => _focused = f),
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+            widget.onBump(1);
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            widget.onBump(-1);
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Builder(
+        builder: (context) => Hoverable(
+          cursor: SystemMouseCursors.click,
+          onTap: () => FocusScope.of(context).requestFocus(Focus.of(context)),
+          builder: (context, hovering) => Container(
+            width: widget.width,
+            padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 1),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _focused
+                  ? AppColors.accentSoft
+                  : (hovering ? AppColors.surfaceHover : Colors.transparent),
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: Text(
+              widget.text,
+              style: AppTheme.mono(
+                size: 14,
+                color: AppColors.textPrimary,
+                weight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Punct extends StatelessWidget {
+  const _Punct(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 1),
+      child: Text(
+        text,
+        style: AppTheme.mono(
+          size: 14,
+          color: AppColors.text4,
+        ),
+      ),
+    );
+  }
+}
+
+class _AtPunct extends StatelessWidget {
+  const _AtPunct();
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, right: 6),
+      child: Text(
+        '@',
+        style: AppTheme.mono(size: 14, color: AppColors.text4),
+      ),
+    );
+  }
+}
+
+class _TzChip extends StatelessWidget {
+  const _TzChip({required this.value, required this.onChange});
+  final String value;
+  final ValueChanged<String> onChange;
+
+  static const _options = [
+    ('-08', 'PST'),
+    ('-07', 'PDT/MST'),
+    ('-05', 'EST'),
+    ('+00', 'UTC'),
+    ('+01', 'CET'),
+    ('+05:30', 'IST'),
+    ('+09', 'JST'),
+  ];
+
+  void _show(BuildContext context, RenderBox anchor) {
+    final overlay = Overlay.of(context);
+    final origin = anchor.localToGlobal(Offset(0, anchor.size.height + 4));
+    late OverlayEntry entry;
+    void close() {
+      if (entry.mounted) entry.remove();
+    }
+
+    entry = OverlayEntry(
+      builder: (_) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: close,
+            ),
+          ),
+          Positioned(
+            left: origin.dx,
+            top: origin.dy,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 110),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: Radii.brSm,
+                  border: Border.all(color: AppColors.borderStrong),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x88000000),
+                      blurRadius: 24,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(3),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final (tz, lbl) in _options)
+                      Hoverable(
+                        onTap: () {
+                          close();
+                          onChange(tz);
+                        },
+                        builder: (context, hovering) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: hovering
+                                ? AppColors.surfaceHover
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                tz,
+                                style: AppTheme.mono(
+                                  size: 11,
+                                  color: tz == value
+                                      ? AppColors.accent
+                                      : AppColors.textSecondary,
+                                  weight: FontWeight.w500,
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                lbl,
+                                style: AppTheme.mono(
+                                  size: 10,
+                                  color: AppColors.text4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    overlay.insert(entry);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final display = value.trim().isEmpty ? '+00' : value;
+    return Builder(
+      builder: (context) {
+        return Hoverable(
+          cursor: SystemMouseCursors.click,
+          onTap: () {
+            final box = context.findRenderObject() as RenderBox?;
+            if (box != null) _show(context, box);
+          },
+          builder: (context, hovering) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            decoration: BoxDecoration(
+              color: hovering ? AppColors.accentSoft : Colors.transparent,
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  display,
+                  style: AppTheme.mono(
+                    size: 14,
+                    color: AppColors.accent,
+                  ),
+                ),
+                const SizedBox(width: 3),
+                Icon(
+                  Icons.expand_more,
+                  size: 10,
+                  color: AppColors.text4,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Row of 3 quick actions (Now / Today / shift) under the value line. The
+/// `primary` action lights in the accent, others stay quiet.
+class _QuickActionsRow extends StatelessWidget {
+  const _QuickActionsRow({required this.children});
+  final List<_QuickAction> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bg,
+        border: Border(bottom: BorderSide(color: AppColors.hairline)),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            Expanded(child: children[i]),
+            if (i < children.length - 1)
+              Container(
+                width: 1,
+                height: 28,
+                color: AppColors.hairline,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
+    required this.label,
+    required this.onTap,
+    this.icon,
+    this.primary = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color fg = primary ? AppColors.accent : AppColors.textSecondary;
+    return Hoverable(
+      onTap: onTap,
+      builder: (context, hovering) {
+        final Color bg = primary && hovering
+            ? AppColors.accentSoft
+            : (hovering ? AppColors.sidebarRowHover : Colors.transparent);
+        final Color fgHover =
+            hovering && !primary ? AppColors.textPrimary : fg;
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+          alignment: Alignment.center,
+          color: bg,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 10, color: fgHover),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                label,
+                style: AppTheme.mono(
+                  size: 11.5,
+                  color: fgHover,
+                  weight: primary ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+
+/// Right-aligned mono input + vertical stepper for the number kind.
+/// Matches the design's `.num-field` / `.num-steppers` layout.
+class _NumberBody extends StatefulWidget {
+  const _NumberBody({
+    required this.controller,
+    required this.focus,
+    required this.intOnly,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focus;
+  final bool intOnly;
+  final VoidCallback onChanged;
+
+  @override
+  State<_NumberBody> createState() => _NumberBodyState();
+}
+
+class _NumberBodyState extends State<_NumberBody> {
+  void _bump(int delta) {
+    final raw = widget.controller.text.trim();
+    final current =
+        num.tryParse(raw.isEmpty ? '0' : raw) ?? num.parse('0');
+    final next =
+        widget.intOnly ? (current + delta).round() : current + delta;
+    widget.controller.text = next.toString();
+    widget.onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.bg,
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.bgDeep,
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: widget.controller,
+                  focusNode: widget.focus,
+                  textAlign: TextAlign.right,
+                  cursorColor: AppColors.accent,
+                  inputFormatters: [
+                    widget.intOnly ? _intFilter : _numberFilter,
+                  ],
+                  style: AppTheme.mono(
+                    size: 12,
+                    color: AppColors.textPrimary,
+                  ).copyWith(
+                    fontFeatures: const [
+                      FontFeature.tabularFigures(),
+                    ],
+                  ),
+                  decoration: const InputDecoration(
+                    isCollapsed: true,
+                    border: InputBorder.none,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  ),
+                  onChanged: (_) => widget.onChanged(),
+                ),
+              ),
+              Container(
+                width: 1,
+                color: AppColors.border,
+              ),
+              Column(
+                children: [
+                  _StepperBtn(
+                    icon: Icons.keyboard_arrow_up,
+                    onTap: () => _bump(1),
+                  ),
+                  Container(width: 22, height: 1, color: AppColors.border),
+                  _StepperBtn(
+                    icon: Icons.keyboard_arrow_down,
+                    onTap: () => _bump(-1),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StepperBtn extends StatelessWidget {
+  const _StepperBtn({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Hoverable(
+      onTap: onTap,
+      builder: (context, hovering) => Container(
+        width: 22,
+        height: 18,
+        alignment: Alignment.center,
+        color: hovering ? AppColors.surfaceHover : Colors.transparent,
+        child: Icon(
+          icon,
+          size: 14,
+          color: hovering ? AppColors.textPrimary : AppColors.textMuted,
+        ),
+      ),
+    );
+  }
+}

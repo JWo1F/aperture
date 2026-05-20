@@ -224,6 +224,7 @@ class _QueryEditorState extends State<QueryEditor> {
               scrollOffset: _scrollOffset,
               lineCount: _lineCount,
               statements: _statements,
+              cursorStmt: _cursorStmt,
               onRunStatement: _runStatement,
             ),
           ),
@@ -886,6 +887,7 @@ class _SqlCodeEditor extends StatelessWidget {
     required this.scrollOffset,
     required this.lineCount,
     required this.statements,
+    required this.cursorStmt,
     required this.onRunStatement,
   });
 
@@ -895,6 +897,7 @@ class _SqlCodeEditor extends StatelessWidget {
   final double scrollOffset;
   final int lineCount;
   final List<SqlStatement> statements;
+  final int? cursorStmt;
   final void Function(SqlStatement) onRunStatement;
 
   @override
@@ -905,9 +908,40 @@ class _SqlCodeEditor extends StatelessWidget {
       color: AppColors.textPrimary,
     );
 
+    final activeStmt = cursorStmt != null && cursorStmt! >= 1 &&
+            cursorStmt! <= statements.length
+        ? statements[cursorStmt! - 1]
+        : null;
+
     return ClipRect(
       child: Stack(
         children: [
+          // Soft accent gradient on the lines of the active statement —
+          // the design's `.editor .code .line.active` rule, painted as one
+          // Positioned overlay across the statement's line range.
+          if (activeStmt != null)
+            Positioned(
+              left: _gutterWidth,
+              top: _lineTop(activeStmt.startLine, scrollOffset),
+              right: 0,
+              height: _editorLineBox *
+                  ('\n'.allMatches(activeStmt.text).length + 1),
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        AppColors.accent.withValues(alpha: 0.06),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.8],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           // Body: gutter background + TextField with syntax highlighting.
           // `decoration: null` skips the InputDecorator entirely so the
           // EditableText underneath renders at the exact Y we wrap it at
