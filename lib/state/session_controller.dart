@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/connection_config.dart';
 import '../models/log_event.dart';
+import '../services/connect_errors.dart';
 import '../services/postgres_service.dart';
 import 'event_log.dart';
 
@@ -97,14 +98,15 @@ class SessionController extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
+      final friendly = friendlyConnectError(e, config);
       _status = ConnectionStatus.error;
-      _error = e.toString();
+      _error = friendly.message;
       _service = null;
       log?.add(LogEvent(
         timestamp: DateTime.now(),
         kind: LogEventKind.error,
         connectionName: config.name,
-        error: e.toString(),
+        error: friendly.detail,
       ));
       notifyListeners();
       return false;
