@@ -261,6 +261,12 @@ class _PlanTree extends StatelessWidget {
     final slowest = rows.reduce((a, b) => a.nodeMs >= b.nodeMs ? a : b);
     final planningMs = (planJson['Planning Time'] as num?)?.toDouble();
     final executionMs = (planJson['Execution Time'] as num?)?.toDouble();
+    final analyzed = executionMs != null;
+    final advice = _deriveAdvice(
+      planJson: planJson,
+      analyzed: analyzed,
+      totalExecutionMs: executionMs,
+    );
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(
@@ -279,9 +285,10 @@ class _PlanTree extends StatelessWidget {
             executionMs: executionMs,
             totalNodes: rows.length,
             slowest: slowest,
-            totalMs: totalMs == 0 ? null : totalMs,
           ),
           const SizedBox(height: 10),
+          _AdviceSection(items: advice, analyzed: analyzed),
+          const SizedBox(height: 4),
           for (final node in rows)
             _NodeCard(
               node: node,
@@ -491,34 +498,18 @@ class _SummaryHeader extends StatelessWidget {
     required this.executionMs,
     required this.totalNodes,
     required this.slowest,
-    required this.totalMs,
   });
 
   final double? planningMs;
   final double? executionMs;
   final int totalNodes;
   final _PlanNode slowest;
-  final double? totalMs;
-
-  String _insight() {
-    final pct = totalMs == null || totalMs == 0
-        ? null
-        : ((slowest.nodeMs / totalMs!) * 100).round();
-    final type = slowest.type;
-    if (pct != null && pct >= 60) {
-      return '$type dominates execution ($pct% of total time).';
-    }
-    if (slowest.mismatch == _Mismatch.severe) {
-      return 'Planner row estimate is far off for $type — consider ANALYZE.';
-    }
-    if (totalNodes == 1) {
-      return 'Single-node plan — no joins or sorts to worry about.';
-    }
-    return '$totalNodes operations · slowest is $type.';
-  }
 
   @override
   Widget build(BuildContext context) {
+    final subtitle = totalNodes == 1
+        ? 'Single-node plan'
+        : '$totalNodes operations · slowest is ${slowest.type}';
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
@@ -545,26 +536,13 @@ class _SummaryHeader extends StatelessWidget {
               _NodeBadge(type: slowest.type, small: true),
             ],
           ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.lightbulb_outline,
-                size: 12,
-                color: AppColors.accent,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  _insight(),
-                  style: AppTheme.mono(
-                    size: 11,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: AppTheme.mono(
+              size: 11,
+              color: AppColors.textMuted,
+            ),
           ),
         ],
       ),
@@ -1283,6 +1261,390 @@ class _StaleBanner extends StatelessWidget {
           Text(
             'Plan is for an earlier run — re-fetching.',
             style: AppTheme.mono(size: 11, color: AppColors.warning),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- advice ---------------------------------------------------------------
+
+enum _AdviceSeverity { good, info, warn, critical }
+
+class _PlanAdvice {
+  _PlanAdvice({
+    required this.severity,
+    required this.title,
+    required this.body,
+  });
+
+  final _AdviceSeverity severity;
+  final String title;
+  final String body;
+}
+
+/// Walks the plan tree and returns advice items in priority order.
+///
+/// Each rule fires from one EXPLAIN field combination; together they
+/// surface the most common "this looks slow because…" patterns without
+/// needing catalog lookups. When ANALYZE wasn't used, rules that depend
+/// on actual rows / times stay silent and the empty result becomes an
+/// "estimates only" notice in [_AdviceSection].
+List<_PlanAdvice> _deriveAdvice({
+  required Map<String, dynamic> planJson,
+  required bool analyzed,
+  required double? totalExecutionMs,
+}) {
+  final root = planJson['Plan'] as Map<String, dynamic>?;
+  if (root == null) return const [];
+  final out = <_PlanAdvice>[];
+  final mismatchCandidates = <_MismatchCandidate>[];
+  _walkAdvice(root, null, analyzed, out, mismatchCandidates);
+
+  // Estimate-mismatch is per-node noisy: keep only the single worst
+  // offender (largest fold) to avoid drowning the panel.
+  if (mismatchCandidates.isNotEmpty) {
+    mismatchCandidates.sort((a, b) => b.fold.compareTo(a.fold));
+    out.add(mismatchCandidates.first.toAdvice());
+  }
+
+  if (out.isEmpty && analyzed) {
+    out.add(_PlanAdvice(
+      severity: _AdviceSeverity.good,
+      title: 'Plan looks healthy',
+      body: totalExecutionMs == null
+          ? 'No bottlenecks worth flagging — nothing actionable here.'
+          : 'Finished in ${totalExecutionMs.toStringAsFixed(2)} ms with no '
+              'obvious bottlenecks.',
+    ));
+  }
+  return out;
+}
+
+class _MismatchCandidate {
+  _MismatchCandidate({
+    required this.type,
+    required this.relation,
+    required this.actual,
+    required this.estimated,
+    required this.fold,
+  });
+  final String type;
+  final String? relation;
+  final int actual;
+  final int estimated;
+  final double fold;
+
+  _PlanAdvice toAdvice() {
+    final fixHint = relation != null
+        ? 'Run `ANALYZE $relation` to refresh statistics — the planner is '
+            'choosing strategies blind right now.'
+        : 'Refresh table stats with `ANALYZE` so the planner can pick a '
+            'better strategy.';
+    return _PlanAdvice(
+      severity: _AdviceSeverity.warn,
+      title: 'Planner estimate off by ${fold.round()}× on $type',
+      body: 'Expected ${_fmtAdviceInt(estimated)} rows, got '
+          '${_fmtAdviceInt(actual)}. $fixHint',
+    );
+  }
+}
+
+void _walkAdvice(
+  Map<String, dynamic> node,
+  Map<String, dynamic>? parent,
+  bool analyzed,
+  List<_PlanAdvice> out,
+  List<_MismatchCandidate> mismatchOut,
+) {
+  final type = node['Node Type'] as String? ?? '';
+  final actualRows = (node['Actual Rows'] as num?)?.toInt();
+  final planRows = (node['Plan Rows'] as num?)?.toInt();
+  final rowsRemoved = (node['Rows Removed by Filter'] as num?)?.toInt();
+  final relation = node['Relation Name'] as String?;
+  final schema = node['Schema'] as String?;
+  final filter = node['Filter'] as String?;
+
+  String? qualified() {
+    if (relation == null) return null;
+    if (schema == null || schema == 'public') return relation;
+    return '$schema.$relation';
+  }
+
+  // 1. Seq Scan with selective filter on a large table.
+  if (type == 'Seq Scan' &&
+      rowsRemoved != null &&
+      actualRows != null &&
+      qualified() != null) {
+    final total = rowsRemoved + actualRows;
+    if (total >= 10000 && rowsRemoved >= actualRows * 9) {
+      out.add(_PlanAdvice(
+        severity: _AdviceSeverity.warn,
+        title: 'Seq Scan with selective filter on ${qualified()}',
+        body: 'Read ${_fmtAdviceInt(total)} rows and discarded '
+            '${_fmtAdviceInt(rowsRemoved)} of them. An index on the '
+            'filtered column(s) would let Postgres skip most of the table.',
+      ));
+    }
+  }
+
+  // 2. Sort spilled to disk.
+  if (type == 'Sort' || type == 'Incremental Sort') {
+    final spaceType = node['Sort Space Type'] as String?;
+    final spaceUsedKb = (node['Sort Space Used'] as num?)?.toInt();
+    if (spaceType == 'Disk') {
+      out.add(_PlanAdvice(
+        severity: _AdviceSeverity.critical,
+        title: '$type spilled to disk',
+        body: 'Wrote ${spaceUsedKb == null ? "data" : _fmtKb(spaceUsedKb)} '
+            'to temp files. Raise `work_mem` for this session, or return '
+            'fewer rows before sorting.',
+      ));
+    }
+  }
+
+  // 3. Hash join split into batches (work_mem too small).
+  if (type == 'Hash') {
+    final batches = (node['Hash Batches'] as num?)?.toInt();
+    if (batches != null && batches > 1) {
+      out.add(_PlanAdvice(
+        severity: _AdviceSeverity.warn,
+        title: 'Hash table did not fit in memory',
+        body: 'Postgres split the hash into $batches batches because '
+            '`work_mem` was too small. Raise `work_mem` if this query is '
+            'on the hot path.',
+      ));
+    }
+  }
+
+  // 4. Temp blocks spilled by a non-Sort/Hash node (catch-all).
+  final tempBlocks = ((node['Temp Read Blocks'] as num?)?.toInt() ?? 0) +
+      ((node['Temp Written Blocks'] as num?)?.toInt() ?? 0);
+  if (tempBlocks > 0 && type != 'Sort' && type != 'Hash') {
+    out.add(_PlanAdvice(
+      severity: _AdviceSeverity.warn,
+      title: '$type spilled to temp files',
+      body: 'Used ${_fmtKb(tempBlocks * 8)} of temp files. Raise `work_mem` '
+          'or break the query into smaller pieces.',
+    ));
+  }
+
+  // 5. Index Only Scan still hits the heap (stale visibility map).
+  if (type == 'Index Only Scan') {
+    final heap = (node['Heap Fetches'] as num?)?.toInt() ?? 0;
+    if (heap > 0 && actualRows != null && heap > actualRows * 0.05) {
+      out.add(_PlanAdvice(
+        severity: _AdviceSeverity.info,
+        title: 'Index Only Scan still reads the table',
+        body: 'Postgres had to fetch from the heap ${_fmtAdviceInt(heap)} '
+            'times because the visibility map is stale. '
+            '${qualified() != null ? "Run `VACUUM ${qualified()}` to "
+                "restore true index-only behavior." : "VACUUM the table to "
+                "restore true index-only behavior."}',
+      ));
+    }
+  }
+
+  // 6. Estimate severely off. Only collect candidates here; the caller
+  //    keeps the single worst one to avoid drowning the panel.
+  if (analyzed && actualRows != null && planRows != null) {
+    final a = actualRows == 0 ? 1 : actualRows;
+    final e = planRows == 0 ? 1 : planRows;
+    final fold = a > e ? a / e : e / a;
+    if (fold >= 10 && (actualRows > 100 || qualified() != null)) {
+      mismatchOut.add(_MismatchCandidate(
+        type: type,
+        relation: qualified(),
+        actual: actualRows,
+        estimated: planRows,
+        fold: fold.toDouble(),
+      ));
+    }
+  }
+
+  // 7. Nested Loop driving a non-indexed inner side with a big outer.
+  if (type == 'Nested Loop') {
+    final children =
+        (node['Plans'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+    if (children.length == 2) {
+      final outer = children[0];
+      final inner = children[1];
+      final outerRows = (outer['Actual Rows'] as num?)?.toInt() ?? 0;
+      final outerLoops = (outer['Actual Loops'] as num?)?.toInt() ?? 1;
+      final outerTotal = outerRows * outerLoops;
+      final innerType = inner['Node Type'] as String? ?? '';
+      final innerIndexed = innerType.contains('Index');
+      if (outerTotal >= 1000 && !innerIndexed) {
+        out.add(_PlanAdvice(
+          severity: _AdviceSeverity.warn,
+          title: 'Nested Loop without an index on the inner side',
+          body: 'Outer side feeds ${_fmtAdviceInt(outerTotal)} rows into a '
+              '$innerType inner side. A Hash/Merge join — or an index on '
+              'the join key — would scale much better.',
+        ));
+      }
+    }
+  }
+
+  // 8. Full Sort under a Limit (Top-N would be faster).
+  if (type == 'Sort' && parent != null) {
+    final parentType = parent['Node Type'];
+    final method = node['Sort Method'] as String? ?? '';
+    if (parentType == 'Limit' && !method.contains('top-N')) {
+      out.add(_PlanAdvice(
+        severity: _AdviceSeverity.info,
+        title: 'Full sort feeding a LIMIT',
+        body: 'Sort processed all input rows before LIMIT trimmed it. An '
+            'index matching the ORDER BY would let Postgres stop early.',
+      ));
+    }
+  }
+
+  // 9. LIKE/ILIKE filter on a heap scan large enough to matter.
+  if (filter != null && (type == 'Seq Scan' || type == 'Bitmap Heap Scan')) {
+    final hasLike = filter.contains('~~') ||
+        filter.toLowerCase().contains(' like ') ||
+        filter.toLowerCase().contains(' ilike ');
+    final scanned = (actualRows ?? 0) + (rowsRemoved ?? 0);
+    if (hasLike && scanned >= 1000) {
+      out.add(_PlanAdvice(
+        severity: _AdviceSeverity.info,
+        title: 'Pattern match runs without an index',
+        body: 'A LIKE/ILIKE filter is being evaluated row-by-row. A '
+            '`pg_trgm` GIN or GIST index on the column would let Postgres '
+            'narrow the rows first.',
+      ));
+    }
+  }
+
+  // 10. Parallelism capped below planned.
+  final workersPlanned = (node['Workers Planned'] as num?)?.toInt();
+  final workersLaunched = (node['Workers Launched'] as num?)?.toInt();
+  if (workersPlanned != null &&
+      workersLaunched != null &&
+      workersLaunched < workersPlanned) {
+    out.add(_PlanAdvice(
+      severity: _AdviceSeverity.info,
+      title: 'Parallel workers capped',
+      body: 'Postgres planned $workersPlanned workers but only launched '
+          '$workersLaunched. `max_parallel_workers` (or '
+          '`max_parallel_workers_per_gather`) is the ceiling.',
+    ));
+  }
+
+  final children =
+      (node['Plans'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+  for (final c in children) {
+    _walkAdvice(c, node, analyzed, out, mismatchOut);
+  }
+}
+
+String _fmtAdviceInt(int n) {
+  final s = n.toString();
+  final buf = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
+    buf.write(s[i]);
+  }
+  return buf.toString();
+}
+
+/// Human-readable size string for a kB count. `Sort Space Used` is kB,
+/// and we convert `Temp * Blocks` (8 KB pages) to kB before calling.
+String _fmtKb(int kb) {
+  if (kb < 1024) return '$kb kB';
+  if (kb < 1024 * 1024) return '${(kb / 1024).toStringAsFixed(1)} MB';
+  return '${(kb / 1024 / 1024).toStringAsFixed(2)} GB';
+}
+
+class _AdviceSection extends StatelessWidget {
+  const _AdviceSection({required this.items, required this.analyzed});
+
+  final List<_PlanAdvice> items;
+  final bool analyzed;
+
+  @override
+  Widget build(BuildContext context) {
+    final effective = items.isEmpty && !analyzed
+        ? [
+            _PlanAdvice(
+              severity: _AdviceSeverity.info,
+              title: 'Plan shown without execution',
+              body: 'This statement was not run under ANALYZE, so costs are '
+                  'estimates and row counts are guesses. Run it as a SELECT '
+                  'to see measured times and targeted advice.',
+            ),
+          ]
+        : items;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final a in effective)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: _AdviceCard(advice: a),
+          ),
+      ],
+    );
+  }
+}
+
+class _AdviceCard extends StatelessWidget {
+  const _AdviceCard({required this.advice});
+  final _PlanAdvice advice;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (advice.severity) {
+      _AdviceSeverity.critical => AppColors.error,
+      _AdviceSeverity.warn => AppColors.warning,
+      _AdviceSeverity.info => AppColors.accent,
+      _AdviceSeverity.good => AppColors.success,
+    };
+    final icon = switch (advice.severity) {
+      _AdviceSeverity.critical => Icons.error_outline,
+      _AdviceSeverity.warn => Icons.warning_amber_outlined,
+      _AdviceSeverity.info => Icons.lightbulb_outline,
+      _AdviceSeverity.good => Icons.check_circle_outline,
+    };
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+        borderRadius: Radii.brMd,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(icon, size: 14, color: color),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  advice.title,
+                  style: AppTheme.ui(
+                    size: 12,
+                    weight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  advice.body,
+                  style: AppTheme.mono(
+                    size: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
