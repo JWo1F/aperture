@@ -98,6 +98,13 @@ class AppState extends ChangeNotifier {
   void addConnection(ConnectionConfig config) => registry.add(config);
   void updateConnection(ConnectionConfig config) {
     registry.update(config);
+    // Password rotation is an explicit, separate step — `update` is
+    // called by every metadata-only path (column widths, recents,
+    // favorites) with the live password still in the config, and we
+    // must not rewrite the keychain entry from those.
+    if (config.password.isNotEmpty) {
+      unawaited(registry.setPassword(config.id, config.password));
+    }
     if (session.activeConnection?.id == config.id) {
       session.setActiveConnection(config);
     }
@@ -117,7 +124,21 @@ class AppState extends ChangeNotifier {
     tabsController.clear();
     history.clear();
 
-    final ok = await session.connect(config);
+    // Lazily fetch the password from the keychain — the biometric ACL
+    // on the item triggers a single Touch ID prompt here, and nothing
+    // else throughout the lifetime of the connection.
+    var resolved = config;
+    if (resolved.password.isEmpty) {
+      final stored = await registry.readPassword(
+        resolved.id,
+        reason: 'Unlock "${resolved.name}" to connect',
+      );
+      if (stored.isNotEmpty) {
+        resolved = resolved.copyWith(password: stored);
+      }
+    }
+
+    final ok = await session.connect(resolved);
     if (!ok) return;
     if (gen != catalog.generation) return;
 
@@ -127,8 +148,10 @@ class AppState extends ChangeNotifier {
       if (schemas == null) return;
       if (schemas.length == 1) ui.expandSingleSchema(schemas.first.name);
 
-      final stamped = config.copyWith(lastConnectedAt: DateTime.now());
-      registry.update(stamped);
+      final stamped = resolved.copyWith(lastConnectedAt: DateTime.now());
+      // Pass an empty password so the registry's metadata-touch update
+      // doesn't re-write the value we just pulled out of the vault.
+      registry.update(stamped.copyWith(password: ''));
       session.setActiveConnection(stamped);
 
       // Phase 1 runs in the background; the listener on catalog will fire

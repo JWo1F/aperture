@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import LocalAuthentication
 import macos_window_utils
 import Security
 
@@ -28,7 +29,31 @@ class MainFlutterWindow: NSWindow {
       case "keychainRead":
         let args = call.arguments as? [String: Any]
         let key = args?["key"] as? String ?? ""
-        result(KeychainStore.read(key: key))
+        let reason = args?["reason"] as? String
+          ?? "Unlock the saved password for this connection"
+
+        // Auth gate lives in our code, not on the keychain item. ACLs
+        // (.biometryAny / .userPresence) require a developer-cert
+        // entitlement that ad-hoc-signed builds don't carry — SecItemAdd
+        // returns errSecMissingEntitlement (-34018) if you try. Plain
+        // keychain storage + LAContext.evaluatePolicy gives the same
+        // Touch ID UX without needing the entitlement.
+        let context = LAContext()
+        var policyError: NSError?
+        let canBio = context.canEvaluatePolicy(
+          .deviceOwnerAuthenticationWithBiometrics,
+          error: &policyError
+        )
+        let policy: LAPolicy = canBio
+          ? .deviceOwnerAuthenticationWithBiometrics
+          : .deviceOwnerAuthentication
+        NSLog("[dbv.keychain] auth begin key=\(key) canBio=\(canBio)")
+        context.evaluatePolicy(policy, localizedReason: reason) { success, authError in
+          NSLog("[dbv.keychain] auth done key=\(key) success=\(success) err=\(authError?.localizedDescription ?? "nil")")
+          DispatchQueue.main.async {
+            result(success ? KeychainStore.read(key: key) : nil)
+          }
+        }
       case "keychainWrite":
         let args = call.arguments as? [String: Any]
         let key = args?["key"] as? String ?? ""
@@ -79,6 +104,12 @@ class MainFlutterWindow: NSWindow {
 /// automatically because sandboxed apps each get their own keychain
 /// partition — no entitlement beyond app-sandbox is required for items
 /// the app itself created.
+///
+/// Storage is intentionally plain: `kSecAttrAccessControl` (biometric /
+/// user-presence ACLs) requires a developer-cert keychain entitlement
+/// that ad-hoc-signed builds don't carry, so we keep items unprotected
+/// at the keychain level and gate reads through `LAContext` in the
+/// `keychainRead` method-channel handler instead.
 enum KeychainStore {
   private static let service = "dbv.password"
 
@@ -96,6 +127,7 @@ enum KeychainStore {
     query[kSecMatchLimit as String] = kSecMatchLimitOne
     var item: CFTypeRef?
     let status = SecItemCopyMatching(query as CFDictionary, &item)
+    NSLog("[dbv.keychain] read store key=\(key) status=\(status)")
     guard status == errSecSuccess, let data = item as? Data else { return nil }
     return String(data: data, encoding: .utf8)
   }
@@ -105,11 +137,13 @@ enum KeychainStore {
     let query = baseQuery(key)
     let attrs: [String: Any] = [kSecValueData as String: data]
     let updateStatus = SecItemUpdate(query as CFDictionary, attrs as CFDictionary)
+    NSLog("[dbv.keychain] write key=\(key) updateStatus=\(updateStatus)")
     if updateStatus == errSecSuccess { return true }
     if updateStatus == errSecItemNotFound {
       var add = query
       add[kSecValueData as String] = data
       let addStatus = SecItemAdd(add as CFDictionary, nil)
+      NSLog("[dbv.keychain] write key=\(key) addStatus=\(addStatus)")
       return addStatus == errSecSuccess
     }
     return false

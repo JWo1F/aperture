@@ -18,11 +18,14 @@ class PasswordVault {
 
   final MethodChannel _channel;
 
-  Future<String?> read(String connectionId) async {
+  Future<String?> read(String connectionId, {String? reason}) async {
     try {
       return await _channel.invokeMethod<String>(
         'keychainRead',
-        {'key': connectionId},
+        {
+          'key': connectionId,
+          'reason': ?reason,
+        },
       );
     } on PlatformException catch (e, st) {
       developer.log(

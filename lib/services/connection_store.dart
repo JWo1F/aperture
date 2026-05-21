@@ -9,9 +9,11 @@ import 'password_vault.dart';
 /// directory. Passwords live in [PasswordVault] (macOS Keychain) and never
 /// touch the JSON file.
 ///
-/// The first launch after upgrading from a plaintext-passwords version
-/// detects any embedded `password` field, migrates it into the vault, and
-/// rewrites the file without it.
+/// Passwords are read lazily — [load] hydrates configs with an empty
+/// password and the caller fetches the real value via [readPassword] only
+/// when the user actually opens a connection. Eagerly reading on startup
+/// would trigger a macOS keychain access prompt per saved connection, and
+/// debug rebuilds re-sign the app so the prompts repeat every launch.
 class ConnectionStore {
   ConnectionStore({AtomicJsonFile? file, PasswordVault? vault})
       : _file = file ?? AtomicJsonFile('connections.json'),
@@ -24,21 +26,13 @@ class ConnectionStore {
     final decoded = await _file.load();
     if (decoded is! List) return [];
     final configs = <ConnectionConfig>[];
-    var didMigrate = false;
     for (final item in decoded) {
       if (item is! Map<String, dynamic>) continue;
       try {
         final id = item['id'] as String?;
         if (id == null) continue;
-        final plaintext = item['password'] as String?;
-        if (plaintext != null) {
-          await _vault.write(id, plaintext);
-          item.remove('password');
-          didMigrate = true;
-        }
-        final fromVault = await _vault.read(id) ?? '';
         configs.add(
-          ConnectionConfig.fromJson({...item, 'password': fromVault}),
+          ConnectionConfig.fromJson({...item, 'password': ''}),
         );
       } catch (e, st) {
         developer.log(
@@ -49,20 +43,30 @@ class ConnectionStore {
         );
       }
     }
-    if (didMigrate) {
-      await save(configs);
-    }
     return configs;
   }
 
+  /// Reads the password for [connectionId] from the vault on demand.
+  /// Returns the empty string when the user cancels Touch ID or no entry
+  /// exists. [reason] is shown in the system biometric prompt.
+  Future<String> readPassword(String connectionId, {String? reason}) async {
+    return await _vault.read(connectionId, reason: reason) ?? '';
+  }
+
+  /// Writes [password] to the vault for [connectionId]. Called explicitly
+  /// when the user sets or rotates a password, never as a side effect of
+  /// metadata saves.
+  Future<void> writePassword(String connectionId, String password) =>
+      _vault.write(connectionId, password);
+
+  /// Persists connection metadata to the JSON file. Does not touch the
+  /// vault — passwords are stored independently through [writePassword]
+  /// so unrelated saves (column widths, favorites, recents) never trigger
+  /// a keychain access prompt.
   Future<void> save(List<ConnectionConfig> connections) async {
     try {
-      for (final c in connections) {
-        await _vault.write(c.id, c.password);
-      }
       await _file.save([
-        for (final c in connections)
-          c.toJson()..remove('password'),
+        for (final c in connections) c.toJson()..remove('password'),
       ]);
     } catch (e, st) {
       developer.log(
