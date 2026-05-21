@@ -1,17 +1,55 @@
 import 'package:dbv/models/db_catalog.dart';
 import 'package:dbv/models/db_object.dart';
 import 'package:dbv/services/sql_complete.dart';
+import 'package:dbv/ui/widgets/code_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 DbTable _t(int oid, String schema, String name) =>
     DbTable(oid: oid, schema: schema, name: name, kind: DbRelationKind.table);
 
-DatabaseCatalog _catalog(List<DbTable> tables) {
+DbColumn _c(String name, String type, {bool pk = false}) => DbColumn(
+  name: name,
+  dataType: type,
+  nullable: !pk,
+  isPrimaryKey: pk,
+  hasDefault: false,
+  ordinal: 1,
+);
+
+DatabaseCatalog _catalog(
+  List<DbTable> tables, {
+  Map<int, List<DbColumn>> columns = const {},
+}) {
   final byOid = {for (final t in tables) t.oid: t};
   return DatabaseCatalog.empty.copyWith(
     schemas: const [],
     relationsByOid: byOid,
-    phases: {CatalogPhase.schemas},
+    columnsByOid: columns,
+    phases: {CatalogPhase.schemas, CatalogPhase.columns},
+  );
+}
+
+SuggestRequest _req(
+  String text, {
+  int? cursor,
+  bool manualTrigger = false,
+}) {
+  final at = cursor ?? text.length;
+  var ts = at;
+  bool isWord(int c) =>
+      (c >= 0x30 && c <= 0x39) ||
+      (c >= 0x41 && c <= 0x5A) ||
+      (c >= 0x61 && c <= 0x7A) ||
+      c == 0x5F;
+  while (ts > 0 && isWord(text.codeUnitAt(ts - 1))) {
+    ts--;
+  }
+  return SuggestRequest(
+    text: text,
+    cursor: at,
+    token: text.substring(ts, at),
+    tokenStart: ts,
+    manualTrigger: manualTrigger,
   );
 }
 
@@ -69,6 +107,489 @@ void main() {
 
     test('skips whitespace between token and prior word', () {
       expect(previousWord('JOIN    orders', 8), 'join');
+    });
+  });
+
+  group('detectClause', () {
+    test('empty text is statementStart', () {
+      expect(detectClause('', 0), SqlClause.statementStart);
+    });
+
+    test('after SELECT is selectList', () {
+      expect(detectClause('SELECT id', 9), SqlClause.selectList);
+    });
+
+    test('after FROM is from', () {
+      expect(detectClause('SELECT * FROM u', 15), SqlClause.from);
+    });
+
+    test('after WHERE is where', () {
+      expect(detectClause('SELECT * FROM t WHERE x', 23), SqlClause.where);
+    });
+
+    test('after ORDER BY is orderBy, not the bare BY', () {
+      expect(
+        detectClause('SELECT * FROM t ORDER BY x', 26),
+        SqlClause.orderBy,
+      );
+    });
+
+    test('clause keywords inside string literals are ignored', () {
+      expect(
+        detectClause("SELECT 'WHERE x' FROM t", 23),
+        SqlClause.from,
+      );
+    });
+
+    test('clause keywords inside line comments are ignored', () {
+      expect(
+        detectClause('SELECT x -- WHERE\n FROM t', 25),
+        SqlClause.from,
+      );
+    });
+  });
+
+  group('qualifierBefore', () {
+    test('null when no dot precedes the token', () {
+      expect(qualifierBefore('SELECT u', 7), isNull);
+    });
+
+    test('returns the bare identifier before a dot', () {
+      expect(qualifierBefore('SELECT u.i', 9), 'u');
+    });
+
+    test('null when only a dot but no preceding identifier', () {
+      expect(qualifierBefore('SELECT .i', 8), isNull);
+    });
+  });
+
+  group('isInsideStringOrComment', () {
+    test('false outside quotes', () {
+      expect(isInsideStringOrComment("SELECT 'x' FROM t", 12), isFalse);
+    });
+
+    test('true inside a single-quoted literal', () {
+      expect(isInsideStringOrComment("SELECT 'abc", 10), isTrue);
+    });
+
+    test('escaped quote does not close the string', () {
+      expect(isInsideStringOrComment("SELECT 'a''b", 11), isTrue);
+    });
+
+    test('true inside a -- line comment', () {
+      expect(isInsideStringOrComment('SELECT 1 -- note', 14), isTrue);
+    });
+
+    test('true inside a /* … */ block comment', () {
+      expect(isInsideStringOrComment('SELECT /* x', 10), isTrue);
+    });
+  });
+
+  group('completeQueryEditor', () {
+    test('returns only columns of the qualified table on dot completion', () {
+      final users = _t(1, 'public', 'users');
+      final orders = _t(2, 'public', 'orders');
+      final cat = _catalog(
+        [users, orders],
+        columns: {
+          1: [_c('id', 'int', pk: true), _c('email', 'text')],
+          2: [_c('id', 'int', pk: true), _c('total', 'numeric')],
+        },
+      );
+      const text = 'SELECT * FROM users u WHERE u.';
+      final out = completeQueryEditor(
+        req: _req(text, manualTrigger: true),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out.map((s) => s.label).toSet(), {'id', 'email'});
+      // No keywords in dot completion.
+      expect(out.every((s) => s.kind == SuggestionKind.column), isTrue);
+    });
+
+    test('case-sensitive prefix ranks ahead of case-insensitive prefix', () {
+      final users = _t(1, 'public', 'users');
+      final cat = _catalog(
+        [users],
+        columns: {1: [_c('Status', 'text'), _c('status_at', 'timestamp')]},
+      );
+      const text = 'SELECT s FROM users';
+      final out = completeQueryEditor(
+        req: SuggestRequest(
+          text: text,
+          cursor: 8,
+          token: 's',
+          tokenStart: 7,
+        ),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out.first.label, 'status_at');
+    });
+
+    test('returns nothing inside a string literal', () {
+      final users = _t(1, 'public', 'users');
+      final cat = _catalog([users], columns: {1: [_c('id', 'int')]});
+      const text = "SELECT 'i FROM users";
+      final out = completeQueryEditor(
+        req: SuggestRequest(
+          text: text,
+          cursor: 9,
+          token: 'i',
+          tokenStart: 8,
+        ),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out, isEmpty);
+    });
+
+    test('caps result list', () {
+      final users = _t(1, 'public', 'lots');
+      final cat = _catalog(
+        [users],
+        columns: {
+          1: [for (var i = 0; i < 80; i++) _c('col_$i', 'int')],
+        },
+      );
+      const text = 'SELECT c FROM lots';
+      final out = completeQueryEditor(
+        req: SuggestRequest(
+          text: text,
+          cursor: 8,
+          token: 'c',
+          tokenStart: 7,
+        ),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out.length, lessThanOrEqualTo(30));
+    });
+
+    test('FROM context offers tables but no FK join templates', () {
+      final users = _t(1, 'public', 'users');
+      final orders = _t(2, 'public', 'orders');
+      final cat = _catalog(
+        [users, orders],
+        columns: {
+          1: [_c('id', 'int', pk: true)],
+          2: [_c('user_id', 'int')],
+        },
+      ).copyWith(
+        foreignKeysByOid: {
+          2: [
+            DbForeignKey(
+              constraintName: 'orders_user_fk',
+              localColumns: ['user_id'],
+              refSchema: 'public',
+              refTable: 'users',
+              refTableOid: 1,
+              refColumns: ['id'],
+            ),
+          ],
+        },
+        phases: {
+          CatalogPhase.schemas,
+          CatalogPhase.columns,
+          CatalogPhase.foreignKeys,
+        },
+      );
+      const text = 'SELECT * FROM ';
+      final out = completeQueryEditor(
+        req: _req(text, manualTrigger: true),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(
+        out.every((s) => s.kind != SuggestionKind.snippet),
+        isTrue,
+        reason: 'no `users ON …` join template should leak in after FROM',
+      );
+      expect(out.any((s) => s.label == 'users'), isTrue);
+      expect(out.any((s) => s.label == 'orders'), isTrue);
+    });
+
+    test('JOIN context offers FK templates plus bare tables', () {
+      final users = _t(1, 'public', 'users');
+      final orders = _t(2, 'public', 'orders');
+      final cat = _catalog(
+        [users, orders],
+        columns: {
+          1: [_c('id', 'int', pk: true)],
+          2: [_c('user_id', 'int')],
+        },
+      ).copyWith(
+        foreignKeysByOid: {
+          2: [
+            DbForeignKey(
+              constraintName: 'orders_user_fk',
+              localColumns: ['user_id'],
+              refSchema: 'public',
+              refTable: 'users',
+              refTableOid: 1,
+              refColumns: ['id'],
+            ),
+          ],
+        },
+        phases: {
+          CatalogPhase.schemas,
+          CatalogPhase.columns,
+          CatalogPhase.foreignKeys,
+        },
+      );
+      const text = 'SELECT * FROM users JOIN ';
+      final out = completeQueryEditor(
+        req: _req(text, manualTrigger: true),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(
+        out.any((s) => s.kind == SuggestionKind.snippet),
+        isTrue,
+        reason: 'should include at least one FK-derived join template',
+      );
+      expect(out.any((s) => s.kind == SuggestionKind.table), isTrue);
+    });
+
+    test('soft-trigger: empty token after JOIN+space pops tables', () {
+      final users = _t(1, 'public', 'users');
+      final orders = _t(2, 'public', 'orders');
+      final cat = _catalog(
+        [users, orders],
+        columns: {
+          1: [_c('id', 'int', pk: true)],
+          2: [_c('user_id', 'int')],
+        },
+      );
+      const text = 'SELECT * FROM users JOIN ';
+      final out = completeQueryEditor(
+        req: SuggestRequest(
+          text: text,
+          cursor: text.length,
+          token: '',
+          tokenStart: text.length,
+        ),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out.any((s) => s.label == 'orders'), isTrue);
+      expect(out.any((s) => s.label == 'users'), isTrue);
+    });
+
+    test('soft-trigger: empty token mid-whitespace does NOT pop', () {
+      final users = _t(1, 'public', 'users');
+      final cat = _catalog([users], columns: {1: [_c('id', 'int')]});
+      const text = 'SELECT * FROM users WHERE id = 1 ';
+      final out = completeQueryEditor(
+        req: SuggestRequest(
+          text: text,
+          cursor: text.length,
+          token: '',
+          tokenStart: text.length,
+        ),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out, isEmpty);
+    });
+
+    test('soft-trigger: SELECT+space lists `*` first, ahead of keywords', () {
+      final users = _t(1, 'public', 'users');
+      final cat = _catalog([users], columns: {1: [_c('id', 'int')]});
+      const text = 'SELECT ';
+      final out = completeQueryEditor(
+        req: SuggestRequest(
+          text: text,
+          cursor: text.length,
+          token: '',
+          tokenStart: text.length,
+        ),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out, isNotEmpty);
+      expect(out.first.label, '*');
+      expect(out.any((s) => s.label == 'DISTINCT'), isTrue);
+    });
+
+    test('schema.table.col qualifier returns only that table\'s columns', () {
+      final users = _t(1, 'app', 'users');
+      final orders = _t(2, 'app', 'orders');
+      final cat = _catalog(
+        [users, orders],
+        columns: {
+          1: [_c('id', 'int', pk: true), _c('email', 'text')],
+          2: [_c('id', 'int', pk: true), _c('total', 'numeric')],
+        },
+      );
+      const text = 'SELECT * FROM app.users WHERE app.users.';
+      final out = completeQueryEditor(
+        req: _req(text, manualTrigger: true),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out.map((s) => s.label).toSet(), {'id', 'email'});
+    });
+
+    test('schema. alone returns tables in that schema', () {
+      final users = _t(1, 'app', 'users');
+      final orders = _t(2, 'app', 'orders');
+      final inv = _t(3, 'public', 'invoices');
+      final cat = _catalog([users, orders, inv]);
+      const text = 'SELECT * FROM app.';
+      final out = completeQueryEditor(
+        req: _req(text, manualTrigger: true),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out.map((s) => s.label).toSet(), {'users', 'orders'});
+      expect(out.every((s) => s.kind == SuggestionKind.table), isTrue);
+    });
+
+    test('typing alias-dot auto-triggers without manual trigger', () {
+      final users = _t(1, 'public', 'users');
+      final cat = _catalog(
+        [users],
+        columns: {1: [_c('id', 'int', pk: true), _c('email', 'text')]},
+      );
+      const text = 'SELECT u. FROM users u';
+      final out = completeQueryEditor(
+        req: SuggestRequest(
+          text: text,
+          cursor: 9,
+          token: '',
+          tokenStart: 9,
+        ),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out.map((s) => s.label).toSet(), {'id', 'email'});
+    });
+
+    test('typing schema-dot auto-triggers without manual trigger', () {
+      final users = _t(1, 'app', 'users');
+      final cat = _catalog([users]);
+      const text = 'SELECT * FROM app.';
+      final out = completeQueryEditor(
+        req: SuggestRequest(
+          text: text,
+          cursor: text.length,
+          token: '',
+          tokenStart: text.length,
+        ),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out.any((s) => s.label == 'users'), isTrue);
+    });
+
+    test('alias.col resolves columns of the aliased table', () {
+      final users = _t(1, 'public', 'users');
+      final orders = _t(2, 'public', 'orders');
+      final cat = _catalog(
+        [users, orders],
+        columns: {
+          1: [_c('id', 'int', pk: true), _c('email', 'text')],
+          2: [_c('id', 'int', pk: true), _c('total', 'numeric')],
+        },
+      );
+      const text = 'SELECT u. FROM users u JOIN orders o ON u.id = o.user_id';
+      final out = completeQueryEditor(
+        req: SuggestRequest(
+          text: text,
+          cursor: 9,
+          token: '',
+          tokenStart: 9,
+          manualTrigger: true,
+        ),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out.map((s) => s.label).toSet(), {'id', 'email'});
+    });
+
+    test('after SELECT * space, FROM is first, * is not re-suggested', () {
+      final users = _t(1, 'public', 'users');
+      final cat = _catalog([users], columns: {1: [_c('id', 'int')]});
+      const text = 'SELECT * ';
+      final out = completeQueryEditor(
+        req: SuggestRequest(
+          text: text,
+          cursor: text.length,
+          token: '',
+          tokenStart: text.length,
+          manualTrigger: true,
+        ),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out.first.label, 'FROM');
+      expect(out.any((s) => s.label == '*'), isFalse);
+    });
+
+    test('after SELECT id space, FROM is first, * is not re-suggested', () {
+      final users = _t(1, 'public', 'users');
+      final cat = _catalog([users], columns: {1: [_c('id', 'int')]});
+      const text = 'SELECT id ';
+      final out = completeQueryEditor(
+        req: SuggestRequest(
+          text: text,
+          cursor: text.length,
+          token: '',
+          tokenStart: text.length,
+          manualTrigger: true,
+        ),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out.first.label, 'FROM');
+      expect(out.any((s) => s.label == '*'), isFalse);
+    });
+
+    test('after FROM <table> space, suggests clauses not columns', () {
+      final users = _t(1, 'public', 'users');
+      final cat = _catalog(
+        [users],
+        columns: {1: [_c('id', 'int', pk: true), _c('email', 'text')]},
+      );
+      const text = 'SELECT * FROM users ';
+      final out = completeQueryEditor(
+        req: SuggestRequest(
+          text: text,
+          cursor: text.length,
+          token: '',
+          tokenStart: text.length,
+          manualTrigger: true,
+        ),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out.any((s) => s.label == 'WHERE'), isTrue);
+      expect(out.any((s) => s.label == 'ORDER BY'), isTrue);
+      expect(
+        out.every((s) => s.kind != SuggestionKind.column),
+        isTrue,
+        reason: 'columns shouldn\'t leak into a FROM-continuation slot',
+      );
+    });
+
+    test('empty token in non-trigger whitespace returns nothing', () {
+      final users = _t(1, 'public', 'users');
+      final cat = _catalog([users], columns: {1: [_c('id', 'int')]});
+      const text = 'SELECT id  FROM users';
+      // Cursor sits in the gap between `id` and `FROM`. The prior word
+      // is the identifier `id`, not a clause keyword — no soft trigger.
+      final out = completeQueryEditor(
+        req: const SuggestRequest(
+          text: text,
+          cursor: 10,
+          token: '',
+          tokenStart: 10,
+        ),
+        catalog: cat,
+        stmtText: text,
+      );
+      expect(out, isEmpty);
     });
   });
 }

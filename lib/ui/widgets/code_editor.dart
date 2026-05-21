@@ -10,34 +10,53 @@ import 'package:highlight/languages/pgsql.dart' as lang_pgsql;
 import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
 
-/// A single suggestion shown by the autocomplete popup.
+/// A single suggestion shown by the autocomplete popup. [kind] and
+/// [matchBoost] are consumed by the ranker in `sql_complete.dart`; the
+/// editor itself only reads label/insert/detail/icon/[chainNext].
 class CodeSuggestion {
   const CodeSuggestion({
     required this.label,
     required this.insertText,
     this.detail,
     this.icon,
+    this.kind = SuggestionKind.keyword,
+    this.matchBoost = 0,
+    this.chainNext = false,
   });
 
   final String label;
   final String insertText;
   final String? detail;
   final IconData? icon;
+  final SuggestionKind kind;
+  final int matchBoost;
+
+  /// When true, accepting this suggestion appends a trailing space and
+  /// immediately re-opens the popup for the next token — used for SQL
+  /// keywords, table names, and `*` so picking `SELECT → * → FROM →
+  /// users → …` flows without ever pressing Ctrl-Space.
+  final bool chainNext;
 }
 
+enum SuggestionKind { column, alias, table, keyword, snippet }
+
 /// Snapshot of the editor at the moment a suggestion is requested.
+/// [manualTrigger] is set by `Ctrl-Space` / `⌃Space` — providers may use
+/// it to widen results when the user explicitly asks "what's available?"
 class SuggestRequest {
   const SuggestRequest({
     required this.text,
     required this.cursor,
     required this.token,
     required this.tokenStart,
+    this.manualTrigger = false,
   });
 
   final String text;
   final int cursor;
   final String token;
   final int tokenStart;
+  final bool manualTrigger;
 }
 
 typedef CodeSuggestProvider =
@@ -197,13 +216,22 @@ class _CodeEditorState extends State<CodeEditor> {
   List<double> _lineHeightsPx = const [0];
   double _rowHeightPx = 0;
 
-  // Autocomplete
+  // Autocomplete. The popup obeys three rules that the old version got
+  // wrong: (1) it only re-queries on actual text edits, not when the
+  // caret moves with the keyboard; (2) it stays suppressed for one tick
+  // after accepting a suggestion, so the controller-change fired by the
+  // `controller.value = …` write doesn't immediately re-open with the
+  // freshly inserted word as the new prefix; (3) it never opens on its
+  // own with an empty token — empty-token popups only happen via the
+  // manual `Ctrl-Space` trigger.
   final ValueNotifier<_PopupState> _popup = ValueNotifier(
     const _PopupState.hidden(),
   );
   OverlayEntry? _overlay;
   int _suggestSeq = 0;
   Timer? _suggestDebounce;
+  String? _lastSeenText;
+  bool _suppressNextAutoTrigger = false;
 
   TextStyle get _bodyStyle => GoogleFonts.jetBrainsMono(
     fontSize: widget.fontSize,
@@ -229,6 +257,7 @@ class _CodeEditorState extends State<CodeEditor> {
     _scroll.addListener(_onScroll);
     widget.controller.addListener(_onControllerChange);
     _focus.addListener(_onFocusChange);
+    _lastSeenText = widget.controller.text;
   }
 
   @override
@@ -293,7 +322,7 @@ class _CodeEditorState extends State<CodeEditor> {
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.escape) {
-        _dismissPopup();
+        _dismissPopup(suppressNext: true);
         return KeyEventResult.handled;
       }
       if (noModifier &&
@@ -304,6 +333,17 @@ class _CodeEditorState extends State<CodeEditor> {
         _acceptSuggestion(s.items[s.selected]);
         return KeyEventResult.handled;
       }
+    }
+
+    // Manual trigger: Ctrl-Space (and ⌃Space on macOS) opens the popup
+    // with the full ranked list for the current context, even if the
+    // user hasn't typed an identifier prefix yet.
+    if (key == LogicalKeyboardKey.space &&
+        hk.isControlPressed &&
+        !hk.isMetaPressed &&
+        !hk.isAltPressed) {
+      _requestSuggestions(manualTrigger: true);
+      return KeyEventResult.handled;
     }
 
     if (widget.singleLine &&
@@ -332,21 +372,40 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _onControllerChange() {
     widget.onChanged?.call(widget.controller.text);
-    if (widget.suggest != null) _scheduleSuggest();
+    final text = widget.controller.text;
+    final textChanged = text != _lastSeenText;
+    _lastSeenText = text;
+
+    if (widget.suggest != null) {
+      if (_suppressNextAutoTrigger) {
+        // The accept-suggestion path wrote the controller value, which
+        // re-entered this listener. Swallow exactly one trigger so we
+        // don't immediately re-open the popup on the inserted word.
+        _suppressNextAutoTrigger = false;
+      } else if (textChanged) {
+        _scheduleSuggest();
+      } else if (_popupOpen) {
+        // Selection-only change while the popup is up — if the caret has
+        // walked off the active token, hide; otherwise leave it alone.
+        _reconcilePopupToCaret();
+      }
+    }
+
     if (mounted) setState(() {});
   }
 
   // --- Autocomplete -------------------------------------------------------
 
+  /// Tight debounce — enough to coalesce a flurry of edits inside a
+  /// single frame, short enough that the popup feels live as you type.
+  static const Duration _suggestDelay = Duration(milliseconds: 60);
+
   void _scheduleSuggest() {
     _suggestDebounce?.cancel();
-    _suggestDebounce = Timer(
-      const Duration(milliseconds: 300),
-      _requestSuggestions,
-    );
+    _suggestDebounce = Timer(_suggestDelay, _requestSuggestions);
   }
 
-  Future<void> _requestSuggestions() async {
+  Future<void> _requestSuggestions({bool manualTrigger = false}) async {
     if (!mounted || !_focus.hasFocus) return;
     final provider = widget.suggest;
     if (provider == null) return;
@@ -360,14 +419,11 @@ class _CodeEditorState extends State<CodeEditor> {
 
     final tokenStart = _tokenStart(text, cursor);
     final token = text.substring(tokenStart, cursor);
-    // No prefix → no popup. Avoids the popup appearing every time the caret
-    // sits in whitespace, after punctuation, or right after accepting a
-    // previous suggestion.
-    if (token.isEmpty) {
-      _dismissPopup();
-      return;
-    }
 
+    // Empty tokens are handed to the provider too — the SQL engine
+    // decides whether the cursor sits in a "natural" completion slot
+    // (right after `JOIN `, `,`, `(`, …) and returns a non-empty pool
+    // there, or returns [] elsewhere so the popup stays hidden.
     final seq = ++_suggestSeq;
     final res = await provider(
       SuggestRequest(
@@ -375,6 +431,7 @@ class _CodeEditorState extends State<CodeEditor> {
         cursor: cursor,
         token: token,
         tokenStart: tokenStart,
+        manualTrigger: manualTrigger,
       ),
     );
     if (!mounted || seq != _suggestSeq) return;
@@ -385,6 +442,25 @@ class _CodeEditorState extends State<CodeEditor> {
     }
 
     _showPopup(res, tokenStart, cursor);
+  }
+
+  /// Called on selection-only controller updates while the popup is up.
+  /// If the caret has moved outside the active token's word run we hide;
+  /// otherwise the popup keeps its existing items (the next text edit
+  /// will re-rank).
+  void _reconcilePopupToCaret() {
+    final state = _popup.value;
+    if (state.isHidden) return;
+    final cursor = widget.controller.selection.baseOffset;
+    if (cursor < state.tokenStart || cursor > state.tokenStart + 200) {
+      _dismissPopup();
+      return;
+    }
+    final text = widget.controller.text;
+    final liveTokenStart = _tokenStart(text, cursor);
+    if (liveTokenStart != state.tokenStart) {
+      _dismissPopup();
+    }
   }
 
   void _showPopup(List<CodeSuggestion> items, int tokenStart, int cursor) {
@@ -406,13 +482,18 @@ class _CodeEditorState extends State<CodeEditor> {
     }
   }
 
-  void _dismissPopup() {
+  /// Hides the popup. When [suppressNext] is true, also swallow the next
+  /// auto-trigger — used by Escape so a debounced suggest in flight
+  /// doesn't immediately re-open the popup the user just dismissed.
+  void _dismissPopup({bool suppressNext = false}) {
     _suggestSeq++;
+    _suggestDebounce?.cancel();
     if (_overlay != null) {
       _overlay!.remove();
       _overlay = null;
     }
     if (!_popup.value.isHidden) _popup.value = const _PopupState.hidden();
+    if (suppressNext) _suppressNextAutoTrigger = true;
   }
 
   void _refreshPopupAnchor() {
@@ -427,15 +508,44 @@ class _CodeEditorState extends State<CodeEditor> {
     if (state.isHidden) return;
     final t = widget.controller.text;
     final before = t.substring(0, state.tokenStart);
-    final after = t.substring(state.cursor);
-    final newText = '$before${s.insertText}$after';
-    final caret = state.tokenStart + s.insertText.length;
+    // Replace through to the *current* caret, not the cursor snapshot
+    // captured when the popup opened — the user may have typed extra
+    // characters between popup-show and accept.
+    final liveCursor = widget.controller.selection.baseOffset.clamp(
+      state.tokenStart,
+      t.length,
+    );
+    final after = t.substring(liveCursor);
+
+    // Chained suggestions (keywords, tables, `*`) append a trailing
+    // space and re-open the popup for the next slot. Skip the space if
+    // the next char is already whitespace so chaining over an existing
+    // gap doesn't double up.
+    final wantsSpace =
+        s.chainNext && (after.isEmpty || !_isSpace(after.codeUnitAt(0)));
+    final insert = wantsSpace ? '${s.insertText} ' : s.insertText;
+
+    final newText = '$before$insert$after';
+    final caret = state.tokenStart + insert.length;
+    _suppressNextAutoTrigger = true;
     widget.controller.value = TextEditingValue(
       text: newText,
       selection: TextSelection.collapsed(offset: caret),
     );
     _dismissPopup();
+
+    if (s.chainNext) {
+      // Re-open after the controller change has fully propagated.
+      // `manualTrigger: true` makes the engine treat an empty token as
+      // "show me what fits here" instead of bailing out.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_focus.hasFocus) return;
+        _requestSuggestions(manualTrigger: true);
+      });
+    }
   }
+
+  bool _isSpace(int c) => c == 0x20 || c == 0x09 || c == 0x0A || c == 0x0D;
 
   void _movePopup(int delta) {
     final cur = _popup.value;
@@ -444,6 +554,15 @@ class _CodeEditorState extends State<CodeEditor> {
     _popup.value = cur.copyWith(
       selected: raw < 0 ? raw + cur.items.length : raw,
     );
+    _overlay?.markNeedsBuild();
+  }
+
+  void _setPopupSelected(int index) {
+    final cur = _popup.value;
+    if (cur.isHidden) return;
+    if (index < 0 || index >= cur.items.length) return;
+    if (cur.selected == index) return;
+    _popup.value = cur.copyWith(selected: index);
     _overlay?.markNeedsBuild();
   }
 
@@ -761,6 +880,7 @@ class _CodeEditorState extends State<CodeEditor> {
             child: _AutocompletePopup(
               state: state,
               onPick: _acceptSuggestion,
+              onHover: _setPopupSelected,
               fontSize: widget.fontSize,
             ),
           ),
@@ -809,25 +929,77 @@ class _PopupState {
   );
 }
 
-class _AutocompletePopup extends StatelessWidget {
+class _AutocompletePopup extends StatefulWidget {
   const _AutocompletePopup({
     required this.state,
     required this.onPick,
+    required this.onHover,
     required this.fontSize,
   });
 
   final _PopupState state;
   final ValueChanged<CodeSuggestion> onPick;
+  final ValueChanged<int> onHover;
   final double fontSize;
 
   @override
+  State<_AutocompletePopup> createState() => _AutocompletePopupState();
+}
+
+class _AutocompletePopupState extends State<_AutocompletePopup> {
+  final ScrollController _scroll = ScrollController();
+  // Tall enough to clear descenders (`y`, `g`, `p`) and the `_` underscore
+  // in monospace identifiers like `created_at` at fontSize 13. The fixed
+  // extent powers cheap scroll-to-selected math; if the popup font ever
+  // grows past ~14 this needs to grow with it.
+  static const double _rowHeight = 26;
+
+  @override
+  void didUpdateWidget(covariant _AutocompletePopup old) {
+    super.didUpdateWidget(old);
+    if (old.state.selected != widget.state.selected ||
+        old.state.items.length != widget.state.items.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _ensureSelectedVisible());
+    }
+  }
+
+  void _ensureSelectedVisible() {
+    if (!_scroll.hasClients) return;
+    final selected = widget.state.selected;
+    final top = selected * _rowHeight;
+    final bottom = top + _rowHeight;
+    final viewportTop = _scroll.offset;
+    final viewportBottom = viewportTop + _scroll.position.viewportDimension;
+    if (top < viewportTop) {
+      _scroll.jumpTo(top);
+    } else if (bottom > viewportBottom) {
+      _scroll.jumpTo(bottom - _scroll.position.viewportDimension);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
+    final state = widget.state;
+    final fontSize = widget.fontSize;
+    final onPick = widget.onPick;
+    // The popup lives in the root overlay. Without TextFieldTapRegion a
+    // pointer-down inside it counts as "outside" to the host TextField,
+    // which yields focus → our focus listener dismisses the popup before
+    // GestureDetector.onTap ever fires → click silently closes the menu
+    // instead of accepting the row.
+    return TextFieldTapRegion(
+      child: Material(
       color: Colors.transparent,
       child: Container(
         constraints: const BoxConstraints(
-          minWidth: 220,
-          maxWidth: 360,
+          minWidth: 240,
+          maxWidth: 380,
           maxHeight: 260,
         ),
         decoration: BoxDecoration(
@@ -845,32 +1017,40 @@ class _AutocompletePopup extends StatelessWidget {
         child: ClipRRect(
           borderRadius: Radii.brSm,
           child: ListView.builder(
+            controller: _scroll,
             shrinkWrap: true,
             padding: const EdgeInsets.symmetric(vertical: 4),
+            itemExtent: _rowHeight,
             itemCount: state.items.length,
             itemBuilder: (context, i) {
               final s = state.items[i];
               final active = i == state.selected;
-              return InkWell(
-                onTap: () => onPick(s),
-                hoverColor: AppColors.surfaceHover,
-                child: Container(
-                  color: active ? AppColors.accentSoft : Colors.transparent,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  child: Row(
+              return MouseRegion(
+                cursor: SystemMouseCursors.click,
+                onEnter: (_) => widget.onHover(i),
+                onHover: (_) => widget.onHover(i),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onPick(s),
+                  child: Container(
+                    color: active
+                        ? AppColors.accentSoft
+                        : Colors.transparent,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    alignment: Alignment.centerLeft,
+                    child: Row(
                     children: [
+                      _KindChip(kind: s.kind),
+                      const SizedBox(width: 8),
                       if (s.icon != null) ...[
                         Icon(
                           s.icon,
-                          size: 12,
+                          size: 11,
                           color: active
                               ? AppColors.accent
                               : AppColors.textMuted,
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                       ],
                       Expanded(
                         child: Text(
@@ -892,6 +1072,8 @@ class _AutocompletePopup extends StatelessWidget {
                         const SizedBox(width: 10),
                         Text(
                           s.detail!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: AppTheme.mono(
                             size: fontSize - 1,
                             color: AppColors.textMuted,
@@ -900,10 +1082,51 @@ class _AutocompletePopup extends StatelessWidget {
                       ],
                     ],
                   ),
+                  ),
                 ),
               );
             },
           ),
+        ),
+      ),
+      ),
+    );
+  }
+}
+
+/// 14×14 letter chip on the popup's left edge — gives a quick visual
+/// indicator of suggestion kind so a list of mixed columns/tables/
+/// keywords stays scannable. Letter+colour are the only signal; the
+/// font is tiny so it doesn't compete with the suggestion label.
+class _KindChip extends StatelessWidget {
+  const _KindChip({required this.kind});
+
+  final SuggestionKind kind;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (kind) {
+      SuggestionKind.column => ('c', AppColors.accent),
+      SuggestionKind.alias => ('a', AppColors.accent),
+      SuggestionKind.table => ('t', AppColors.success),
+      SuggestionKind.snippet => ('→', AppColors.success),
+      SuggestionKind.keyword => ('k', AppColors.textMuted),
+    };
+    return Container(
+      width: 14,
+      height: 14,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.jetBrainsMono(
+          fontSize: 9.5,
+          height: 1,
+          fontWeight: FontWeight.w600,
+          color: color,
         ),
       ),
     );
