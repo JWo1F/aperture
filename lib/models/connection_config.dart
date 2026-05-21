@@ -1,6 +1,25 @@
 import 'query_message.dart';
 import 'saved_query.dart';
 
+/// Where a connection's password comes from.
+///
+/// - [plain]: stored verbatim in the JSON config file.
+/// - [encrypted]: stored as AES-GCM ciphertext in the JSON config file,
+///   gated by the app-level master passphrase.
+/// - [onePassword]: resolved on demand via the `op` CLI from
+///   [ConnectionConfig.opSecretRef].
+enum CredentialSource {
+  plain,
+  encrypted,
+  onePassword;
+
+  static CredentialSource fromName(String? raw) => switch (raw) {
+    'encrypted' => encrypted,
+    'onePassword' => onePassword,
+    _ => plain,
+  };
+}
+
 /// User-supplied details for one Postgres endpoint.
 class ConnectionConfig {
   ConnectionConfig({
@@ -13,6 +32,9 @@ class ConnectionConfig {
     required this.password,
     this.useSsl = false,
     this.readOnly = false,
+    this.credentialSource = CredentialSource.plain,
+    this.passwordCipher,
+    this.opSecretRef,
     this.lastConnectedAt,
     Set<String>? favoriteTables,
     List<SavedQuery>? savedQueries,
@@ -31,8 +53,23 @@ class ConnectionConfig {
   final int port;
   final String database;
   final String username;
+
+  /// Runtime plaintext. Populated for [CredentialSource.plain] from the
+  /// JSON file, for [CredentialSource.encrypted] only after the master
+  /// passphrase unlocks the session, and for [CredentialSource.onePassword]
+  /// after `op read` resolves the reference.
   final String password;
   final bool useSsl;
+
+  final CredentialSource credentialSource;
+
+  /// Base64 `nonce || ciphertext || tag` produced by [MasterPassphrase.encrypt].
+  /// Non-null only when [credentialSource] is [CredentialSource.encrypted].
+  final String? passwordCipher;
+
+  /// `op://Vault/Item/password`-style reference resolved through the `op`
+  /// CLI when [credentialSource] is [CredentialSource.onePassword].
+  final String? opSecretRef;
 
   /// When true, the workspace blocks cell edits and DDL/UPDATE/DELETE
   /// gestures. The flag is purely client-side — it does not change the
@@ -71,8 +108,18 @@ class ConnectionConfig {
     'port': port,
     'database': database,
     'username': username,
-    'password': password,
+    if (credentialSource == CredentialSource.plain) 'password': password,
     'useSsl': useSsl,
+    if (credentialSource != CredentialSource.plain)
+      'credentialSource': credentialSource.name,
+    if (credentialSource == CredentialSource.encrypted &&
+        passwordCipher != null &&
+        passwordCipher!.isNotEmpty)
+      'passwordCipher': passwordCipher,
+    if (credentialSource == CredentialSource.onePassword &&
+        opSecretRef != null &&
+        opSecretRef!.isNotEmpty)
+      'opSecretRef': opSecretRef,
     if (readOnly) 'readOnly': true,
     if (lastConnectedAt != null)
       'lastConnectedAt': lastConnectedAt!.toIso8601String(),
@@ -88,50 +135,69 @@ class ConnectionConfig {
       },
   };
 
-  factory ConnectionConfig.fromJson(Map<String, dynamic> j) => ConnectionConfig(
-    id: j['id'] as String,
-    name: j['name'] as String? ?? '',
-    host: j['host'] as String? ?? 'localhost',
-    port: (j['port'] as num?)?.toInt() ?? 5432,
-    database: j['database'] as String? ?? '',
-    username: j['username'] as String? ?? 'postgres',
-    password: j['password'] as String? ?? '',
-    useSsl: j['useSsl'] as bool? ?? false,
-    readOnly: j['readOnly'] as bool? ?? false,
-    lastConnectedAt: j['lastConnectedAt'] is String
-        ? DateTime.tryParse(j['lastConnectedAt'] as String)
-        : null,
-    favoriteTables: j['favorites'] is List
-        ? {for (final v in j['favorites'] as List) v as String}
-        : null,
-    savedQueries: j['queries'] is List
-        ? [
-            for (final q in j['queries'] as List)
-              SavedQuery.fromJson(q as Map<String, dynamic>),
-          ]
-        : null,
-    recentTables: j['recentTables'] is List
-        ? [for (final v in j['recentTables'] as List) v as String]
-        : null,
-    columnWidths: j['columnWidths'] is Map
-        ? <String, Map<String, double>>{
-            for (final e in (j['columnWidths'] as Map).entries)
-              e.key as String: <String, double>{
-                for (final ee in (e.value as Map).entries)
-                  ee.key as String: (ee.value as num).toDouble(),
-              },
-          }
-        : null,
-    queryMessages: j['queryMessages'] is Map
-        ? <String, List<QueryMessage>>{
-            for (final e in (j['queryMessages'] as Map).entries)
-              e.key as String: [
-                for (final m in (e.value as List))
-                  QueryMessage.fromJson(m as Map<String, dynamic>),
-              ],
-          }
-        : null,
-  );
+  factory ConnectionConfig.fromJson(Map<String, dynamic> j) {
+    // Legacy: connections written before the master-passphrase rewrite
+    // had credentialSource=keychain and the password living in the
+    // macOS keychain. The keychain is gone now — those configs surface
+    // as plain with no stored password, and the user re-enters it.
+    final raw = j['credentialSource'] as String?;
+    final source = raw == 'keychain'
+        ? CredentialSource.plain
+        : CredentialSource.fromName(raw);
+    return ConnectionConfig(
+      id: j['id'] as String,
+      name: j['name'] as String? ?? '',
+      host: j['host'] as String? ?? 'localhost',
+      port: (j['port'] as num?)?.toInt() ?? 5432,
+      database: j['database'] as String? ?? '',
+      username: j['username'] as String? ?? 'postgres',
+      password: source == CredentialSource.plain
+          ? (j['password'] as String? ?? '')
+          : '',
+      useSsl: j['useSsl'] as bool? ?? false,
+      readOnly: j['readOnly'] as bool? ?? false,
+      credentialSource: source,
+      passwordCipher: source == CredentialSource.encrypted
+          ? j['passwordCipher'] as String?
+          : null,
+      opSecretRef: source == CredentialSource.onePassword
+          ? j['opSecretRef'] as String?
+          : null,
+      lastConnectedAt: j['lastConnectedAt'] is String
+          ? DateTime.tryParse(j['lastConnectedAt'] as String)
+          : null,
+      favoriteTables: j['favorites'] is List
+          ? {for (final v in j['favorites'] as List) v as String}
+          : null,
+      savedQueries: j['queries'] is List
+          ? [
+              for (final q in j['queries'] as List)
+                SavedQuery.fromJson(q as Map<String, dynamic>),
+            ]
+          : null,
+      recentTables: j['recentTables'] is List
+          ? [for (final v in j['recentTables'] as List) v as String]
+          : null,
+      columnWidths: j['columnWidths'] is Map
+          ? <String, Map<String, double>>{
+              for (final e in (j['columnWidths'] as Map).entries)
+                e.key as String: <String, double>{
+                  for (final ee in (e.value as Map).entries)
+                    ee.key as String: (ee.value as num).toDouble(),
+                },
+            }
+          : null,
+      queryMessages: j['queryMessages'] is Map
+          ? <String, List<QueryMessage>>{
+              for (final e in (j['queryMessages'] as Map).entries)
+                e.key as String: [
+                  for (final m in (e.value as List))
+                    QueryMessage.fromJson(m as Map<String, dynamic>),
+                ],
+            }
+          : null,
+    );
+  }
 
   ConnectionConfig copyWith({
     String? name,
@@ -142,6 +208,9 @@ class ConnectionConfig {
     String? password,
     bool? useSsl,
     bool? readOnly,
+    CredentialSource? credentialSource,
+    Object? passwordCipher = _unset,
+    Object? opSecretRef = _unset,
     DateTime? lastConnectedAt,
     Set<String>? favoriteTables,
     List<SavedQuery>? savedQueries,
@@ -159,6 +228,13 @@ class ConnectionConfig {
       password: password ?? this.password,
       useSsl: useSsl ?? this.useSsl,
       readOnly: readOnly ?? this.readOnly,
+      credentialSource: credentialSource ?? this.credentialSource,
+      passwordCipher: identical(passwordCipher, _unset)
+          ? this.passwordCipher
+          : passwordCipher as String?,
+      opSecretRef: identical(opSecretRef, _unset)
+          ? this.opSecretRef
+          : opSecretRef as String?,
       lastConnectedAt: lastConnectedAt ?? this.lastConnectedAt,
       favoriteTables: favoriteTables ?? this.favoriteTables,
       savedQueries: savedQueries ?? this.savedQueries,
@@ -168,3 +244,5 @@ class ConnectionConfig {
     );
   }
 }
+
+const Object _unset = Object();

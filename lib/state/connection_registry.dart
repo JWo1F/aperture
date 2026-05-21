@@ -4,6 +4,31 @@ import 'package:flutter/foundation.dart';
 
 import '../models/connection_config.dart';
 import '../services/connection_store.dart';
+import '../services/one_password_client.dart';
+import 'master_passphrase.dart';
+
+/// Outcome of resolving a connection's password.
+sealed class CredentialResult {
+  const CredentialResult();
+}
+
+/// Password resolved successfully — ready to hand to the postgres driver.
+class CredentialOk extends CredentialResult {
+  const CredentialOk(this.password);
+  final String password;
+}
+
+/// The connection is encrypted and the master passphrase is locked.
+/// AppState handles this by showing the unlock modal, then re-dispatching.
+class CredentialNeedsPassphrase extends CredentialResult {
+  const CredentialNeedsPassphrase();
+}
+
+/// Terminal failure (bad cipher, missing op CLI, op invocation error).
+class CredentialError extends CredentialResult {
+  const CredentialError(this.message);
+  final String message;
+}
 
 /// Owns the persisted list of saved connections.
 ///
@@ -12,10 +37,17 @@ import '../services/connection_store.dart';
 /// queries, column widths) are mutated through [PerConnectionStore], which
 /// goes through `update()` here to land in the same JSON file.
 class ConnectionRegistry extends ChangeNotifier {
-  ConnectionRegistry({ConnectionStore? store})
-    : _store = store ?? ConnectionStore();
+  ConnectionRegistry({
+    ConnectionStore? store,
+    OnePasswordClient? onePassword,
+    required MasterPassphrase masterPassphrase,
+  }) : _store = store ?? ConnectionStore(),
+       _op = onePassword ?? OnePasswordClient(),
+       _passphrase = masterPassphrase;
 
   final ConnectionStore _store;
+  final OnePasswordClient _op;
+  final MasterPassphrase _passphrase;
   final List<ConnectionConfig> _connections = [];
 
   List<ConnectionConfig> get all => List.unmodifiable(_connections);
@@ -43,33 +75,63 @@ class ConnectionRegistry extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Fetches the stored password for [connectionId] from the keychain.
-  /// Triggers the Touch ID prompt — [reason] customizes the prompt text.
-  /// Hydrated configs intentionally carry an empty password so the
-  /// biometric sheet only appears when the user actually opens a
-  /// connection.
-  Future<String> readPassword(String connectionId, {String? reason}) =>
-      _store.readPassword(connectionId, reason: reason);
+  /// Resolves the password for [config] based on its [CredentialSource]:
+  /// inline for plain, AES-GCM decrypt for encrypted, `op read` for
+  /// 1Password.
+  Future<CredentialResult> readCredential(ConnectionConfig config) async {
+    switch (config.credentialSource) {
+      case CredentialSource.plain:
+        return CredentialOk(config.password);
+      case CredentialSource.encrypted:
+        final cipher = config.passwordCipher;
+        if (cipher == null || cipher.isEmpty) {
+          return const CredentialError(
+            'No stored password for this connection — edit it to set one.',
+          );
+        }
+        if (!_passphrase.isUnlocked) {
+          return const CredentialNeedsPassphrase();
+        }
+        final plain = _passphrase.decrypt(cipher);
+        if (plain == null) {
+          return const CredentialError(
+            'Could not decrypt the saved password. The master passphrase '
+            'may be wrong, or the stored ciphertext was tampered with.',
+          );
+        }
+        return CredentialOk(plain);
+      case CredentialSource.onePassword:
+        final ref = config.opSecretRef ?? '';
+        if (ref.isEmpty) {
+          return const CredentialError(
+            'No 1Password secret reference set for this connection.',
+          );
+        }
+        final r = await _op.read(ref);
+        return switch (r) {
+          OpSuccess(value: final v) => CredentialOk(v),
+          OpMissing() => const CredentialError(
+            'The 1Password CLI (`op`) is not installed. '
+            'Install it with `brew install 1password-cli` and enable '
+            'the desktop app integration.',
+          ),
+          OpFailure(message: final m) => CredentialError(
+            '1Password lookup failed: $m',
+          ),
+        };
+    }
+  }
 
   void add(ConnectionConfig config) {
     _connections.add(_strip(config));
-    if (config.password.isNotEmpty) {
-      unawaited(_store.writePassword(config.id, config.password));
-    }
     _persist();
     notifyListeners();
   }
 
   /// Replace the config with id == [config.id]. Metadata only — the
-  /// password in [config] is dropped on the floor. Callers that need to
-  /// rotate the stored password must go through [setPassword] explicitly.
-  ///
-  /// This separation is load-bearing: every column-resize, favorite
-  /// toggle, recent-tables update etc. flows through here, and the
-  /// `session.activeConnection.copyWith(...)` shape those callers build
-  /// carries the live password. Writing that password back to the vault
-  /// on each metadata tick would silently re-issue the biometric
-  /// `delete + add` dance and risk wiping the entry.
+  /// runtime password in [config] is blanked for non-plain sources so
+  /// frequent metadata pings (column widths, favorites, recents) never
+  /// rewrite credentials.
   ConnectionConfig? update(ConnectionConfig config) {
     final i = _connections.indexWhere((c) => c.id == config.id);
     if (i == -1) return null;
@@ -80,26 +142,20 @@ class ConnectionRegistry extends ChangeNotifier {
     return prev;
   }
 
-  /// Rotate the keychain entry for [connectionId]. No-op on an empty
-  /// password — clearing a stored credential goes through [remove] (full
-  /// connection delete), there's no separate "forget password" gesture.
-  Future<void> setPassword(String connectionId, String password) async {
-    if (password.isEmpty) return;
-    await _store.writePassword(connectionId, password);
-  }
-
   void remove(String id) {
-    final removed = _connections.where((c) => c.id == id).toList();
     _connections.removeWhere((c) => c.id == id);
-    for (final c in removed) {
-      unawaited(_store.deletePassword(c.id));
-    }
     _persist();
     notifyListeners();
   }
 
-  ConnectionConfig _strip(ConnectionConfig config) =>
-      config.password.isEmpty ? config : config.copyWith(password: '');
+  /// Plain configs keep the runtime password (it lives in the JSON
+  /// file). Encrypted and 1Password configs blank it so unrelated
+  /// updates can't leak plaintext back into the store.
+  ConnectionConfig _strip(ConnectionConfig config) {
+    if (config.credentialSource == CredentialSource.plain) return config;
+    if (config.password.isEmpty) return config;
+    return config.copyWith(password: '');
+  }
 
   void _persist() => unawaited(_store.save(_connections));
 }

@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/connection_config.dart';
+import '../../services/one_password_client.dart';
 import '../../services/postgres_service.dart';
+import '../../state/app_state.dart';
+import '../../state/master_passphrase.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
+import 'master_passphrase_setup.dart';
 
 /// Modal form for creating or editing a saved connection. Resolves to the
 /// resulting [ConnectionConfig], or null if dismissed.
@@ -12,10 +17,14 @@ Future<ConnectionConfig?> showConnectionDialog(
   BuildContext context, {
   ConnectionConfig? existing,
 }) {
+  final state = context.read<AppState>();
   return showDialog<ConnectionConfig>(
     context: context,
     barrierColor: Colors.black54,
-    builder: (_) => _ConnectionDialog(existing: existing),
+    builder: (_) => _ConnectionDialog(
+      existing: existing,
+      masterPassphrase: state.masterPassphrase,
+    ),
   );
 }
 
@@ -42,9 +51,13 @@ const List<Color> _tagColors = [
 enum _TestStatus { idle, busy, ok, fail }
 
 class _ConnectionDialog extends StatefulWidget {
-  const _ConnectionDialog({this.existing});
+  const _ConnectionDialog({
+    this.existing,
+    required this.masterPassphrase,
+  });
 
   final ConnectionConfig? existing;
+  final MasterPassphrase masterPassphrase;
 
   @override
   State<_ConnectionDialog> createState() => _ConnectionDialogState();
@@ -57,18 +70,21 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
   late final TextEditingController _database;
   late final TextEditingController _username;
   late final TextEditingController _password;
+  late final TextEditingController _opSecretRef;
 
   late String _sslMode;
   late Color _tagColor;
-  bool _savePassword = true;
   late bool _readOnly;
   bool _showPassword = false;
+  late CredentialSource _credentialSource;
   int _activeTab = 0; // 0 = manual, 1 = connection string
 
   _TestStatus _testStatus = _TestStatus.idle;
   String? _testMessage;
   Duration? _testElapsed;
   String? _serverVersion;
+
+  final OnePasswordClient _op = OnePasswordClient();
 
   @override
   void initState() {
@@ -80,11 +96,21 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     _database = TextEditingController(text: e?.database ?? '');
     _username = TextEditingController(text: e?.username ?? 'postgres');
     _password = TextEditingController(text: e?.password ?? '');
+    _opSecretRef = TextEditingController(text: e?.opSecretRef ?? '');
     _sslMode = (e?.useSsl ?? false) ? 'require' : 'disable';
     _tagColor = _tagColors.first;
     _readOnly = e?.readOnly ?? false;
+    _credentialSource = e?.credentialSource ?? CredentialSource.plain;
 
-    for (final c in [_name, _host, _port, _database, _username, _password]) {
+    for (final c in [
+      _name,
+      _host,
+      _port,
+      _database,
+      _username,
+      _password,
+      _opSecretRef,
+    ]) {
       c.addListener(_onAnyFieldChanged);
     }
   }
@@ -95,23 +121,41 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
 
   @override
   void dispose() {
-    for (final c in [_name, _host, _port, _database, _username, _password]) {
+    for (final c in [
+      _name,
+      _host,
+      _port,
+      _database,
+      _username,
+      _password,
+      _opSecretRef,
+    ]) {
       c.removeListener(_onAnyFieldChanged);
       c.dispose();
     }
     super.dispose();
   }
 
-  bool get _valid =>
-      _host.text.trim().isNotEmpty &&
-      _database.text.trim().isNotEmpty &&
-      _username.text.trim().isNotEmpty &&
-      int.tryParse(_port.text.trim()) != null;
+  bool get _valid {
+    final base =
+        _host.text.trim().isNotEmpty &&
+        _database.text.trim().isNotEmpty &&
+        _username.text.trim().isNotEmpty &&
+        int.tryParse(_port.text.trim()) != null;
+    if (!base) return false;
+    if (_credentialSource == CredentialSource.onePassword) {
+      return _opSecretRef.text.trim().startsWith('op://');
+    }
+    return true;
+  }
 
-  ConnectionConfig _buildConfig() {
+  ConnectionConfig _buildConfig({String? overrideCipher}) {
     final host = _host.text.trim();
     final db = _database.text.trim();
     final name = _name.text.trim().isEmpty ? '$db @ $host' : _name.text.trim();
+    final ref = _opSecretRef.text.trim();
+    final isEncrypted = _credentialSource == CredentialSource.encrypted;
+    final isOnePassword = _credentialSource == CredentialSource.onePassword;
     return ConnectionConfig(
       id:
           widget.existing?.id ??
@@ -121,14 +165,51 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
       port: int.parse(_port.text.trim()),
       database: db,
       username: _username.text.trim(),
-      password: _password.text,
+      // Plain holds the password inline; encrypted moves it to
+      // passwordCipher; 1Password keeps neither field populated.
+      password: _credentialSource == CredentialSource.plain
+          ? _password.text
+          : '',
       useSsl: _sslMode != 'disable',
       readOnly: _readOnly,
+      credentialSource: _credentialSource,
+      passwordCipher: isEncrypted
+          ? (overrideCipher ?? widget.existing?.passwordCipher)
+          : null,
+      opSecretRef: isOnePassword && ref.isNotEmpty ? ref : null,
     );
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_valid) return;
+    if (_credentialSource == CredentialSource.encrypted) {
+      // First-time encrypted save: make sure a master passphrase is set
+      // up. The setup modal both creates the verifier and leaves the
+      // session unlocked, so we can encrypt immediately afterwards.
+      if (!widget.masterPassphrase.isConfigured) {
+        final ok = await showMasterPassphraseSetup(
+          context,
+          widget.masterPassphrase,
+        );
+        if (!ok) return;
+      } else if (!widget.masterPassphrase.isUnlocked) {
+        final ok = await showMasterPassphraseUnlock(
+          context,
+          widget.masterPassphrase,
+        );
+        if (!ok) return;
+      }
+      String? cipher;
+      if (_password.text.isNotEmpty) {
+        cipher = widget.masterPassphrase.encrypt(_password.text);
+      } else {
+        // No new password typed — keep whatever cipher we had before.
+        cipher = widget.existing?.passwordCipher;
+      }
+      if (!mounted) return;
+      Navigator.of(context).pop(_buildConfig(overrideCipher: cipher));
+      return;
+    }
     Navigator.of(context).pop(_buildConfig());
   }
 
@@ -140,7 +221,29 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
       _testElapsed = null;
       _serverVersion = null;
     });
-    final cfg = _buildConfig();
+    var cfg = _buildConfig();
+    if (cfg.credentialSource == CredentialSource.onePassword) {
+      final r = await _op.read(cfg.opSecretRef ?? '');
+      switch (r) {
+        case OpSuccess(value: final v):
+          cfg = cfg.copyWith(password: v);
+        case OpMissing():
+          if (!mounted) return;
+          setState(() {
+            _testStatus = _TestStatus.fail;
+            _testMessage =
+                'op CLI not installed (brew install 1password-cli)';
+          });
+          return;
+        case OpFailure(message: final m):
+          if (!mounted) return;
+          setState(() {
+            _testStatus = _TestStatus.fail;
+            _testMessage = '1Password: $m';
+          });
+          return;
+      }
+    }
     final svc = PostgresService(cfg);
     final watch = Stopwatch()..start();
     try {
@@ -219,6 +322,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
                   label: 'USER',
                   child: _PlainInput(controller: _username),
                 ),
+                _buildCredentialSourceRow(),
                 _buildPasswordRow(),
                 _buildSslRow(),
                 _buildTagColorRow(),
@@ -402,15 +506,54 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     );
   }
 
-  // ---------- password row --------------------------------------------
+  // ---------- credential source row -----------------------------------
+
+  Widget _buildCredentialSourceRow() {
+    final tone = switch (_credentialSource) {
+      CredentialSource.plain => 'plaintext in config.json',
+      CredentialSource.encrypted => 'AES-GCM, master passphrase',
+      CredentialSource.onePassword => 'op CLI',
+    };
+    return _buildRow(
+      label: 'STORE AS',
+      child: _SourceSegmented(
+        value: _credentialSource,
+        onChanged: (v) => setState(() => _credentialSource = v),
+      ),
+      trailing: _Chip(
+        text: tone,
+        tone: _credentialSource == CredentialSource.plain
+            ? _ChipTone.mono
+            : _ChipTone.accent,
+      ),
+    );
+  }
+
+  // ---------- password / secret row -----------------------------------
 
   Widget _buildPasswordRow() {
+    if (_credentialSource == CredentialSource.onePassword) {
+      return _buildRow(
+        label: 'SECRET',
+        child: _PlainInput(
+          controller: _opSecretRef,
+          hint: 'op://Vault/Item/password',
+        ),
+        trailing: Text(
+          'resolved at connect',
+          style: AppTheme.mono(size: 11, color: AppColors.textMuted),
+        ),
+      );
+    }
+    final keepHint = _credentialSource == CredentialSource.encrypted &&
+        widget.existing != null &&
+        (widget.existing!.passwordCipher?.isNotEmpty ?? false);
     return _buildRow(
       label: 'PASSWORD',
       child: _PlainInput(
         controller: _password,
         obscure: !_showPassword,
-        hint: '••••••',
+        hint: keepHint ? 'leave blank to keep existing' : '••••••',
       ),
       trailing: Hoverable(
         onTap: () => setState(() => _showPassword = !_showPassword),
@@ -554,16 +697,6 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
       label: 'OPTIONS',
       child: Row(
         children: [
-          _Toggle(
-            value: _savePassword,
-            onChanged: (v) => setState(() => _savePassword = v),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            'Save password in keychain',
-            style: AppTheme.ui(size: 12.5, color: AppColors.textSecondary),
-          ),
-          const SizedBox(width: 32),
           _Toggle(
             value: _readOnly,
             onChanged: (v) => setState(() => _readOnly = v),
@@ -957,6 +1090,63 @@ class _Toggle extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _SourceSegmented extends StatelessWidget {
+  const _SourceSegmented({required this.value, required this.onChanged});
+
+  final CredentialSource value;
+  final ValueChanged<CredentialSource> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 26,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _segment(CredentialSource.plain, 'Plain'),
+          _divider(),
+          _segment(CredentialSource.encrypted, 'Encrypted'),
+          _divider(),
+          _segment(CredentialSource.onePassword, '1Password'),
+        ],
+      ),
+    );
+  }
+
+  Widget _divider() => Container(width: 1, color: AppColors.border);
+
+  Widget _segment(CredentialSource source, String label) {
+    final selected = source == value;
+    return Hoverable(
+      onTap: () => onChanged(source),
+      builder: (_, hovering) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.accentSoft
+              : (hovering ? AppColors.surfaceHover : Colors.transparent),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: AppTheme.ui(
+            size: 11.5,
+            weight: FontWeight.w500,
+            color: selected
+                ? AppColors.accent
+                : (hovering ? AppColors.textPrimary : AppColors.textSecondary),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -11,6 +11,7 @@ import '../theme/app_theme.dart';
 import 'catalog_controller.dart';
 import 'connection_registry.dart';
 import 'event_log.dart';
+import 'master_passphrase.dart';
 import 'navigation_history.dart';
 import 'per_connection_store.dart';
 import 'preferences_controller.dart';
@@ -20,6 +21,12 @@ import 'workspace_tab.dart';
 import 'workspace_ui.dart';
 
 export 'session_controller.dart' show ConnectionStatus;
+
+/// Callback the UI installs to handle the case where a connect attempt
+/// needs the master passphrase but the session is locked. Should open
+/// the unlock modal, await the user's response, and resolve to true on
+/// successful unlock.
+typedef PassphraseUnlockRequest = Future<bool> Function();
 
 /// Coordinator over the focused controllers that make up the app's state.
 ///
@@ -38,6 +45,7 @@ class AppState extends ChangeNotifier {
   AppState() {
     _children = [
       preferences,
+      masterPassphrase,
       registry,
       session,
       catalog,
@@ -54,12 +62,19 @@ class AppState extends ChangeNotifier {
   }
 
   final PreferencesController preferences = PreferencesController();
-  final ConnectionRegistry registry = ConnectionRegistry();
+  final MasterPassphrase masterPassphrase = MasterPassphrase();
+  late final ConnectionRegistry registry = ConnectionRegistry(
+    masterPassphrase: masterPassphrase,
+  );
   final EventLog eventLog = EventLog();
   late final SessionController session = SessionController(log: eventLog);
   final CatalogController catalog = CatalogController();
   final NavigationHistory history = NavigationHistory();
   final WorkspaceUi ui = WorkspaceUi();
+
+  /// Set by the UI at startup. AppState calls this when a connect
+  /// attempt needs the master passphrase but the session is locked.
+  PassphraseUnlockRequest? onPassphraseNeeded;
 
   late final PerConnectionStore perConnection = PerConnectionStore(
     session: session,
@@ -78,6 +93,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> _hydrate() async {
     await preferences.hydrate();
+    await masterPassphrase.hydrate();
     await registry.hydrate();
   }
 
@@ -103,13 +119,6 @@ class AppState extends ChangeNotifier {
 
   void updateConnection(ConnectionConfig config) {
     registry.update(config);
-    // Password rotation is an explicit, separate step — `update` is
-    // called by every metadata-only path (column widths, recents,
-    // favorites) with the live password still in the config, and we
-    // must not rewrite the keychain entry from those.
-    if (config.password.isNotEmpty) {
-      unawaited(registry.setPassword(config.id, config.password));
-    }
     if (session.activeConnection?.id == config.id) {
       session.setActiveConnection(config);
     }
@@ -132,18 +141,17 @@ class AppState extends ChangeNotifier {
     tabsController.clear();
     history.clear();
 
-    // Lazily fetch the password from the keychain — the biometric ACL
-    // on the item triggers a single Touch ID prompt here, and nothing
-    // else throughout the lifetime of the connection.
     var resolved = config;
-    if (resolved.password.isEmpty) {
-      final stored = await registry.readPassword(
-        resolved.id,
-        reason: 'Unlock "${resolved.name}" to connect',
-      );
-      if (stored.isNotEmpty) {
-        resolved = resolved.copyWith(password: stored);
-      }
+    final credential = await _resolveCredentialWithUnlock(resolved);
+    switch (credential) {
+      case CredentialError(message: final m):
+        session.setError(m);
+        return;
+      case CredentialNeedsPassphrase():
+        session.setError('Master passphrase required.');
+        return;
+      case CredentialOk(password: final p):
+        if (p.isNotEmpty) resolved = resolved.copyWith(password: p);
     }
 
     final ok = await session.connect(resolved);
@@ -158,7 +166,7 @@ class AppState extends ChangeNotifier {
 
       final stamped = resolved.copyWith(lastConnectedAt: DateTime.now());
       // Pass an empty password so the registry's metadata-touch update
-      // doesn't re-write the value we just pulled out of the vault.
+      // doesn't write plaintext back into the store.
       registry.update(stamped.copyWith(password: ''));
       session.setActiveConnection(stamped);
 
@@ -170,6 +178,27 @@ class AppState extends ChangeNotifier {
       // back to phase-0-empty so the UI shows the connection without
       // data. The caller can refresh.
     }
+  }
+
+  /// Resolves the password for [config], pumping the UI through the
+  /// unlock modal if the credential source is encrypted and the master
+  /// passphrase is locked. Re-tries the resolution exactly once after
+  /// a successful unlock — further failures (wrong cipher, no callback)
+  /// are surfaced as errors.
+  Future<CredentialResult> _resolveCredentialWithUnlock(
+    ConnectionConfig config,
+  ) async {
+    final first = await registry.readCredential(config);
+    if (first is! CredentialNeedsPassphrase) return first;
+    final ask = onPassphraseNeeded;
+    if (ask == null) {
+      return const CredentialError(
+        'Master passphrase required but no UI is wired to prompt for it.',
+      );
+    }
+    final unlocked = await ask();
+    if (!unlocked) return first;
+    return registry.readCredential(config);
   }
 
   Future<void> disconnect() async {

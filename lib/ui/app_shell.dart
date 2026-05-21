@@ -14,6 +14,7 @@ import '../theme/app_theme.dart';
 import 'about/about_dialog.dart';
 import 'command_palette/command_palette.dart';
 import 'connection/connection_dialog.dart';
+import 'connection/master_passphrase_setup.dart';
 import 'edits/pending_edits_modal.dart';
 import 'export/export_dialog.dart';
 import 'log/log_panel.dart';
@@ -46,6 +47,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // regardless of focus — a TextField inside the active tab would
     // otherwise swallow them via Flutter's default editing shortcuts.
     HardwareKeyboard.instance.addHandler(_onKey);
+    // Hand AppState a way to summon the master-passphrase unlock modal
+    // when a connect attempt needs decryption.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final state = context.read<AppState>();
+      state.onPassphraseNeeded = () => showMasterPassphraseUnlock(
+        context,
+        state.masterPassphrase,
+      );
+    });
   }
 
   @override

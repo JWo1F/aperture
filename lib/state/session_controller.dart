@@ -51,6 +51,16 @@ class SessionController extends ChangeNotifier {
 
   bool get isConnected => _status == ConnectionStatus.connected;
 
+  /// Surface a pre-connect failure (e.g. credential resolution) without
+  /// going through the postgres driver. Leaves the session disconnected
+  /// with the error message visible in the status bar.
+  void setError(String message) {
+    _status = ConnectionStatus.error;
+    _error = message;
+    _service = null;
+    notifyListeners();
+  }
+
   /// Opens [config] and transitions through connecting → connected | error.
   /// Returns true on success.
   Future<bool> connect(ConnectionConfig config) async {
