@@ -270,6 +270,8 @@ class _Tab extends StatelessWidget {
             ? AppColors.textPrimary
             : (hovering ? AppColors.textSecondary : AppColors.textMuted);
 
+        final showClose = hovering || active;
+
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
           child: ConstrainedBox(
@@ -282,7 +284,7 @@ class _Tab extends StatelessWidget {
                 borderRadius: BorderRadius.circular(7),
                 border: Border.all(color: borderColor, width: 0.5),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              padding: const EdgeInsets.only(left: 10, right: 4),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -293,7 +295,9 @@ class _Tab extends StatelessWidget {
                     dirty: _dirty,
                   ),
                   const SizedBox(width: 9),
-                  Flexible(child: _TabLabel(tab: tab, color: labelColor, active: active)),
+                  Flexible(child: _TabLabel(tab: tab, color: labelColor)),
+                  const SizedBox(width: 6),
+                  _CloseButton(visible: showClose, onTap: onClose),
                 ],
               ),
             ),
@@ -305,20 +309,20 @@ class _Tab extends StatelessWidget {
 }
 
 /// The label. For SchemaTab, the trailing `· schema` is rendered in a
-/// muted tone so the table name stays primary.
+/// muted tone so the table name stays primary. Font weight stays
+/// constant across states — color carries the active/hover signal so
+/// neighbouring tabs don't reflow when activation changes.
 class _TabLabel extends StatelessWidget {
-  const _TabLabel({required this.tab, required this.color, required this.active});
+  const _TabLabel({required this.tab, required this.color});
 
   final WorkspaceTab tab;
   final Color color;
-  final bool active;
 
   @override
   Widget build(BuildContext context) {
-    final weight = active ? FontWeight.w600 : FontWeight.w500;
     final base = AppTheme.ui(
       size: 12.5,
-      weight: weight,
+      weight: FontWeight.w500,
       color: color,
       letterSpacing: -0.2,
     );
@@ -331,10 +335,7 @@ class _TabLabel extends StatelessWidget {
             TextSpan(text: t.table.name, style: base),
             TextSpan(
               text: '  schema',
-              style: base.copyWith(
-                color: color.withValues(alpha: 0.55),
-                fontWeight: FontWeight.w400,
-              ),
+              style: base.copyWith(color: color.withValues(alpha: 0.55)),
             ),
           ],
         ),
@@ -348,6 +349,39 @@ class _TabLabel extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       maxLines: 1,
       style: base,
+    );
+  }
+}
+
+class _CloseButton extends StatelessWidget {
+  const _CloseButton({required this.visible, required this.onTap});
+
+  final bool visible;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Hoverable(
+      onTap: visible ? onTap : null,
+      builder: (context, hovering) => AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        width: 16,
+        height: 16,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: visible && hovering
+              ? AppColors.surfaceHover
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Icon(
+          Icons.close_rounded,
+          size: 11,
+          color: visible
+              ? (hovering ? AppColors.textPrimary : AppColors.textMuted)
+              : Colors.transparent,
+        ),
+      ),
     );
   }
 }
