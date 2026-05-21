@@ -14,7 +14,7 @@ import '../../theme/app_theme.dart';
 import '../cell_picker/cell_picker.dart';
 import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
-import '../widgets/json_spans.dart';
+import '../../theme/code_theme.dart';
 
 /// Scrollable data grid for a [QueryResult]. Lazy body, type-aware cell
 /// colours, JSON-inline highlighting, and a right-click context menu.

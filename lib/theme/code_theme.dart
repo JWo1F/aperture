@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:highlight/highlight.dart' show Node;
+import 'package:highlight/highlight.dart' show Node, highlight;
+import 'package:highlight/languages/json.dart' as lang_json;
 
 import 'app_theme.dart';
 
@@ -35,6 +36,24 @@ Map<String, TextStyle> get apertureCodeStyles => {
   'name': TextStyle(color: AppColors.sqlIdentifier),
   'function': TextStyle(color: AppColors.sqlFunction),
 };
+
+/// Tokenises a JSON string into coloured spans using the shared
+/// [apertureCodeStyles] palette — same look as the cell-picker's JSON
+/// editor and the SQL editor. Used by the table grid to render Map/List
+/// cell values where dropping in a full `CodeEditor` isn't viable.
+List<InlineSpan> jsonSpans(String source, TextStyle base) {
+  if (source.isEmpty) return const [];
+  _ensureJsonRegistered();
+  final parsed = highlight.parse(source, language: 'json');
+  return highlightNodesToSpans(parsed.nodes, base, apertureCodeStyles);
+}
+
+bool _jsonRegistered = false;
+void _ensureJsonRegistered() {
+  if (_jsonRegistered) return;
+  highlight.registerLanguage('json', lang_json.json);
+  _jsonRegistered = true;
+}
 
 /// Walks a `highlight` parse tree and returns the matching [TextSpan] tree.
 /// Theme styles are merged on top of [base] so the caller's font choice
