@@ -20,6 +20,12 @@ class AtomicJsonFile {
 
   final String filename;
 
+  // Serializes overlapping save() calls so two writers can't both truncate
+  // the same `.tmp` file and race on rename(2). Without this, the loser's
+  // rename throws PathNotFoundException because the winner already moved
+  // the tmp aside.
+  Future<void> _writeChain = Future.value();
+
   Future<File> _file() async {
     final dir = await getApplicationSupportDirectory();
     return File('${dir.path}/$filename');
@@ -54,7 +60,13 @@ class AtomicJsonFile {
     }
   }
 
-  Future<void> save(Object data) async {
+  Future<void> save(Object data) {
+    final next = _writeChain.then((_) => _save(data));
+    _writeChain = next.catchError((_) {});
+    return next;
+  }
+
+  Future<void> _save(Object data) async {
     final file = await _file();
     final tmp = File('${file.path}.tmp');
     final raf = await tmp.open(mode: FileMode.write);
