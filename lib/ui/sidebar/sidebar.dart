@@ -14,15 +14,44 @@ import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
 import '../widgets/table_glyph.dart';
 
-/// Sidebar v3 — modeled on the design handoff.
+/// Sidebar v4 — Inter-typeset, search-led, pin-forward.
 ///
 /// Layout (top → bottom):
-///   1. `sb-conn` strip: db icon + active connection name + tag chip.
-///   2. Scroll body: Favorites · Recents · Saved queries · Schemas
-///      (each schema's tables/views are surfaced under tiny eyebrow rules).
-///   3. Footer status row: dot + plain-text live-state.
-class Sidebar extends StatelessWidget {
+///   1. Connection hero card — database name, server tag, click to open menu.
+///   2. Slim filter input — substring filter applied to every list below.
+///   3. Scroll body: Pinned · Recent · Queries · Schemas.
+///      Schemas auto-expand when filtering. Pin star is an inline toggle.
+///   4. Footer status — pulsing dot + plain-text live-state.
+class Sidebar extends StatefulWidget {
   const Sidebar({super.key});
+
+  @override
+  State<Sidebar> createState() => _SidebarState();
+}
+
+class _SidebarState extends State<Sidebar> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.removeListener(_onSearchChanged);
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    final next = _searchCtrl.text;
+    if (next != _query) setState(() => _query = next);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,18 +60,29 @@ class Sidebar extends StatelessWidget {
 
     return Container(
       width: state.preferences.sidebarWidth,
-      // Match `var(--sidebar)` — sidebarTint at 86% alpha so the app's accent
-      // halo and the workspace deep bg both bleed through slightly.
-      color: AppColors.sidebarTint.withValues(alpha: 0.86),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [AppColors.sidebarTint, AppColors.bgDeep],
+          stops: const [0.0, 1.0],
+        ),
+        border: Border(right: BorderSide(color: AppColors.hairline)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ConnHeader(state: state),
-          Expanded(
-            child: connected
-                ? _Body(state: state)
-                : _AllConnectionsList(state: state),
-          ),
+          _ConnHero(state: state),
+          if (connected) ...[
+            _SearchBar(controller: _searchCtrl, focusNode: _searchFocus),
+            Expanded(
+              child: _Body(
+                state: state,
+                query: _query.trim().toLowerCase(),
+              ),
+            ),
+          ] else
+            Expanded(child: _AllConnectionsList(state: state)),
           _FooterStatus(state: state),
         ],
       ),
@@ -50,10 +90,10 @@ class Sidebar extends StatelessWidget {
   }
 }
 
-// --- sb-conn strip --------------------------------------------------------
+// --- connection hero ------------------------------------------------------
 
-class _ConnHeader extends StatelessWidget {
-  const _ConnHeader({required this.state});
+class _ConnHero extends StatelessWidget {
+  const _ConnHero({required this.state});
 
   final AppState state;
 
@@ -61,7 +101,9 @@ class _ConnHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final conn = state.activeConnection;
     final connected = state.status == ConnectionStatus.connected;
-    final label = switch (state.status) {
+    final menuEnabled = connected || state.status == ConnectionStatus.lost;
+
+    final title = switch (state.status) {
       ConnectionStatus.connected => conn?.database ?? 'connected',
       ConnectionStatus.connecting => 'connecting…',
       ConnectionStatus.lost => conn?.database ?? 'lost',
@@ -69,69 +111,143 @@ class _ConnHeader extends StatelessWidget {
       ConnectionStatus.disconnected => 'no connection',
     };
 
-    final version = state.serverVersion;
-    final menuEnabled = connected || state.status == ConnectionStatus.lost;
+    final subtitleParts = <String>[
+      if (conn?.name != null && conn!.name.isNotEmpty) conn.name,
+      if (state.serverVersion != null) state.serverVersion!,
+    ];
+    final subtitle = subtitleParts.isEmpty ? null : subtitleParts.join('  ·  ');
 
-    return Hoverable(
-      onTap: menuEnabled
-          ? () => _openConnMenu(context, state, _anchorBelow(context))
-          : null,
-      onSecondaryTapDown: menuEnabled
-          ? (d) => _openConnMenu(context, state, d.globalPosition)
-          : null,
-      builder: (context, hovering) => Container(
-        padding: const EdgeInsets.fromLTRB(12, 10, 10, 8),
-        decoration: BoxDecoration(
-          color: hovering && menuEnabled
-              ? AppColors.sidebarRowHover
-              : Colors.transparent,
-          border: Border(bottom: BorderSide(color: AppColors.hairline)),
-        ),
-        child: Row(
-          children: [
-            // Icon stays in the accent the design uses regardless of state;
-            // connection liveness is surfaced by the footer dot.
-            Icon(Icons.storage_rounded, size: 12, color: AppColors.accent),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTheme.mono(
-                  size: 11.5,
-                  color: AppColors.textPrimary,
-                  weight: FontWeight.w600,
-                ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
+      child: Hoverable(
+        onTap: menuEnabled
+            ? () => _openConnMenu(context, state, _anchorBelow(context))
+            : null,
+        onSecondaryTapDown: menuEnabled
+            ? (d) => _openConnMenu(context, state, d.globalPosition)
+            : null,
+        builder: (context, hovering) {
+          final highlight = hovering && menuEnabled;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+            decoration: BoxDecoration(
+              borderRadius: Radii.brMd,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: highlight
+                    ? [
+                        AppColors.accentSoft,
+                        AppColors.surface,
+                      ]
+                    : [
+                        AppColors.surface,
+                        AppColors.surfaceAlt,
+                      ],
               ),
+              border: Border.all(
+                color: highlight
+                    ? AppColors.accentRing
+                    : AppColors.borderSoft,
+                width: 1,
+              ),
+              boxShadow: highlight
+                  ? [
+                      BoxShadow(
+                        color: AppColors.accentSoft,
+                        blurRadius: 12,
+                        spreadRadius: -2,
+                      ),
+                    ]
+                  : null,
             ),
-            if (version != null) ...[
-              Text(
-                version,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTheme.mono(size: 10.5, color: AppColors.text4),
-              ),
-              const SizedBox(width: 4),
-            ],
-            if (menuEnabled)
-              Icon(
-                Icons.expand_more,
-                size: 13,
-                color: hovering ? AppColors.textSecondary : AppColors.text4,
-              ),
-          ],
-        ),
+            child: Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppColors.accent,
+                        AppColors.accentHover,
+                      ],
+                    ),
+                    borderRadius: Radii.brSm,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.accentSoft,
+                        blurRadius: 6,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.bolt_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTheme.ui(
+                          size: 13,
+                          color: AppColors.textPrimary,
+                          weight: FontWeight.w600,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTheme.ui(
+                            size: 10.5,
+                            color: AppColors.textMuted,
+                            weight: FontWeight.w400,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (menuEnabled)
+                  Icon(
+                    Icons.unfold_more_rounded,
+                    size: 14,
+                    color: highlight
+                        ? AppColors.textSecondary
+                        : AppColors.text4,
+                  ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  /// Drop-anchor for the left-click menu — bottom-left of the conn row.
   Offset _anchorBelow(BuildContext context) {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null) return Offset.zero;
     final origin = box.localToGlobal(Offset.zero);
-    return Offset(origin.dx + 12, origin.dy + box.size.height + 2);
+    return Offset(origin.dx + 8, origin.dy + box.size.height + 2);
   }
 }
 
@@ -157,96 +273,207 @@ void _openConnMenu(BuildContext context, AppState state, Offset position) {
   );
 }
 
-// --- sections -------------------------------------------------------------
+// --- search ---------------------------------------------------------------
 
-class _Body extends StatelessWidget {
-  const _Body({required this.state});
+class _SearchBar extends StatelessWidget {
+  const _SearchBar({required this.controller, required this.focusNode});
 
-  final AppState state;
+  final TextEditingController controller;
+  final FocusNode focusNode;
 
   @override
   Widget build(BuildContext context) {
-    final activeId = _activeTableQualifiedName(state);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 2, 10, 8),
+      child: AnimatedBuilder(
+        animation: Listenable.merge([controller, focusNode]),
+        builder: (context, _) {
+          final hasText = controller.text.isNotEmpty;
+          final focused = focusNode.hasFocus;
+          return Container(
+            height: 28,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: focused ? AppColors.bg : AppColors.surface,
+              borderRadius: Radii.brSm,
+              border: Border.all(
+                color: focused ? AppColors.accentRing : AppColors.borderSoft,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.search_rounded,
+                  size: 13,
+                  color: focused
+                      ? AppColors.textSecondary
+                      : AppColors.textMuted,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    cursorColor: AppColors.accent,
+                    cursorWidth: 1.4,
+                    cursorHeight: 13,
+                    style: AppTheme.ui(
+                      size: 12,
+                      color: AppColors.textPrimary,
+                      weight: FontWeight.w400,
+                      letterSpacing: 0,
+                    ),
+                    decoration: InputDecoration(
+                      isCollapsed: true,
+                      border: InputBorder.none,
+                      hintText: 'Filter tables, queries, schemas…',
+                      hintStyle: AppTheme.ui(
+                        size: 12,
+                        color: AppColors.textMuted,
+                        weight: FontWeight.w400,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                ),
+                if (hasText)
+                  GestureDetector(
+                    onTap: controller.clear,
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 12,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// --- body -----------------------------------------------------------------
+
+class _Body extends StatelessWidget {
+  const _Body({required this.state, required this.query});
+
+  final AppState state;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeTableId = _activeTableQualifiedName(state);
     final activeQueryId = _activeQueryId(state);
-    final favorites = state.favoriteTables;
-    final favKeys = {for (final t in favorites) t.qualifiedKey};
-    final recents = state.recents
-        .where((t) => !favKeys.contains(t.qualifiedKey))
-        .toList();
-    final saved = state.savedQueries;
-    final schemas = state.schemas;
+    final favKeys = {for (final t in state.favoriteTables) t.qualifiedKey};
+    final filtering = query.isNotEmpty;
+
+    bool tableMatches(DbTable t) =>
+        !filtering ||
+        t.name.toLowerCase().contains(query) ||
+        t.schema.toLowerCase().contains(query);
+
+    final favList = state.favoriteTables.where(tableMatches).toList();
+    final frequent = filtering
+        ? <DbTable>[]
+        : state
+            .frequentTables(limit: 5 + favKeys.length)
+            .where((t) => !favKeys.contains(t.qualifiedKey))
+            .take(5)
+            .toList();
+    final saved = filtering
+        ? state.savedQueries
+            .where((q) => q.name.toLowerCase().contains(query))
+            .toList()
+        : state.savedQueries;
+
+    final visibleSchemas = state.schemas.map((s) {
+      final tables = filtering
+          ? s.tables.where(tableMatches).toList()
+          : s.tables;
+      return (schema: s, tables: tables);
+    }).where((e) => !filtering || e.tables.isNotEmpty).toList();
+
+    final totalTables = state.schemas.fold<int>(
+      0,
+      (a, b) => a + b.tables.length,
+    );
+
+    final empty = favList.isEmpty &&
+        frequent.isEmpty &&
+        saved.isEmpty &&
+        visibleSchemas.isEmpty;
+
+    if (empty && filtering) {
+      return _NoResults(query: query);
+    }
 
     return ListView(
-      padding: const EdgeInsets.only(top: 4, bottom: 16),
+      padding: const EdgeInsets.fromLTRB(0, 2, 0, 16),
       children: [
-        if (favorites.isNotEmpty)
+        if (favList.isNotEmpty)
           _Section(
-            label: 'Favorites',
-            count: favorites.length,
+            label: 'Pinned',
+            badge: '${favList.length}',
             children: [
-              for (final t in favorites)
-                _TreeRow(
+              for (final t in favList)
+                _TableRow(
+                  table: t,
+                  state: state,
+                  active: t.qualifiedName == activeTableId,
+                  isFav: true,
                   indent: 0,
-                  twisty: Icon(Icons.star, size: 9, color: AppColors.warn),
-                  icon: t.isView
-                      ? Icon(
-                          Icons.visibility_outlined,
-                          size: 11,
-                          color: AppColors.textMuted,
-                        )
-                      : TableGlyph(size: 11, color: AppColors.textMuted),
-                  name: '${t.schema}.${t.name}',
-                  active: t.qualifiedName == activeId,
-                  onTap: () => state.openTable(t),
-                  onSecondaryTapDown: (d) =>
-                      _openTableMenu(context, state, t, d.globalPosition),
+                  query: query,
                 ),
             ],
           ),
-        if (recents.isNotEmpty)
+        if (frequent.isNotEmpty)
           _Section(
-            label: 'Recents',
-            count: recents.length,
+            label: 'Frequent',
+            badge: '${frequent.length}',
             children: [
-              for (final t in recents.take(8))
-                _TreeRow(
+              for (final t in frequent)
+                _TableRow(
+                  table: t,
+                  state: state,
+                  active: t.qualifiedName == activeTableId,
+                  isFav: favKeys.contains(t.qualifiedKey),
                   indent: 0,
-                  twisty: Icon(
-                    Icons.schedule,
-                    size: 10,
-                    color: AppColors.text4,
-                  ),
-                  name: '${t.schema}.${t.name}',
-                  active: t.qualifiedName == activeId,
-                  onTap: () => state.openTable(t),
-                  onSecondaryTapDown: (d) =>
-                      _openTableMenu(context, state, t, d.globalPosition),
+                  query: query,
                 ),
             ],
           ),
         if (saved.isNotEmpty)
           _Section(
-            label: 'Saved queries',
-            count: saved.length,
+            label: 'Queries',
+            badge: '${saved.length}',
             children: [
               for (final q in saved)
                 _SavedQueryRow(
                   query: q,
                   active: q.id == activeQueryId,
                   state: state,
+                  match: query,
                 ),
             ],
           ),
         _Section(
           label: 'Schemas',
-          count: schemas.length,
+          badge: '$totalTables',
           children: [
-            for (final s in schemas)
+            for (final entry in visibleSchemas)
               _SchemaBlock(
-                schema: s,
+                schema: entry.schema,
+                tables: entry.tables,
                 state: state,
-                activeId: activeId,
-                expanded: state.isSchemaExpanded(s.name),
+                activeTableId: activeTableId,
+                favKeys: favKeys,
+                forceExpanded: filtering,
+                query: query,
               ),
           ],
         ),
@@ -267,15 +494,59 @@ class _Body extends StatelessWidget {
   }
 }
 
+class _NoResults extends StatelessWidget {
+  const _NoResults({required this.query});
+
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.search_off_rounded,
+            size: 18,
+            color: AppColors.textMuted,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'No matches',
+            style: AppTheme.ui(
+              size: 12.5,
+              color: AppColors.textSecondary,
+              weight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Nothing in this connection matches "$query".',
+            style: AppTheme.ui(
+              size: 11.5,
+              color: AppColors.textMuted,
+              weight: FontWeight.w400,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- section --------------------------------------------------------------
+
 class _Section extends StatelessWidget {
   const _Section({
     required this.label,
-    required this.count,
+    required this.badge,
     required this.children,
   });
 
   final String label;
-  final int count;
+  final String badge;
   final List<Widget> children;
 
   @override
@@ -284,23 +555,42 @@ class _Section extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 14, 4),
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
           child: Row(
             children: [
-              Expanded(
-                child: Text(
-                  label.toUpperCase(),
-                  style: AppTheme.ui(
-                    size: 10,
-                    color: AppColors.textMuted,
-                    weight: FontWeight.w600,
-                    letterSpacing: 0.06 * 10,
-                  ),
+              Text(
+                label.toUpperCase(),
+                style: AppTheme.ui(
+                  size: 9.5,
+                  color: AppColors.textMuted,
+                  weight: FontWeight.w700,
+                  letterSpacing: 0.8,
                 ),
               ),
-              Text(
-                '$count',
-                style: AppTheme.mono(size: 10, color: AppColors.text4),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Container(height: 1, color: AppColors.hairline),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 5,
+                  vertical: 1,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: const BorderRadius.all(Radii.xs),
+                  border: Border.all(color: AppColors.borderSoft),
+                ),
+                child: Text(
+                  badge,
+                  style: AppTheme.ui(
+                    size: 9.5,
+                    color: AppColors.text4,
+                    weight: FontWeight.w600,
+                    letterSpacing: 0,
+                  ),
+                ),
               ),
             ],
           ),
@@ -311,206 +601,198 @@ class _Section extends StatelessWidget {
   }
 }
 
-/// Eyebrow rule inside a schema separating tables / views / functions.
-/// Mirrors the design's inline style: `padding:'4px 0 2px 24px'`, mono 9.5,
-/// uppercase letter-spacing 0.06em, text-4.
-class _SubEyebrow extends StatelessWidget {
-  const _SubEyebrow({required this.label, required this.count});
-
-  final String label;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 24, top: 4, bottom: 2),
-      child: Text(
-        '$label · $count',
-        style: AppTheme.mono(
-          size: 9.5,
-          color: AppColors.text4,
-          weight: FontWeight.w600,
-        ).copyWith(letterSpacing: 0.06 * 9.5),
-      ),
-    );
-  }
-}
+// --- schema block ---------------------------------------------------------
 
 class _SchemaBlock extends StatelessWidget {
   const _SchemaBlock({
     required this.schema,
+    required this.tables,
     required this.state,
-    required this.activeId,
-    required this.expanded,
+    required this.activeTableId,
+    required this.favKeys,
+    required this.forceExpanded,
+    required this.query,
   });
 
   final DbSchema schema;
+  final List<DbTable> tables;
   final AppState state;
-  final String? activeId;
-  final bool expanded;
+  final String? activeTableId;
+  final Set<String> favKeys;
+  final bool forceExpanded;
+  final String query;
 
   @override
   Widget build(BuildContext context) {
-    final tables = schema.tables
-        .where((t) => t.kind == DbRelationKind.table)
-        .toList();
-    final views = schema.tables
-        .where((t) => t.kind == DbRelationKind.view)
-        .toList();
-    final matViews = schema.tables
-        .where((t) => t.kind == DbRelationKind.materializedView)
-        .toList();
-    final total = tables.length + views.length + matViews.length;
-
+    final expanded = forceExpanded || state.isSchemaExpanded(schema.name);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _TreeRow(
-          indent: 0,
-          twisty: Icon(
-            expanded ? Icons.expand_more : Icons.chevron_right,
-            size: 12,
-            color: AppColors.text4,
-          ),
-          icon: Icon(
-            Icons.folder_outlined,
-            size: 11,
-            color: AppColors.textMuted,
-          ),
-          name: schema.name,
-          meta: '$total',
+        Hoverable(
           onTap: () => state.toggleSchema(schema.name),
+          builder: (context, hovering) {
+            return Container(
+              height: 26,
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              decoration: BoxDecoration(
+                color: hovering
+                    ? AppColors.sidebarRowHover
+                    : Colors.transparent,
+                borderRadius: Radii.brSm,
+              ),
+              child: Row(
+                children: [
+                  AnimatedRotation(
+                    turns: expanded ? 0.25 : 0,
+                    duration: const Duration(milliseconds: 120),
+                    curve: Curves.easeOut,
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      size: 14,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: expanded
+                          ? AppColors.accentSoft
+                          : AppColors.surface,
+                      borderRadius: const BorderRadius.all(Radii.xs),
+                      border: Border.all(
+                        color: expanded
+                            ? AppColors.accentRing
+                            : AppColors.borderSoft,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      schema.name.isEmpty
+                          ? '?'
+                          : schema.name.substring(0, 1).toUpperCase(),
+                      style: AppTheme.ui(
+                        size: 8.5,
+                        color: expanded
+                            ? AppColors.accent
+                            : AppColors.textMuted,
+                        weight: FontWeight.w700,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _HighlightedText(
+                      text: schema.name,
+                      match: query,
+                      style: AppTheme.ui(
+                        size: 12,
+                        color: AppColors.textSecondary,
+                        weight: FontWeight.w600,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${tables.length}',
+                    style: AppTheme.ui(
+                      size: 10.5,
+                      color: AppColors.text4,
+                      weight: FontWeight.w500,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
-        if (expanded) ...[
-          if (tables.isNotEmpty) ...[
-            _SubEyebrow(label: 'tables', count: tables.length),
-            for (final t in tables)
-              _TreeRow(
-                indent: 1,
-                icon: TableGlyph(size: 11, color: AppColors.textMuted),
-                name: t.name,
-                active: t.qualifiedName == activeId,
-                onTap: () => state.openTable(t),
-                onSecondaryTapDown: (d) =>
-                    _openTableMenu(context, state, t, d.globalPosition),
-              ),
-          ],
-          if (views.isNotEmpty) ...[
-            _SubEyebrow(label: 'views', count: views.length),
-            for (final v in views)
-              _TreeRow(
-                indent: 1,
-                icon: Icon(
-                  Icons.visibility_outlined,
-                  size: 11,
-                  color: AppColors.info,
-                ),
-                name: v.name,
-                active: v.qualifiedName == activeId,
-                onTap: () => state.openTable(v),
-                onSecondaryTapDown: (d) =>
-                    _openTableMenu(context, state, v, d.globalPosition),
-              ),
-          ],
-          if (matViews.isNotEmpty) ...[
-            _SubEyebrow(label: 'materialized views', count: matViews.length),
-            for (final v in matViews)
-              _TreeRow(
-                indent: 1,
-                icon: Icon(
-                  Icons.layers_outlined,
-                  size: 11,
-                  color: AppColors.info,
-                ),
-                name: v.name,
-                active: v.qualifiedName == activeId,
-                onTap: () => state.openTable(v),
-                onSecondaryTapDown: (d) =>
-                    _openTableMenu(context, state, v, d.globalPosition),
-              ),
-          ],
-        ],
+        if (expanded)
+          for (final t in tables)
+            _TableRow(
+              table: t,
+              state: state,
+              active: t.qualifiedName == activeTableId,
+              isFav: favKeys.contains(t.qualifiedKey),
+              indent: 1,
+              query: query,
+            ),
       ],
     );
   }
 }
 
-// --- tree row -------------------------------------------------------------
+// --- table row ------------------------------------------------------------
 
-class _TreeRow extends StatelessWidget {
-  const _TreeRow({
-    required this.name,
-    this.indent = 0,
-    this.twisty,
-    this.icon,
-    this.meta,
-    this.active = false,
-    this.onTap,
-    this.onSecondaryTapDown,
+class _TableRow extends StatelessWidget {
+  const _TableRow({
+    required this.table,
+    required this.state,
+    required this.active,
+    required this.isFav,
+    required this.indent,
+    required this.query,
   });
 
-  final String name;
-  final int indent;
-  final Widget? twisty;
-  final Widget? icon;
-  final String? meta;
+  final DbTable table;
+  final AppState state;
   final bool active;
-  final VoidCallback? onTap;
-  final GestureTapDownCallback? onSecondaryTapDown;
+  final bool isFav;
+  final int indent;
+  final String query;
 
   @override
   Widget build(BuildContext context) {
-    // indent levels: 0 → 6px left, 1 → 18px, 2 → 30px (matching design).
-    final leftBase = 6.0 + indent * 12.0;
+    final leftBase = 14.0 + indent * 18.0;
     return Hoverable(
-      onTap: onTap,
-      onSecondaryTapDown: onSecondaryTapDown,
+      onTap: () => state.openTable(table),
+      onSecondaryTapDown: (d) =>
+          _openTableMenu(context, state, table, d.globalPosition),
       builder: (context, hovering) {
-        final Color rowBg = active
+        final showStar = hovering || isFav;
+        final rowBg = active
             ? AppColors.sidebarRowActive
             : (hovering ? AppColors.sidebarRowHover : Colors.transparent);
         return Stack(
           clipBehavior: Clip.none,
           children: [
             Container(
-              height: AppLayout.treeRowHeight,
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              padding: EdgeInsets.only(left: leftBase, right: 8),
-              decoration: BoxDecoration(color: rowBg, borderRadius: Radii.brSm),
+              height: 24,
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+              padding: EdgeInsets.only(left: leftBase, right: 6),
+              decoration: BoxDecoration(
+                color: rowBg,
+                borderRadius: Radii.brSm,
+              ),
               child: Row(
                 children: [
                   SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: Center(child: twisty ?? const SizedBox.shrink()),
+                    width: 14,
+                    height: 14,
+                    child: Center(child: _kindIcon(table.kind, active)),
                   ),
-                  if (icon != null) ...[
-                    const SizedBox(width: 4),
-                    SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: Center(child: icon!),
-                    ),
-                  ],
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTheme.mono(
-                        size: 11.5,
+                    child: _HighlightedText(
+                      text: table.name,
+                      match: query,
+                      style: AppTheme.ui(
+                        size: 12,
                         color: active
                             ? AppColors.textPrimary
                             : AppColors.textSecondary,
-                        weight: FontWeight.w500,
+                        weight: active ? FontWeight.w600 : FontWeight.w400,
+                        letterSpacing: 0,
                       ),
                     ),
                   ),
-                  if (meta != null)
-                    Text(
-                      meta!,
-                      style: AppTheme.mono(size: 10.5, color: AppColors.text4),
+                  if (showStar)
+                    _StarToggle(
+                      filled: isFav,
+                      onTap: () => state.toggleFavorite(table),
                     ),
                 ],
               ),
@@ -518,19 +800,132 @@ class _TreeRow extends StatelessWidget {
             if (active)
               Positioned(
                 left: 0,
-                top: 4,
-                bottom: 4,
+                top: 5,
+                bottom: 5,
                 child: Container(
-                  width: 2,
+                  width: 2.5,
                   decoration: BoxDecoration(
                     color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(2),
+                      bottomRight: Radius.circular(2),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.accentSoft,
+                        blurRadius: 6,
+                        spreadRadius: 0,
+                      ),
+                    ],
                   ),
                 ),
               ),
           ],
         );
       },
+    );
+  }
+
+  Widget _kindIcon(DbRelationKind kind, bool active) {
+    switch (kind) {
+      case DbRelationKind.table:
+        return TableGlyph(
+          size: 12,
+          color: active ? AppColors.accent : AppColors.textMuted,
+        );
+      case DbRelationKind.view:
+        return Icon(
+          Icons.visibility_outlined,
+          size: 12,
+          color: active ? AppColors.accent : AppColors.info,
+        );
+      case DbRelationKind.materializedView:
+        return Icon(
+          Icons.layers_outlined,
+          size: 12,
+          color: active ? AppColors.accent : AppColors.info,
+        );
+    }
+  }
+}
+
+class _StarToggle extends StatelessWidget {
+  const _StarToggle({required this.filled, required this.onTap});
+
+  final bool filled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Hoverable(
+      onTap: onTap,
+      builder: (context, hovering) {
+        final color = filled
+            ? AppColors.warn
+            : (hovering ? AppColors.textSecondary : AppColors.text4);
+        return Padding(
+          padding: const EdgeInsets.all(2),
+          child: Icon(
+            filled ? Icons.star_rounded : Icons.star_outline_rounded,
+            size: 13,
+            color: color,
+          ),
+        );
+      },
+    );
+  }
+}
+
+// --- highlighted text -----------------------------------------------------
+
+class _HighlightedText extends StatelessWidget {
+  const _HighlightedText({
+    required this.text,
+    required this.match,
+    required this.style,
+  });
+
+  final String text;
+  final String match;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    if (match.isEmpty) {
+      return Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      );
+    }
+    final lower = text.toLowerCase();
+    final idx = lower.indexOf(match);
+    if (idx < 0) {
+      return Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      );
+    }
+    final before = text.substring(0, idx);
+    final hit = text.substring(idx, idx + match.length);
+    final after = text.substring(idx + match.length);
+    final hitStyle = style.copyWith(
+      color: AppColors.accent,
+      fontWeight: FontWeight.w700,
+    );
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: before, style: style),
+          TextSpan(text: hit, style: hitStyle),
+          TextSpan(text: after, style: style),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }
@@ -542,11 +937,13 @@ class _SavedQueryRow extends StatefulWidget {
     required this.query,
     required this.active,
     required this.state,
+    required this.match,
   });
 
   final SavedQuery query;
   final bool active;
   final AppState state;
+  final String match;
 
   @override
   State<_SavedQueryRow> createState() => _SavedQueryRowState();
@@ -569,7 +966,7 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
         CmItem(
           icon: Icons.edit_outlined,
           label: 'Rename…',
-          onTap: () => _renameDialog(),
+          onTap: _renameDialog,
         ),
         CmItem(
           icon: Icons.content_copy,
@@ -606,23 +1003,87 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
   @override
   Widget build(BuildContext context) {
     final ts = widget.query.updatedAt;
-    return _TreeRow(
-      indent: 0,
-      twisty: Icon(
-        Icons.description_outlined,
-        size: 10,
-        color: AppColors.text4,
-      ),
-      name: widget.query.name,
-      meta: ts == null ? null : timeAgo(ts),
-      active: widget.active,
+    return Hoverable(
       onTap: () => widget.state.openSavedQuery(widget.query),
       onSecondaryTapDown: (d) => _openMenu(d.globalPosition),
+      builder: (context, hovering) {
+        final bg = widget.active
+            ? AppColors.sidebarRowActive
+            : (hovering ? AppColors.sidebarRowHover : Colors.transparent);
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              height: 24,
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+              padding: const EdgeInsets.only(left: 14, right: 6),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: Radii.brSm,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.code_rounded,
+                    size: 12,
+                    color: widget.active
+                        ? AppColors.accent
+                        : AppColors.textMuted,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _HighlightedText(
+                      text: widget.query.name,
+                      match: widget.match,
+                      style: AppTheme.ui(
+                        size: 12,
+                        color: widget.active
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
+                        weight: widget.active
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                  if (ts != null)
+                    Text(
+                      timeAgo(ts),
+                      style: AppTheme.ui(
+                        size: 10,
+                        color: AppColors.text4,
+                        weight: FontWeight.w400,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (widget.active)
+              Positioned(
+                left: 0,
+                top: 5,
+                bottom: 5,
+                child: Container(
+                  width: 2.5,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent,
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(2),
+                      bottomRight: Radius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
 
-// --- footer ---------------------------------------------------------------
+// --- footer status --------------------------------------------------------
 
 class _FooterStatus extends StatelessWidget {
   const _FooterStatus({required this.state});
@@ -632,53 +1093,154 @@ class _FooterStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final connected = state.status == ConnectionStatus.connected;
-    final color = connected ? AppColors.success : AppColors.textMuted;
+    final color = switch (state.status) {
+      ConnectionStatus.connected => AppColors.success,
+      ConnectionStatus.connecting => AppColors.warn,
+      ConnectionStatus.lost => AppColors.warn,
+      ConnectionStatus.error => AppColors.error,
+      ConnectionStatus.disconnected => AppColors.textMuted,
+    };
     final label = switch (state.status) {
-      ConnectionStatus.connected => 'connected',
+      ConnectionStatus.connected => 'live',
       ConnectionStatus.connecting => 'connecting…',
       ConnectionStatus.lost => 'connection lost',
       ConnectionStatus.error => 'error',
-      ConnectionStatus.disconnected => 'disconnected',
+      ConnectionStatus.disconnected => 'offline',
     };
-    // Heights / bg match the workspace's pagination bar so the two surfaces
-    // form one continuous bottom rail across the app (per the design's
-    // single `.pagebar` / sidebar footer pair).
+
+    final tableCount = state.schemas.fold<int>(
+      0,
+      (a, b) => a + b.tables.length,
+    );
+
     return Container(
       height: 28,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: AppColors.bgDeep,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
-          Container(
-            width: 5,
-            height: 5,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: color.withValues(alpha: 0.24),
-                  blurRadius: 0,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-          ),
+          _LiveDot(color: color, pulse: connected),
           const SizedBox(width: 8),
           Text(
             label,
-            style: AppTheme.mono(size: 10, color: AppColors.textMuted),
+            style: AppTheme.ui(
+              size: 10.5,
+              color: AppColors.textMuted,
+              weight: FontWeight.w500,
+              letterSpacing: 0,
+            ),
           ),
+          const Spacer(),
+          if (connected && tableCount > 0)
+            Text(
+              '$tableCount ${tableCount == 1 ? 'table' : 'tables'}',
+              style: AppTheme.ui(
+                size: 10.5,
+                color: AppColors.text4,
+                weight: FontWeight.w400,
+                letterSpacing: 0,
+              ),
+            ),
         ],
       ),
     );
   }
 }
 
-// --- context menu helper --------------------------------------------------
+class _LiveDot extends StatefulWidget {
+  const _LiveDot({required this.color, required this.pulse});
+
+  final Color color;
+  final bool pulse;
+
+  @override
+  State<_LiveDot> createState() => _LiveDotState();
+}
+
+class _LiveDotState extends State<_LiveDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    );
+    if (widget.pulse) _ctrl.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LiveDot old) {
+    super.didUpdateWidget(old);
+    if (widget.pulse && !_ctrl.isAnimating) {
+      _ctrl.repeat();
+    } else if (!widget.pulse && _ctrl.isAnimating) {
+      _ctrl.stop();
+      _ctrl.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 12,
+      height: 12,
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (context, _) {
+          final t = _ctrl.value;
+          final ringOpacity = widget.pulse ? (1 - t) * 0.45 : 0.0;
+          final ringSize = widget.pulse ? 5 + t * 7 : 0.0;
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              if (widget.pulse)
+                Container(
+                  width: ringSize,
+                  height: ringSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: widget.color.withValues(alpha: ringOpacity),
+                      width: 1,
+                    ),
+                  ),
+                ),
+              Container(
+                width: 5,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: widget.color,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: 0.5),
+                      blurRadius: 4,
+                      spreadRadius: 0,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+// --- context menu for tables ---------------------------------------------
 
 void _openTableMenu(
   BuildContext context,
@@ -731,13 +1293,13 @@ void _openTableMenu(
       CmItem(
         icon: Icons.refresh,
         label: 'Refresh catalog',
-        onTap: () => state.refreshCatalog(),
+        onTap: state.refreshCatalog,
       ),
     ],
   );
 }
 
-// --- no-connection list (unchanged style; only shows when disconnected) ---
+// --- disconnected: saved connections list --------------------------------
 
 class _AllConnectionsList extends StatelessWidget {
   const _AllConnectionsList({required this.state});
@@ -758,23 +1320,42 @@ class _AllConnectionsList extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 14, 4),
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
           child: Row(
             children: [
-              Expanded(
-                child: Text(
-                  'SAVED',
-                  style: AppTheme.ui(
-                    size: 10,
-                    color: AppColors.textMuted,
-                    weight: FontWeight.w600,
-                    letterSpacing: 0.06 * 10,
-                  ),
+              Text(
+                'SAVED',
+                style: AppTheme.ui(
+                  size: 9.5,
+                  color: AppColors.textMuted,
+                  weight: FontWeight.w700,
+                  letterSpacing: 0.8,
                 ),
               ),
-              Text(
-                '${list.length}',
-                style: AppTheme.mono(size: 10, color: AppColors.text4),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Container(height: 1, color: AppColors.hairline),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 5,
+                  vertical: 1,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: const BorderRadius.all(Radii.xs),
+                  border: Border.all(color: AppColors.borderSoft),
+                ),
+                child: Text(
+                  '${list.length}',
+                  style: AppTheme.ui(
+                    size: 9.5,
+                    color: AppColors.text4,
+                    weight: FontWeight.w600,
+                    letterSpacing: 0,
+                  ),
+                ),
               ),
             ],
           ),
@@ -782,10 +1363,35 @@ class _AllConnectionsList extends StatelessWidget {
         Expanded(
           child: list.isEmpty
               ? Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'No saved connections yet.',
-                    style: AppTheme.ui(size: 12, color: AppColors.textMuted),
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.power_off_outlined,
+                        size: 20,
+                        color: AppColors.textMuted,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No connections',
+                        style: AppTheme.ui(
+                          size: 13,
+                          color: AppColors.textSecondary,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Add a PostgreSQL connection to get started.',
+                        style: AppTheme.ui(
+                          size: 11.5,
+                          color: AppColors.textMuted,
+                          weight: FontWeight.w400,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
                   ),
                 )
               : ListView.builder(
@@ -799,20 +1405,20 @@ class _AllConnectionsList extends StatelessWidget {
         Hoverable(
           onTap: () => _newConnection(context),
           builder: (context, hovering) => Container(
-            height: 32,
+            height: 36,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             color: hovering ? AppColors.sidebarRowHover : Colors.transparent,
             alignment: Alignment.centerLeft,
             child: Row(
               children: [
-                Icon(Icons.add, size: 13, color: AppColors.accent),
+                Icon(Icons.add_rounded, size: 14, color: AppColors.accent),
                 const SizedBox(width: 8),
                 Text(
-                  'New connection…',
+                  'New connection',
                   style: AppTheme.ui(
-                    size: 12,
+                    size: 12.5,
                     color: AppColors.accent,
-                    weight: FontWeight.w500,
+                    weight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -843,19 +1449,39 @@ class _SavedConnectionRow extends StatelessWidget {
     return Hoverable(
       onTap: () => state.connect(config),
       builder: (context, hovering) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        color: hovering ? AppColors.sidebarRowHover : Colors.transparent,
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: hovering ? AppColors.surface : Colors.transparent,
+          borderRadius: Radii.brSm,
+          border: Border.all(
+            color: hovering ? AppColors.borderSoft : Colors.transparent,
+          ),
+        ),
         child: Row(
           children: [
             Container(
-              width: 7,
-              height: 7,
+              width: 24,
+              height: 24,
               decoration: BoxDecoration(
-                color: AppColors.borderStrong,
-                shape: BoxShape.circle,
+                color: AppColors.surfaceAlt,
+                borderRadius: const BorderRadius.all(Radii.xs),
+                border: Border.all(color: AppColors.borderSoft),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                config.name.isEmpty
+                    ? '?'
+                    : config.name.substring(0, 1).toUpperCase(),
+                style: AppTheme.ui(
+                  size: 10.5,
+                  color: AppColors.textSecondary,
+                  weight: FontWeight.w700,
+                  letterSpacing: 0,
+                ),
               ),
             ),
-            const SizedBox(width: 9),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -866,15 +1492,21 @@ class _SavedConnectionRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: AppTheme.ui(
                       size: 12.5,
-                      weight: FontWeight.w500,
+                      weight: FontWeight.w600,
                       color: AppColors.textPrimary,
                     ),
                   ),
+                  const SizedBox(height: 1),
                   Text(
-                    ts == null ? config.summary : timeAgo(ts),
+                    ts == null ? config.summary : 'opened ${timeAgo(ts)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTheme.mono(size: 10, color: AppColors.textMuted),
+                    style: AppTheme.ui(
+                      size: 10.5,
+                      color: AppColors.textMuted,
+                      weight: FontWeight.w400,
+                      letterSpacing: 0,
+                    ),
                   ),
                 ],
               ),
@@ -898,11 +1530,15 @@ class _MiniIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Hoverable(
       onTap: onTap,
-      child: Padding(
+      builder: (context, hovering) => Padding(
         padding: const EdgeInsets.all(3),
-        child: Icon(icon, size: 12, color: AppColors.textMuted),
+        child: Icon(
+          icon,
+          size: 12,
+          color: hovering ? AppColors.textPrimary : AppColors.textMuted,
+        ),
       ),
     );
   }
