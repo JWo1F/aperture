@@ -19,7 +19,11 @@ class SchemaView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    // SchemaView only needs AppState for dispatching reload to the
+    // toolbar's icon button. The tab's own listener (driven by the
+    // workspace's per-tab ListenableBuilder) handles ddl/error/loading
+    // updates, so no AppState subscription is required here.
+    final state = context.read<AppState>();
 
     return Column(
       children: [

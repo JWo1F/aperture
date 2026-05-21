@@ -144,9 +144,22 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final connected = state.status == ConnectionStatus.connected;
-    final lost = state.status == ConnectionStatus.lost;
+    // Pull only the slices the shell layout reacts to. Sidebar drag,
+    // log-panel resize, preference changes, tab mutations etc. all stay
+    // out of this widget's rebuild path. The sidebar / log-panel /
+    // workspace subtrees subscribe to their own state independently.
+    final state = context.read<AppState>();
+    final status = context.select<AppState, ConnectionStatus>(
+      (s) => s.status,
+    );
+    final sidebarVisible = context.select<AppState, bool>(
+      (s) => s.sidebarVisible,
+    );
+    final logVisible = context.select<AppState, bool>(
+      (s) => s.eventLog.isVisible,
+    );
+    final connected = status == ConnectionStatus.connected;
+    final lost = status == ConnectionStatus.lost;
     final showWorkspace = connected || lost;
 
     return Scaffold(
@@ -193,7 +206,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                       // other. Cell-edit repaints in the grid no longer ripple
                       // back through the sidebar's compositor layer, and vice
                       // versa.
-                      if (state.sidebarVisible) ...[
+                      if (sidebarVisible) ...[
                         const RepaintBoundary(child: Sidebar()),
                         _SidebarResizeHandle(state: state),
                       ],
@@ -207,8 +220,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                           ),
                         ),
                       ),
-                      if (state.eventLog.isVisible)
-                        _LogResizeHandle(state: state),
+                      if (logVisible) _LogResizeHandle(state: state),
                       const RepaintBoundary(child: LogPanel()),
                     ],
                   ),
@@ -329,10 +341,30 @@ class _Toolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final pending = state.unappliedEditCount;
-    final activeTab = state.activeTab;
-    final canExport = _exportableResult(activeTab) != null;
+    // Each reactive bit is a separate selector so the toolbar only
+    // rebuilds when one of these actually changes. Brightness, history,
+    // pending-edit count and the active tab's exportable result are the
+    // only fields driving any visible change in here.
+    final state = context.read<AppState>();
+    final pending = context.select<AppState, int>(
+      (s) => s.unappliedEditCount,
+    );
+    final canGoBack = context.select<AppState, bool>((s) => s.canGoBack);
+    final canGoForward = context.select<AppState, bool>(
+      (s) => s.canGoForward,
+    );
+    final brightness = context.select<AppState, AppBrightness>(
+      (s) => s.brightness,
+    );
+    // Export availability tracks the active tab's id + its result
+    // existence. Selecting both as a record means switching tabs or
+    // running a query updates this; mere width drags don't.
+    final exportKey = context.select<AppState, (String?, bool)>((s) {
+      final tab = s.activeTab;
+      final result = _exportableResult(tab);
+      return (tab?.id, result != null);
+    });
+    final canExport = exportKey.$2;
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -362,12 +394,12 @@ class _Toolbar extends StatelessWidget {
             _TbIcon(
               icon: Icons.arrow_back,
               tooltip: 'Back  ⌘[',
-              onPressed: state.canGoBack ? state.historyBack : null,
+              onPressed: canGoBack ? state.historyBack : null,
             ),
             _TbIcon(
               icon: Icons.arrow_forward,
               tooltip: 'Forward  ⌘]',
-              onPressed: state.canGoForward ? state.historyForward : null,
+              onPressed: canGoForward ? state.historyForward : null,
             ),
             const SizedBox(width: 8),
             const _TbGroupRail(),
@@ -380,7 +412,8 @@ class _Toolbar extends StatelessWidget {
               icon: Icons.ios_share,
               tooltip: 'Export…',
               onPressed: canExport
-                  ? () => _openExportForActiveTab(context, state, activeTab)
+                  ? () =>
+                        _openExportForActiveTab(context, state, state.activeTab)
                   : null,
             ),
             const Spacer(),
@@ -401,7 +434,7 @@ class _Toolbar extends StatelessWidget {
             ),
             const _TbRail(),
             _TbIcon(
-              icon: state.brightness == AppBrightness.dark
+              icon: brightness == AppBrightness.dark
                   ? Icons.dark_mode_outlined
                   : Icons.light_mode_outlined,
               tooltip: 'Toggle theme',
@@ -837,19 +870,29 @@ class _ConnectionPillState extends State<ConnectionPill> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final conn = state.activeConnection;
-    final (Color dot, String connLabel) = switch (state.status) {
+    // ConnectionPill reflects connection liveness, the active connection's
+    // name, and the schema of the current tab. Subscribe to each slice
+    // narrowly so widget-resize ticks and other unrelated notifications
+    // don't repaint the pill.
+    final status = context.select<AppState, ConnectionStatus>(
+      (s) => s.status,
+    );
+    final connName = context.select<AppState, String?>(
+      (s) => s.activeConnection?.name,
+    );
+    final schema = context.select<AppState, String>(
+      (s) => _activeSchema(s) ?? 'public',
+    );
+    final (Color dot, String connLabel) = switch (status) {
       ConnectionStatus.connected => (
         AppColors.success,
-        conn?.name ?? 'connected',
+        connName ?? 'connected',
       ),
       ConnectionStatus.connecting => (AppColors.accent, 'connecting…'),
-      ConnectionStatus.lost => (AppColors.warning, conn?.name ?? 'lost'),
+      ConnectionStatus.lost => (AppColors.warning, connName ?? 'lost'),
       ConnectionStatus.error => (AppColors.error, 'no connection'),
       ConnectionStatus.disconnected => (AppColors.textMuted, 'no connection'),
     };
-    final schema = _activeSchema(state) ?? 'public';
 
     return CompositedTransformTarget(
       link: _link,
@@ -903,7 +946,7 @@ class _ConnectionPillState extends State<ConnectionPill> {
                   ),
                 ),
               ),
-              if (state.status == ConnectionStatus.connected) ...[
+              if (status == ConnectionStatus.connected) ...[
                 const SizedBox(width: 6),
                 Text(
                   '/',

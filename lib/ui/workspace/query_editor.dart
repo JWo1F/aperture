@@ -183,7 +183,16 @@ class _QueryEditorState extends State<QueryEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    // Read AppState non-reactively. The State already listens to the tab
+    // directly (see initState → addListener(_onTabChange)) which triggers
+    // setState, so tab field updates rebuild this widget without going
+    // through AppState's bubbled notifications. The one slice of app-wide
+    // state we still need to react to is the editor/results split — pulled
+    // narrowly so a sidebar drag doesn't reach this widget.
+    final state = context.read<AppState>();
+    final fraction = context.select<AppState, double>(
+      (s) => s.preferences.queryResultsFraction,
+    );
     final tab = widget.tab;
 
     final activeStmt =
@@ -243,6 +252,9 @@ class _QueryEditorState extends State<QueryEditor> {
           // in a sibling statement doesn't leak its columns into another one.
           final stmt = statementAtOffset(_statements, req.cursor);
           final stmtText = stmt?.text ?? req.text;
+          // Resolve catalog at invocation time — the editor isn't rebuilt
+          // on catalog phase-1 completion, so reading through the freshest
+          // AppState avoids serving stale suggestions.
           return completeQueryEditor(
             req: req,
             catalog: state.catalog.catalog,
@@ -276,7 +288,6 @@ class _QueryEditorState extends State<QueryEditor> {
                     0.0,
                     double.infinity,
                   );
-              final fraction = state.preferences.queryResultsFraction;
               double resultsHeight = available * fraction;
               // Enforce a per-side pixel minimum on top of the fraction
               // clamp; widgets like the empty-state card have an intrinsic
@@ -723,7 +734,10 @@ class _QueryPagebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    // _QueryPagebar reads only from `tab` and dispatches to AppState
+    // methods; it lives inside a per-tab ListenableBuilder, so a plain
+    // context.read is enough — no need to subscribe to the root.
+    final state = context.read<AppState>();
     final result = tab.result;
     final refreshedAt = tab.lastRefreshedAt;
     final lastRunSql = tab.lastRunSql;

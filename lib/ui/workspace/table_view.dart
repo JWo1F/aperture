@@ -23,91 +23,104 @@ class TableView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    // Read AppState non-reactively — the workspace already wraps this
+    // widget in a ListenableBuilder(listenable: tab), so tab field changes
+    // (result, loading, edits, page, …) drive rebuilds. The whole subtree
+    // is then wrapped in a ListenableBuilder on CatalogController so
+    // phase-1 column / FK arrivals refresh the toolbar's autocomplete and
+    // the grid's typed-cell colouring + FK indicators — without dragging
+    // in the rest of AppState. readOnly is a connection-level slice
+    // selected narrowly.
+    final state = context.read<AppState>();
+    final readOnly = context.select<AppState, bool>(
+      (s) => s.activeConnection?.readOnly ?? false,
+    );
 
-    return Column(
-      children: [
-        _TableToolbar(tab: tab, state: state),
-        Expanded(
-          // Body uses `var(--bg)` per the design's `.grid-wrap` rule — the
-          // clause bar above is `var(--bg-deep)`, so the hairline between
-          // them reads even when the grid hasn't loaded any rows yet.
-          child: ColoredBox(
-            color: AppColors.bg,
-            child: tab.result == null
-                ? (tab.loading
-                      ? Center(
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.accent,
+    return ListenableBuilder(
+      listenable: state.catalog,
+      builder: (_, _) => Column(
+        children: [
+          _TableToolbar(tab: tab, state: state),
+          Expanded(
+            // Body uses `var(--bg)` per the design's `.grid-wrap` rule — the
+            // clause bar above is `var(--bg-deep)`, so the hairline between
+            // them reads even when the grid hasn't loaded any rows yet.
+            child: ColoredBox(
+              color: AppColors.bg,
+              child: tab.result == null
+                  ? (tab.loading
+                        ? Center(
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.accent,
+                              ),
                             ),
-                          ),
-                        )
-                      : const EmptyState(
-                          icon: Icons.warning_amber_outlined,
-                          title: 'Could not load data',
-                        ))
-                : Stack(
-                    // Force non-positioned children (the ResultsGrid) to fill
-                    // the available Stack box. Without this, the grid sizes to
-                    // its content (28px header + 0-N rows) and leaves the rest
-                    // of the body painted in `var(--bg)`, which looked like
-                    // bottom padding on the clause bar.
-                    fit: StackFit.expand,
-                    children: [
-                      ResultsGrid(
-                        result: tab.result!,
-                        editable:
-                            !tab.table.isView &&
-                            !(state.activeConnection?.readOnly ?? false),
-                        edits: tab.edits,
-                        widths: tab.columnWidths,
-                        onWidthChanged: (col, w) =>
-                            state.persistColumnWidth(tab.table, col, w),
-                        onEditCell: (row, col, value) =>
-                            state.setCellEdit(tab, row, col, value),
-                        onRevertEdit: (row, col) =>
-                            state.revertCellEdit(tab, row, col),
-                        order: parseOrderBy(tab.orderBy),
-                        onSortColumn: (column) =>
-                            state.cycleTableOrder(tab, column),
-                        onSetSort: (column, desc) =>
-                            state.setColumnSort(tab, column, desc),
-                        onAddFilter: (column, value, not) =>
-                            _addFilter(state, column, value, not),
-                        foreignKeys: state.foreignKeysFor(tab.table),
-                        onFollowForeignKey: (fk, value) =>
-                            state.followForeignKey(fk, value),
-                        columnMeta: _columnMeta(state),
-                        findRowOwner: (col) {
-                          final owner = state.findPrimaryKeyOwner(col);
-                          // Skip the redundant "Find row in {this table}"
-                          // when the PK match is the table we're viewing.
-                          if (owner == null ||
-                              owner.qualifiedName == tab.table.qualifiedName) {
-                            return null;
-                          }
-                          return owner;
-                        },
-                        onFindRow: (table, col, value) =>
-                            state.findRowInTable(table, col, value),
-                      ),
-                      if (tab.loading)
-                        const Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          child: _RefreshBar(),
+                          )
+                        : const EmptyState(
+                            icon: Icons.warning_amber_outlined,
+                            title: 'Could not load data',
+                          ))
+                  : Stack(
+                      // Force non-positioned children (the ResultsGrid) to
+                      // fill the available Stack box. Without this, the grid
+                      // sizes to its content (28px header + 0-N rows) and
+                      // leaves the rest of the body painted in `var(--bg)`,
+                      // which looked like bottom padding on the clause bar.
+                      fit: StackFit.expand,
+                      children: [
+                        ResultsGrid(
+                          result: tab.result!,
+                          editable: !tab.table.isView && !readOnly,
+                          edits: tab.edits,
+                          widths: tab.columnWidths,
+                          onWidthChanged: (col, w) =>
+                              state.persistColumnWidth(tab.table, col, w),
+                          onEditCell: (row, col, value) =>
+                              state.setCellEdit(tab, row, col, value),
+                          onRevertEdit: (row, col) =>
+                              state.revertCellEdit(tab, row, col),
+                          order: parseOrderBy(tab.orderBy),
+                          onSortColumn: (column) =>
+                              state.cycleTableOrder(tab, column),
+                          onSetSort: (column, desc) =>
+                              state.setColumnSort(tab, column, desc),
+                          onAddFilter: (column, value, not) =>
+                              _addFilter(state, column, value, not),
+                          foreignKeys: state.foreignKeysFor(tab.table),
+                          onFollowForeignKey: (fk, value) =>
+                              state.followForeignKey(fk, value),
+                          columnMeta: _columnMeta(state),
+                          findRowOwner: (col) {
+                            final owner = state.findPrimaryKeyOwner(col);
+                            // Skip the redundant "Find row in {this table}"
+                            // when the PK match is the table we're viewing.
+                            if (owner == null ||
+                                owner.qualifiedName ==
+                                    tab.table.qualifiedName) {
+                              return null;
+                            }
+                            return owner;
+                          },
+                          onFindRow: (table, col, value) =>
+                              state.findRowInTable(table, col, value),
                         ),
-                    ],
-                  ),
+                        if (tab.loading)
+                          const Positioned(
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            child: _RefreshBar(),
+                          ),
+                      ],
+                    ),
+            ),
           ),
-        ),
-        _PaginationBar(tab: tab, state: state),
-      ],
+          _PaginationBar(tab: tab, state: state),
+        ],
+      ),
     );
   }
 

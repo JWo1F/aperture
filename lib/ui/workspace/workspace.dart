@@ -13,15 +13,28 @@ import 'table_view.dart';
 /// Center pane: a refined underline-style tab strip over the active tab's
 /// content. Tabs follow Linear conventions — a thin accent
 /// underline marks the active tab, hover lifts inactive ones subtly.
+///
+/// Subscribes narrowly to the tab list structure (ids + active index) so
+/// sidebar drags, log ticks, and preference changes don't rebuild the
+/// workspace body. Each tab in the IndexedStack is wrapped in a
+/// [ListenableBuilder] keyed on the tab itself — `tab.result` /
+/// `tab.loading` / cell edits only rebuild that one tab subtree.
 class Workspace extends StatelessWidget {
   const Workspace({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final tab = state.activeTab;
+    // Subscribe to a concatenated id string + tab count instead of a
+    // List<String>. provider's `select` compares via `==`; a freshly-built
+    // List is never == to its predecessor, so List<String> would defeat
+    // the narrowing. The joined string compares by value and changes only
+    // when tabs are added, removed, or reordered.
+    final tabsKey = context.select<AppState, String>(
+      (s) => s.tabs.map((t) => t.id).join('|'),
+    );
+    final activeIndex = context.select<AppState, int>((s) => s.activeTabIndex);
 
-    if (tab == null) {
+    if (tabsKey.isEmpty) {
       return Container(
         color: AppColors.bg,
         child: EmptyState(
@@ -32,12 +45,13 @@ class Workspace extends StatelessWidget {
             label: 'New Query',
             icon: Icons.add,
             primary: true,
-            onPressed: state.newQueryTab,
+            onPressed: context.read<AppState>().newQueryTab,
           ),
         ),
       );
     }
 
+    final tabs = context.read<AppState>().tabs;
     return Container(
       color: AppColors.bg,
       child: Column(
@@ -45,14 +59,14 @@ class Workspace extends StatelessWidget {
           // Isolate the tab strip's compositor layer from the workspace body
           // so scrolling/editing in the active tab doesn't redraw the strip
           // every frame.
-          RepaintBoundary(child: _TabStrip(state: state)),
+          const RepaintBoundary(child: _TabStrip()),
           Expanded(
             // All tabs stay mounted so per-tab state (scroll offset, code
             // editor cursor, query result) survives switching away and back.
             child: IndexedStack(
-              index: state.activeTabIndex.clamp(0, state.tabs.length - 1),
+              index: activeIndex.clamp(0, tabs.length - 1),
               sizing: StackFit.expand,
-              children: [for (final t in state.tabs) _content(t)],
+              children: [for (final t in tabs) _content(t)],
             ),
           ),
         ],
@@ -61,22 +75,32 @@ class Workspace extends StatelessWidget {
   }
 
   Widget _content(WorkspaceTab tab) {
-    final key = ValueKey(tab.id);
-    return switch (tab) {
-      QueryTab() => QueryEditor(key: key, tab: tab),
-      TableTab() => TableView(key: key, tab: tab),
-      SchemaTab() => SchemaView(key: key, tab: tab),
-    };
+    // Each tab subtree listens to the tab itself, not the root AppState.
+    // Mutations from TabsController (result load, loading toggle, cell-edit
+    // map mutations, pagination, etc.) flow through tab.notifyListeners()
+    // and rebuild only this one stack child. Tabs in other stack slots stay
+    // put.
+    return ListenableBuilder(
+      key: ValueKey(tab.id),
+      listenable: tab,
+      builder: (_, _) => switch (tab) {
+        QueryTab() => QueryEditor(tab: tab),
+        TableTab() => TableView(tab: tab),
+        SchemaTab() => SchemaView(tab: tab),
+      },
+    );
   }
 }
 
 class _TabStrip extends StatelessWidget {
-  const _TabStrip({required this.state});
-
-  final AppState state;
+  const _TabStrip();
 
   @override
   Widget build(BuildContext context) {
+    final state = context.read<AppState>();
+    final tabs = state.tabs;
+    final activeIndex = context.select<AppState, int>((s) => s.activeTabIndex);
+
     return DecoratedBox(
       decoration: BoxDecoration(color: AppColors.bgDeep),
       child: SizedBox(
@@ -112,18 +136,24 @@ class _TabStrip extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      for (var i = 0; i < state.tabs.length; i++)
-                        _Tab(
-                          tab: state.tabs[i],
-                          active: i == state.activeTabIndex,
-                          onTap: () => state.selectTab(i),
-                          onClose: () => state.closeTab(state.tabs[i].id),
-                          onContextMenu: (pos) => _showTabMenu(
-                            context,
-                            state: state,
-                            tab: state.tabs[i],
-                            position: pos,
-                            canCloseRight: i < state.tabs.length - 1,
+                      for (var i = 0; i < tabs.length; i++)
+                        // Each tab listens to itself so a query rename
+                        // refreshes its label without rebuilding the
+                        // whole strip.
+                        ListenableBuilder(
+                          listenable: tabs[i],
+                          builder: (_, _) => _Tab(
+                            tab: tabs[i],
+                            active: i == activeIndex,
+                            onTap: () => state.selectTab(i),
+                            onClose: () => state.closeTab(tabs[i].id),
+                            onContextMenu: (pos) => _showTabMenu(
+                              context,
+                              state: state,
+                              tab: tabs[i],
+                              position: pos,
+                              canCloseRight: i < tabs.length - 1,
+                            ),
                           ),
                         ),
                       _NewTabButton(onTap: state.newQueryTab),
