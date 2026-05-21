@@ -20,16 +20,31 @@ enum CredentialSource {
   };
 }
 
-/// User-supplied details for one Postgres endpoint.
+/// Which database engine a connection targets.
+///
+/// - [postgres]: networked endpoint (host/port/database/credentials).
+/// - [sqlite]: a local database file addressed by [ConnectionConfig.filePath].
+enum DbEngine {
+  postgres,
+  sqlite;
+
+  static DbEngine fromName(String? raw) =>
+      raw == 'sqlite' ? sqlite : postgres;
+}
+
+/// User-supplied details for one database connection — a Postgres endpoint
+/// or a local SQLite file, distinguished by [engine].
 class ConnectionConfig {
   ConnectionConfig({
     required this.id,
     required this.name,
-    required this.host,
-    required this.port,
-    required this.database,
-    required this.username,
-    required this.password,
+    this.engine = DbEngine.postgres,
+    this.host = '',
+    this.port = 5432,
+    this.database = '',
+    this.username = '',
+    this.password = '',
+    this.filePath = '',
     this.useSsl = false,
     this.readOnly = false,
     this.credentialSource = CredentialSource.plain,
@@ -51,10 +66,18 @@ class ConnectionConfig {
 
   final String id;
   final String name;
+
+  /// Selects which driver/service backs this connection.
+  final DbEngine engine;
+
   final String host;
   final int port;
   final String database;
   final String username;
+
+  /// Absolute path to the SQLite database file. Empty for Postgres
+  /// connections; the sole address for [DbEngine.sqlite] connections.
+  final String filePath;
 
   /// Runtime plaintext. Populated for [CredentialSource.plain] from the
   /// JSON file, for [CredentialSource.encrypted] only after the master
@@ -106,15 +129,20 @@ class ConnectionConfig {
   /// after every append.
   final Map<String, List<QueryMessage>> queryMessages;
 
-  String get summary => '$username@$host:$port/$database';
+  String get summary => switch (engine) {
+    DbEngine.sqlite => filePath.isEmpty ? 'sqlite' : filePath,
+    DbEngine.postgres => '$username@$host:$port/$database',
+  };
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
+    if (engine != DbEngine.postgres) 'engine': engine.name,
     'host': host,
     'port': port,
     'database': database,
     'username': username,
+    if (filePath.isNotEmpty) 'filePath': filePath,
     if (credentialSource == CredentialSource.plain) 'password': password,
     'useSsl': useSsl,
     if (credentialSource != CredentialSource.plain)
@@ -155,10 +183,12 @@ class ConnectionConfig {
     return ConnectionConfig(
       id: j['id'] as String,
       name: j['name'] as String? ?? '',
+      engine: DbEngine.fromName(j['engine'] as String?),
       host: j['host'] as String? ?? 'localhost',
       port: (j['port'] as num?)?.toInt() ?? 5432,
       database: j['database'] as String? ?? '',
       username: j['username'] as String? ?? 'postgres',
+      filePath: j['filePath'] as String? ?? '',
       password: source == CredentialSource.plain
           ? (j['password'] as String? ?? '')
           : '',
@@ -215,11 +245,13 @@ class ConnectionConfig {
 
   ConnectionConfig copyWith({
     String? name,
+    DbEngine? engine,
     String? host,
     int? port,
     String? database,
     String? username,
     String? password,
+    String? filePath,
     bool? useSsl,
     bool? readOnly,
     CredentialSource? credentialSource,
@@ -236,11 +268,13 @@ class ConnectionConfig {
     return ConnectionConfig(
       id: id,
       name: name ?? this.name,
+      engine: engine ?? this.engine,
       host: host ?? this.host,
       port: port ?? this.port,
       database: database ?? this.database,
       username: username ?? this.username,
       password: password ?? this.password,
+      filePath: filePath ?? this.filePath,
       useSsl: useSsl ?? this.useSsl,
       readOnly: readOnly ?? this.readOnly,
       credentialSource: credentialSource ?? this.credentialSource,
