@@ -71,8 +71,7 @@ class ResultsGrid extends StatefulWidget {
   /// column is a PK). Used in query result grids to surface a "Find row in
   /// {table}" action.
   final DbTable? Function(String column)? findRowOwner;
-  final void Function(DbTable table, String column, Object? value)?
-      onFindRow;
+  final void Function(DbTable table, String column, Object? value)? onFindRow;
 
   @override
   State<ResultsGrid> createState() => _ResultsGridState();
@@ -122,8 +121,10 @@ class _ResultsGridState extends State<ResultsGrid> {
   ).copyWith(fontStyle: FontStyle.italic);
 
   // Reused across all width measurements to avoid per-cell allocation.
-  final TextPainter _measurer =
-      TextPainter(textDirection: TextDirection.ltr, maxLines: 1);
+  final TextPainter _measurer = TextPainter(
+    textDirection: TextDirection.ltr,
+    maxLines: 1,
+  );
 
   static const double _autoMin = 64;
   static const double _autoMax = 200;
@@ -163,10 +164,7 @@ class _ResultsGridState extends State<ResultsGrid> {
   /// fixed sample is enough to pick a reasonable default — the user can drag
   /// the handle if it guesses short.
   double _autoWidth(String column, int columnIndex) {
-    final headerStyle = AppTheme.mono(
-      size: 11.5,
-      weight: FontWeight.w600,
-    );
+    final headerStyle = AppTheme.mono(size: 11.5, weight: FontWeight.w600);
 
     _measurer
       ..text = TextSpan(text: column, style: headerStyle)
@@ -220,15 +218,21 @@ class _ResultsGridState extends State<ResultsGrid> {
   /// Begin (or extend) a selection at the pointer-down cell. Drag tracking
   /// is set up so subsequent `onPointerMove` events grow the last range.
   void _beginPointerSelection(int row, int column) {
-    final cmd = HardwareKeyboard.instance.isMetaPressed ||
+    final cmd =
+        HardwareKeyboard.instance.isMetaPressed ||
         HardwareKeyboard.instance.isControlPressed;
     final shift = HardwareKeyboard.instance.isShiftPressed;
     final current = _selection.value;
 
     if (shift && current.anchor != null) {
       final a = current.anchor!;
-      _selection.value =
-          current.replaceLast(a.$1, a.$2, row, column, focus: (row, column));
+      _selection.value = current.replaceLast(
+        a.$1,
+        a.$2,
+        row,
+        column,
+        focus: (row, column),
+      );
       _drag = (row: a.$1, col: a.$2);
     } else if (cmd && !current.isEmpty) {
       _selection.value = current.addRange(row, column);
@@ -245,8 +249,13 @@ class _ResultsGridState extends State<ResultsGrid> {
   void _extendDragTo(int row, int column) {
     final d = _drag;
     if (d == null) return;
-    _selection.value = _selection.value
-        .replaceLast(d.row, d.col, row, column, focus: (row, column));
+    _selection.value = _selection.value.replaceLast(
+      d.row,
+      d.col,
+      row,
+      column,
+      focus: (row, column),
+    );
   }
 
   void _clearSelection() {
@@ -317,12 +326,14 @@ class _ResultsGridState extends State<ResultsGrid> {
       _clearSelection();
       return KeyEventResult.handled;
     }
-    final isCopyChord = key == LogicalKeyboardKey.keyC &&
+    final isCopyChord =
+        key == LogicalKeyboardKey.keyC &&
         (HardwareKeyboard.instance.isMetaPressed ||
             HardwareKeyboard.instance.isControlPressed);
     if (isCopyChord && !_selection.value.isEmpty) {
       final sel = _selection.value;
-      final text = (sel.ranges.length == 1 &&
+      final text =
+          (sel.ranges.length == 1 &&
               sel.ranges.first.r0 == sel.ranges.first.r1 &&
               sel.ranges.first.c0 == sel.ranges.first.c1)
           ? _selectedCellText()
@@ -394,8 +405,13 @@ class _ResultsGridState extends State<ResultsGrid> {
     final shift = HardwareKeyboard.instance.isShiftPressed;
     final anchor = _selection.value.anchor;
     if (shift && anchor != null) {
-      _selection.value = _selection.value
-          .replaceLast(anchor.$1, anchor.$2, r, c, focus: (r, c));
+      _selection.value = _selection.value.replaceLast(
+        anchor.$1,
+        anchor.$2,
+        r,
+        c,
+        focus: (r, c),
+      );
     } else {
       _selectCell(r, c);
     }
@@ -575,8 +591,7 @@ class _ResultsGridState extends State<ResultsGrid> {
         ? pending.value
         : (pending is CellDefault ? null : formatCellValue(original));
 
-    void copy(String text) =>
-        Clipboard.setData(ClipboardData(text: text));
+    void copy(String text) => Clipboard.setData(ClipboardData(text: text));
 
     final findOwner = widget.findRowOwner?.call(columnName);
 
@@ -639,23 +654,13 @@ class _ResultsGridState extends State<ResultsGrid> {
           icon: Icons.not_interested,
           label: canBeNull ? 'Set NULL' : 'Set NULL (column is NOT NULL)',
           enabled: canBeNull,
-          onTap: () => widget.onEditCell!(
-            row,
-            column,
-            const CellLiteral(null),
-          ),
+          onTap: () => widget.onEditCell!(row, column, const CellLiteral(null)),
         ),
         CmItem(
           icon: Icons.settings_backup_restore,
-          label: hasDefault
-              ? 'Set DEFAULT'
-              : 'Set DEFAULT (no default value)',
+          label: hasDefault ? 'Set DEFAULT' : 'Set DEFAULT (no default value)',
           enabled: hasDefault,
-          onTap: () => widget.onEditCell!(
-            row,
-            column,
-            const CellDefault(),
-          ),
+          onTap: () => widget.onEditCell!(row, column, const CellDefault()),
         ),
         if (isEdited && widget.onRevertEdit != null)
           CmItem(
@@ -715,8 +720,7 @@ class _ResultsGridState extends State<ResultsGrid> {
       );
     }
 
-    final totalWidth =
-        _indexWidth + _widths.fold<double>(0, (s, w) => s + w);
+    final totalWidth = _indexWidth + _widths.fold<double>(0, (s, w) => s + w);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -745,9 +749,7 @@ class _ResultsGridState extends State<ResultsGrid> {
             height: 28,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              border: Border(
-                right: BorderSide(color: AppColors.border),
-              ),
+              border: Border(right: BorderSide(color: AppColors.border)),
             ),
             child: Text(
               '#',
@@ -851,19 +853,15 @@ class _ResultsGridState extends State<ResultsGrid> {
                 // biggest cost during fast scrolling. We hit-test (row,
                 // column) from the pointer's local position instead.
                 return RepaintBoundary(
-                  child: MouseRegion(
-                    cursor: widget.editable
-                        ? SystemMouseCursors.text
-                        : SystemMouseCursors.basic,
-                    child: SingleChildScrollView(
-                      controller: _hBody,
-                      scrollDirection: Axis.horizontal,
-                      child: SizedBox(
-                        width: bodyWidth,
-                        child: Builder(
-                          builder: (bodyCtx) {
-                            _bodyCtx = bodyCtx;
-                            return Listener(
+                  child: SingleChildScrollView(
+                    controller: _hBody,
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: bodyWidth,
+                      child: Builder(
+                        builder: (bodyCtx) {
+                          _bodyCtx = bodyCtx;
+                          return Listener(
                             behavior: HitTestBehavior.translucent,
                             onPointerDown: (e) {
                               final cell = _cellAt(e.localPosition);
@@ -927,9 +925,8 @@ class _ResultsGridState extends State<ResultsGrid> {
                                     _buildRow(r, result.rows[r], bodyWidth),
                               ),
                             ),
-                            );
-                          },
-                        ),
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -972,9 +969,7 @@ class _ResultsGridState extends State<ResultsGrid> {
                 width: rowWidth,
                 decoration: BoxDecoration(
                   color: bg,
-                  border: Border(
-                    bottom: BorderSide(color: AppColors.hairline),
-                  ),
+                  border: Border(bottom: BorderSide(color: AppColors.hairline)),
                 ),
                 child: Row(
                   children: [
@@ -1092,8 +1087,9 @@ class _ResultsGridState extends State<ResultsGrid> {
       tooltipUseful = false;
       tooltipText = 'DEFAULT';
     } else {
-      final String? displayValue =
-          pending is CellLiteral ? pending.value : formatCellValue(original);
+      final String? displayValue = pending is CellLiteral
+          ? pending.value
+          : formatCellValue(original);
       final bool isNull = displayValue == null;
 
       if (isNull) {
@@ -1205,8 +1201,8 @@ class _HeaderCellState extends State<_HeaderCell> {
     final Color nameColor = widget.isPrimaryKey
         ? AppColors.accent
         : widget.isForeignKey
-            ? AppColors.tFk
-            : AppColors.textPrimary;
+        ? AppColors.tFk
+        : AppColors.textPrimary;
 
     return SizedBox(
       width: widget.width,
@@ -1314,18 +1310,17 @@ class _HeaderCellState extends State<_HeaderCell> {
 /// (r0 ≤ r1, c0 ≤ c1) so callers don't have to normalize at every read.
 class _CellRange {
   factory _CellRange.of(int r0, int c0, int r1, int c1) => _CellRange._(
-        r0 < r1 ? r0 : r1,
-        c0 < c1 ? c0 : c1,
-        r0 > r1 ? r0 : r1,
-        c0 > c1 ? c0 : c1,
-      );
+    r0 < r1 ? r0 : r1,
+    c0 < c1 ? c0 : c1,
+    r0 > r1 ? r0 : r1,
+    c0 > c1 ? c0 : c1,
+  );
 
   const _CellRange._(this.r0, this.c0, this.r1, this.c1);
 
   final int r0, c0, r1, c1;
 
-  bool contains(int r, int c) =>
-      r >= r0 && r <= r1 && c >= c0 && c <= c1;
+  bool contains(int r, int c) => r >= r0 && r <= r1 && c >= c0 && c <= c1;
 
   bool containsRow(int r) => r >= r0 && r <= r1;
 }
@@ -1345,10 +1340,10 @@ class _GridSelection {
   bool get isEmpty => ranges.isEmpty;
 
   factory _GridSelection.single(int row, int col) => _GridSelection(
-        ranges: [_CellRange._(row, col, row, col)],
-        anchor: (row, col),
-        focus: (row, col),
-      );
+    ranges: [_CellRange._(row, col, row, col)],
+    anchor: (row, col),
+    focus: (row, col),
+  );
 
   bool contains(int row, int col) {
     for (final rg in ranges) {
@@ -1384,10 +1379,10 @@ class _GridSelection {
   }
 
   _GridSelection addRange(int row, int col) => _GridSelection(
-        ranges: [...ranges, _CellRange._(row, col, row, col)],
-        anchor: (row, col),
-        focus: (row, col),
-      );
+    ranges: [...ranges, _CellRange._(row, col, row, col)],
+    anchor: (row, col),
+    focus: (row, col),
+  );
 
   /// Replace the last range with bbox((r0,c0), (r1,c1)). Anchor stays at
   /// (r0,c0); focus moves to the supplied [focus] (defaults to (r1,c1)).
