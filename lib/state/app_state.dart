@@ -390,6 +390,9 @@ class AppState extends ChangeNotifier {
 
   List<DbTable> get recents => perConnection.recents;
 
+  List<DbTable> frequentTables({int limit = 5}) =>
+      perConnection.frequentTables(limit: limit);
+
   void persistColumnWidth(DbTable table, String column, double width) =>
       perConnection.persistColumnWidth(table, column, width);
 

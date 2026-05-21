@@ -39,11 +39,13 @@ class ConnectionConfig {
     Set<String>? favoriteTables,
     List<SavedQuery>? savedQueries,
     List<String>? recentTables,
+    Map<String, int>? tableUseCounts,
     Map<String, Map<String, double>>? columnWidths,
     Map<String, List<QueryMessage>>? queryMessages,
   }) : favoriteTables = favoriteTables ?? const {},
        savedQueries = savedQueries ?? const [],
        recentTables = recentTables ?? const [],
+       tableUseCounts = tableUseCounts ?? const {},
        columnWidths = columnWidths ?? const {},
        queryMessages = queryMessages ?? const {};
 
@@ -90,6 +92,11 @@ class ConnectionConfig {
   /// catalog is loaded on connect.
   final List<String> recentTables;
 
+  /// Count of times each table has been opened, keyed by `schema.table`.
+  /// Drives the "Frequent" section in the sidebar — top-N most-used tables,
+  /// minus anything already pinned as a favourite.
+  final Map<String, int> tableUseCounts;
+
   /// User-set column widths, keyed by `schema.table` then by column name.
   /// Rehydrated into the open tab's columnWidths on openTable.
   final Map<String, Map<String, double>> columnWidths;
@@ -127,6 +134,7 @@ class ConnectionConfig {
     if (savedQueries.isNotEmpty)
       'queries': [for (final q in savedQueries) q.toJson()],
     if (recentTables.isNotEmpty) 'recentTables': recentTables,
+    if (tableUseCounts.isNotEmpty) 'tableUseCounts': tableUseCounts,
     if (columnWidths.isNotEmpty) 'columnWidths': columnWidths,
     if (queryMessages.isNotEmpty)
       'queryMessages': {
@@ -178,6 +186,12 @@ class ConnectionConfig {
       recentTables: j['recentTables'] is List
           ? [for (final v in j['recentTables'] as List) v as String]
           : null,
+      tableUseCounts: j['tableUseCounts'] is Map
+          ? <String, int>{
+              for (final e in (j['tableUseCounts'] as Map).entries)
+                e.key as String: (e.value as num).toInt(),
+            }
+          : null,
       columnWidths: j['columnWidths'] is Map
           ? <String, Map<String, double>>{
               for (final e in (j['columnWidths'] as Map).entries)
@@ -215,6 +229,7 @@ class ConnectionConfig {
     Set<String>? favoriteTables,
     List<SavedQuery>? savedQueries,
     List<String>? recentTables,
+    Map<String, int>? tableUseCounts,
     Map<String, Map<String, double>>? columnWidths,
     Map<String, List<QueryMessage>>? queryMessages,
   }) {
@@ -239,6 +254,7 @@ class ConnectionConfig {
       favoriteTables: favoriteTables ?? this.favoriteTables,
       savedQueries: savedQueries ?? this.savedQueries,
       recentTables: recentTables ?? this.recentTables,
+      tableUseCounts: tableUseCounts ?? this.tableUseCounts,
       columnWidths: columnWidths ?? this.columnWidths,
       queryMessages: queryMessages ?? this.queryMessages,
     );

@@ -112,7 +112,34 @@ class PerConnectionStore extends ChangeNotifier {
     _recents.insert(0, table);
     if (_recents.length > 12) _recents.removeRange(12, _recents.length);
     _persistRecents();
+    _bumpUseCount(table);
     notifyListeners();
+  }
+
+  void _bumpUseCount(DbTable table) {
+    _mutate((conn) {
+      final next = Map<String, int>.of(conn.tableUseCounts);
+      final key = table.qualifiedKey;
+      next[key] = (next[key] ?? 0) + 1;
+      return conn.copyWith(tableUseCounts: next);
+    });
+  }
+
+  /// Top-N most-opened tables for the active connection, descending by
+  /// total open count. Tables that no longer exist in the loaded catalog
+  /// are silently dropped. Caller is expected to subtract favourites.
+  List<DbTable> frequentTables({int limit = 5}) {
+    final conn = session.activeConnection;
+    if (conn == null || conn.tableUseCounts.isEmpty) return const [];
+    final lookup = {
+      for (final s in catalog.schemas)
+        for (final t in s.tables) t.qualifiedKey: t,
+    };
+    final ranked = conn.tableUseCounts.entries
+        .where((e) => lookup.containsKey(e.key))
+        .toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return [for (final e in ranked.take(limit)) lookup[e.key]!];
   }
 
   void persistQueryEdit(String id, String name, String sql) {
