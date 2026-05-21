@@ -43,7 +43,7 @@ void main() {
     });
 
     test('passing maxLength: null disables the cap', () {
-      final source = '"' + 'a' * 500 + '"';
+      final source = '"${'a' * 500}"';
       expect(jsonSpans(source, base, maxLength: null), isNotEmpty);
       // No assertion on which span is which; just confirming the call
       // accepts the override and still produces output.

@@ -838,33 +838,39 @@ class _ResultsGridState extends State<ResultsGrid> {
       ),
     );
 
-    return Container(
-      height: 28,
-      decoration: BoxDecoration(
-        color: AppColors.bgDeep,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      // ClipRect alone would force the header row to fit the viewport
-      // (Transform passes parent constraints through). OverflowBox grants
-      // it the same unbounded horizontal space the body's scroll view has,
-      // so the Row lays out at `totalWidth` and we translate it sideways
-      // to mirror the body's scroll offset.
-      child: ClipRect(
-        child: AnimatedBuilder(
-          animation: _hBody,
-          builder: (_, child) {
-            final offset = _hBody.hasClients ? _hBody.offset : 0.0;
-            return OverflowBox(
-              minWidth: 0,
-              maxWidth: double.infinity,
-              alignment: Alignment.topLeft,
-              child: Transform.translate(
-                offset: Offset(-offset, 0),
-                child: child,
-              ),
-            );
-          },
-          child: headerRow,
+    // RepaintBoundary isolates the header's pixels from the body's. The
+    // body's RepaintBoundary already prevents the reverse direction; this
+    // one stops a header repaint (sort indicator flicker, resize-handle
+    // hover) from invalidating the cells layer underneath.
+    return RepaintBoundary(
+      child: Container(
+        height: 28,
+        decoration: BoxDecoration(
+          color: AppColors.bgDeep,
+          border: Border(bottom: BorderSide(color: AppColors.border)),
+        ),
+        // ClipRect alone would force the header row to fit the viewport
+        // (Transform passes parent constraints through). OverflowBox grants
+        // it the same unbounded horizontal space the body's scroll view has,
+        // so the Row lays out at `totalWidth` and we translate it sideways
+        // to mirror the body's scroll offset.
+        child: ClipRect(
+          child: AnimatedBuilder(
+            animation: _hBody,
+            builder: (_, child) {
+              final offset = _hBody.hasClients ? _hBody.offset : 0.0;
+              return OverflowBox(
+                minWidth: 0,
+                maxWidth: double.infinity,
+                alignment: Alignment.topLeft,
+                child: Transform.translate(
+                  offset: Offset(-offset, 0),
+                  child: child,
+                ),
+              );
+            },
+            child: headerRow,
+          ),
         ),
       ),
     );
@@ -1006,15 +1012,16 @@ class _ResultsGridState extends State<ResultsGrid> {
       for (var c = 0; c < values.length; c++) _buildCell(row, c, values[c]),
     ];
 
-    return StatefulBuilder(
-      builder: (_, setRowState) {
-        var hovering = false;
-        return MouseRegion(
-          onEnter: (_) => setRowState(() => hovering = true),
-          onExit: (_) => setRowState(() => hovering = false),
-          child: ValueListenableBuilder<_GridSelection>(
-            valueListenable: _selection,
-            builder: (_, sel, _) {
+    // Hover lives on `_RowHoverScope`, a tiny StatefulWidget that
+    // outlives a single rebuild. Previously the row used a
+    // `StatefulBuilder` with `var hovering = false` captured inside the
+    // builder closure — that reset to false on every rebuild (selection
+    // change, parent notify), forcing MouseRegion's onEnter to re-fire
+    // each frame the pointer hovered.
+    return _RowHoverScope(
+      builder: (_, hovering) => ValueListenableBuilder<_GridSelection>(
+        valueListenable: _selection,
+        builder: (_, sel, _) {
               final segments = sel.rowSegments(row);
               final hasSelection = segments.isNotEmpty;
               final bg = hasSelection
@@ -1116,9 +1123,7 @@ class _ResultsGridState extends State<ResultsGrid> {
 
               return Stack(children: [body, ...overlays]);
             },
-          ),
-        );
-      },
+      ),
     );
   }
 
@@ -1219,6 +1224,41 @@ class _ResultsGridState extends State<ResultsGrid> {
             )
           : null,
       child: rendered,
+    );
+  }
+}
+
+/// Owns per-row hover state so it persists across the parent's rebuilds.
+///
+/// `MouseRegion` only fires `onEnter` when the pointer first crosses
+/// into the widget's bounds — if the rebuild swaps in a new element,
+/// the state of "the pointer is currently inside me" is lost. Holding
+/// it in a real [State] means selection changes, parent notifications,
+/// and ValueListenableBuilder updates inside the row all preserve the
+/// hover indicator instead of flickering it off and re-acquiring it on
+/// the next pointer event.
+class _RowHoverScope extends StatefulWidget {
+  const _RowHoverScope({required this.builder});
+
+  final Widget Function(BuildContext context, bool hovering) builder;
+
+  @override
+  State<_RowHoverScope> createState() => _RowHoverScopeState();
+}
+
+class _RowHoverScopeState extends State<_RowHoverScope> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) {
+        if (!_hover) setState(() => _hover = true);
+      },
+      onExit: (_) {
+        if (_hover) setState(() => _hover = false);
+      },
+      child: widget.builder(context, _hover),
     );
   }
 }

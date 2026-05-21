@@ -59,7 +59,7 @@ User memories under
 | Window chrome | `macos_window_utils` — transparent titlebar + full-size content |
 | Persistence | `path_provider` → JSON at `Application Support/connections.json` |
 | File save | `file_selector` (export) |
-| Scroll sync | `linked_scroll_controller` (header ↔ body in grid) |
+| Scroll sync | grid header reads body offset through an `AnimatedBuilder(animation: _hBody)` — `linked_scroll_controller`'s microtask hop felt rubbery on trackpad |
 
 ## Architecture
 
