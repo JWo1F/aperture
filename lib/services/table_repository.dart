@@ -46,9 +46,11 @@ class TableRepository {
     return (result.first.first as int?) ?? 0;
   }
 
-  /// One page of rows from a relation. Each row carries its `ctid` so the UI
-  /// can later target it for updates; the ctid is returned separately and is
-  /// never shown as a data column.
+  /// One page of rows from a relation. For regular tables each row carries
+  /// its `ctid` so the UI can later target it for updates; the ctid is
+  /// returned separately and is never shown as a data column. Views (and
+  /// materialized views) have no usable `ctid` for editing — for views it
+  /// doesn't exist at all and the query would fail — so we skip it.
   Future<QueryResult> fetchPage(
     DbTable table, {
     required int limit,
@@ -59,11 +61,16 @@ class TableRepository {
   }) async {
     final watch = Stopwatch()..start();
     final order = orderBy.trim().isEmpty ? '' : ' ORDER BY ${orderBy.trim()}';
-    final projection = _projection(selectList);
+    final withCtid = table.kind == DbRelationKind.table;
+    final projection = _projection(selectList, aliased: withCtid);
+    final ctidPrefix = withCtid ? 't.ctid::text AS __ctid, ' : '';
+    final fromClause = withCtid
+        ? 'FROM ${table.qualifiedName} AS t'
+        : 'FROM ${table.qualifiedName}';
     try {
       final result = await _db.execute(
-        'SELECT t.ctid::text AS __ctid, $projection '
-        'FROM ${table.qualifiedName} AS t'
+        'SELECT $ctidPrefix$projection '
+        '$fromClause'
         '${_whereClause(filter)}'
         '$order '
         'LIMIT $limit OFFSET $offset',
@@ -71,7 +78,8 @@ class TableRepository {
       );
       watch.stop();
 
-      final dataSchemas = result.schema.columns.sublist(1);
+      final dataSchemas =
+          withCtid ? result.schema.columns.sublist(1) : result.schema.columns;
       final columns = dataSchemas
           .map((c) => c.columnName ?? 'column')
           .toList();
@@ -85,11 +93,15 @@ class TableRepository {
           )
           .toList();
       final rows = <List<Object?>>[];
-      final rowIds = <String>[];
+      final rowIds = withCtid ? <String>[] : null;
       for (final row in result) {
         final values = row.toList();
-        rowIds.add(values.first as String);
-        rows.add(_decodeRow(values.sublist(1)));
+        if (withCtid) {
+          rowIds!.add(values.first as String);
+          rows.add(_decodeRow(values.sublist(1)));
+        } else {
+          rows.add(_decodeRow(values));
+        }
       }
 
       return QueryResult.rows(

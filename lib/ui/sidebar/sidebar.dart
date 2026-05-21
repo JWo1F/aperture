@@ -355,9 +355,16 @@ class _SchemaBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tables = schema.tables.where((t) => !t.isView).toList();
-    final views = schema.tables.where((t) => t.isView).toList();
-    final total = tables.length + views.length;
+    final tables = schema.tables
+        .where((t) => t.kind == DbRelationKind.table)
+        .toList();
+    final views = schema.tables
+        .where((t) => t.kind == DbRelationKind.view)
+        .toList();
+    final matViews = schema.tables
+        .where((t) => t.kind == DbRelationKind.materializedView)
+        .toList();
+    final total = tables.length + views.length + matViews.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -395,6 +402,20 @@ class _SchemaBlock extends StatelessWidget {
               _TreeRow(
                 indent: 1,
                 icon: Icon(Icons.visibility_outlined,
+                    size: 11, color: AppColors.info),
+                name: v.name,
+                active: v.qualifiedName == activeId,
+                onTap: () => state.openTable(v),
+                onSecondaryTapDown: (d) =>
+                    _openTableMenu(context, state, v, d.globalPosition),
+              ),
+          ],
+          if (matViews.isNotEmpty) ...[
+            _SubEyebrow(label: 'materialized views', count: matViews.length),
+            for (final v in matViews)
+              _TreeRow(
+                indent: 1,
+                icon: Icon(Icons.layers_outlined,
                     size: 11, color: AppColors.info),
                 name: v.name,
                 active: v.qualifiedName == activeId,
