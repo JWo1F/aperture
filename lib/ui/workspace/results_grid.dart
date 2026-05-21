@@ -113,6 +113,19 @@ class _ResultsGridState extends State<ResultsGrid> {
   List<double> _widths = [];
   List<String> _widthKeys = [];
 
+  /// Cache of `formatCellValue` outputs keyed by (row, col). Filled
+  /// lazily as cells scroll into view; cleared whenever a fresh result
+  /// page replaces the current one. Map/List values run jsonEncode in
+  /// `formatCellValue` and that allocation was repeated on every row
+  /// rebuild before this cache existed.
+  final Map<int, Map<int, String?>> _formatCache = {};
+
+  /// Cache of `jsonSpans` output for JSON cells. Each highlighter run
+  /// calls `highlight.parse`, which is the dominant per-cell cost in
+  /// JSON-heavy result sets; we hold onto the resulting span list until
+  /// the result reference turns over.
+  final Map<int, Map<int, List<InlineSpan>>> _spanCache = {};
+
   final TextStyle _baseText = AppTheme.mono(size: 11.5);
   final TextStyle _nullText = AppTheme.mono(
     size: 11.5,
@@ -140,17 +153,46 @@ class _ResultsGridState extends State<ResultsGrid> {
   @override
   void didUpdateWidget(ResultsGrid old) {
     super.didUpdateWidget(old);
-    if (!listEquals(widget.result.columns, _widthKeys)) {
-      _syncWidths();
-    } else if (!identical(old.result, widget.result)) {
-      _syncWidths();
-    }
-    // A new result set invalidates the row/column indices we held; clearing
-    // the selection avoids highlighting an arbitrary cell after pagination.
-    if (!identical(old.result, widget.result)) {
+    // A new result set invalidates the cell-formatting and JSON-span
+    // caches, the persistent selection, and any in-progress drag. Clear
+    // them *before* re-syncing widths — _syncWidths primes the format
+    // cache for sample rows in the new result via _autoWidth, so a
+    // post-sync clear would throw that work away.
+    final resultChanged = !identical(old.result, widget.result);
+    if (resultChanged) {
       _selection.value = _GridSelection.empty;
       _drag = null;
+      _formatCache.clear();
+      _spanCache.clear();
     }
+    if (!listEquals(widget.result.columns, _widthKeys) || resultChanged) {
+      _syncWidths();
+    }
+  }
+
+  /// Returns the formatted text for [row], [column]. Cached per result
+  /// page; map/list values run jsonEncode once and the result is reused
+  /// across rebuilds (selection changes, hover toggles, horizontal
+  /// scrolls).
+  String? _formatAt(int row, int column, Object? original) {
+    final byRow = _formatCache.putIfAbsent(row, () => <int, String?>{});
+    if (byRow.containsKey(column)) return byRow[column];
+    final formatted = formatCellValue(original);
+    byRow[column] = formatted;
+    return formatted;
+  }
+
+  /// Returns the highlighted JSON spans for [row], [column] using
+  /// [source] as the input. Source is bounded to 255 chars by
+  /// `jsonSpans` itself; everything past that is plain text. Cached per
+  /// result page in the same way as `_formatAt`.
+  List<InlineSpan> _spansAt(int row, int column, String source) {
+    final byRow = _spanCache.putIfAbsent(row, () => <int, List<InlineSpan>>{});
+    final cached = byRow[column];
+    if (cached != null) return cached;
+    final spans = jsonSpans(source, _baseText);
+    byRow[column] = spans;
+    return spans;
   }
 
   /// Default width = widest visible cell (and the header) in this column,
@@ -174,7 +216,9 @@ class _ResultsGridState extends State<ResultsGrid> {
     final n = rows.length < _autoSampleRows ? rows.length : _autoSampleRows;
     for (var r = 0; r < n; r++) {
       final raw = rows[r][columnIndex];
-      final formatted = formatCellValue(raw);
+      // Use the cache so sample-row formatting work is reused when the
+      // user scrolls those rows into view a moment later.
+      final formatted = _formatAt(r, columnIndex, raw);
       final text = formatted ?? 'NULL';
       final sample = text.length > 200 ? text.substring(0, 200) : text;
       _measurer
@@ -1099,9 +1143,13 @@ class _ResultsGridState extends State<ResultsGrid> {
       tooltipUseful = false;
       tooltipText = 'DEFAULT';
     } else {
+      // Pending edits (raw user-typed strings) bypass the cache — they
+      // can change on every keystroke, so caching by (row, col) would
+      // keep stale text. Original values flow through `_formatAt`, which
+      // memoises the jsonEncode / toString result per cell.
       final String? displayValue = pending is CellLiteral
           ? pending.value
-          : formatCellValue(original);
+          : _formatAt(row, column, original);
       final bool isNull = displayValue == null;
 
       if (isNull) {
@@ -1115,7 +1163,7 @@ class _ResultsGridState extends State<ResultsGrid> {
         tooltipText = 'NULL';
       } else if (!isEdited && (original is Map || original is List)) {
         content = Text.rich(
-          TextSpan(children: jsonSpans(displayValue, _baseText)),
+          TextSpan(children: _spansAt(row, column, displayValue)),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         );

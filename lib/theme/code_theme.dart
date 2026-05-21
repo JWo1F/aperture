@@ -41,11 +41,32 @@ Map<String, TextStyle> get apertureCodeStyles => {
 /// [apertureCodeStyles] palette — same look as the cell-picker's JSON
 /// editor and the SQL editor. Used by the table grid to render Map/List
 /// cell values where dropping in a full `CodeEditor` isn't viable.
-List<InlineSpan> jsonSpans(String source, TextStyle base) {
+///
+/// Sources beyond [maxLength] are only highlighted up to that boundary;
+/// the tail is appended as a plain [base]-styled span. Grid cells render
+/// single-line with ellipsis, so the user never sees past a few hundred
+/// pixels of text — running the tokenizer over a 10kB JSON blob just to
+/// throw away 99% of the output would tank scroll perf. Pass a larger
+/// limit (or `null`) only where the full source is actually displayed.
+List<InlineSpan> jsonSpans(
+  String source,
+  TextStyle base, {
+  int? maxLength = 255,
+}) {
   if (source.isEmpty) return const [];
   _ensureJsonRegistered();
-  final parsed = highlight.parse(source, language: 'json');
-  return highlightNodesToSpans(parsed.nodes, base, apertureCodeStyles);
+  final cap = maxLength;
+  if (cap == null || source.length <= cap) {
+    final parsed = highlight.parse(source, language: 'json');
+    return highlightNodesToSpans(parsed.nodes, base, apertureCodeStyles);
+  }
+  final head = source.substring(0, cap);
+  final tail = source.substring(cap);
+  final parsed = highlight.parse(head, language: 'json');
+  return [
+    ...highlightNodesToSpans(parsed.nodes, base, apertureCodeStyles),
+    TextSpan(text: tail, style: base),
+  ];
 }
 
 bool _jsonRegistered = false;
