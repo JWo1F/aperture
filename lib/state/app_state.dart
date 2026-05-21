@@ -348,6 +348,15 @@ class AppState extends ChangeNotifier {
   void revertCellEdit(TableTab tab, int row, int column) =>
       tabsController.revertCellEdit(tab, row, column);
 
+  void deleteRow(TableTab tab, int row) =>
+      tabsController.deleteRow(tab, row);
+
+  void restoreDeletedRow(TableTab tab, int row) =>
+      tabsController.restoreDeletedRow(tab, row);
+
+  void duplicateRow(TableTab tab, int row) =>
+      tabsController.duplicateRow(tab, row);
+
   void resetTableEdits(TableTab tab) => tabsController.resetTableEdits(tab);
 
   List<String> previewEditStatements(TableTab tab) =>

@@ -26,6 +26,11 @@ class ResultsGrid extends StatefulWidget {
     this.edits,
     this.onEditCell,
     this.onRevertEdit,
+    this.deletedRows,
+    this.inserts,
+    this.onDeleteRow,
+    this.onRestoreDeletedRow,
+    this.onDuplicateRow,
     this.order,
     this.onSortColumn,
     this.onSetSort,
@@ -44,6 +49,23 @@ class ResultsGrid extends StatefulWidget {
   final Map<CellEdit, CellEditValue>? edits;
   final void Function(int row, int column, CellEditValue value)? onEditCell;
   final void Function(int row, int column)? onRevertEdit;
+
+  /// Row indexes (in [result.rows]) marked for DELETE on Apply. Rendered
+  /// with a red tint + strikethrough. Right-click → Restore to undo.
+  final Set<int>? deletedRows;
+
+  /// Synthetic INSERT rows rendered after the persistent rows. Index
+  /// [result.rows.length + i] in the grid maps to [inserts[i]].
+  final List<PendingInsert>? inserts;
+
+  /// Mark [row] for DELETE (persistent rows) or discard the pending
+  /// insert at the virtual row index.
+  final void Function(int row)? onDeleteRow;
+  final void Function(int row)? onRestoreDeletedRow;
+
+  /// Queue a duplicate of [row] as a pending insert. PK columns are
+  /// stamped DEFAULT by the state layer.
+  final void Function(int row)? onDuplicateRow;
   final List<OrderTerm>? order;
   final void Function(String column)? onSortColumn;
   final void Function(String column, bool descending)? onSetSort;
@@ -113,6 +135,78 @@ class _ResultsGridState extends State<ResultsGrid> {
 
   int? get _selCol => _selection.value.focus?.$2;
 
+  int get _persistentRowCount => widget.result.rows.length;
+
+  /// Interleaved render order: each persistent row, followed by every
+  /// pending insert anchored to it, with un-anchored inserts appended at
+  /// the end. Recomputed in [_syncSlots] whenever the result or the
+  /// inserts list changes — callers that index by "row" address slots
+  /// here, not the raw result/insert arrays.
+  List<_Slot> _slots = const [];
+
+  void _syncSlots() {
+    final inserts = widget.inserts;
+    final persistent = _persistentRowCount;
+    if (inserts == null || inserts.isEmpty) {
+      _slots = [for (var r = 0; r < persistent; r++) _Slot.persistent(r)];
+      return;
+    }
+    final anchored = <int, List<int>>{};
+    final unanchored = <int>[];
+    for (var i = 0; i < inserts.length; i++) {
+      final after = inserts[i].afterRow;
+      if (after != null && after >= 0 && after < persistent) {
+        anchored.putIfAbsent(after, () => <int>[]).add(i);
+      } else {
+        unanchored.add(i);
+      }
+    }
+    final out = <_Slot>[];
+    for (var r = 0; r < persistent; r++) {
+      out.add(_Slot.persistent(r));
+      final group = anchored[r];
+      if (group != null) {
+        for (final i in group) {
+          out.add(_Slot.insert(i));
+        }
+      }
+    }
+    for (final i in unanchored) {
+      out.add(_Slot.insert(i));
+    }
+    _slots = out;
+  }
+
+  int get _totalRowCount => _slots.length;
+
+  bool _isInsertRow(int row) => _slots[row].isInsert;
+
+  bool _isDeletedRow(int row) {
+    final slot = _slots[row];
+    if (slot.isInsert) return false;
+    return widget.deletedRows?.contains(slot.sourceIdx) ?? false;
+  }
+
+  /// Translates a slot row index to the row index that the state layer
+  /// expects in its callbacks (persistent → original row index; insert →
+  /// `persistentRowCount + insertIdx`).
+  int _stateRowFor(int row) {
+    final slot = _slots[row];
+    return slot.isInsert ? _persistentRowCount + slot.sourceIdx : slot.sourceIdx;
+  }
+
+  /// Effective edit for a cell — pending insert values for virtual rows,
+  /// the [edits] map for persistent rows.
+  CellEditValue? _pendingFor(int row, int column) {
+    final slot = _slots[row];
+    if (slot.isInsert) {
+      final inserts = widget.inserts;
+      if (inserts == null || slot.sourceIdx >= inserts.length) return null;
+      return inserts[slot.sourceIdx].values[widget.result.columns[column]];
+    }
+    return widget.edits?[CellEdit(slot.sourceIdx, column)];
+  }
+
   /// In-progress drag anchor: the cell where the pointer went down. While
   /// non-null every `onPointerMove` extends the last range from this point.
   ({int row, int col})? _drag;
@@ -158,6 +252,7 @@ class _ResultsGridState extends State<ResultsGrid> {
   void initState() {
     super.initState();
     _syncWidths();
+    _syncSlots();
   }
 
   @override
@@ -178,26 +273,33 @@ class _ResultsGridState extends State<ResultsGrid> {
     if (!listEquals(widget.result.columns, _widthKeys) || resultChanged) {
       _syncWidths();
     }
+    // Inserts/deletes don't shift _formatCache (keyed by sourceIdx) but
+    // they do change which slots map to which sources, so re-derive on
+    // every widget update — cheap (O(rows + inserts)).
+    _syncSlots();
   }
 
-  /// Returns the formatted text for [row], [column]. Cached per result
-  /// page; map/list values run jsonEncode once and the result is reused
-  /// across rebuilds (selection changes, hover toggles, horizontal
-  /// scrolls).
-  String? _formatAt(int row, int column, Object? original) {
-    final byRow = _formatCache.putIfAbsent(row, () => <int, String?>{});
+  /// Returns the formatted text for the persistent row [sourceRow],
+  /// [column]. Cached per result page — keying by source row (not slot
+  /// row) keeps the cache valid as the user adds, removes, or anchors
+  /// pending inserts that reorder slots without touching `result.rows`.
+  String? _formatAt(int sourceRow, int column, Object? original) {
+    final byRow = _formatCache.putIfAbsent(sourceRow, () => <int, String?>{});
     if (byRow.containsKey(column)) return byRow[column];
     final formatted = formatCellValue(original);
     byRow[column] = formatted;
     return formatted;
   }
 
-  /// Returns the highlighted JSON spans for [row], [column] using
-  /// [source] as the input. Source is bounded to 255 chars by
-  /// `jsonSpans` itself; everything past that is plain text. Cached per
-  /// result page in the same way as `_formatAt`.
-  List<InlineSpan> _spansAt(int row, int column, String source) {
-    final byRow = _spanCache.putIfAbsent(row, () => <int, List<InlineSpan>>{});
+  /// Returns the highlighted JSON spans for [sourceRow], [column] using
+  /// [source] as the input. Source is bounded to 255 chars by `jsonSpans`
+  /// itself; everything past that is plain text. Cached per result page
+  /// in the same way as [_formatAt], keyed by source row.
+  List<InlineSpan> _spansAt(int sourceRow, int column, String source) {
+    final byRow = _spanCache.putIfAbsent(
+      sourceRow,
+      () => <int, List<InlineSpan>>{},
+    );
     final cached = byRow[column];
     if (cached != null) return cached;
     final spans = jsonSpans(source, _baseText);
@@ -332,10 +434,14 @@ class _ResultsGridState extends State<ResultsGrid> {
   }
 
   String _cellTextAt(int row, int column) {
-    final pending = widget.edits?[CellEdit(row, column)];
+    final pending = _pendingFor(row, column);
     if (pending is CellLiteral) return pending.value ?? 'NULL';
     if (pending is CellDefault) return 'DEFAULT';
-    final formatted = formatCellValue(widget.result.rows[row][column]);
+    final slot = _slots[row];
+    if (slot.isInsert) return 'NULL';
+    final formatted = formatCellValue(
+      widget.result.rows[slot.sourceIdx][column],
+    );
     return formatted ?? 'NULL';
   }
 
@@ -430,7 +536,7 @@ class _ResultsGridState extends State<ResultsGrid> {
   /// extends the last range from the anchor instead of collapsing to a
   /// single cell.
   bool _moveSelection(LogicalKeyboardKey key) {
-    final rows = widget.result.rows.length;
+    final rows = _totalRowCount;
     final cols = widget.result.columns.length;
     if (rows == 0 || cols == 0) return false;
 
@@ -533,7 +639,7 @@ class _ResultsGridState extends State<ResultsGrid> {
     final contentY = localPos.dy + (_vBody.hasClients ? _vBody.offset : 0);
     if (contentY < 0) return null;
     final row = (contentY / _rowHeight).floor();
-    if (row < 0 || row >= widget.result.rows.length) return null;
+    if (row < 0 || row >= _totalRowCount) return null;
 
     return (row, col);
   }
@@ -570,27 +676,33 @@ class _ResultsGridState extends State<ResultsGrid> {
     Object? original,
   ) {
     if (widget.onEditCell == null) return;
+    if (_isDeletedRow(row)) return;
 
     final columnName = widget.result.columns[column];
-    final key = CellEdit(row, column);
-    final pending = widget.edits?[key];
     final meta = widget.columnMeta?[columnName];
+    final isInsert = _isInsertRow(row);
+    final pending = _pendingFor(row, column);
 
     showCellPicker(
       bodyCtx,
       anchorRect: _cellRect(bodyCtx, row, column),
       target: CellEditTarget(
         columnName: columnName,
-        originalValue: original,
+        // Insert rows have no DB-side original — type detection falls back
+        // on columnDataType.
+        originalValue: isInsert ? null : original,
         pendingEdit: pending,
         canBeNull: meta?.nullable ?? true,
         hasDefault: meta?.hasDefault ?? false,
         columnDataType: meta?.dataType,
       ),
-      onCommit: (value) => widget.onEditCell!(row, column, value),
-      onRevert: pending == null
+      onCommit: (value) =>
+          widget.onEditCell!(_stateRowFor(row), column, value),
+      // Insert-row cells don't have a "revert to original" — the row
+      // itself is the pending operation. Use Delete row to discard it.
+      onRevert: (isInsert || pending == null)
           ? null
-          : () => widget.onRevertEdit?.call(row, column),
+          : () => widget.onRevertEdit?.call(_stateRowFor(row), column),
     );
   }
 
@@ -654,8 +766,9 @@ class _ResultsGridState extends State<ResultsGrid> {
     Object? original,
   ) {
     final columnName = widget.result.columns[column];
-    final key = CellEdit(row, column);
-    final pending = widget.edits?[key];
+    final isInsert = _isInsertRow(row);
+    final isDeleted = _isDeletedRow(row);
+    final pending = _pendingFor(row, column);
     final isEdited = pending != null;
     final meta = widget.columnMeta?[columnName];
     final canBeNull = meta?.nullable ?? true;
@@ -663,11 +776,16 @@ class _ResultsGridState extends State<ResultsGrid> {
 
     final String? displayValue = pending is CellLiteral
         ? pending.value
-        : (pending is CellDefault ? null : formatCellValue(original));
+        : (pending is CellDefault
+              ? null
+              : (isInsert ? null : formatCellValue(original)));
 
     void copy(String text) => Clipboard.setData(ClipboardData(text: text));
 
     final findOwner = widget.findRowOwner?.call(columnName);
+    final canMutateCell =
+        widget.editable && widget.onEditCell != null && !isDeleted;
+    final canMutateRow = widget.editable;
 
     final entries = <CmEntry>[
       CmItem(
@@ -676,7 +794,7 @@ class _ResultsGridState extends State<ResultsGrid> {
         shortcut: '⌘C',
         onTap: () => copy(displayValue ?? 'NULL'),
       ),
-      if (original is Map || original is List)
+      if (!isInsert && (original is Map || original is List))
         CmItem(
           icon: Icons.data_object,
           label: 'Copy pretty JSON',
@@ -697,7 +815,8 @@ class _ResultsGridState extends State<ResultsGrid> {
         onTap: () => copy('$columnName = ${displayValue ?? 'NULL'}'),
       ),
       const CmDivider(),
-      if (widget.foreignKeys?[columnName] != null &&
+      if (!isInsert &&
+          widget.foreignKeys?[columnName] != null &&
           widget.onFollowForeignKey != null) ...[
         CmItem(
           icon: Icons.north_east,
@@ -709,7 +828,7 @@ class _ResultsGridState extends State<ResultsGrid> {
         ),
         const CmDivider(),
       ],
-      if (findOwner != null && widget.onFindRow != null) ...[
+      if (!isInsert && findOwner != null && widget.onFindRow != null) ...[
         CmItem(
           icon: Icons.search,
           label: 'Find row in ${findOwner.qualifiedKey}',
@@ -717,7 +836,7 @@ class _ResultsGridState extends State<ResultsGrid> {
         ),
         const CmDivider(),
       ],
-      if (widget.editable && widget.onEditCell != null) ...[
+      if (canMutateCell) ...[
         CmItem(
           icon: Icons.edit_outlined,
           label: 'Edit cell',
@@ -728,23 +847,64 @@ class _ResultsGridState extends State<ResultsGrid> {
           icon: Icons.not_interested,
           label: canBeNull ? 'Set NULL' : 'Set NULL (column is NOT NULL)',
           enabled: canBeNull,
-          onTap: () => widget.onEditCell!(row, column, const CellLiteral(null)),
+          onTap: () => widget.onEditCell!(
+            _stateRowFor(row),
+            column,
+            const CellLiteral(null),
+          ),
         ),
         CmItem(
           icon: Icons.settings_backup_restore,
           label: hasDefault ? 'Set DEFAULT' : 'Set DEFAULT (no default value)',
           enabled: hasDefault,
-          onTap: () => widget.onEditCell!(row, column, const CellDefault()),
+          onTap: () => widget.onEditCell!(
+            _stateRowFor(row),
+            column,
+            const CellDefault(),
+          ),
         ),
-        if (isEdited && widget.onRevertEdit != null)
+        if (!isInsert && isEdited && widget.onRevertEdit != null)
           CmItem(
             icon: Icons.undo,
             label: 'Revert change',
-            onTap: () => widget.onRevertEdit!(row, column),
+            onTap: () => widget.onRevertEdit!(_stateRowFor(row), column),
           ),
         const CmDivider(),
       ],
-      if (widget.onAddFilter != null) ...[
+      if (canMutateRow) ...[
+        if (isInsert)
+          CmItem(
+            icon: Icons.delete_outline,
+            label: 'Discard new row',
+            enabled: widget.onDeleteRow != null,
+            danger: true,
+            onTap: () => widget.onDeleteRow?.call(_stateRowFor(row)),
+          )
+        else if (isDeleted)
+          CmItem(
+            icon: Icons.restore_from_trash,
+            label: 'Restore row',
+            enabled: widget.onRestoreDeletedRow != null,
+            onTap: () =>
+                widget.onRestoreDeletedRow?.call(_stateRowFor(row)),
+          )
+        else
+          CmItem(
+            icon: Icons.delete_outline,
+            label: 'Delete row',
+            enabled: widget.onDeleteRow != null,
+            danger: true,
+            onTap: () => widget.onDeleteRow?.call(_stateRowFor(row)),
+          ),
+        CmItem(
+          icon: Icons.content_copy,
+          label: 'Duplicate row',
+          enabled: widget.onDuplicateRow != null && !isDeleted,
+          onTap: () => widget.onDuplicateRow?.call(_stateRowFor(row)),
+        ),
+        const CmDivider(),
+      ],
+      if (!isInsert && widget.onAddFilter != null) ...[
         CmItem(
           icon: Icons.filter_alt_outlined,
           label: 'Filter: $columnName = value',
@@ -801,7 +961,7 @@ class _ResultsGridState extends State<ResultsGrid> {
       children: [
         _buildHeader(result.columns, dataWidth),
         Expanded(
-          child: result.rows.isEmpty
+          child: _totalRowCount == 0
               ? const EmptyState(
                   icon: Icons.inbox_outlined,
                   title: 'No rows',
@@ -928,7 +1088,7 @@ class _ResultsGridState extends State<ResultsGrid> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildIndexColumn(result.rows.length),
+                _buildIndexColumn(_totalRowCount),
                 Expanded(child: _buildDataArea(result, dataWidth)),
               ],
             ),
@@ -958,11 +1118,18 @@ class _ResultsGridState extends State<ResultsGrid> {
             itemCount: rowCount,
             itemExtent: _rowHeight,
             addAutomaticKeepAlives: false,
-            itemBuilder: (_, r) => _IndexCell(
-              row: r,
-              selection: _selection,
-              height: _rowHeight,
-            ),
+            itemBuilder: (_, r) {
+              final slot = _slots[r];
+              return _IndexCell(
+                row: r,
+                selection: _selection,
+                height: _rowHeight,
+                isInsert: slot.isInsert,
+                isDeleted: !slot.isInsert &&
+                    (widget.deletedRows?.contains(slot.sourceIdx) ?? false),
+                label: slot.isInsert ? '+' : '${slot.sourceIdx + 1}',
+              );
+            },
           ),
         ),
       ),
@@ -1046,14 +1213,19 @@ class _ResultsGridState extends State<ResultsGrid> {
                         },
                         child: ListView.builder(
                           controller: _vBody,
-                          itemCount: result.rows.length,
+                          itemCount: _totalRowCount,
                           itemExtent: _rowHeight,
                           // Rows hold no local state (selection lives in a
                           // ValueNotifier). Skipping per-child keepalives
                           // saves a widget allocation per row that scrolls in.
                           addAutomaticKeepAlives: false,
-                          itemBuilder: (_, r) =>
-                              _buildRow(r, result.rows[r], bodyWidth),
+                          itemBuilder: (_, r) {
+                            final slot = _slots[r];
+                            final values = slot.isInsert
+                                ? const <Object?>[]
+                                : result.rows[slot.sourceIdx];
+                            return _buildRow(r, values, bodyWidth);
+                          },
                         ),
                       ),
                     );
@@ -1074,9 +1246,13 @@ class _ResultsGridState extends State<ResultsGrid> {
     // Positioned widget over the active column) instead of giving every
     // visible cell its own ValueListenableBuilder + Stack — that previously
     // meant ~200 listener subscriptions churning on each scroll tick.
+    final colCount = widget.result.columns.length;
     final cells = <Widget>[
-      for (var c = 0; c < values.length; c++) _buildCell(row, c, values[c]),
+      for (var c = 0; c < colCount; c++)
+        _buildCell(row, c, c < values.length ? values[c] : null),
     ];
+    final isInsert = _isInsertRow(row);
+    final isDeleted = _isDeletedRow(row);
 
     // Hover lives on `_RowHoverScope`, a tiny StatefulWidget that
     // outlives a single rebuild. Previously the row used a
@@ -1090,25 +1266,62 @@ class _ResultsGridState extends State<ResultsGrid> {
         builder: (_, sel, _) {
               final segments = sel.rowSegments(row);
               final hasSelection = segments.isNotEmpty;
-              final bg = hasSelection
+              // Insert / delete row tints layer below the selection tint so
+              // a selected pending-insert still reads as selected — the
+              // row-state colour stays visible through the selection wash.
+              final Color baseBg = isInsert
+                  ? const Color(0x145B7CFA)
+                  : isDeleted
+                  ? const Color(0x1FE05D5D)
+                  : Colors.transparent;
+              final Color hoverBg = hovering
+                  ? const Color(0x06FFFFFF)
+                  : Colors.transparent;
+              final Color selectionBg = hasSelection
                   ? const Color(0x1A5B7CFA)
-                  : (hovering ? const Color(0x06FFFFFF) : Colors.transparent);
+                  : Colors.transparent;
+              final bg = Color.alphaBlend(
+                selectionBg,
+                Color.alphaBlend(hoverBg, baseBg),
+              );
 
               final body = Container(
                 width: rowWidth,
                 decoration: BoxDecoration(
                   color: bg,
-                  border: Border(bottom: BorderSide(color: AppColors.hairline)),
+                  border: Border(
+                    bottom: BorderSide(color: AppColors.hairline),
+                  ),
                 ),
                 child: Row(children: cells),
               );
 
-              if (!hasSelection) return body;
+              // Insert / delete left stripe rides on top of the row content
+              // as a Positioned overlay — using a left BorderSide on the
+              // body would shrink the row's inner width by 2px and the
+              // unchanged cells layout would overflow.
+              final overlays = <Widget>[];
+              if (isInsert || isDeleted) {
+                overlays.add(
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 2,
+                    child: IgnorePointer(
+                      child: ColoredBox(
+                        color: isInsert ? AppColors.accent : AppColors.error,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              if (!hasSelection && overlays.isEmpty) return body;
 
               // Layer a tint over each contiguous selected column segment
               // and, if this row owns the focus cell, draw the indigo ring
               // on top.
-              final overlays = <Widget>[];
               for (final segment in segments) {
                 final (sc0, sc1) = segment;
                 var x = 0.0;
@@ -1166,9 +1379,14 @@ class _ResultsGridState extends State<ResultsGrid> {
   }
 
   Widget _buildCell(int row, int column, Object? original) {
-    final key = CellEdit(row, column);
-    final pending = widget.edits?[key];
-    final isEdited = pending != null;
+    final slot = _slots[row];
+    final pending = _pendingFor(row, column);
+    final isInsert = slot.isInsert;
+    final isDeleted =
+        !isInsert && (widget.deletedRows?.contains(slot.sourceIdx) ?? false);
+    // Insert rows don't get the per-cell accent stripe — the whole row is
+    // already accent-tinted, so per-cell highlighting becomes noise.
+    final isEdited = pending != null && !isInsert;
 
     // Decide content based on the cell's effective state.
     final Widget content;
@@ -1192,7 +1410,7 @@ class _ResultsGridState extends State<ResultsGrid> {
       // memoises the jsonEncode / toString result per cell.
       final String? displayValue = pending is CellLiteral
           ? pending.value
-          : _formatAt(row, column, original);
+          : _formatAt(slot.sourceIdx, column, original);
       final bool isNull = displayValue == null;
 
       if (isNull) {
@@ -1206,7 +1424,7 @@ class _ResultsGridState extends State<ResultsGrid> {
         tooltipText = 'NULL';
       } else if (!isEdited && (original is Map || original is List)) {
         content = Text.rich(
-          TextSpan(children: _spansAt(row, column, displayValue)),
+          TextSpan(children: _spansAt(slot.sourceIdx, column, displayValue)),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         );
@@ -1248,7 +1466,7 @@ class _ResultsGridState extends State<ResultsGrid> {
     // GestureDetector hit-tests (row, column) from the click's local
     // position. Cells reduce to a sized Container, which keeps the per-row
     // widget allocation small enough for fast scrolling.
-    return Container(
+    final cell = Container(
       width: _widths[column],
       height: _rowHeight,
       alignment: Alignment.centerLeft,
@@ -1263,6 +1481,9 @@ class _ResultsGridState extends State<ResultsGrid> {
           : null,
       child: rendered,
     );
+    // Dim deleted cells without losing legibility — pairs with the red
+    // row tint + stripe for an unmistakable "going away" read.
+    return isDeleted ? Opacity(opacity: 0.55, child: cell) : cell;
   }
 }
 
@@ -1283,11 +1504,17 @@ class _IndexCell extends StatelessWidget {
     required this.row,
     required this.selection,
     required this.height,
+    required this.label,
+    this.isInsert = false,
+    this.isDeleted = false,
   });
 
   final int row;
   final ValueListenable<_GridSelection> selection;
   final double height;
+  final bool isInsert;
+  final bool isDeleted;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -1295,6 +1522,16 @@ class _IndexCell extends StatelessWidget {
       valueListenable: selection,
       builder: (_, sel, _) {
         final hasSelection = sel.rowSegments(row).isNotEmpty;
+        final Color color = isInsert
+            ? AppColors.accent
+            : isDeleted
+            ? AppColors.error
+            : hasSelection
+            ? AppColors.accent
+            : AppColors.text4;
+        final FontWeight weight = (isInsert || isDeleted || hasSelection)
+            ? FontWeight.w600
+            : FontWeight.w400;
         return SizedBox(
           height: height,
           child: Container(
@@ -1304,12 +1541,8 @@ class _IndexCell extends StatelessWidget {
               border: Border(bottom: BorderSide(color: AppColors.hairline)),
             ),
             child: Text(
-              '${row + 1}',
-              style: AppTheme.mono(
-                size: 10,
-                color: hasSelection ? AppColors.accent : AppColors.text4,
-                weight: hasSelection ? FontWeight.w600 : FontWeight.w400,
-              ),
+              label,
+              style: AppTheme.mono(size: 10, color: color, weight: weight),
             ),
           ),
         );
@@ -1553,6 +1786,18 @@ class _HeaderCellState extends State<_HeaderCell> {
 
     return TextSpan(children: lines);
   }
+}
+
+/// One slot in the visual row order — either a persistent row (index
+/// into `widget.result.rows`) or a pending insert (index into
+/// `widget.inserts`). Built once per render in `_syncSlots` so the
+/// rest of the grid can treat row indexing as a single linear axis.
+class _Slot {
+  const _Slot.persistent(this.sourceIdx) : isInsert = false;
+  const _Slot.insert(this.sourceIdx) : isInsert = true;
+
+  final bool isInsert;
+  final int sourceIdx;
 }
 
 /// One rectangular block of selected cells, stored in canonical form

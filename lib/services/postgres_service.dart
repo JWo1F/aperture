@@ -9,6 +9,7 @@ import 'introspector.dart';
 import 'safe_query.dart';
 import 'table_repository.dart';
 
+export '../models/cell_edit.dart' show EditBatch, PendingInsert;
 export 'table_repository.dart'
     show
         TableRepository,
@@ -221,16 +222,13 @@ class PostgresService {
 
   Future<String> loadTableDdl(DbTable table) => tableRepository.loadDdl(table);
 
-  Future<int> applyTableEdits(
-    DbTable table,
-    Map<String, Map<String, CellEditValue>> updatesByCtid,
-  ) async {
+  Future<int> applyTableEdits(DbTable table, EditBatch batch) async {
     final watch = Stopwatch()..start();
     try {
-      final affected = await tableRepository.applyEdits(table, updatesByCtid);
+      final affected = await tableRepository.applyEdits(table, batch);
       watch.stop();
       onEditApplied?.call(
-        statementCount: updatesByCtid.length,
+        statementCount: batch.statementCount,
         elapsed: watch.elapsed,
         error: null,
       );
@@ -238,7 +236,7 @@ class PostgresService {
     } catch (e) {
       watch.stop();
       onEditApplied?.call(
-        statementCount: updatesByCtid.length,
+        statementCount: batch.statementCount,
         elapsed: watch.elapsed,
         error: e.toString(),
       );

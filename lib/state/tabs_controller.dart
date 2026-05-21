@@ -49,11 +49,12 @@ class TabsController extends ChangeNotifier {
   WorkspaceTab? get activeTab =>
       _tabs.isEmpty ? null : _tabs[_activeIndex.clamp(0, _tabs.length - 1)];
 
-  /// Total pending cell edits across every open TableTab.
+  /// Total pending operations (cell edits + row deletes + row inserts)
+  /// across every open TableTab.
   int get unappliedEditCount {
     var n = 0;
     for (final t in _tabs) {
-      if (t is TableTab) n += t.edits.length;
+      if (t is TableTab) n += t.pendingOpCount;
     }
     return n;
   }
@@ -402,6 +403,15 @@ class TabsController extends ChangeNotifier {
   void setCellEdit(TableTab tab, int row, int column, CellEditValue value) {
     final result = tab.result;
     if (result == null) return;
+    final insertIdx = row - result.rows.length;
+    if (insertIdx >= 0) {
+      if (insertIdx >= tab.inserts.length) return;
+      final columnName = result.columns[column];
+      tab.inserts[insertIdx].values[columnName] = value;
+      tab.markChanged();
+      notifyListeners();
+      return;
+    }
     final original = result.rows[row][column];
     final originalText = formatCellValue(original);
     final key = CellEdit(row, column);
@@ -416,6 +426,14 @@ class TabsController extends ChangeNotifier {
   }
 
   void revertCellEdit(TableTab tab, int row, int column) {
+    final result = tab.result;
+    if (result == null) return;
+    final insertIdx = row - result.rows.length;
+    if (insertIdx >= 0) {
+      // No "revert" for an insert-row cell — the row itself is what's
+      // pending. Use deleteRow / Delete row to discard it.
+      return;
+    }
     tab.edits.remove(CellEdit(row, column));
     tab.markChanged();
     notifyListeners();
@@ -423,20 +441,120 @@ class TabsController extends ChangeNotifier {
 
   void resetTableEdits(TableTab tab) {
     tab.edits.clear();
+    tab.deletedRows.clear();
+    tab.inserts.clear();
     tab.markChanged();
     notifyListeners();
   }
 
-  List<String> previewEditStatements(TableTab tab) {
+  /// Mark a persistent row for DELETE, or discard a virtual insert row.
+  /// Cell edits on the deleted row are dropped — DELETE overrides UPDATE.
+  void deleteRow(TableTab tab, int row) {
     final result = tab.result;
-    if (result?.rowIds == null || tab.edits.isEmpty) return const [];
+    if (result == null) return;
+    final insertIdx = row - result.rows.length;
+    if (insertIdx >= 0) {
+      if (insertIdx >= tab.inserts.length) return;
+      tab.inserts.removeAt(insertIdx);
+      tab.markChanged();
+      notifyListeners();
+      return;
+    }
+    if (row < 0 || row >= result.rows.length) return;
+    tab.deletedRows.add(row);
+    tab.edits.removeWhere((key, _) => key.row == row);
+    tab.markChanged();
+    notifyListeners();
+  }
+
+  void restoreDeletedRow(TableTab tab, int row) {
+    if (tab.deletedRows.remove(row)) {
+      tab.markChanged();
+      notifyListeners();
+    }
+  }
+
+  /// Queue a duplicate of [row] as a pending INSERT. Primary-key columns
+  /// (resolved through the catalog) are stamped as DEFAULT so the database
+  /// generates fresh keys. The new row anchors immediately below its
+  /// source so the duplicate is visible in context, not appended at the
+  /// far end of the page.
+  void duplicateRow(TableTab tab, int row) {
+    final result = tab.result;
+    if (result == null) return;
+    final columns = result.columns;
+    final pkColumns = <String>{
+      for (final c in (catalog.columnsFor(tab.table) ?? const <DbColumn>[]))
+        if (c.isPrimaryKey) c.name,
+    };
+
+    final sourceValues = <String, CellEditValue>{};
+    int? anchor;
+    final insertIdx = row - result.rows.length;
+    if (insertIdx >= 0) {
+      // Duplicating an existing pending insert — inherit its anchor so the
+      // new row sits in the same logical neighborhood as the source.
+      if (insertIdx >= tab.inserts.length) return;
+      final source = tab.inserts[insertIdx];
+      sourceValues.addAll(source.values);
+      anchor = source.afterRow;
+    } else {
+      if (row < 0 || row >= result.rows.length) return;
+      anchor = row;
+      for (var c = 0; c < columns.length; c++) {
+        final pending = tab.edits[CellEdit(row, c)];
+        if (pending != null) {
+          sourceValues[columns[c]] = pending;
+        } else {
+          sourceValues[columns[c]] = CellLiteral(
+            formatCellValue(result.rows[row][c]),
+          );
+        }
+      }
+    }
+
+    final values = <String, CellEditValue>{
+      for (final name in columns)
+        if (sourceValues.containsKey(name))
+          name: pkColumns.contains(name)
+              ? const CellDefault()
+              : sourceValues[name]!,
+    };
+
+    tab.inserts.add(PendingInsert(afterRow: anchor, values: values));
+    tab.markChanged();
+    notifyListeners();
+  }
+
+  EditBatch _buildBatch(TableTab tab) {
+    final result = tab.result;
+    if (result == null || result.rowIds == null) return EditBatch();
+    final rowIds = result.rowIds!;
     final updates = <String, Map<String, CellEditValue>>{};
     for (final entry in tab.edits.entries) {
-      final ctid = result!.rowIds![entry.key.row];
+      final row = entry.key.row;
+      if (row < 0 || row >= rowIds.length) continue;
+      if (tab.deletedRows.contains(row)) continue;
+      final ctid = rowIds[row];
       final column = result.columns[entry.key.column];
       updates.putIfAbsent(ctid, () => {})[column] = entry.value;
     }
-    return buildEditStatements(tab.table, updates);
+    final deletes = <String>[
+      for (final r in tab.deletedRows)
+        if (r >= 0 && r < rowIds.length) rowIds[r],
+    ];
+    return EditBatch(
+      updatesByCtid: updates,
+      deleteCtids: deletes,
+      inserts: List.of(tab.inserts),
+    );
+  }
+
+  List<String> previewEditStatements(TableTab tab) {
+    if (!tab.hasEdits) return const [];
+    final batch = _buildBatch(tab);
+    if (batch.isEmpty) return const [];
+    return buildEditStatements(tab.table, batch);
   }
 
   Future<String?> applyTableEdits(TableTab tab) async {
@@ -446,19 +564,15 @@ class TabsController extends ChangeNotifier {
     if (result == null || result.rowIds == null) {
       return 'This view has no row identity and cannot be edited.';
     }
-    final updates = <String, Map<String, CellEditValue>>{};
-    for (final entry in tab.edits.entries) {
-      final ctid = result.rowIds![entry.key.row];
-      final column = result.columns[entry.key.column];
-      updates.putIfAbsent(ctid, () => {})[column] = entry.value;
-    }
+    final batch = _buildBatch(tab);
+    if (batch.isEmpty) return null;
 
     tab.applying = true;
     notifyListeners();
 
     String? error;
     try {
-      await service.applyTableEdits(tab.table, updates);
+      await service.applyTableEdits(tab.table, batch);
     } on StaleRowException catch (e) {
       error = e.toString();
     } on EditFailureException catch (e) {
@@ -469,6 +583,9 @@ class TabsController extends ChangeNotifier {
     tab.applying = false;
 
     if (error == null) {
+      tab.edits.clear();
+      tab.deletedRows.clear();
+      tab.inserts.clear();
       await loadTablePage(tab, tab.page);
     } else {
       notifyListeners();

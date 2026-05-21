@@ -75,6 +75,13 @@ class TableView extends StatelessWidget {
                           result: tab.result!,
                           editable: !tab.table.isView && !readOnly,
                           edits: tab.edits,
+                          deletedRows: tab.deletedRows,
+                          inserts: tab.inserts,
+                          onDeleteRow: (row) => state.deleteRow(tab, row),
+                          onRestoreDeletedRow: (row) =>
+                              state.restoreDeletedRow(tab, row),
+                          onDuplicateRow: (row) =>
+                              state.duplicateRow(tab, row),
                           widths: tab.columnWidths,
                           onWidthChanged: (col, w) =>
                               state.persistColumnWidth(tab.table, col, w),
@@ -535,7 +542,7 @@ class _PaginationBar extends StatelessWidget {
     final result = tab.result;
     final rowCount = result?.rows.length ?? 0;
     final pageCount = tab.pageCount;
-    final pendingCount = tab.edits.length;
+    final pendingCount = tab.pendingOpCount;
     final refreshedAt = tab.lastRefreshedAt;
 
     return Container(

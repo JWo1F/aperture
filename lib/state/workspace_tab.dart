@@ -6,7 +6,7 @@ import '../models/query_message.dart';
 import '../models/query_result.dart';
 
 export '../models/cell_edit.dart'
-    show CellEdit, CellEditValue, CellLiteral, CellDefault;
+    show CellEdit, CellEditValue, CellLiteral, CellDefault, PendingInsert, EditBatch;
 export '../models/query_message.dart';
 
 /// A tab in the centre workspace. Either a free-form SQL editor, a data
@@ -232,8 +232,17 @@ class TableTab extends WorkspaceTab {
   Duration? _autoRefreshInterval;
   DateTime? _lastRefreshedAt;
 
-  /// Pending, un-applied cell edits.
+  /// Pending, un-applied cell edits, keyed by (row, column). Only meaningful
+  /// for persistent rows — pending inserts mutate [inserts] directly.
   final Map<CellEdit, CellEditValue> edits = {};
+
+  /// Row indexes (into [result.rows]) marked for DELETE on Apply. Cell
+  /// edits on a deleted row are dropped — DELETE supersedes UPDATE.
+  final Set<int> deletedRows = {};
+
+  /// Synthetic rows queued for INSERT. The grid renders them after the
+  /// persistent rows so the user can edit their cells inline before Apply.
+  final List<PendingInsert> inserts = [];
 
   QueryResult? get result => _result;
 
@@ -329,7 +338,13 @@ class TableTab extends WorkspaceTab {
     notifyListeners();
   }
 
-  bool get hasEdits => edits.isNotEmpty;
+  bool get hasEdits =>
+      edits.isNotEmpty || deletedRows.isNotEmpty || inserts.isNotEmpty;
+
+  /// Aggregate count of pending operations (cell edits + row deletes + row
+  /// inserts) shown in the pending-edits chip.
+  int get pendingOpCount =>
+      edits.length + deletedRows.length + inserts.length;
 
   int get pageCount =>
       _totalRows == 0 ? 1 : ((_totalRows - 1) ~/ _pageSize) + 1;

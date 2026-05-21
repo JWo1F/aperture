@@ -11,14 +11,20 @@ void main() {
     kind: DbRelationKind.table,
   );
 
+  EditBatch updates(Map<String, Map<String, CellEditValue>> u) =>
+      EditBatch(updatesByCtid: u);
+
   group('buildEditStatements', () {
     test('renders one UPDATE per ctid with quoted columns', () {
-      final stmts = buildEditStatements(table, {
-        '(0,5)': {
-          'name': const CellLiteral('Alice'),
-          'count': const CellLiteral('42'),
-        },
-      });
+      final stmts = buildEditStatements(
+        table,
+        updates({
+          '(0,5)': {
+            'name': const CellLiteral('Alice'),
+            'count': const CellLiteral('42'),
+          },
+        }),
+      );
       expect(stmts, hasLength(1));
       expect(stmts.first, contains('UPDATE "public"."events" SET'));
       expect(stmts.first, contains('"name" = \'Alice\''));
@@ -27,39 +33,113 @@ void main() {
     });
 
     test('renders NULL for a null literal', () {
-      final stmts = buildEditStatements(table, {
-        '(0,1)': {'note': const CellLiteral(null)},
-      });
+      final stmts = buildEditStatements(
+        table,
+        updates({
+          '(0,1)': {'note': const CellLiteral(null)},
+        }),
+      );
       expect(stmts.first, contains('"note" = NULL'));
     });
 
     test('renders DEFAULT for CellDefault', () {
-      final stmts = buildEditStatements(table, {
-        '(0,1)': {'created_at': const CellDefault()},
-      });
+      final stmts = buildEditStatements(
+        table,
+        updates({
+          '(0,1)': {'created_at': const CellDefault()},
+        }),
+      );
       expect(stmts.first, contains('"created_at" = DEFAULT'));
     });
 
-    test("doubles single quotes inside the literal", () {
-      final stmts = buildEditStatements(table, {
-        '(0,1)': {'name': const CellLiteral("O'Brien")},
-      });
+    test('doubles single quotes inside the literal', () {
+      final stmts = buildEditStatements(
+        table,
+        updates({
+          '(0,1)': {'name': const CellLiteral("O'Brien")},
+        }),
+      );
       expect(stmts.first, contains("'O''Brien'"));
     });
 
     test('escapes embedded quotes in column names', () {
-      final stmts = buildEditStatements(table, {
-        '(0,1)': {'weird"col': const CellLiteral('x')},
-      });
+      final stmts = buildEditStatements(
+        table,
+        updates({
+          '(0,1)': {'weird"col': const CellLiteral('x')},
+        }),
+      );
       expect(stmts.first, contains('"weird""col" = '));
     });
 
     test('one statement per ctid', () {
-      final stmts = buildEditStatements(table, {
-        '(0,1)': {'a': const CellLiteral('1')},
-        '(0,2)': {'a': const CellLiteral('2')},
-      });
+      final stmts = buildEditStatements(
+        table,
+        updates({
+          '(0,1)': {'a': const CellLiteral('1')},
+          '(0,2)': {'a': const CellLiteral('2')},
+        }),
+      );
       expect(stmts, hasLength(2));
+    });
+
+    test('renders one DELETE per ctid', () {
+      final stmts = buildEditStatements(
+        table,
+        EditBatch(deleteCtids: ['(0,3)', '(0,4)']),
+      );
+      expect(stmts, hasLength(2));
+      expect(stmts.first, contains('DELETE FROM "public"."events"'));
+      expect(stmts.first, contains("ctid = '(0,3)'::tid"));
+      expect(stmts.last, contains("ctid = '(0,4)'::tid"));
+    });
+
+    test('renders INSERT with column list and DEFAULT for PK', () {
+      final stmts = buildEditStatements(
+        table,
+        EditBatch(
+          inserts: [
+            PendingInsert(
+              values: {
+                'id': const CellDefault(),
+                'name': const CellLiteral('Alice'),
+                'note': const CellLiteral(null),
+              },
+            ),
+          ],
+        ),
+      );
+      expect(stmts, hasLength(1));
+      expect(stmts.first, contains('INSERT INTO "public"."events"'));
+      expect(stmts.first, contains('("id", "name", "note")'));
+      expect(stmts.first, contains('(DEFAULT, \'Alice\', NULL)'));
+    });
+
+    test('empty INSERT falls back to DEFAULT VALUES', () {
+      final stmts = buildEditStatements(
+        table,
+        EditBatch(inserts: [PendingInsert()]),
+      );
+      expect(stmts.single, contains('DEFAULT VALUES'));
+    });
+
+    test('orders updates → deletes → inserts', () {
+      final stmts = buildEditStatements(
+        table,
+        EditBatch(
+          updatesByCtid: {
+            '(0,1)': {'a': const CellLiteral('u')},
+          },
+          deleteCtids: ['(0,2)'],
+          inserts: [
+            PendingInsert(values: {'a': const CellLiteral('i')}),
+          ],
+        ),
+      );
+      expect(stmts, hasLength(3));
+      expect(stmts[0], startsWith('UPDATE'));
+      expect(stmts[1], startsWith('DELETE FROM'));
+      expect(stmts[2], startsWith('INSERT INTO'));
     });
   });
 }

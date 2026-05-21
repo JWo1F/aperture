@@ -276,30 +276,34 @@ class TableRepository {
     return buf.toString();
   }
 
-  /// Applies pending cell edits as one transaction of `UPDATE` statements,
-  /// one per affected row keyed by `ctid`. Runs under REPEATABLE READ so the
-  /// snapshot used to resolve the ctids stays consistent for the whole batch.
+  /// Applies a batch of pending UPDATEs, DELETEs, and INSERTs in one
+  /// transaction. Runs under REPEATABLE READ so the snapshot used to
+  /// resolve the ctids stays consistent for every statement.
   ///
-  /// If any statement affects a row count other than 1, the whole batch is
-  /// rolled back and [StaleRowException] is thrown — the row's ctid was
-  /// moved by a concurrent VACUUM FULL / HOT update / DELETE, or the row was
-  /// never matched. The caller should ask the user to reload and retry.
-  Future<int> applyEdits(
-    DbTable table,
-    Map<String, Map<String, CellEditValue>> updatesByCtid,
-  ) async {
-    if (updatesByCtid.isEmpty) return 0;
-    final ctids = updatesByCtid.keys.toList(growable: false);
-    final statements = buildEditStatements(table, updatesByCtid);
+  /// Any UPDATE or DELETE that doesn't affect exactly one row rolls the
+  /// whole batch back and raises [StaleRowException] — the row's ctid was
+  /// moved by a concurrent VACUUM FULL / HOT update / DELETE, or the row
+  /// no longer exists. The caller should ask the user to reload and retry.
+  Future<int> applyEdits(DbTable table, EditBatch batch) async {
+    if (batch.isEmpty) return 0;
+    final statements = buildEditStatements(table, batch);
+    // Mirror the statement-list ordering used inside buildEditStatements so
+    // a stale-row failure can name the ctid it stumbled on.
+    final updateCtids = batch.updatesByCtid.keys.toList(growable: false);
+    final deleteCtids = batch.deleteCtids;
+    final mutationCount = updateCtids.length + deleteCtids.length;
     try {
       return await _db.runTx<int>(
         (scope) async {
           var affected = 0;
           for (var i = 0; i < statements.length; i++) {
             final result = await scope.execute(statements[i]);
-            if (result.affectedRows != 1) {
+            if (i < mutationCount && result.affectedRows != 1) {
+              final ctid = i < updateCtids.length
+                  ? updateCtids[i]
+                  : deleteCtids[i - updateCtids.length];
               throw StaleRowException(
-                ctid: ctids[i],
+                ctid: ctid,
                 affectedRows: result.affectedRows,
                 table: table,
               );
@@ -320,16 +324,16 @@ class TableRepository {
   }
 }
 
-/// Pure builder for the per-ctid UPDATE statements that would be sent to the
-/// database. Lives at top level so the preview UI can render the same SQL
-/// without holding a connection.
-List<String> buildEditStatements(
-  DbTable table,
-  Map<String, Map<String, CellEditValue>> updatesByCtid,
-) {
+/// Pure builder for the SQL the database would receive for a batch of
+/// pending edits. Ordering is UPDATE → DELETE → INSERT — UPDATEs run first
+/// so a pending edit on a row that's also being duplicated propagates the
+/// new value into the source row before the duplicate is committed.
+List<String> buildEditStatements(DbTable table, EditBatch batch) {
   return [
-    for (final entry in updatesByCtid.entries)
+    for (final entry in batch.updatesByCtid.entries)
       _renderUpdate(table, entry.key, entry.value),
+    for (final ctid in batch.deleteCtids) _renderDelete(table, ctid),
+    for (final insert in batch.inserts) _renderInsert(table, insert),
   ];
 }
 
@@ -344,6 +348,21 @@ String _renderUpdate(
   return 'UPDATE ${table.qualifiedName} SET\n'
       '$lines\n'
       "WHERE ctid = '$ctid'::tid";
+}
+
+String _renderDelete(DbTable table, String ctid) =>
+    "DELETE FROM ${table.qualifiedName}\n"
+    "WHERE ctid = '$ctid'::tid";
+
+String _renderInsert(DbTable table, PendingInsert insert) {
+  if (insert.values.isEmpty) {
+    return 'INSERT INTO ${table.qualifiedName} DEFAULT VALUES';
+  }
+  final cols = insert.values.keys.toList(growable: false);
+  final colList = cols.map(quoteIdent).join(', ');
+  final valList = cols.map((c) => _renderAssignment(insert.values[c]!)).join(', ');
+  return 'INSERT INTO ${table.qualifiedName} ($colList)\n'
+      'VALUES ($valList)';
 }
 
 String _renderAssignment(CellEditValue value) => switch (value) {

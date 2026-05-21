@@ -195,18 +195,23 @@ class _StatementItem extends StatelessWidget {
   final TextStyle monoStyle;
 
   static final _relRe = RegExp(
-    r'UPDATE\s+("?[\w.]+"?\."?[\w.]+"?|"?[\w.]+"?)\s',
+    r'(?:UPDATE|DELETE\s+FROM|INSERT\s+INTO)\s+("?[\w.]+"?\."?[\w.]+"?|"?[\w.]+"?)',
     caseSensitive: false,
   );
   static final _ctidRe = RegExp(
     r"ctid\s*=\s*'\(([\d,]+)\)'",
     caseSensitive: false,
   );
+  static final _kindRe = RegExp(
+    r'^\s*(UPDATE|DELETE|INSERT)\b',
+    caseSensitive: false,
+  );
 
-  ({String? relation, String? ctid}) _meta() {
+  ({String? relation, String? ctid, String kind}) _meta() {
     final r = _relRe.firstMatch(sql)?.group(1);
     final c = _ctidRe.firstMatch(sql)?.group(1);
-    return (relation: r, ctid: c == null ? null : '($c)');
+    final k = _kindRe.firstMatch(sql)?.group(1)?.toUpperCase() ?? 'EDIT';
+    return (relation: r, ctid: c == null ? null : '($c)', kind: k);
   }
 
   void _copy() => Clipboard.setData(ClipboardData(text: sql));
@@ -224,7 +229,17 @@ class _StatementItem extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.edit_outlined, size: 11, color: AppColors.accent),
+              Icon(
+                meta.kind == 'DELETE'
+                    ? Icons.delete_outline
+                    : meta.kind == 'INSERT'
+                    ? Icons.add
+                    : Icons.edit_outlined,
+                size: 11,
+                color: meta.kind == 'DELETE'
+                    ? AppColors.error
+                    : AppColors.accent,
+              ),
               const SizedBox(width: 6),
               Text(
                 meta.relation ?? 'unknown',
