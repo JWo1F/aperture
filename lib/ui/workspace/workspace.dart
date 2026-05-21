@@ -10,25 +10,11 @@ import 'query_editor.dart';
 import 'schema_view.dart';
 import 'table_view.dart';
 
-/// Center pane: a refined underline-style tab strip over the active tab's
-/// content. Tabs follow Linear conventions — a thin accent
-/// underline marks the active tab, hover lifts inactive ones subtly.
-///
-/// Subscribes narrowly to the tab list structure (ids + active index) so
-/// sidebar drags, log ticks, and preference changes don't rebuild the
-/// workspace body. Each tab in the IndexedStack is wrapped in a
-/// [ListenableBuilder] keyed on the tab itself — `tab.result` /
-/// `tab.loading` / cell edits only rebuild that one tab subtree.
 class Workspace extends StatelessWidget {
   const Workspace({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Subscribe to a concatenated id string + tab count instead of a
-    // List<String>. provider's `select` compares via `==`; a freshly-built
-    // List is never == to its predecessor, so List<String> would defeat
-    // the narrowing. The joined string compares by value and changes only
-    // when tabs are added, removed, or reordered.
     final tabsKey = context.select<AppState, String>(
       (s) => s.tabs.map((t) => t.id).join('|'),
     );
@@ -56,13 +42,8 @@ class Workspace extends StatelessWidget {
       color: AppColors.bg,
       child: Column(
         children: [
-          // Isolate the tab strip's compositor layer from the workspace body
-          // so scrolling/editing in the active tab doesn't redraw the strip
-          // every frame.
           const RepaintBoundary(child: _TabStrip()),
           Expanded(
-            // All tabs stay mounted so per-tab state (scroll offset, code
-            // editor cursor, query result) survives switching away and back.
             child: IndexedStack(
               index: activeIndex.clamp(0, tabs.length - 1),
               sizing: StackFit.expand,
@@ -75,11 +56,6 @@ class Workspace extends StatelessWidget {
   }
 
   Widget _content(WorkspaceTab tab) {
-    // Each tab subtree listens to the tab itself, not the root AppState.
-    // Mutations from TabsController (result load, loading toggle, cell-edit
-    // map mutations, pagination, etc.) flow through tab.notifyListeners()
-    // and rebuild only this one stack child. Tabs in other stack slots stay
-    // put.
     return ListenableBuilder(
       key: ValueKey(tab.id),
       listenable: tab,
@@ -102,44 +78,25 @@ class _TabStrip extends StatelessWidget {
     final activeIndex = context.select<AppState, int>((s) => s.activeTabIndex);
 
     return DecoratedBox(
-      decoration: BoxDecoration(color: AppColors.bgDeep),
+      decoration: BoxDecoration(
+        color: AppColors.bgDeep,
+        border: Border(
+          bottom: BorderSide(color: AppColors.border, width: 1),
+        ),
+      ),
       child: SizedBox(
-        height: 32,
-        child: Stack(
-          // Force every non-positioned child to top-left, regardless of
-          // its intrinsic alignment behavior — without this, a horizontal
-          // SingleChildScrollView in a Stack centers its viewport when it
-          // can't decide where to anchor.
-          alignment: AlignmentDirectional.topStart,
-          fit: StackFit.expand,
-          children: [
-            // 1. Full-width bottom hairline. Active tabs paint a
-            //    solid bg fill that covers the rule under them; inactive
-            //    tabs stay transparent so the rule reads through.
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(height: 1, color: AppColors.border),
-            ),
-            // 2. Tabs cluster — anchored to the left, sized to its
-            //    content, with horizontal scrolling once it overflows.
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              right: 0,
-              child: Align(
-                alignment: Alignment.topLeft,
+        height: AppLayout.tabHeight,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Row(
+            children: [
+              Expanded(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       for (var i = 0; i < tabs.length; i++)
-                        // Each tab listens to itself so a query rename
-                        // refreshes its label without rebuilding the
-                        // whole strip.
                         ListenableBuilder(
                           listenable: tabs[i],
                           builder: (_, _) => _Tab(
@@ -156,22 +113,19 @@ class _TabStrip extends StatelessWidget {
                             ),
                           ),
                         ),
-                      _NewTabButton(onTap: state.newQueryTab),
                     ],
                   ),
                 ),
               ),
-            ),
-          ],
+              _NewTabButton(onTap: state.newQueryTab),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// 32px square at the end of the tab cluster — matches `.new-tab-btn` in
-/// the design. The bottom rule is rendered on the button itself so it
-/// continues the inactive-tab hairline cleanly.
 class _NewTabButton extends StatelessWidget {
   const _NewTabButton({required this.onTap});
 
@@ -184,18 +138,27 @@ class _NewTabButton extends StatelessWidget {
       waitDuration: const Duration(milliseconds: 350),
       child: Hoverable(
         onTap: onTap,
-        builder: (context, hovering) => Container(
-          width: 32,
-          height: 32,
-          alignment: Alignment.center,
-          // No bottom border — the strip paints a full-width hairline
-          // behind every tab and this button alike, so the rule continues
-          // uninterrupted to the right edge of the window.
-          color: hovering ? AppColors.surfaceHover : Colors.transparent,
-          child: Icon(
-            Icons.add,
-            size: 13,
-            color: hovering ? AppColors.textPrimary : AppColors.textMuted,
+        builder: (context, hovering) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+            width: 22,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: hovering ? AppColors.surface : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: hovering ? AppColors.borderSoft : Colors.transparent,
+                width: 0.5,
+              ),
+            ),
+            child: Icon(
+              Icons.add_rounded,
+              size: 14,
+              color: hovering ? AppColors.textPrimary : AppColors.textMuted,
+            ),
           ),
         ),
       ),
@@ -244,7 +207,16 @@ void _showTabMenu(
   );
 }
 
-class _Tab extends StatefulWidget {
+/// A single tab — a floating pill on the strip. Identity comes from a
+/// type-colored status dot (indigo / emerald / amber-purple), not an
+/// icon, and the active tab "lifts" with a [AppColors.surface] fill and
+/// hairline border. The dot does extra duty: it pulses when the tab is
+/// busy (running query / loading page / applying edits) and grows into
+/// a warn-colored ring when a TableTab has unsaved cell edits.
+///
+/// There is no per-tab close button — middle-click, ⌘W, and the
+/// right-click menu cover closing.
+class _Tab extends StatelessWidget {
   const _Tab({
     required this.tab,
     required this.active,
@@ -259,96 +231,232 @@ class _Tab extends StatefulWidget {
   final VoidCallback onClose;
   final void Function(Offset globalPosition) onContextMenu;
 
-  @override
-  State<_Tab> createState() => _TabState();
-}
+  Color _typeColor() => switch (tab) {
+    QueryTab() => AppColors.accent,
+    TableTab() => AppColors.success,
+    SchemaTab() => AppColors.tDate,
+  };
 
-class _TabState extends State<_Tab> {
-  IconData get _tabIcon => switch (widget.tab) {
-    QueryTab() => Icons.terminal,
-    SchemaTab() => Icons.data_object,
-    TableTab() => Icons.table_rows_outlined,
+  bool get _busy => switch (tab) {
+    QueryTab(running: final r) => r,
+    TableTab(loading: final l, applying: final a) => l || a,
+    SchemaTab(loading: final l) => l,
+  };
+
+  bool get _dirty => switch (tab) {
+    TableTab(hasEdits: final e) => e,
+    _ => false,
   };
 
   @override
   Widget build(BuildContext context) {
     return Hoverable(
-      onTap: widget.onTap,
-      onSecondaryTapDown: (d) => widget.onContextMenu(d.globalPosition),
-      onTertiaryTapUp: (_) => widget.onClose(),
+      onTap: onTap,
+      onSecondaryTapDown: (d) => onContextMenu(d.globalPosition),
+      onTertiaryTapUp: (_) => onClose(),
       builder: (context, hovering) {
-        final showClose = hovering || widget.active;
-        return Container(
-          constraints: const BoxConstraints(maxWidth: 200),
-          height: 32,
-          decoration: BoxDecoration(
-            // Active tab paints a solid `bg` fill so the strip's bottom
-            // rule (rendered behind every tab) is masked underneath it.
-            // Inactive tabs stay transparent so the rule reads through.
-            color: widget.active
-                ? AppColors.bg
-                : (hovering ? const Color(0x06FFFFFF) : Colors.transparent),
-            border: Border(
-              right: BorderSide(color: AppColors.borderSoft, width: 1),
-              top: widget.active
-                  ? BorderSide(color: AppColors.accent, width: 1)
-                  : BorderSide.none,
+        final pillFill = active
+            ? AppColors.surface
+            : (hovering
+                  ? Color.alphaBlend(
+                      AppColors.surfaceHover.withValues(alpha: 0.55),
+                      AppColors.bgDeep,
+                    )
+                  : Colors.transparent);
+        final borderColor = active
+            ? AppColors.borderSoft
+            : Colors.transparent;
+        final labelColor = active
+            ? AppColors.textPrimary
+            : (hovering ? AppColors.textSecondary : AppColors.textMuted);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 220, minWidth: 0),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 130),
+              curve: Curves.easeOut,
+              decoration: BoxDecoration(
+                color: pillFill,
+                borderRadius: BorderRadius.circular(7),
+                border: Border.all(color: borderColor, width: 0.5),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _StatusDot(
+                    color: _typeColor(),
+                    active: active,
+                    busy: _busy,
+                    dirty: _dirty,
+                  ),
+                  const SizedBox(width: 9),
+                  Flexible(child: _TabLabel(tab: tab, color: labelColor, active: active)),
+                ],
+              ),
             ),
-          ),
-          padding: const EdgeInsets.only(left: 10, right: 0),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                _tabIcon,
-                size: 11,
-                color: widget.active ? AppColors.textMuted : AppColors.text4,
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  widget.tab.title,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTheme.mono(
-                    size: 11,
-                    weight: FontWeight.w500,
-                    color: widget.active
-                        ? AppColors.textPrimary
-                        : (hovering
-                              ? AppColors.textSecondary
-                              : AppColors.textMuted),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Hoverable(
-                onTap: widget.onClose,
-                builder: (context, closeHovering) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 100),
-                  width: 14,
-                  height: 14,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: closeHovering
-                        ? AppColors.surfaceHover
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: Icon(
-                    Icons.close,
-                    size: 8,
-                    color: showClose
-                        ? (closeHovering
-                              ? AppColors.textPrimary
-                              : AppColors.textMuted)
-                        : Colors.transparent,
-                  ),
-                ),
-              ),
-            ],
           ),
         );
       },
+    );
+  }
+}
+
+/// The label. For SchemaTab, the trailing `· schema` is rendered in a
+/// muted tone so the table name stays primary.
+class _TabLabel extends StatelessWidget {
+  const _TabLabel({required this.tab, required this.color, required this.active});
+
+  final WorkspaceTab tab;
+  final Color color;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final weight = active ? FontWeight.w600 : FontWeight.w500;
+    final base = AppTheme.ui(
+      size: 12.5,
+      weight: weight,
+      color: color,
+      letterSpacing: -0.2,
+    );
+
+    if (tab is SchemaTab) {
+      final t = tab as SchemaTab;
+      return Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(text: t.table.name, style: base),
+            TextSpan(
+              text: '  schema',
+              style: base.copyWith(
+                color: color.withValues(alpha: 0.55),
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+      );
+    }
+
+    return Text(
+      tab.title,
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+      style: base,
+    );
+  }
+}
+
+/// The little circle. Dual-purpose: identifies tab type by color, and
+/// animates to signal busy/dirty states without stealing attention.
+class _StatusDot extends StatefulWidget {
+  const _StatusDot({
+    required this.color,
+    required this.active,
+    required this.busy,
+    required this.dirty,
+  });
+
+  final Color color;
+  final bool active;
+  final bool busy;
+  final bool dirty;
+
+  @override
+  State<_StatusDot> createState() => _StatusDotState();
+}
+
+class _StatusDotState extends State<_StatusDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.busy) _pulse.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant _StatusDot old) {
+    super.didUpdateWidget(old);
+    if (widget.busy && !_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    } else if (!widget.busy && _pulse.isAnimating) {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dotColor = widget.dirty
+        ? AppColors.warn
+        : (widget.active ? widget.color : widget.color.withValues(alpha: 0.55));
+
+    return SizedBox(
+      width: 14,
+      height: 14,
+      child: Center(
+        child: AnimatedBuilder(
+          animation: _pulse,
+          builder: (context, _) {
+            final pulse = widget.busy ? _pulse.value : 0.0;
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                if (widget.busy)
+                  Container(
+                    width: 6 + pulse * 8,
+                    height: 6 + pulse * 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: dotColor.withValues(alpha: 0.18 * (1 - pulse)),
+                    ),
+                  ),
+                if (widget.dirty)
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: dotColor, width: 1.2),
+                    ),
+                  ),
+                Container(
+                  width: widget.dirty ? 4 : 6,
+                  height: widget.dirty ? 4 : 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: dotColor,
+                    boxShadow: widget.active
+                        ? [
+                            BoxShadow(
+                              color: dotColor.withValues(alpha: 0.35),
+                              blurRadius: 5,
+                            ),
+                          ]
+                        : null,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 }

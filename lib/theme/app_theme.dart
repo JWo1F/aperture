@@ -323,7 +323,7 @@ class AppLayout {
   const AppLayout._();
 
   static const double toolbarHeight = 36.0;
-  static const double tabHeight = 32.0;
+  static const double tabHeight = 36.0;
   static const double gridRowHeight = 26.0;
   static const double treeRowHeight = 22.0;
   static const double gridHeaderHeight = 28.0;
