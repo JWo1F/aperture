@@ -314,9 +314,6 @@ class _ClauseBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The clause bar is exactly 78px tall (three 26px rows) plus the 1px
-    // bottom border — no IntrinsicHeight needed because each row is hard-
-    // sized, and the side strip stretches via the Row's stretch alignment.
     return Container(
       decoration: BoxDecoration(
         color: AppColors.bgDeep,
@@ -324,67 +321,44 @@ class _ClauseBar extends StatelessWidget {
       ),
       child: SizedBox(
         height: 78,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Left decorative strip — 18px wide, accent gradient.
-            Container(
-              width: 18,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.accent.withValues(alpha: 0.05),
-                    Colors.transparent,
-                  ],
-                ),
-                border: Border(right: BorderSide(color: AppColors.hairline)),
-              ),
+            _ClauseRow(
+              label: 'WHERE',
+              controller: filterController,
+              focusNode: filterFocus,
+              onApply: onApplyFilter,
+              hint: "e.g.  status = 'active'",
+              active: whereActive,
+              actionIcon: Icons.filter_alt_outlined,
+              actionTooltip: 'Apply filter (↵)',
+              isLast: false,
+              suggest: filterSuggest,
             ),
-            // Clause rows stacked vertically.
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ClauseRow(
-                    label: 'WHERE',
-                    controller: filterController,
-                    focusNode: filterFocus,
-                    onApply: onApplyFilter,
-                    hint: "e.g.  status = 'active'",
-                    active: whereActive,
-                    actionIcon: Icons.filter_alt_outlined,
-                    actionTooltip: 'Apply filter (↵)',
-                    isLast: false,
-                    suggest: filterSuggest,
-                  ),
-                  _ClauseRow(
-                    label: 'SELECT',
-                    controller: selectController,
-                    focusNode: selectFocus,
-                    onApply: onApplySelect,
-                    hint: '*  or  col_a, col_b',
-                    active: selectActive,
-                    actionIcon: Icons.view_column_outlined,
-                    actionTooltip: 'Apply columns (↵)',
-                    isLast: false,
-                    suggest: selectSuggest,
-                  ),
-                  _ClauseRow(
-                    label: 'ORDER',
-                    controller: orderController,
-                    focusNode: orderFocus,
-                    onApply: onApplyOrder,
-                    hint: 'click a column header',
-                    active: orderActive,
-                    actionIcon: Icons.swap_vert,
-                    actionTooltip: 'Apply sort (↵)',
-                    isLast: true,
-                    suggest: orderSuggest,
-                  ),
-                ],
-              ),
+            _ClauseRow(
+              label: 'SELECT',
+              controller: selectController,
+              focusNode: selectFocus,
+              onApply: onApplySelect,
+              hint: '*  or  col_a, col_b',
+              active: selectActive,
+              actionIcon: Icons.view_column_outlined,
+              actionTooltip: 'Apply columns (↵)',
+              isLast: false,
+              suggest: selectSuggest,
+            ),
+            _ClauseRow(
+              label: 'ORDER',
+              controller: orderController,
+              focusNode: orderFocus,
+              onApply: onApplyOrder,
+              hint: 'click a column header',
+              active: orderActive,
+              actionIcon: Icons.swap_vert,
+              actionTooltip: 'Apply sort (↵)',
+              isLast: true,
+              suggest: orderSuggest,
             ),
           ],
         ),
