@@ -97,15 +97,20 @@ class _ResultsGridState extends State<ResultsGrid> {
   /// default editing keybindings while no cell is active.
   final FocusNode _gridFocus = FocusNode(debugLabel: 'results-grid');
 
-  /// The active cell. `(null, null)` until the user clicks one; cleared by
-  /// Esc or when the underlying result changes (new page / filter). Stored
-  /// as a ValueNotifier so a click only rebuilds the rows that listen to it
-  /// (the visible rows), not the whole grid build method.
-  final ValueNotifier<(int?, int?)> _selection =
-      ValueNotifier<(int?, int?)>((null, null));
+  /// The current selection — a set of cell ranges plus an anchor (shift-
+  /// extension reference) and a focus (the active cell for keyboard nav,
+  /// editing, and context-menu actions). Empty until the user clicks; reset
+  /// when the result set changes. Stored in a notifier so only visible rows
+  /// rebuild on selection updates, not the whole grid.
+  final ValueNotifier<_GridSelection> _selection =
+      ValueNotifier<_GridSelection>(_GridSelection.empty);
 
-  int? get _selRow => _selection.value.$1;
-  int? get _selCol => _selection.value.$2;
+  int? get _selRow => _selection.value.focus?.$1;
+  int? get _selCol => _selection.value.focus?.$2;
+
+  /// In-progress drag anchor: the cell where the pointer went down. While
+  /// non-null every `onPointerMove` extends the last range from this point.
+  ({int row, int col})? _drag;
 
   List<double> _widths = [];
   List<String> _widthKeys = [];
@@ -143,7 +148,8 @@ class _ResultsGridState extends State<ResultsGrid> {
     // A new result set invalidates the row/column indices we held; clearing
     // the selection avoids highlighting an arbitrary cell after pagination.
     if (!identical(old.result, widget.result)) {
-      _selection.value = (null, null);
+      _selection.value = _GridSelection.empty;
+      _drag = null;
     }
   }
 
@@ -207,28 +213,98 @@ class _ResultsGridState extends State<ResultsGrid> {
   // --- selection -------------------------------------------------------
 
   void _selectCell(int row, int column) {
+    _selection.value = _GridSelection.single(row, column);
+    if (!_gridFocus.hasFocus) _gridFocus.requestFocus();
+  }
+
+  /// Begin (or extend) a selection at the pointer-down cell. Drag tracking
+  /// is set up so subsequent `onPointerMove` events grow the last range.
+  void _beginPointerSelection(int row, int column) {
+    final cmd = HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isControlPressed;
+    final shift = HardwareKeyboard.instance.isShiftPressed;
     final current = _selection.value;
-    if (current.$1 != row || current.$2 != column) {
-      _selection.value = (row, column);
+
+    if (shift && current.anchor != null) {
+      final a = current.anchor!;
+      _selection.value =
+          current.replaceLast(a.$1, a.$2, row, column, focus: (row, column));
+      _drag = (row: a.$1, col: a.$2);
+    } else if (cmd && !current.isEmpty) {
+      _selection.value = current.addRange(row, column);
+      _drag = (row: row, col: column);
+    } else {
+      _selection.value = _GridSelection.single(row, column);
+      _drag = (row: row, col: column);
     }
     if (!_gridFocus.hasFocus) _gridFocus.requestFocus();
   }
 
-  void _clearSelection() {
-    if (_selRow == null && _selCol == null) return;
-    _selection.value = (null, null);
+  /// Extend the last range from the drag anchor to (row, column) and move
+  /// the focus there. Called from `onPointerMove` while a drag is active.
+  void _extendDragTo(int row, int column) {
+    final d = _drag;
+    if (d == null) return;
+    _selection.value = _selection.value
+        .replaceLast(d.row, d.col, row, column, focus: (row, column));
   }
 
-  /// Returns the textual form of the selected cell — pending edit (if any)
+  void _clearSelection() {
+    if (_selection.value.isEmpty) return;
+    _selection.value = _GridSelection.empty;
+  }
+
+  /// Returns the textual form of the focus cell — pending edit (if any)
   /// wins over the original, mirroring what's painted in the grid.
   String _selectedCellText() {
-    final r = _selRow!;
-    final c = _selCol!;
-    final pending = widget.edits?[CellEdit(r, c)];
+    final focus = _selection.value.focus!;
+    return _cellTextAt(focus.$1, focus.$2);
+  }
+
+  String _cellTextAt(int row, int column) {
+    final pending = widget.edits?[CellEdit(row, column)];
     if (pending is CellLiteral) return pending.value ?? 'NULL';
     if (pending is CellDefault) return 'DEFAULT';
-    final formatted = formatCellValue(widget.result.rows[r][c]);
+    final formatted = formatCellValue(widget.result.rows[row][column]);
     return formatted ?? 'NULL';
+  }
+
+  /// Excel-style TSV of the current selection: tabs between columns,
+  /// newlines between rows. A single rect is emitted as-is. Multiple
+  /// disjoint rects are projected into the bounding box, leaving blank
+  /// cells where nothing is selected. Tabs/newlines/quotes inside values
+  /// are wrapped in `"…"` with internal `"` doubled — the same convention
+  /// Excel and Sheets use when copying TSV to the system clipboard.
+  String _selectionAsTabular() {
+    final sel = _selection.value;
+    if (sel.isEmpty) return '';
+
+    final ranges = sel.ranges;
+    var minR = ranges.first.r0, maxR = ranges.first.r1;
+    var minC = ranges.first.c0, maxC = ranges.first.c1;
+    for (final rg in ranges) {
+      if (rg.r0 < minR) minR = rg.r0;
+      if (rg.r1 > maxR) maxR = rg.r1;
+      if (rg.c0 < minC) minC = rg.c0;
+      if (rg.c1 > maxC) maxC = rg.c1;
+    }
+
+    final out = StringBuffer();
+    for (var r = minR; r <= maxR; r++) {
+      for (var c = minC; c <= maxC; c++) {
+        if (c > minC) out.write('\t');
+        if (sel.contains(r, c)) out.write(_quoteForTsv(_cellTextAt(r, c)));
+      }
+      if (r < maxR) out.write('\n');
+    }
+    return out.toString();
+  }
+
+  static String _quoteForTsv(String s) {
+    if (s.contains('\t') || s.contains('\n') || s.contains('"')) {
+      return '"${s.replaceAll('"', '""')}"';
+    }
+    return s;
   }
 
   BuildContext? _bodyCtx;
@@ -237,15 +313,21 @@ class _ResultsGridState extends State<ResultsGrid> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.escape) {
-      if (_selRow == null) return KeyEventResult.ignored;
+      if (_selection.value.isEmpty) return KeyEventResult.ignored;
       _clearSelection();
       return KeyEventResult.handled;
     }
     final isCopyChord = key == LogicalKeyboardKey.keyC &&
         (HardwareKeyboard.instance.isMetaPressed ||
             HardwareKeyboard.instance.isControlPressed);
-    if (isCopyChord && _selRow != null && _selCol != null) {
-      Clipboard.setData(ClipboardData(text: _selectedCellText()));
+    if (isCopyChord && !_selection.value.isEmpty) {
+      final sel = _selection.value;
+      final text = (sel.ranges.length == 1 &&
+              sel.ranges.first.r0 == sel.ranges.first.r1 &&
+              sel.ranges.first.c0 == sel.ranges.first.c1)
+          ? _selectedCellText()
+          : _selectionAsTabular();
+      Clipboard.setData(ClipboardData(text: text));
       return KeyEventResult.handled;
     }
 
@@ -272,7 +354,9 @@ class _ResultsGridState extends State<ResultsGrid> {
 
   /// Handles arrow-key navigation (with Home/End/PageUp/PageDown). Returns
   /// true when the event was consumed. With no selection, any arrow lands
-  /// on (0, 0) so the user can take over after a fresh focus.
+  /// on (0, 0) so the user can take over after a fresh focus. Holding Shift
+  /// extends the last range from the anchor instead of collapsing to a
+  /// single cell.
   bool _moveSelection(LogicalKeyboardKey key) {
     final rows = widget.result.rows.length;
     final cols = widget.result.columns.length;
@@ -307,7 +391,14 @@ class _ResultsGridState extends State<ResultsGrid> {
     } else {
       return false;
     }
-    _selectCell(r, c);
+    final shift = HardwareKeyboard.instance.isShiftPressed;
+    final anchor = _selection.value.anchor;
+    if (shift && anchor != null) {
+      _selection.value = _selection.value
+          .replaceLast(anchor.$1, anchor.$2, r, c, focus: (r, c));
+    } else {
+      _selectCell(r, c);
+    }
     _scrollToCell(r, c);
     return true;
   }
@@ -777,8 +868,16 @@ class _ResultsGridState extends State<ResultsGrid> {
                             onPointerDown: (e) {
                               final cell = _cellAt(e.localPosition);
                               if (cell == null) return;
-                              _selectCell(cell.$1, cell.$2);
+                              _beginPointerSelection(cell.$1, cell.$2);
                             },
+                            onPointerMove: (e) {
+                              if (_drag == null) return;
+                              final cell = _cellAt(e.localPosition);
+                              if (cell == null) return;
+                              _extendDragTo(cell.$1, cell.$2);
+                            },
+                            onPointerUp: (_) => _drag = null,
+                            onPointerCancel: (_) => _drag = null,
                             child: GestureDetector(
                               behavior: HitTestBehavior.translucent,
                               onDoubleTapDown: widget.editable
@@ -798,7 +897,14 @@ class _ResultsGridState extends State<ResultsGrid> {
                                 final cell = _cellAt(d.localPosition);
                                 if (cell == null) return;
                                 final (r, c) = cell;
-                                _selectCell(r, c);
+                                // Right-clicking inside an existing
+                                // multi-selection keeps it intact so a
+                                // "Copy" from the menu reflects the whole
+                                // range; clicking outside collapses to
+                                // the targeted cell.
+                                if (!_selection.value.contains(r, c)) {
+                                  _selectCell(r, c);
+                                }
                                 _openCellMenu(
                                   bodyCtx,
                                   d.globalPosition,
@@ -853,11 +959,12 @@ class _ResultsGridState extends State<ResultsGrid> {
         return MouseRegion(
           onEnter: (_) => setRowState(() => hovering = true),
           onExit: (_) => setRowState(() => hovering = false),
-          child: ValueListenableBuilder<(int?, int?)>(
+          child: ValueListenableBuilder<_GridSelection>(
             valueListenable: _selection,
             builder: (_, sel, _) {
-              final isSelectedRow = sel.$1 == row;
-              final bg = isSelectedRow
+              final segments = sel.rowSegments(row);
+              final hasSelection = segments.isNotEmpty;
+              final bg = hasSelection
                   ? const Color(0x1A5B7CFA)
                   : (hovering ? const Color(0x06FFFFFF) : Colors.transparent);
 
@@ -869,67 +976,95 @@ class _ResultsGridState extends State<ResultsGrid> {
                     bottom: BorderSide(color: AppColors.hairline),
                   ),
                 ),
-          child: Row(
-            children: [
-              Container(
-                width: _indexWidth,
-                height: _rowHeight,
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.bg,
-                  border: Border(
-                    right: BorderSide(color: AppColors.border),
-                  ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: _indexWidth,
+                      height: _rowHeight,
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.bg,
+                        border: Border(
+                          right: BorderSide(color: AppColors.border),
+                        ),
+                      ),
+                      child: Text(
+                        '${row + 1}',
+                        style: AppTheme.mono(
+                          size: 10,
+                          color: hasSelection
+                              ? AppColors.accent
+                              : AppColors.text4,
+                          weight: hasSelection
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    ...cells,
+                  ],
                 ),
-                child: Text(
-                  '${row + 1}',
-                  style: AppTheme.mono(
-                    size: 10,
-                    color: isSelectedRow
-                        ? AppColors.accent
-                        : AppColors.text4,
-                    weight: isSelectedRow
-                        ? FontWeight.w600
-                        : FontWeight.w400,
-                  ),
-                ),
-              ),
-              ...cells,
-            ],
-          ),
-        );
+              );
 
-        if (!isSelectedRow || sel.$2 == null) return body;
-        final selCol = sel.$2!;
-        if (selCol >= _widths.length) return body;
+              if (!hasSelection) return body;
 
-        var x = _indexWidth;
-        for (var c = 0; c < selCol; c++) {
-          x += _widths[c];
-        }
-
-        return Stack(
-          children: [
-            body,
-            Positioned(
-              left: x,
-              top: 0,
-              width: _widths[selCol],
-              height: _rowHeight,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: Border.fromBorderSide(
-                      BorderSide(color: AppColors.accent, width: 1.5),
+              // Layer a tint over each contiguous selected column segment
+              // and, if this row owns the focus cell, draw the indigo ring
+              // on top.
+              final overlays = <Widget>[];
+              for (final segment in segments) {
+                final (sc0, sc1) = segment;
+                var x = _indexWidth;
+                for (var c = 0; c < sc0; c++) {
+                  x += _widths[c];
+                }
+                var w = 0.0;
+                for (var c = sc0; c <= sc1 && c < _widths.length; c++) {
+                  w += _widths[c];
+                }
+                overlays.add(
+                  Positioned(
+                    left: x,
+                    top: 0,
+                    width: w,
+                    height: _rowHeight,
+                    child: const IgnorePointer(
+                      child: ColoredBox(color: Color(0x1A5B7CFA)),
                     ),
                   ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+                );
+              }
+
+              final focus = sel.focus;
+              if (focus != null &&
+                  focus.$1 == row &&
+                  focus.$2 < _widths.length) {
+                var x = _indexWidth;
+                for (var c = 0; c < focus.$2; c++) {
+                  x += _widths[c];
+                }
+                overlays.add(
+                  Positioned(
+                    left: x,
+                    top: 0,
+                    width: _widths[focus.$2],
+                    height: _rowHeight,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border.fromBorderSide(
+                            BorderSide(color: AppColors.accent, width: 1.5),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              return Stack(children: [body, ...overlays]);
+            },
           ),
         );
       },
@@ -1171,6 +1306,107 @@ class _HeaderCellState extends State<_HeaderCell> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// One rectangular block of selected cells, stored in canonical form
+/// (r0 ≤ r1, c0 ≤ c1) so callers don't have to normalize at every read.
+class _CellRange {
+  factory _CellRange.of(int r0, int c0, int r1, int c1) => _CellRange._(
+        r0 < r1 ? r0 : r1,
+        c0 < c1 ? c0 : c1,
+        r0 > r1 ? r0 : r1,
+        c0 > c1 ? c0 : c1,
+      );
+
+  const _CellRange._(this.r0, this.c0, this.r1, this.c1);
+
+  final int r0, c0, r1, c1;
+
+  bool contains(int r, int c) =>
+      r >= r0 && r <= r1 && c >= c0 && c <= c1;
+
+  bool containsRow(int r) => r >= r0 && r <= r1;
+}
+
+/// Excel-style selection: a stack of ranges plus an anchor (the cell that
+/// shift-extension grows from) and a focus (the active cell — the one
+/// keyboard navigation, the cell picker, and the context menu act on).
+class _GridSelection {
+  const _GridSelection({this.ranges = const [], this.anchor, this.focus});
+
+  static const empty = _GridSelection();
+
+  final List<_CellRange> ranges;
+  final (int, int)? anchor;
+  final (int, int)? focus;
+
+  bool get isEmpty => ranges.isEmpty;
+
+  factory _GridSelection.single(int row, int col) => _GridSelection(
+        ranges: [_CellRange._(row, col, row, col)],
+        anchor: (row, col),
+        focus: (row, col),
+      );
+
+  bool contains(int row, int col) {
+    for (final rg in ranges) {
+      if (rg.contains(row, col)) return true;
+    }
+    return false;
+  }
+
+  /// Column intervals (c0, c1) that intersect [row]. Overlapping or
+  /// adjacent intervals are merged so the row paints one continuous tint
+  /// strip per visual block.
+  List<(int, int)> rowSegments(int row) {
+    final hits = <(int, int)>[];
+    for (final rg in ranges) {
+      if (rg.containsRow(row)) hits.add((rg.c0, rg.c1));
+    }
+    if (hits.length < 2) return hits;
+    hits.sort((a, b) => a.$1.compareTo(b.$1));
+    final merged = <(int, int)>[];
+    var (lo, hi) = hits.first;
+    for (var i = 1; i < hits.length; i++) {
+      final (nlo, nhi) = hits[i];
+      if (nlo <= hi + 1) {
+        if (nhi > hi) hi = nhi;
+      } else {
+        merged.add((lo, hi));
+        lo = nlo;
+        hi = nhi;
+      }
+    }
+    merged.add((lo, hi));
+    return merged;
+  }
+
+  _GridSelection addRange(int row, int col) => _GridSelection(
+        ranges: [...ranges, _CellRange._(row, col, row, col)],
+        anchor: (row, col),
+        focus: (row, col),
+      );
+
+  /// Replace the last range with bbox((r0,c0), (r1,c1)). Anchor stays at
+  /// (r0,c0); focus moves to the supplied [focus] (defaults to (r1,c1)).
+  /// If there are no ranges yet, the bbox is added as the only range.
+  _GridSelection replaceLast(
+    int r0,
+    int c0,
+    int r1,
+    int c1, {
+    (int, int)? focus,
+  }) {
+    final next = _CellRange.of(r0, c0, r1, c1);
+    final list = ranges.isEmpty
+        ? [next]
+        : [...ranges.sublist(0, ranges.length - 1), next];
+    return _GridSelection(
+      ranges: list,
+      anchor: (r0, c0),
+      focus: focus ?? (r1, c1),
     );
   }
 }
