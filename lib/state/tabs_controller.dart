@@ -58,7 +58,20 @@ class TabsController extends ChangeNotifier {
     return n;
   }
 
-  String _nextId() => 'id${_idCounter++}';
+  /// Generates a fresh tab id that does not collide with any open tab or
+  /// any persisted saved-query id. SavedQuery ids are produced by this same
+  /// counter, but the counter resets to 0 on every app launch — so without
+  /// the collision guard, a brand-new TableTab can be assigned the same id
+  /// as a previously-saved query, and clicking the query in the sidebar
+  /// would land you on the table tab.
+  String _nextId() {
+    while (true) {
+      final candidate = 'id${_idCounter++}';
+      if (_tabs.any((t) => t.id == candidate)) continue;
+      if (perConnection.savedQueries.any((q) => q.id == candidate)) continue;
+      return candidate;
+    }
+  }
 
   /// Reset everything when the connection changes (or disconnects).
   void clear() {
@@ -123,7 +136,8 @@ class TabsController extends ChangeNotifier {
 
   void deleteSavedQuery(String id) {
     perConnection.deleteSavedQuery(id);
-    closeTab(id);
+    final i = _tabs.indexWhere((t) => t is QueryTab && t.id == id);
+    if (i != -1) closeTab(_tabs[i].id);
   }
 
   void duplicateSavedQuery(String id) {
@@ -131,7 +145,9 @@ class TabsController extends ChangeNotifier {
   }
 
   void openSavedQuery(SavedQuery q) {
-    final existing = _tabs.indexWhere((t) => t.id == q.id);
+    final existing = _tabs.indexWhere(
+      (t) => t is QueryTab && t.id == q.id,
+    );
     if (existing != -1) {
       _select(existing);
       return;
