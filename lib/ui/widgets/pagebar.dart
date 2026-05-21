@@ -89,8 +89,7 @@ class PbChev extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Hoverable(
-        cursor:
-            enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
         onTap: onPressed,
         builder: (context, hovering) {
           final fg = enabled
@@ -211,8 +210,8 @@ class RefreshDropdown extends StatelessWidget {
             builder: (context, hovering) {
               final fg = canRefresh
                   ? (hovering
-                      ? AppColors.textPrimary
-                      : (autoOn ? AppColors.accent : AppColors.textMuted))
+                        ? AppColors.textPrimary
+                        : (autoOn ? AppColors.accent : AppColors.textMuted))
                   : AppColors.textMuted.withValues(alpha: 0.4);
               return Container(
                 width: 22,
@@ -252,8 +251,9 @@ class RefreshDropdown extends StatelessWidget {
               );
             },
             builder: (context, hovering) {
-              final Color fg =
-                  autoOn ? AppColors.accent : AppColors.textSecondary;
+              final Color fg = autoOn
+                  ? AppColors.accent
+                  : AppColors.textSecondary;
               final Color hoverFg = hovering
                   ? (autoOn ? AppColors.accent : AppColors.textPrimary)
                   : fg;
@@ -262,9 +262,7 @@ class RefreshDropdown extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 7),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: hovering
-                      ? AppColors.surfaceHover
-                      : Colors.transparent,
+                  color: hovering ? AppColors.surfaceHover : Colors.transparent,
                   borderRadius: Radii.brSm,
                 ),
                 child: Row(

@@ -45,7 +45,9 @@ class Introspector {
       final name = row[2] as String;
       final kind = row[3] as String;
       final comment = row[4] as String?;
-      grouped.putIfAbsent(schema, () => []).add(
+      grouped
+          .putIfAbsent(schema, () => [])
+          .add(
             DbTable(
               oid: oid,
               schema: schema,
@@ -93,7 +95,9 @@ class Introspector {
     final out = <int, List<DbColumn>>{};
     for (final row in result) {
       final relOid = row[0] as int;
-      out.putIfAbsent(relOid, () => []).add(
+      out
+          .putIfAbsent(relOid, () => [])
+          .add(
             DbColumn(
               name: row[1] as String,
               dataType: row[2] as String,
@@ -154,7 +158,9 @@ class Introspector {
       final localCols = _stringList(row[7]);
       final refCols = _stringList(row[8]);
       if (localCols.isEmpty || refCols.isEmpty) continue;
-      out.putIfAbsent(srcOid, () => []).add(
+      out
+          .putIfAbsent(srcOid, () => [])
+          .add(
             DbForeignKey(
               constraintName: row[1] as String,
               localColumns: localCols,
@@ -204,7 +210,9 @@ class Introspector {
     final out = <int, List<DbIndex>>{};
     for (final row in result) {
       final relOid = row[0] as int;
-      out.putIfAbsent(relOid, () => []).add(
+      out
+          .putIfAbsent(relOid, () => [])
+          .add(
             DbIndex(
               name: row[1] as String,
               unique: row[2] as bool,

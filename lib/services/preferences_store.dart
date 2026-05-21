@@ -8,7 +8,7 @@ import 'atomic_json.dart';
 /// down the saved-connection list.
 class PreferencesStore {
   PreferencesStore({AtomicJsonFile? file})
-      : _file = file ?? AtomicJsonFile('preferences.json');
+    : _file = file ?? AtomicJsonFile('preferences.json');
 
   final AtomicJsonFile _file;
 

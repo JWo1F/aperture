@@ -8,19 +8,19 @@ import '../theme/app_theme.dart';
 
 /// Global app preferences: theme brightness, window frame, etc.
 class PreferencesController extends ChangeNotifier {
-  PreferencesController({
-    PreferencesStore? store,
-    WindowFrame? window,
-  })  : _store = store ?? PreferencesStore(),
-        _window = window ?? WindowFrame();
+  PreferencesController({PreferencesStore? store, WindowFrame? window})
+    : _store = store ?? PreferencesStore(),
+      _window = window ?? WindowFrame();
 
   final PreferencesStore _store;
   final WindowFrame _window;
 
   AppBrightness _brightness = AppBrightness.dark;
+
   AppBrightness get brightness => _brightness;
 
   bool _sidebarVisible = true;
+
   bool get sidebarVisible => _sidebarVisible;
 
   // Pane geometry. Fractions are clamped at the call site; widths are clamped
@@ -38,12 +38,15 @@ class PreferencesController extends ChangeNotifier {
   static const double queryResultsFractionDefault = 0.6;
 
   double _sidebarWidth = sidebarWidthDefault;
+
   double get sidebarWidth => _sidebarWidth;
 
   double _logPanelWidth = logPanelWidthDefault;
+
   double get logPanelWidth => _logPanelWidth;
 
   double _queryResultsFraction = queryResultsFractionDefault;
+
   double get queryResultsFraction => _queryResultsFraction;
 
   Map<String, double>? _frame;
@@ -81,9 +84,10 @@ class PreferencesController extends ChangeNotifier {
     }
     final qf = prefs['queryResultsFraction'];
     if (qf is num) {
-      _queryResultsFraction = qf
-          .toDouble()
-          .clamp(queryResultsFractionMin, queryResultsFractionMax);
+      _queryResultsFraction = qf.toDouble().clamp(
+        queryResultsFractionMin,
+        queryResultsFractionMax,
+      );
     }
 
     final frame = prefs['windowFrame'];
@@ -141,8 +145,10 @@ class PreferencesController extends ChangeNotifier {
   }
 
   void setQueryResultsFraction(double fraction) {
-    final clamped = fraction
-        .clamp(queryResultsFractionMin, queryResultsFractionMax);
+    final clamped = fraction.clamp(
+      queryResultsFractionMin,
+      queryResultsFractionMax,
+    );
     if (clamped == _queryResultsFraction) return;
     _queryResultsFraction = clamped;
     _schedulePaneSave();

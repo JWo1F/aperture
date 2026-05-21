@@ -12,25 +12,82 @@ import '../ui/widgets/code_editor.dart';
 /// (typically lowercase) identifiers. The set is intentionally small; rare
 /// keywords would only add noise to the prefix-match popup.
 const List<String> sqlKeywords = [
-  'SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING',
-  'LIMIT', 'OFFSET', 'JOIN', 'INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN',
-  'FULL JOIN', 'CROSS JOIN', 'ON', 'AS', 'AND', 'OR', 'NOT', 'NULL',
-  'TRUE', 'FALSE', 'IS', 'IS NULL', 'IS NOT NULL', 'IN', 'BETWEEN',
-  'LIKE', 'ILIKE', 'EXISTS', 'ANY', 'ALL', 'CASE', 'WHEN', 'THEN',
-  'ELSE', 'END', 'ASC', 'DESC', 'NULLS FIRST', 'NULLS LAST',
-  'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM', 'RETURNING',
-  'WITH', 'DISTINCT', 'UNION', 'INTERSECT', 'EXCEPT',
+  'SELECT',
+  'FROM',
+  'WHERE',
+  'GROUP BY',
+  'ORDER BY',
+  'HAVING',
+  'LIMIT',
+  'OFFSET',
+  'JOIN',
+  'INNER JOIN',
+  'LEFT JOIN',
+  'RIGHT JOIN',
+  'FULL JOIN',
+  'CROSS JOIN',
+  'ON',
+  'AS',
+  'AND',
+  'OR',
+  'NOT',
+  'NULL',
+  'TRUE',
+  'FALSE',
+  'IS',
+  'IS NULL',
+  'IS NOT NULL',
+  'IN',
+  'BETWEEN',
+  'LIKE',
+  'ILIKE',
+  'EXISTS',
+  'ANY',
+  'ALL',
+  'CASE',
+  'WHEN',
+  'THEN',
+  'ELSE',
+  'END',
+  'ASC',
+  'DESC',
+  'NULLS FIRST',
+  'NULLS LAST',
+  'INSERT INTO',
+  'VALUES',
+  'UPDATE',
+  'SET',
+  'DELETE FROM',
+  'RETURNING',
+  'WITH',
+  'DISTINCT',
+  'UNION',
+  'INTERSECT',
+  'EXCEPT',
 ];
 
 const List<String> whereOperatorKeywords = [
-  'AND', 'OR', 'NOT', 'IS NULL', 'IS NOT NULL', 'IN', 'BETWEEN',
-  'LIKE', 'ILIKE', 'NULL', 'TRUE', 'FALSE',
+  'AND',
+  'OR',
+  'NOT',
+  'IS NULL',
+  'IS NOT NULL',
+  'IN',
+  'BETWEEN',
+  'LIKE',
+  'ILIKE',
+  'NULL',
+  'TRUE',
+  'FALSE',
 ];
 
 const List<String> selectModifierKeywords = ['DISTINCT', 'AS', 'COUNT(*)'];
 
 const List<String> orderModifierKeywords = [
-  'ASC', 'DESC', 'NULLS FIRST', 'NULLS LAST',
+  'ASC',
+  'DESC',
+  'NULLS FIRST',
+  'NULLS LAST',
 ];
 
 /// Resolved snapshot of `FROM …` / `JOIN …` references inside one statement.
@@ -38,6 +95,7 @@ class SqlScope {
   SqlScope({required this.tables, required this.aliases});
 
   final List<DbTable> tables;
+
   /// Alias → table. Tables without an alias resolve under their bare name
   /// (so `users.id` works even when no `AS users` is written).
   final Map<String, DbTable> aliases;
@@ -68,9 +126,24 @@ final _refRe = RegExp(
 );
 
 const _clauseStops = {
-  'from', 'join', 'where', 'group', 'order', 'having', 'limit', 'offset',
-  'on', 'returning', 'union', 'intersect', 'except', 'inner', 'left',
-  'right', 'full', 'cross',
+  'from',
+  'join',
+  'where',
+  'group',
+  'order',
+  'having',
+  'limit',
+  'offset',
+  'on',
+  'returning',
+  'union',
+  'intersect',
+  'except',
+  'inner',
+  'left',
+  'right',
+  'full',
+  'cross',
 };
 
 SqlScope parseScope(String stmtText, DatabaseCatalog catalog) {
@@ -80,9 +153,9 @@ SqlScope parseScope(String stmtText, DatabaseCatalog catalog) {
   for (final m in _refRe.allMatches(stmtText)) {
     final part1 = _unquote(m.group(2)!);
     final part2 = m.group(3) == null ? null : _unquote(m.group(3)!);
-    final aliasCandidate =
-        m.group(4) == null ? null : _unquote(m.group(4)!);
-    final alias = aliasCandidate == null ||
+    final aliasCandidate = m.group(4) == null ? null : _unquote(m.group(4)!);
+    final alias =
+        aliasCandidate == null ||
             _clauseStops.contains(aliasCandidate.toLowerCase())
         ? null
         : aliasCandidate;
@@ -115,8 +188,8 @@ SqlScope parseScope(String stmtText, DatabaseCatalog catalog) {
 
 String _unquote(String s) =>
     s.length >= 2 && s.startsWith('"') && s.endsWith('"')
-        ? s.substring(1, s.length - 1)
-        : s;
+    ? s.substring(1, s.length - 1)
+    : s;
 
 bool _matches(String name, String token) {
   if (token.isEmpty) return true;
@@ -207,11 +280,13 @@ List<CodeSuggestion> completeQueryEditor({
   // Right after JOIN / FROM / UPDATE / INTO — suggest tables.
   const tableContexts = {'join', 'from', 'update', 'into'};
   if (tableContexts.contains(prev)) {
-    out.addAll(_joinSuggestions(
-      currentTables: scope.tables,
-      catalog: catalog,
-      token: req.token,
-    ));
+    out.addAll(
+      _joinSuggestions(
+        currentTables: scope.tables,
+        catalog: catalog,
+        token: req.token,
+      ),
+    );
     out.addAll(_tableNameSuggestions(catalog, req.token));
     out.addAll(_keywordSuggestions(sqlKeywords, req.token));
     return out;
@@ -251,19 +326,22 @@ List<CodeSuggestion> _joinSuggestions({
 
   for (final src in currentTables) {
     // Outbound FKs: src.col → other.col
-    for (final fk in catalog.foreignKeysByOid[src.oid] ?? const <DbForeignKey>[]) {
+    for (final fk
+        in catalog.foreignKeysByOid[src.oid] ?? const <DbForeignKey>[]) {
       if (!fk.isSingleColumn) continue;
       if (!_matches(fk.refTable, token)) continue;
       final ref = fk.refSchema == 'public' ? fk.refTable : fk.refQualified;
       final insert =
           '$ref ON ${fk.refTable}.${fk.refColumn} = ${src.name}.${fk.localColumn}';
       if (!seen.add(insert)) continue;
-      out.add(CodeSuggestion(
-        label: fk.refTable,
-        insertText: insert,
-        detail: '→ ${src.name}.${fk.localColumn}',
-        icon: Icons.link,
-      ));
+      out.add(
+        CodeSuggestion(
+          label: fk.refTable,
+          insertText: insert,
+          detail: '→ ${src.name}.${fk.localColumn}',
+          icon: Icons.link,
+        ),
+      );
     }
     // Inbound FKs: other.col → src.col
     for (final entry in catalog.foreignKeysByOid.entries) {
@@ -274,17 +352,18 @@ List<CodeSuggestion> _joinSuggestions({
         if (!fk.isSingleColumn) continue;
         if (fk.refTableOid != src.oid) continue;
         if (!_matches(other.name, token)) continue;
-        final ref =
-            other.schema == 'public' ? other.name : other.qualifiedName;
+        final ref = other.schema == 'public' ? other.name : other.qualifiedName;
         final insert =
             '$ref ON ${other.name}.${fk.localColumn} = ${src.name}.${fk.refColumn}';
         if (!seen.add(insert)) continue;
-        out.add(CodeSuggestion(
-          label: other.name,
-          insertText: insert,
-          detail: '← ${other.name}.${fk.localColumn}',
-          icon: Icons.link,
-        ));
+        out.add(
+          CodeSuggestion(
+            label: other.name,
+            insertText: insert,
+            detail: '← ${other.name}.${fk.localColumn}',
+            icon: Icons.link,
+          ),
+        );
       }
     }
   }

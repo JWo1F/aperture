@@ -8,7 +8,9 @@ import '../models/value_format.dart';
 /// can construct one directly; the UI flips [cancel] on a button press.
 class CancelToken {
   bool _cancelled = false;
+
   bool get isCancelled => _cancelled;
+
   void cancel() => _cancelled = true;
 }
 
@@ -16,6 +18,7 @@ class CancelToken {
 /// Callers should catch and delete the partial file.
 class ExportCancelledException implements Exception {
   const ExportCancelledException();
+
   @override
   String toString() => 'Export cancelled';
 }
@@ -31,7 +34,9 @@ abstract class ExportFormat {
   const ExportFormat();
 
   String get id;
+
   String get label;
+
   String get fileExtension;
 
   String render(QueryResult result);
@@ -119,7 +124,8 @@ class CsvFormat extends ExportFormat {
   String _renderRow(List<String> cells) => cells.map(_escape).join(',');
 
   String _escape(String text) {
-    final needsQuoting = text.contains(',') ||
+    final needsQuoting =
+        text.contains(',') ||
         text.contains('"') ||
         text.contains('\n') ||
         text.contains('\r');
@@ -262,7 +268,4 @@ class MarkdownFormat extends ExportFormat {
 }
 
 /// Catalog of available formats. New formats only need to be appended here.
-const List<ExportFormat> exportFormats = [
-  CsvFormat(),
-  MarkdownFormat(),
-];
+const List<ExportFormat> exportFormats = [CsvFormat(), MarkdownFormat()];

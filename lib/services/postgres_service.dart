@@ -16,20 +16,22 @@ export 'table_repository.dart'
         EditFailureException,
         buildEditStatements;
 
-List<Object?> _decodeRow(List<Object?> raw) =>
-    [for (final v in raw) decodeDriverValue(v)];
+List<Object?> _decodeRow(List<Object?> raw) => [
+  for (final v in raw) decodeDriverValue(v),
+];
 
 /// Called for every SQL statement that crosses the driver — successful or
 /// not. Lives on a single channel so swapping in a different driver (SQLite,
 /// future remote backends) is a matter of providing a new implementation
 /// of [PostgresService.execute] and [PostgresService.runTx], not chasing
 /// scattered `Connection.execute` calls.
-typedef QueryLogger = void Function({
-  required String sql,
-  required Duration elapsed,
-  required int? affectedRows,
-  required String? error,
-});
+typedef QueryLogger =
+    void Function({
+      required String sql,
+      required Duration elapsed,
+      required int? affectedRows,
+      required String? error,
+    });
 
 /// Runs [sql] on [session], times it, and reports the outcome to [logger]
 /// before either returning the [Result] or rethrowing. The single point
@@ -82,14 +84,13 @@ class TxScope {
     String sql, {
     Map<String, dynamic>? parameters,
     Duration? timeout,
-  }) =>
-      _logged(
-        _session,
-        sql,
-        parameters: parameters,
-        timeout: timeout,
-        logger: _logger,
-      );
+  }) => _logged(
+    _session,
+    sql,
+    parameters: parameters,
+    timeout: timeout,
+    logger: _logger,
+  );
 }
 
 /// Facade over a single live Postgres connection. Owns the connection
@@ -112,7 +113,8 @@ class PostgresService {
     required int statementCount,
     required Duration elapsed,
     required String? error,
-  })? onEditApplied;
+  })?
+  onEditApplied;
 
   Connection? _connection;
   TableRepository? _repository;
@@ -166,25 +168,23 @@ class PostgresService {
     String sql, {
     Map<String, dynamic>? parameters,
     Duration? timeout,
-  }) =>
-      _logged(
-        _conn,
-        sql,
-        parameters: parameters,
-        timeout: timeout,
-        logger: onQueryRun,
-      );
+  }) => _logged(
+    _conn,
+    sql,
+    parameters: parameters,
+    timeout: timeout,
+    logger: onQueryRun,
+  );
 
   /// Runs [action] inside a real transaction. Statements executed on the
   /// supplied [TxScope] log through the same channel as standalone calls.
   Future<T> runTx<T>(
     Future<T> Function(TxScope) action, {
     TransactionSettings? settings,
-  }) =>
-      _conn.runTx<T>(
-        (session) => action(TxScope._(session, onQueryRun)),
-        settings: settings,
-      );
+  }) => _conn.runTx<T>(
+    (session) => action(TxScope._(session, onQueryRun)),
+    settings: settings,
+  );
 
   // --- Delegations preserved so existing call sites compile ----------
 
@@ -198,31 +198,28 @@ class PostgresService {
     String filter = '',
     String orderBy = '',
     String selectList = '*',
-  }) =>
-      tableRepository.fetchPage(
-        table,
-        limit: limit,
-        offset: offset,
-        filter: filter,
-        orderBy: orderBy,
-        selectList: selectList,
-      );
+  }) => tableRepository.fetchPage(
+    table,
+    limit: limit,
+    offset: offset,
+    filter: filter,
+    orderBy: orderBy,
+    selectList: selectList,
+  );
 
   Future<QueryResult> fetchAllTableRows(
     DbTable table, {
     String filter = '',
     String orderBy = '',
     String selectList = '*',
-  }) =>
-      tableRepository.fetchAll(
-        table,
-        filter: filter,
-        orderBy: orderBy,
-        selectList: selectList,
-      );
+  }) => tableRepository.fetchAll(
+    table,
+    filter: filter,
+    orderBy: orderBy,
+    selectList: selectList,
+  );
 
-  Future<String> loadTableDdl(DbTable table) =>
-      tableRepository.loadDdl(table);
+  Future<String> loadTableDdl(DbTable table) => tableRepository.loadDdl(table);
 
   Future<int> applyTableEdits(
     DbTable table,
@@ -230,8 +227,7 @@ class PostgresService {
   ) async {
     final watch = Stopwatch()..start();
     try {
-      final affected =
-          await tableRepository.applyEdits(table, updatesByCtid);
+      final affected = await tableRepository.applyEdits(table, updatesByCtid);
       watch.stop();
       onEditApplied?.call(
         statementCount: updatesByCtid.length,

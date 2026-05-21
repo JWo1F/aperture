@@ -65,8 +65,7 @@ class _QueryPlanViewState extends State<QueryPlanView> {
         onRun: tab.sql.trim().isNotEmpty ? _runAsExplain : null,
       );
     }
-    final stale = tab.lastRunSql != null &&
-        tab.planSourceSql != tab.lastRunSql;
+    final stale = tab.lastRunSql != null && tab.planSourceSql != tab.lastRunSql;
     return _PlanTree(planJson: json, stale: stale);
   }
 }
@@ -105,8 +104,11 @@ class _PlanSuggestion extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.account_tree_outlined,
-                size: 30, color: AppColors.textMuted),
+            Icon(
+              Icons.account_tree_outlined,
+              size: 30,
+              color: AppColors.textMuted,
+            ),
             const SizedBox(height: 10),
             Text(
               'See how Postgres runs your query',
@@ -120,9 +122,9 @@ class _PlanSuggestion extends StatelessWidget {
             Text(
               enabled
                   ? 'EXPLAIN walks every step of the plan: which tables it '
-                      'reads, how it joins them, and where time is spent.'
+                        'reads, how it joins them, and where time is spent.'
                   : 'Write SQL in the editor above and the plan will '
-                      'become available here.',
+                        'become available here.',
               textAlign: TextAlign.center,
               style: AppTheme.mono(size: 11.5, color: AppColors.textMuted),
             ),
@@ -142,6 +144,7 @@ class _PlanSuggestion extends StatelessWidget {
 
 class _PlanError extends StatelessWidget {
   const _PlanError({required this.message});
+
   final String message;
 
   @override
@@ -197,8 +200,7 @@ const Map<String, String> _nodeDescriptions = {
   'Function Scan': 'Iterates the rows returned by a set-returning function.',
   'Values Scan': 'Reads an inline VALUES list.',
   'CTE Scan': 'Iterates rows produced by a WITH clause.',
-  'WorkTable Scan':
-      'Iterates the working set of a recursive WITH clause.',
+  'WorkTable Scan': 'Iterates the working set of a recursive WITH clause.',
   'Foreign Scan': 'Reads rows from a foreign (remote) table.',
   'Nested Loop':
       'For each row on the left, finds the matching rows on the right.',
@@ -207,11 +209,9 @@ const Map<String, String> _nodeDescriptions = {
   'Merge Join':
       'Merges two sorted inputs together, the way mergesort merges runs.',
   'Hash': 'Builds an in-memory hash table to feed the join above it.',
-  'Materialize':
-      'Caches its input so the parent can scan it more than once.',
+  'Materialize': 'Caches its input so the parent can scan it more than once.',
   'Sort': 'Sorts its input by the requested keys.',
-  'Incremental Sort':
-      'Sorts within groups that are already partly sorted.',
+  'Incremental Sort': 'Sorts within groups that are already partly sorted.',
   'Group': 'Groups consecutive rows with equal keys.',
   'Aggregate': 'Reduces input rows to one row per group (count, sum, …).',
   'WindowAgg': 'Computes window-function values over partitions.',
@@ -307,13 +307,16 @@ class _PlanTree extends StatelessWidget {
     String? parentType,
     List<_PlanNode> out,
   ) {
-    out.add(_PlanNode(
-      node: node,
-      depth: depth,
-      ancestorIsLast: ancestorIsLast,
-      parentType: parentType,
-    ));
-    final children = (node['Plans'] as List?)?.cast<Map<String, dynamic>>() ??
+    out.add(
+      _PlanNode(
+        node: node,
+        depth: depth,
+        ancestorIsLast: ancestorIsLast,
+        parentType: parentType,
+      ),
+    );
+    final children =
+        (node['Plans'] as List?)?.cast<Map<String, dynamic>>() ??
         const <Map<String, dynamic>>[];
     final type = node['Node Type'] as String?;
     for (var i = 0; i < children.length; i++) {
@@ -349,23 +352,33 @@ class _PlanNode {
   /// above it ("hash input" vs. "outer side" vs. "feeds Aggregate").
   final String? parentType;
 
-  bool get isLastChild =>
-      ancestorIsLast.isNotEmpty && ancestorIsLast.last;
+  bool get isLastChild => ancestorIsLast.isNotEmpty && ancestorIsLast.last;
 
   String get type => node['Node Type'] as String? ?? 'Unknown';
+
   String? get relation => node['Relation Name'] as String?;
+
   String? get indexName => node['Index Name'] as String?;
+
   String? get alias => node['Alias'] as String?;
+
   String? get schema => node['Schema'] as String?;
+
   String? get strategy => node['Strategy'] as String?;
+
   String? get joinType => node['Join Type'] as String?;
+
   String? get parentRelationship => node['Parent Relationship'] as String?;
 
   double? get actualTotalTime =>
       (node['Actual Total Time'] as num?)?.toDouble();
+
   int? get actualRows => (node['Actual Rows'] as num?)?.toInt();
+
   int? get actualLoops => (node['Actual Loops'] as num?)?.toInt();
+
   int? get planRows => (node['Plan Rows'] as num?)?.toInt();
+
   double? get totalCost => (node['Total Cost'] as num?)?.toDouble();
 
   /// Total wall-time spent inside this node — per-loop time × loop count.
@@ -382,9 +395,11 @@ class _PlanNode {
     final parts = <String>[];
     if (indexName != null) parts.add('via ${indexName!}');
     if (relation != null) {
-      parts.add(alias != null && alias != relation
-          ? '${relation!} (as $alias)'
-          : relation!);
+      parts.add(
+        alias != null && alias != relation
+            ? '${relation!} (as $alias)'
+            : relation!,
+      );
     }
     if (parts.isEmpty) return null;
     return parts.join(' ');
@@ -479,8 +494,8 @@ class _PlanNode {
     final ratio = a == 0
         ? e.toDouble()
         : e == 0
-            ? a.toDouble()
-            : (a / e).clamp(1 / 10000, 10000.0);
+        ? a.toDouble()
+        : (a / e).clamp(1 / 10000, 10000.0);
     final fold = ratio >= 1 ? ratio : 1 / ratio;
     if (fold < 2) return _Mismatch.none;
     if (fold < 10) return _Mismatch.mild;
@@ -539,10 +554,7 @@ class _SummaryHeader extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             subtitle,
-            style: AppTheme.mono(
-              size: 11,
-              color: AppColors.textMuted,
-            ),
+            style: AppTheme.mono(size: 11, color: AppColors.textMuted),
           ),
         ],
       ),
@@ -587,10 +599,7 @@ class _BigMetric extends StatelessWidget {
               TextSpan(text: valueMs.toStringAsFixed(2)),
               TextSpan(
                 text: ' ms',
-                style: AppTheme.mono(
-                  size: 11,
-                  color: AppColors.textMuted,
-                ),
+                style: AppTheme.mono(size: 11, color: AppColors.textMuted),
               ),
             ],
           ),
@@ -633,69 +642,62 @@ class _NodeCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: IntrinsicHeight(
         child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (node.depth > 0)
-            SizedBox(
-              width: node.depth * _indentStep,
-              child: _IndentRail(
-                node: node,
-                indentStep: _indentStep,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (node.depth > 0)
+              SizedBox(
+                width: node.depth * _indentStep,
+                child: _IndentRail(node: node, indentStep: _indentStep),
               ),
-            ),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              decoration: BoxDecoration(
-                color: cardColor,
-                border: Border.all(color: borderColor),
-                borderRadius: Radii.brMd,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (node.relationshipLabel != null) ...[
-                    _RelationshipKicker(
-                      label: node.relationshipLabel!,
-                      parentType: node.parentType,
-                    ),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                decoration: BoxDecoration(
+                  color: cardColor,
+                  border: Border.all(color: borderColor),
+                  borderRadius: Radii.brMd,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (node.relationshipLabel != null) ...[
+                      _RelationshipKicker(
+                        label: node.relationshipLabel!,
+                        parentType: node.parentType,
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    _CardHeader(node: node, pct: pct, isSlowest: isSlowest),
                     const SizedBox(height: 4),
-                  ],
-                  _CardHeader(
-                    node: node,
-                    pct: pct,
-                    isSlowest: isSlowest,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _describeNode(node.type),
-                    style: AppTheme.mono(
-                      size: 11,
-                      color: AppColors.textMuted,
+                    Text(
+                      _describeNode(node.type),
+                      style: AppTheme.mono(
+                        size: 11,
+                        color: AppColors.textMuted,
+                      ),
                     ),
-                  ),
-                  if (node.conditions.isNotEmpty) ...[
+                    if (node.conditions.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          for (final c in node.conditions)
+                            _ConditionChip(label: c.$1, value: c.$2),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    _MetricsRow(node: node, pct: pct),
                     const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        for (final c in node.conditions)
-                          _ConditionChip(label: c.$1, value: c.$2),
-                      ],
-                    ),
+                    _TimeBar(fraction: fraction, isSlowest: isSlowest),
                   ],
-                  const SizedBox(height: 8),
-                  _MetricsRow(node: node, pct: pct),
-                  const SizedBox(height: 6),
-                  _TimeBar(fraction: fraction, isSlowest: isSlowest),
-                ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
 }
@@ -781,8 +783,7 @@ class _RailPainter extends CustomPainter {
 
     // Immediate parent slot: corner + arrow.
     final parentX = (depth - 1) * indentStep + indentStep / 2;
-    final isLast =
-        ancestorIsLast.isNotEmpty && ancestorIsLast.last;
+    final isLast = ancestorIsLast.isNotEmpty && ancestorIsLast.last;
 
     // Vertical down from the top — stop at the corner if this is the
     // last child of its parent, continue to the bottom otherwise so the
@@ -895,18 +896,12 @@ class _CardHeader extends StatelessWidget {
           Flexible(
             child: Text(
               target,
-              style: AppTheme.mono(
-                size: 12,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTheme.mono(size: 12, color: AppColors.textPrimary),
               overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
-        if (isSlowest) ...[
-          const SizedBox(width: 8),
-          _SlowestPill(),
-        ],
+        if (isSlowest) ...[const SizedBox(width: 8), _SlowestPill()],
         const Spacer(),
         if (ms != null) ...[
           Text(
@@ -922,10 +917,7 @@ class _CardHeader extends StatelessWidget {
         ] else if (node.totalCost != null) ...[
           Text(
             'cost ${node.totalCost!.toStringAsFixed(1)}',
-            style: AppTheme.mono(
-              size: 11.5,
-              color: AppColors.textSecondary,
-            ),
+            style: AppTheme.mono(size: 11.5, color: AppColors.textSecondary),
           ),
         ],
       ],
@@ -956,6 +948,7 @@ class _SlowestPill extends StatelessWidget {
 
 class _PercentChip extends StatelessWidget {
   const _PercentChip({required this.pct});
+
   final int pct;
 
   @override
@@ -976,11 +969,7 @@ class _PercentChip extends StatelessWidget {
       ),
       child: Text(
         '$pct%',
-        style: AppTheme.mono(
-          size: 10,
-          color: color,
-          weight: FontWeight.w600,
-        ),
+        style: AppTheme.mono(size: 10, color: color, weight: FontWeight.w600),
       ),
     );
   }
@@ -988,6 +977,7 @@ class _PercentChip extends StatelessWidget {
 
 class _NodeBadge extends StatelessWidget {
   const _NodeBadge({required this.type, required this.small});
+
   final String type;
   final bool small;
 
@@ -1022,11 +1012,7 @@ class _NodeBadge extends StatelessWidget {
       ),
       child: Text(
         type,
-        style: AppTheme.mono(
-          size: size,
-          color: color,
-          weight: FontWeight.w600,
-        ),
+        style: AppTheme.mono(size: size, color: color, weight: FontWeight.w600),
       ),
     );
   }
@@ -1034,6 +1020,7 @@ class _NodeBadge extends StatelessWidget {
 
 class _ConditionChip extends StatelessWidget {
   const _ConditionChip({required this.label, required this.value});
+
   final String label;
   final String value;
 
@@ -1052,10 +1039,7 @@ class _ConditionChip extends StatelessWidget {
           children: [
             TextSpan(
               text: '$label ',
-              style: AppTheme.mono(
-                size: 10.5,
-                color: AppColors.textMuted,
-              ),
+              style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
             ),
             TextSpan(text: value),
           ],
@@ -1067,6 +1051,7 @@ class _ConditionChip extends StatelessWidget {
 
 class _MetricsRow extends StatelessWidget {
   const _MetricsRow({required this.node, required this.pct});
+
   final _PlanNode node;
   final int pct;
 
@@ -1078,11 +1063,9 @@ class _MetricsRow extends StatelessWidget {
     if (actual != null) {
       segments.add(_Metric(label: 'rows', value: _fmt(actual)));
       if (est != null) {
-        segments.add(_Metric(
-          label: 'estimated',
-          value: _fmt(est),
-          muted: true,
-        ));
+        segments.add(
+          _Metric(label: 'estimated', value: _fmt(est), muted: true),
+        );
       }
     } else if (est != null) {
       segments.add(_Metric(label: 'rows est', value: _fmt(est)));
@@ -1120,11 +1103,8 @@ class _MetricsRow extends StatelessWidget {
 }
 
 class _Metric extends StatelessWidget {
-  const _Metric({
-    required this.label,
-    required this.value,
-    this.muted = false,
-  });
+  const _Metric({required this.label, required this.value, this.muted = false});
+
   final String label;
   final String value;
   final bool muted;
@@ -1139,8 +1119,7 @@ class _Metric extends StatelessWidget {
             text: value,
             style: AppTheme.mono(
               size: 11,
-              color:
-                  muted ? AppColors.textMuted : AppColors.textPrimary,
+              color: muted ? AppColors.textMuted : AppColors.textPrimary,
               weight: muted ? FontWeight.w500 : FontWeight.w600,
             ),
           ),
@@ -1203,6 +1182,7 @@ class _MismatchChip extends StatelessWidget {
 
 class _TimeBar extends StatelessWidget {
   const _TimeBar({required this.fraction, required this.isSlowest});
+
   final double fraction;
   final bool isSlowest;
 
@@ -1212,10 +1192,10 @@ class _TimeBar extends StatelessWidget {
     final fillColor = isSlowest
         ? AppColors.warning
         : clamped >= 0.6
-            ? AppColors.warning
-            : clamped >= 0.25
-                ? AppColors.accent
-                : AppColors.accent.withValues(alpha: 0.55);
+        ? AppColors.warning
+        : clamped >= 0.25
+        ? AppColors.accent
+        : AppColors.accent.withValues(alpha: 0.55);
     return Stack(
       children: [
         Container(
@@ -1255,8 +1235,11 @@ class _StaleBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.warning_amber_outlined,
-              size: 12, color: AppColors.warning),
+          Icon(
+            Icons.warning_amber_outlined,
+            size: 12,
+            color: AppColors.warning,
+          ),
           const SizedBox(width: 6),
           Text(
             'Plan is for an earlier run — re-fetching.',
@@ -1310,14 +1293,16 @@ List<_PlanAdvice> _deriveAdvice({
   }
 
   if (out.isEmpty && analyzed) {
-    out.add(_PlanAdvice(
-      severity: _AdviceSeverity.good,
-      title: 'Plan looks healthy',
-      body: totalExecutionMs == null
-          ? 'No bottlenecks worth flagging — nothing actionable here.'
-          : 'Finished in ${totalExecutionMs.toStringAsFixed(2)} ms with no '
-              'obvious bottlenecks.',
-    ));
+    out.add(
+      _PlanAdvice(
+        severity: _AdviceSeverity.good,
+        title: 'Plan looks healthy',
+        body: totalExecutionMs == null
+            ? 'No bottlenecks worth flagging — nothing actionable here.'
+            : 'Finished in ${totalExecutionMs.toStringAsFixed(2)} ms with no '
+                  'obvious bottlenecks.',
+      ),
+    );
   }
   return out;
 }
@@ -1330,6 +1315,7 @@ class _MismatchCandidate {
     required this.estimated,
     required this.fold,
   });
+
   final String type;
   final String? relation;
   final int actual;
@@ -1339,13 +1325,14 @@ class _MismatchCandidate {
   _PlanAdvice toAdvice() {
     final fixHint = relation != null
         ? 'Run `ANALYZE $relation` to refresh statistics — the planner is '
-            'choosing strategies blind right now.'
+              'choosing strategies blind right now.'
         : 'Refresh table stats with `ANALYZE` so the planner can pick a '
-            'better strategy.';
+              'better strategy.';
     return _PlanAdvice(
       severity: _AdviceSeverity.warn,
       title: 'Planner estimate off by ${fold.round()}× on $type',
-      body: 'Expected ${_fmtAdviceInt(estimated)} rows, got '
+      body:
+          'Expected ${_fmtAdviceInt(estimated)} rows, got '
           '${_fmtAdviceInt(actual)}. $fixHint',
     );
   }
@@ -1379,13 +1366,16 @@ void _walkAdvice(
       qualified() != null) {
     final total = rowsRemoved + actualRows;
     if (total >= 10000 && rowsRemoved >= actualRows * 9) {
-      out.add(_PlanAdvice(
-        severity: _AdviceSeverity.warn,
-        title: 'Seq Scan with selective filter on ${qualified()}',
-        body: 'Read ${_fmtAdviceInt(total)} rows and discarded '
-            '${_fmtAdviceInt(rowsRemoved)} of them. An index on the '
-            'filtered column(s) would let Postgres skip most of the table.',
-      ));
+      out.add(
+        _PlanAdvice(
+          severity: _AdviceSeverity.warn,
+          title: 'Seq Scan with selective filter on ${qualified()}',
+          body:
+              'Read ${_fmtAdviceInt(total)} rows and discarded '
+              '${_fmtAdviceInt(rowsRemoved)} of them. An index on the '
+              'filtered column(s) would let Postgres skip most of the table.',
+        ),
+      );
     }
   }
 
@@ -1394,13 +1384,16 @@ void _walkAdvice(
     final spaceType = node['Sort Space Type'] as String?;
     final spaceUsedKb = (node['Sort Space Used'] as num?)?.toInt();
     if (spaceType == 'Disk') {
-      out.add(_PlanAdvice(
-        severity: _AdviceSeverity.critical,
-        title: '$type spilled to disk',
-        body: 'Wrote ${spaceUsedKb == null ? "data" : _fmtKb(spaceUsedKb)} '
-            'to temp files. Raise `work_mem` for this session, or return '
-            'fewer rows before sorting.',
-      ));
+      out.add(
+        _PlanAdvice(
+          severity: _AdviceSeverity.critical,
+          title: '$type spilled to disk',
+          body:
+              'Wrote ${spaceUsedKb == null ? "data" : _fmtKb(spaceUsedKb)} '
+              'to temp files. Raise `work_mem` for this session, or return '
+              'fewer rows before sorting.',
+        ),
+      );
     }
   }
 
@@ -1408,41 +1401,51 @@ void _walkAdvice(
   if (type == 'Hash') {
     final batches = (node['Hash Batches'] as num?)?.toInt();
     if (batches != null && batches > 1) {
-      out.add(_PlanAdvice(
-        severity: _AdviceSeverity.warn,
-        title: 'Hash table did not fit in memory',
-        body: 'Postgres split the hash into $batches batches because '
-            '`work_mem` was too small. Raise `work_mem` if this query is '
-            'on the hot path.',
-      ));
+      out.add(
+        _PlanAdvice(
+          severity: _AdviceSeverity.warn,
+          title: 'Hash table did not fit in memory',
+          body:
+              'Postgres split the hash into $batches batches because '
+              '`work_mem` was too small. Raise `work_mem` if this query is '
+              'on the hot path.',
+        ),
+      );
     }
   }
 
   // 4. Temp blocks spilled by a non-Sort/Hash node (catch-all).
-  final tempBlocks = ((node['Temp Read Blocks'] as num?)?.toInt() ?? 0) +
+  final tempBlocks =
+      ((node['Temp Read Blocks'] as num?)?.toInt() ?? 0) +
       ((node['Temp Written Blocks'] as num?)?.toInt() ?? 0);
   if (tempBlocks > 0 && type != 'Sort' && type != 'Hash') {
-    out.add(_PlanAdvice(
-      severity: _AdviceSeverity.warn,
-      title: '$type spilled to temp files',
-      body: 'Used ${_fmtKb(tempBlocks * 8)} of temp files. Raise `work_mem` '
-          'or break the query into smaller pieces.',
-    ));
+    out.add(
+      _PlanAdvice(
+        severity: _AdviceSeverity.warn,
+        title: '$type spilled to temp files',
+        body:
+            'Used ${_fmtKb(tempBlocks * 8)} of temp files. Raise `work_mem` '
+            'or break the query into smaller pieces.',
+      ),
+    );
   }
 
   // 5. Index Only Scan still hits the heap (stale visibility map).
   if (type == 'Index Only Scan') {
     final heap = (node['Heap Fetches'] as num?)?.toInt() ?? 0;
     if (heap > 0 && actualRows != null && heap > actualRows * 0.05) {
-      out.add(_PlanAdvice(
-        severity: _AdviceSeverity.info,
-        title: 'Index Only Scan still reads the table',
-        body: 'Postgres had to fetch from the heap ${_fmtAdviceInt(heap)} '
-            'times because the visibility map is stale. '
-            '${qualified() != null ? "Run `VACUUM ${qualified()}` to "
-                "restore true index-only behavior." : "VACUUM the table to "
-                "restore true index-only behavior."}',
-      ));
+      out.add(
+        _PlanAdvice(
+          severity: _AdviceSeverity.info,
+          title: 'Index Only Scan still reads the table',
+          body:
+              'Postgres had to fetch from the heap ${_fmtAdviceInt(heap)} '
+              'times because the visibility map is stale. '
+              '${qualified() != null ? "Run `VACUUM ${qualified()}` to "
+                        "restore true index-only behavior." : "VACUUM the table to "
+                        "restore true index-only behavior."}',
+        ),
+      );
     }
   }
 
@@ -1453,13 +1456,15 @@ void _walkAdvice(
     final e = planRows == 0 ? 1 : planRows;
     final fold = a > e ? a / e : e / a;
     if (fold >= 10 && (actualRows > 100 || qualified() != null)) {
-      mismatchOut.add(_MismatchCandidate(
-        type: type,
-        relation: qualified(),
-        actual: actualRows,
-        estimated: planRows,
-        fold: fold.toDouble(),
-      ));
+      mismatchOut.add(
+        _MismatchCandidate(
+          type: type,
+          relation: qualified(),
+          actual: actualRows,
+          estimated: planRows,
+          fold: fold.toDouble(),
+        ),
+      );
     }
   }
 
@@ -1476,13 +1481,16 @@ void _walkAdvice(
       final innerType = inner['Node Type'] as String? ?? '';
       final innerIndexed = innerType.contains('Index');
       if (outerTotal >= 1000 && !innerIndexed) {
-        out.add(_PlanAdvice(
-          severity: _AdviceSeverity.warn,
-          title: 'Nested Loop without an index on the inner side',
-          body: 'Outer side feeds ${_fmtAdviceInt(outerTotal)} rows into a '
-              '$innerType inner side. A Hash/Merge join — or an index on '
-              'the join key — would scale much better.',
-        ));
+        out.add(
+          _PlanAdvice(
+            severity: _AdviceSeverity.warn,
+            title: 'Nested Loop without an index on the inner side',
+            body:
+                'Outer side feeds ${_fmtAdviceInt(outerTotal)} rows into a '
+                '$innerType inner side. A Hash/Merge join — or an index on '
+                'the join key — would scale much better.',
+          ),
+        );
       }
     }
   }
@@ -1492,29 +1500,36 @@ void _walkAdvice(
     final parentType = parent['Node Type'];
     final method = node['Sort Method'] as String? ?? '';
     if (parentType == 'Limit' && !method.contains('top-N')) {
-      out.add(_PlanAdvice(
-        severity: _AdviceSeverity.info,
-        title: 'Full sort feeding a LIMIT',
-        body: 'Sort processed all input rows before LIMIT trimmed it. An '
-            'index matching the ORDER BY would let Postgres stop early.',
-      ));
+      out.add(
+        _PlanAdvice(
+          severity: _AdviceSeverity.info,
+          title: 'Full sort feeding a LIMIT',
+          body:
+              'Sort processed all input rows before LIMIT trimmed it. An '
+              'index matching the ORDER BY would let Postgres stop early.',
+        ),
+      );
     }
   }
 
   // 9. LIKE/ILIKE filter on a heap scan large enough to matter.
   if (filter != null && (type == 'Seq Scan' || type == 'Bitmap Heap Scan')) {
-    final hasLike = filter.contains('~~') ||
+    final hasLike =
+        filter.contains('~~') ||
         filter.toLowerCase().contains(' like ') ||
         filter.toLowerCase().contains(' ilike ');
     final scanned = (actualRows ?? 0) + (rowsRemoved ?? 0);
     if (hasLike && scanned >= 1000) {
-      out.add(_PlanAdvice(
-        severity: _AdviceSeverity.info,
-        title: 'Pattern match runs without an index',
-        body: 'A LIKE/ILIKE filter is being evaluated row-by-row. A '
-            '`pg_trgm` GIN or GIST index on the column would let Postgres '
-            'narrow the rows first.',
-      ));
+      out.add(
+        _PlanAdvice(
+          severity: _AdviceSeverity.info,
+          title: 'Pattern match runs without an index',
+          body:
+              'A LIKE/ILIKE filter is being evaluated row-by-row. A '
+              '`pg_trgm` GIN or GIST index on the column would let Postgres '
+              'narrow the rows first.',
+        ),
+      );
     }
   }
 
@@ -1524,13 +1539,16 @@ void _walkAdvice(
   if (workersPlanned != null &&
       workersLaunched != null &&
       workersLaunched < workersPlanned) {
-    out.add(_PlanAdvice(
-      severity: _AdviceSeverity.info,
-      title: 'Parallel workers capped',
-      body: 'Postgres planned $workersPlanned workers but only launched '
-          '$workersLaunched. `max_parallel_workers` (or '
-          '`max_parallel_workers_per_gather`) is the ceiling.',
-    ));
+    out.add(
+      _PlanAdvice(
+        severity: _AdviceSeverity.info,
+        title: 'Parallel workers capped',
+        body:
+            'Postgres planned $workersPlanned workers but only launched '
+            '$workersLaunched. `max_parallel_workers` (or '
+            '`max_parallel_workers_per_gather`) is the ceiling.',
+      ),
+    );
   }
 
   final children =
@@ -1571,7 +1589,8 @@ class _AdviceSection extends StatelessWidget {
             _PlanAdvice(
               severity: _AdviceSeverity.info,
               title: 'Plan shown without execution',
-              body: 'This statement was not run under ANALYZE, so costs are '
+              body:
+                  'This statement was not run under ANALYZE, so costs are '
                   'estimates and row counts are guesses. Run it as a SELECT '
                   'to see measured times and targeted advice.',
             ),
@@ -1592,6 +1611,7 @@ class _AdviceSection extends StatelessWidget {
 
 class _AdviceCard extends StatelessWidget {
   const _AdviceCard({required this.advice});
+
   final _PlanAdvice advice;
 
   @override

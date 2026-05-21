@@ -1,11 +1,10 @@
 /// Filesystem-safe ISO-ish timestamp suitable for export filenames:
 /// `2026-05-20T14-32-10` (no colons, no fractional seconds).
-String filenameTimestamp([DateTime? now]) =>
-    (now ?? DateTime.now())
-        .toIso8601String()
-        .replaceAll(':', '-')
-        .split('.')
-        .first;
+String filenameTimestamp([DateTime? now]) => (now ?? DateTime.now())
+    .toIso8601String()
+    .replaceAll(':', '-')
+    .split('.')
+    .first;
 
 /// Compact relative-time formatter ("3m ago", "yesterday", "5d ago").
 String timeAgo(DateTime when, {DateTime? now}) {

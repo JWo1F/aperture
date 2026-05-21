@@ -116,17 +116,16 @@ class DatabaseCatalog {
     return out;
   }
 
-  DatabaseCatalog withPhase(CatalogPhase phase) =>
-      DatabaseCatalog(
-        schemas: schemas,
-        relationsByOid: relationsByOid,
-        columnsByOid: columnsByOid,
-        foreignKeysByOid: foreignKeysByOid,
-        indexesByOid: indexesByOid,
-        enums: enums,
-        domains: domains,
-        phases: {...phases, phase},
-      );
+  DatabaseCatalog withPhase(CatalogPhase phase) => DatabaseCatalog(
+    schemas: schemas,
+    relationsByOid: relationsByOid,
+    columnsByOid: columnsByOid,
+    foreignKeysByOid: foreignKeysByOid,
+    indexesByOid: indexesByOid,
+    enums: enums,
+    domains: domains,
+    phases: {...phases, phase},
+  );
 
   DatabaseCatalog copyWith({
     List<DbSchema>? schemas,
@@ -137,17 +136,16 @@ class DatabaseCatalog {
     List<DbEnum>? enums,
     List<DbDomain>? domains,
     Set<CatalogPhase>? phases,
-  }) =>
-      DatabaseCatalog(
-        schemas: schemas ?? this.schemas,
-        relationsByOid: relationsByOid ?? this.relationsByOid,
-        columnsByOid: columnsByOid ?? this.columnsByOid,
-        foreignKeysByOid: foreignKeysByOid ?? this.foreignKeysByOid,
-        indexesByOid: indexesByOid ?? this.indexesByOid,
-        enums: enums ?? this.enums,
-        domains: domains ?? this.domains,
-        phases: phases ?? this.phases,
-      );
+  }) => DatabaseCatalog(
+    schemas: schemas ?? this.schemas,
+    relationsByOid: relationsByOid ?? this.relationsByOid,
+    columnsByOid: columnsByOid ?? this.columnsByOid,
+    foreignKeysByOid: foreignKeysByOid ?? this.foreignKeysByOid,
+    indexesByOid: indexesByOid ?? this.indexesByOid,
+    enums: enums ?? this.enums,
+    domains: domains ?? this.domains,
+    phases: phases ?? this.phases,
+  );
 }
 
 /// A single batched introspection step. Each phase, once present in

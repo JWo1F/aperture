@@ -26,12 +26,12 @@ class LogEvent {
   final String? error;
 
   Map<String, dynamic> toJson() => {
-        'ts': timestamp.toIso8601String(),
-        'kind': kind.name,
-        if (connectionName != null) 'connection': connectionName,
-        if (sql != null) 'sql': sql,
-        if (elapsed != null) 'ms': elapsed!.inMilliseconds,
-        if (affectedRows != null) 'affected': affectedRows,
-        if (error != null) 'error': error,
-      };
+    'ts': timestamp.toIso8601String(),
+    'kind': kind.name,
+    if (connectionName != null) 'connection': connectionName,
+    if (sql != null) 'sql': sql,
+    if (elapsed != null) 'ms': elapsed!.inMilliseconds,
+    if (affectedRows != null) 'affected': affectedRows,
+    if (error != null) 'error': error,
+  };
 }

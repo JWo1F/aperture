@@ -10,31 +10,31 @@ import 'app_theme.dart';
 /// Rebuilt on each access so palette swaps (dark ⇄ light) take effect on
 /// the next paint without threading a theme object through every consumer.
 Map<String, TextStyle> get apertureCodeStyles => {
-      'root': TextStyle(
-        color: AppColors.textPrimary,
-        backgroundColor: AppColors.bg,
-      ),
-      'keyword': TextStyle(
-        color: AppColors.sqlKeyword,
-        fontWeight: FontWeight.w500,
-      ),
-      'built_in': TextStyle(color: AppColors.sqlFunction),
-      'type': TextStyle(color: AppColors.sqlKeyword),
-      'literal': TextStyle(color: AppColors.sqlNumber),
-      'number': TextStyle(color: AppColors.sqlNumber),
-      'string': TextStyle(color: AppColors.sqlString),
-      'symbol': TextStyle(color: AppColors.sqlString),
-      'comment': TextStyle(
-        color: AppColors.sqlComment,
-        fontStyle: FontStyle.italic,
-      ),
-      'meta': TextStyle(color: AppColors.sqlComment),
-      'operator': TextStyle(color: AppColors.sqlOperator),
-      'punctuation': TextStyle(color: AppColors.sqlOperator),
-      'attr': TextStyle(color: AppColors.sqlIdentifier),
-      'name': TextStyle(color: AppColors.sqlIdentifier),
-      'function': TextStyle(color: AppColors.sqlFunction),
-    };
+  'root': TextStyle(
+    color: AppColors.textPrimary,
+    backgroundColor: AppColors.bg,
+  ),
+  'keyword': TextStyle(
+    color: AppColors.sqlKeyword,
+    fontWeight: FontWeight.w500,
+  ),
+  'built_in': TextStyle(color: AppColors.sqlFunction),
+  'type': TextStyle(color: AppColors.sqlKeyword),
+  'literal': TextStyle(color: AppColors.sqlNumber),
+  'number': TextStyle(color: AppColors.sqlNumber),
+  'string': TextStyle(color: AppColors.sqlString),
+  'symbol': TextStyle(color: AppColors.sqlString),
+  'comment': TextStyle(
+    color: AppColors.sqlComment,
+    fontStyle: FontStyle.italic,
+  ),
+  'meta': TextStyle(color: AppColors.sqlComment),
+  'operator': TextStyle(color: AppColors.sqlOperator),
+  'punctuation': TextStyle(color: AppColors.sqlOperator),
+  'attr': TextStyle(color: AppColors.sqlIdentifier),
+  'name': TextStyle(color: AppColors.sqlIdentifier),
+  'function': TextStyle(color: AppColors.sqlFunction),
+};
 
 /// Walks a `highlight` parse tree and returns the matching [TextSpan] tree.
 /// Theme styles are merged on top of [base] so the caller's font choice
@@ -47,18 +47,19 @@ List<InlineSpan> highlightNodesToSpans(
   if (nodes == null) return const [];
   final out = <InlineSpan>[];
   for (final node in nodes) {
-    final classStyle =
-        node.className == null ? null : theme[node.className!];
+    final classStyle = node.className == null ? null : theme[node.className!];
     if (node.value != null) {
-      out.add(TextSpan(
-        text: node.value,
-        style: classStyle == null ? base : base.merge(classStyle),
-      ));
+      out.add(
+        TextSpan(
+          text: node.value,
+          style: classStyle == null ? base : base.merge(classStyle),
+        ),
+      );
     } else if (node.children != null) {
       final inner = classStyle == null ? base : base.merge(classStyle);
-      out.add(TextSpan(
-        children: highlightNodesToSpans(node.children, inner, theme),
-      ));
+      out.add(
+        TextSpan(children: highlightNodesToSpans(node.children, inner, theme)),
+      );
     }
   }
   return out;

@@ -102,11 +102,7 @@ class _ContextMenuOverlay extends StatelessWidget {
         Positioned(
           left: x,
           top: y,
-          child: _Menu(
-            entries: entries,
-            onClose: onClose,
-            width: _menuWidth,
-          ),
+          child: _Menu(entries: entries, onClose: onClose, width: _menuWidth),
         ),
       ],
     );
@@ -150,7 +146,10 @@ class _Menu extends StatelessWidget {
             for (final e in entries)
               if (e is CmDivider)
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 3,
+                    horizontal: 6,
+                  ),
                   child: Divider(height: 1, color: AppColors.border),
                 )
               else if (e is CmItem)
@@ -164,6 +163,7 @@ class _Menu extends StatelessWidget {
 
 class _Row extends StatelessWidget {
   const _Row({required this.item, required this.onClose});
+
   final CmItem item;
   final VoidCallback onClose;
 
@@ -189,13 +189,13 @@ class _Row extends StatelessWidget {
         final Color fg = hot
             ? Colors.white
             : disabled
-                ? AppColors.textMuted
-                : (item.danger ? AppColors.error : AppColors.textPrimary);
+            ? AppColors.textMuted
+            : (item.danger ? AppColors.error : AppColors.textPrimary);
         final Color iconColor = hot
             ? Colors.white.withValues(alpha: 0.85)
             : disabled
-                ? AppColors.textMuted
-                : (item.danger ? AppColors.error : AppColors.textSecondary);
+            ? AppColors.textMuted
+            : (item.danger ? AppColors.error : AppColors.textSecondary);
         final Color shortcutColor = hot
             ? Colors.white.withValues(alpha: 0.85)
             : AppColors.textMuted;
@@ -231,10 +231,7 @@ class _Row extends StatelessWidget {
               if (item.shortcut != null)
                 Text(
                   item.shortcut!,
-                  style: AppTheme.mono(
-                    size: 10,
-                    color: shortcutColor,
-                  ),
+                  style: AppTheme.mono(size: 10, color: shortcutColor),
                 ),
             ],
           ),

@@ -14,19 +14,16 @@ import 'package:flutter/services.dart';
 /// to read/write items the app itself created.
 class PasswordVault {
   PasswordVault({MethodChannel? channel})
-      : _channel = channel ?? const MethodChannel('dbv/window');
+    : _channel = channel ?? const MethodChannel('dbv/window');
 
   final MethodChannel _channel;
 
   Future<String?> read(String connectionId, {String? reason}) async {
     try {
-      return await _channel.invokeMethod<String>(
-        'keychainRead',
-        {
-          'key': connectionId,
-          'reason': ?reason,
-        },
-      );
+      return await _channel.invokeMethod<String>('keychainRead', {
+        'key': connectionId,
+        'reason': ?reason,
+      });
     } on PlatformException catch (e, st) {
       developer.log(
         'keychain read failed',
@@ -42,10 +39,10 @@ class PasswordVault {
 
   Future<void> write(String connectionId, String password) async {
     try {
-      await _channel.invokeMethod<bool>(
-        'keychainWrite',
-        {'key': connectionId, 'value': password},
-      );
+      await _channel.invokeMethod<bool>('keychainWrite', {
+        'key': connectionId,
+        'value': password,
+      });
     } on PlatformException catch (e, st) {
       developer.log(
         'keychain write failed',
@@ -60,10 +57,9 @@ class PasswordVault {
 
   Future<void> delete(String connectionId) async {
     try {
-      await _channel.invokeMethod<bool>(
-        'keychainDelete',
-        {'key': connectionId},
-      );
+      await _channel.invokeMethod<bool>('keychainDelete', {
+        'key': connectionId,
+      });
     } on PlatformException catch (e, st) {
       developer.log(
         'keychain delete failed',

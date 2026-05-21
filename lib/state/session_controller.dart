@@ -37,8 +37,11 @@ class SessionController extends ChangeNotifier {
   bool _keepalivePending = false;
 
   PostgresService? get service => _service;
+
   ConnectionConfig? get activeConnection => _activeConnection;
+
   ConnectionStatus get status => _status;
+
   String? get error => _error;
 
   /// Server version short-tag — e.g. `v16.4`. Populated right after a
@@ -55,36 +58,38 @@ class SessionController extends ChangeNotifier {
     await _service?.close();
     _service = PostgresService(
       config,
-      onQueryRun: ({
-        required sql,
-        required elapsed,
-        required affectedRows,
-        required error,
-      }) {
-        log?.add(LogEvent(
-          timestamp: DateTime.now(),
-          kind: error == null ? LogEventKind.query : LogEventKind.error,
-          connectionName: config.name,
-          sql: sql,
-          elapsed: elapsed,
-          affectedRows: affectedRows,
-          error: error,
-        ));
-      },
-      onEditApplied: ({
-        required statementCount,
-        required elapsed,
-        required error,
-      }) {
-        log?.add(LogEvent(
-          timestamp: DateTime.now(),
-          kind: error == null ? LogEventKind.edit : LogEventKind.error,
-          connectionName: config.name,
-          sql: '$statementCount UPDATE statement(s)',
-          elapsed: elapsed,
-          error: error,
-        ));
-      },
+      onQueryRun:
+          ({
+            required sql,
+            required elapsed,
+            required affectedRows,
+            required error,
+          }) {
+            log?.add(
+              LogEvent(
+                timestamp: DateTime.now(),
+                kind: error == null ? LogEventKind.query : LogEventKind.error,
+                connectionName: config.name,
+                sql: sql,
+                elapsed: elapsed,
+                affectedRows: affectedRows,
+                error: error,
+              ),
+            );
+          },
+      onEditApplied:
+          ({required statementCount, required elapsed, required error}) {
+            log?.add(
+              LogEvent(
+                timestamp: DateTime.now(),
+                kind: error == null ? LogEventKind.edit : LogEventKind.error,
+                connectionName: config.name,
+                sql: '$statementCount UPDATE statement(s)',
+                elapsed: elapsed,
+                error: error,
+              ),
+            );
+          },
     );
     _activeConnection = config;
     _status = ConnectionStatus.connecting;
@@ -96,11 +101,13 @@ class SessionController extends ChangeNotifier {
       _status = ConnectionStatus.connected;
       _serverVersion = null;
       _startKeepalive();
-      log?.add(LogEvent(
-        timestamp: DateTime.now(),
-        kind: LogEventKind.connect,
-        connectionName: config.name,
-      ));
+      log?.add(
+        LogEvent(
+          timestamp: DateTime.now(),
+          kind: LogEventKind.connect,
+          connectionName: config.name,
+        ),
+      );
       notifyListeners();
       // Fetch the server version out of band — failures are non-fatal,
       // they just leave the header without a "v…" tag.
@@ -111,12 +118,14 @@ class SessionController extends ChangeNotifier {
       _status = ConnectionStatus.error;
       _error = friendly.message;
       _service = null;
-      log?.add(LogEvent(
-        timestamp: DateTime.now(),
-        kind: LogEventKind.error,
-        connectionName: config.name,
-        error: friendly.detail,
-      ));
+      log?.add(
+        LogEvent(
+          timestamp: DateTime.now(),
+          kind: LogEventKind.error,
+          connectionName: config.name,
+          error: friendly.detail,
+        ),
+      );
       notifyListeners();
       return false;
     }
@@ -151,11 +160,13 @@ class SessionController extends ChangeNotifier {
     _status = ConnectionStatus.disconnected;
     _error = null;
     _serverVersion = null;
-    log?.add(LogEvent(
-      timestamp: DateTime.now(),
-      kind: LogEventKind.disconnect,
-      connectionName: name,
-    ));
+    log?.add(
+      LogEvent(
+        timestamp: DateTime.now(),
+        kind: LogEventKind.disconnect,
+        connectionName: name,
+      ),
+    );
     notifyListeners();
   }
 
@@ -172,12 +183,14 @@ class SessionController extends ChangeNotifier {
     _service = null;
     _status = ConnectionStatus.lost;
     _error = cause.toString();
-    log?.add(LogEvent(
-      timestamp: DateTime.now(),
-      kind: LogEventKind.lost,
-      connectionName: _activeConnection?.name,
-      error: cause.toString(),
-    ));
+    log?.add(
+      LogEvent(
+        timestamp: DateTime.now(),
+        kind: LogEventKind.lost,
+        connectionName: _activeConnection?.name,
+        error: cause.toString(),
+      ),
+    );
     notifyListeners();
   }
 

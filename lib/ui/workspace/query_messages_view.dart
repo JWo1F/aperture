@@ -51,6 +51,7 @@ class QueryMessagesView extends StatelessWidget {
 
 class _Header extends StatelessWidget {
   const _Header({required this.tab});
+
   final QueryTab tab;
 
   @override
@@ -73,17 +74,12 @@ class _Header extends StatelessWidget {
             cursor: SystemMouseCursors.click,
             onTap: () => context.read<AppState>().clearQueryMessages(tab),
             builder: (context, hovering) => Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 6,
-                vertical: 2,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               child: Text(
                 'Clear',
                 style: AppTheme.mono(
                   size: 10.5,
-                  color: hovering
-                      ? AppColors.textPrimary
-                      : AppColors.textMuted,
+                  color: hovering ? AppColors.textPrimary : AppColors.textMuted,
                 ),
               ),
             ),
@@ -95,6 +91,7 @@ class _Header extends StatelessWidget {
 }
 
 bool _pgsqlRegistered = false;
+
 void _ensurePgsqlRegistered() {
   if (_pgsqlRegistered) return;
   highlight.registerLanguage('pgsql', pgsql);
@@ -103,6 +100,7 @@ void _ensurePgsqlRegistered() {
 
 class _MessageRow extends StatefulWidget {
   const _MessageRow({required this.message});
+
   final QueryMessage message;
 
   @override
@@ -136,6 +134,7 @@ class _MessageRowState extends State<_MessageRow> {
   }
 
   String _two(int n) => n.toString().padLeft(2, '0');
+
   String _time(DateTime t) =>
       '${_two(t.hour)}:${_two(t.minute)}:${_two(t.second)}';
 
@@ -144,15 +143,11 @@ class _MessageRowState extends State<_MessageRow> {
     final m = widget.message;
     final overflows = _overflows(m.sql);
     final maxLines = _expanded || !overflows ? null : _collapsedMaxLines;
-    final bodyStyle =
-        AppTheme.mono(size: 11.5, color: AppColors.textPrimary);
+    final bodyStyle = AppTheme.mono(size: 11.5, color: AppColors.textPrimary);
     final dotColor = m.isError ? AppColors.error : AppColors.accent;
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: Insets.md,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: Insets.md, vertical: 6),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
@@ -164,8 +159,10 @@ class _MessageRowState extends State<_MessageRow> {
               Container(
                 width: 6,
                 height: 6,
-                decoration:
-                    BoxDecoration(color: dotColor, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: dotColor,
+                  shape: BoxShape.circle,
+                ),
               ),
               const SizedBox(width: 6),
               Text(
@@ -193,8 +190,9 @@ class _MessageRowState extends State<_MessageRow> {
             _highlight(m.sql, bodyStyle),
             maxLines: maxLines,
             style: bodyStyle,
-            scrollPhysics:
-                maxLines == null ? null : const NeverScrollableScrollPhysics(),
+            scrollPhysics: maxLines == null
+                ? null
+                : const NeverScrollableScrollPhysics(),
           ),
           if (overflows) ...[
             const SizedBox(height: 2),
@@ -202,8 +200,9 @@ class _MessageRowState extends State<_MessageRow> {
               cursor: SystemMouseCursors.click,
               onTap: () => setState(() => _expanded = !_expanded),
               builder: (context, hovering) {
-                final color =
-                    hovering ? AppColors.textPrimary : AppColors.textMuted;
+                final color = hovering
+                    ? AppColors.textPrimary
+                    : AppColors.textMuted;
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -241,6 +240,7 @@ class _MessageRowState extends State<_MessageRow> {
 
 class _CopyButton extends StatefulWidget {
   const _CopyButton({required this.text});
+
   final String text;
 
   @override

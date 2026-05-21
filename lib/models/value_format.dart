@@ -26,8 +26,10 @@ String? formatCellValue(Object? value) {
 }
 
 String _hexPreview(Uint8List bytes) {
-  final preview =
-      bytes.take(16).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  final preview = bytes
+      .take(16)
+      .map((b) => b.toRadixString(16).padLeft(2, '0'))
+      .join();
   return '\\x$preview${bytes.length > 16 ? '…' : ''}';
 }
 

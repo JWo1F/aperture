@@ -35,6 +35,7 @@ class PerConnectionStore extends ChangeNotifier {
   final Duration columnWidthDebounce;
 
   final List<DbTable> _recents = [];
+
   List<DbTable> get recents => List.unmodifiable(_recents);
 
   List<SavedQuery> get savedQueries =>
@@ -146,9 +147,11 @@ class PerConnectionStore extends ChangeNotifier {
   }
 
   void deleteSavedQuery(String id) {
-    _mutate((conn) => conn.copyWith(
-          savedQueries: conn.savedQueries.where((q) => q.id != id).toList(),
-        ));
+    _mutate(
+      (conn) => conn.copyWith(
+        savedQueries: conn.savedQueries.where((q) => q.id != id).toList(),
+      ),
+    );
   }
 
   /// Duplicate the saved query and return the freshly-created copy so the
@@ -201,9 +204,10 @@ class PerConnectionStore extends ChangeNotifier {
         entry.key: Map<String, double>.from(entry.value),
     };
     _pendingConnectionId = conn.id;
-    _pendingWidths!
-        .putIfAbsent(table.qualifiedKey, () => <String, double>{})[column] =
-        width;
+    _pendingWidths!.putIfAbsent(
+      table.qualifiedKey,
+      () => <String, double>{},
+    )[column] = width;
 
     _widthSaveTimer?.cancel();
     _widthSaveTimer = Timer(columnWidthDebounce, _flushColumnWidths);

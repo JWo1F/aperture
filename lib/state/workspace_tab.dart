@@ -5,10 +5,9 @@ import '../models/db_object.dart';
 import '../models/query_message.dart';
 import '../models/query_result.dart';
 
-export '../models/query_message.dart';
-
 export '../models/cell_edit.dart'
     show CellEdit, CellEditValue, CellLiteral, CellDefault;
+export '../models/query_message.dart';
 
 /// A tab in the centre workspace. Either a free-form SQL editor, a data
 /// view bound to one relation, or a schema viewer.
@@ -41,8 +40,8 @@ enum QueryResultsView { results, plan, messages }
 
 class QueryTab extends WorkspaceTab {
   QueryTab(super.id, {String name = 'Query', String sql = ''})
-      : _name = name,
-        _sql = sql;
+    : _name = name,
+      _sql = sql;
 
   // ignore_for_file: prefer_initializing_formals
   String _name;
@@ -69,6 +68,7 @@ class QueryTab extends WorkspaceTab {
   /// the sidebar context menu; auto-incremented as `Query 1`, `Query 2`,
   /// … when created via the toolbar / ⌘N path.
   String get name => _name;
+
   set name(String value) {
     if (_name == value) return;
     _name = value;
@@ -76,6 +76,7 @@ class QueryTab extends WorkspaceTab {
   }
 
   String get sql => _sql;
+
   set sql(String value) {
     if (_sql == value) return;
     _sql = value;
@@ -83,12 +84,14 @@ class QueryTab extends WorkspaceTab {
   }
 
   QueryResult? get result => _result;
+
   set result(QueryResult? value) {
     _result = value;
     notifyListeners();
   }
 
   bool get running => _running;
+
   set running(bool value) {
     if (_running == value) return;
     _running = value;
@@ -98,6 +101,7 @@ class QueryTab extends WorkspaceTab {
   /// Wall-clock time the most recent run completed. Powers the "refreshed
   /// HH:MM:SS" stamp in the query pagebar.
   DateTime? get lastRefreshedAt => _lastRefreshedAt;
+
   set lastRefreshedAt(DateTime? value) {
     _lastRefreshedAt = value;
     notifyListeners();
@@ -107,6 +111,7 @@ class QueryTab extends WorkspaceTab {
   /// user invoked Run statement on a single block. The footer's refresh
   /// button re-issues this exact text rather than the whole editor body.
   String? get lastRunSql => _lastRunSql;
+
   set lastRunSql(String? value) {
     _lastRunSql = value;
     notifyListeners();
@@ -114,6 +119,7 @@ class QueryTab extends WorkspaceTab {
 
   /// Active section below the editor.
   QueryResultsView get view => _view;
+
   set view(QueryResultsView value) {
     if (_view == value) return;
     _view = value;
@@ -121,7 +127,9 @@ class QueryTab extends WorkspaceTab {
   }
 
   Map<String, dynamic>? get planJson => _planJson;
+
   String? get planError => _planError;
+
   bool get planLoading => _planLoading;
 
   /// SQL the cached plan was computed against. Stays in sync with
@@ -160,6 +168,7 @@ class QueryTab extends WorkspaceTab {
   /// Auto-refresh cadence for this query tab. The timer in [TabsController]
   /// re-runs [lastRunSql] on every tick; `null` means manual.
   Duration? get autoRefreshInterval => _autoRefreshInterval;
+
   set autoRefreshInterval(Duration? value) {
     if (_autoRefreshInterval == value) return;
     _autoRefreshInterval = value;
@@ -181,18 +190,21 @@ class SchemaTab extends WorkspaceTab {
   bool _loading = false;
 
   String? get ddl => _ddl;
+
   set ddl(String? value) {
     _ddl = value;
     notifyListeners();
   }
 
   String? get error => _error;
+
   set error(String? value) {
     _error = value;
     notifyListeners();
   }
 
   bool get loading => _loading;
+
   set loading(bool value) {
     if (_loading == value) return;
     _loading = value;
@@ -224,12 +236,14 @@ class TableTab extends WorkspaceTab {
   final Map<CellEdit, CellEditValue> edits = {};
 
   QueryResult? get result => _result;
+
   set result(QueryResult? value) {
     _result = value;
     notifyListeners();
   }
 
   bool get loading => _loading;
+
   set loading(bool value) {
     if (_loading == value) return;
     _loading = value;
@@ -237,6 +251,7 @@ class TableTab extends WorkspaceTab {
   }
 
   bool get applying => _applying;
+
   set applying(bool value) {
     if (_applying == value) return;
     _applying = value;
@@ -244,6 +259,7 @@ class TableTab extends WorkspaceTab {
   }
 
   int get page => _page;
+
   set page(int value) {
     if (_page == value) return;
     _page = value;
@@ -251,6 +267,7 @@ class TableTab extends WorkspaceTab {
   }
 
   int get pageSize => _pageSize;
+
   set pageSize(int value) {
     if (_pageSize == value) return;
     _pageSize = value;
@@ -258,6 +275,7 @@ class TableTab extends WorkspaceTab {
   }
 
   int get totalRows => _totalRows;
+
   set totalRows(int value) {
     if (_totalRows == value) return;
     _totalRows = value;
@@ -266,6 +284,7 @@ class TableTab extends WorkspaceTab {
 
   /// Column projection — a raw SQL select list. Defaults to `*`.
   String get selectList => _selectList;
+
   set selectList(String value) {
     if (_selectList == value) return;
     _selectList = value;
@@ -274,6 +293,7 @@ class TableTab extends WorkspaceTab {
 
   /// Active row filter — a raw SQL `WHERE` fragment typed by the user.
   String get filter => _filter;
+
   set filter(String value) {
     if (_filter == value) return;
     _filter = value;
@@ -282,6 +302,7 @@ class TableTab extends WorkspaceTab {
 
   /// Active sort — a raw SQL `ORDER BY` fragment, also driven by header clicks.
   String get orderBy => _orderBy;
+
   set orderBy(String value) {
     if (_orderBy == value) return;
     _orderBy = value;
@@ -292,6 +313,7 @@ class TableTab extends WorkspaceTab {
   /// this interval. The Timer itself lives on the tab; [TabsController.dispose]
   /// makes sure it shuts down when the connection drops.
   Duration? get autoRefreshInterval => _autoRefreshInterval;
+
   set autoRefreshInterval(Duration? value) {
     _autoRefreshInterval = value;
     notifyListeners();
@@ -301,6 +323,7 @@ class TableTab extends WorkspaceTab {
   /// auto-refresh, or first open). Drives the "refreshed HH:MM:SS" tag in
   /// the pagination bar.
   DateTime? get lastRefreshedAt => _lastRefreshedAt;
+
   set lastRefreshedAt(DateTime? value) {
     _lastRefreshedAt = value;
     notifyListeners();
@@ -310,6 +333,7 @@ class TableTab extends WorkspaceTab {
 
   int get pageCount =>
       _totalRows == 0 ? 1 : ((_totalRows - 1) ~/ _pageSize) + 1;
+
   int get offset => _page * _pageSize;
 
   @override

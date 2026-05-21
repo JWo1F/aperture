@@ -13,7 +13,7 @@ import '../services/connection_store.dart';
 /// goes through `update()` here to land in the same JSON file.
 class ConnectionRegistry extends ChangeNotifier {
   ConnectionRegistry({ConnectionStore? store})
-      : _store = store ?? ConnectionStore();
+    : _store = store ?? ConnectionStore();
 
   final ConnectionStore _store;
   final List<ConnectionConfig> _connections = [];
@@ -22,10 +22,9 @@ class ConnectionRegistry extends ChangeNotifier {
 
   /// Top-3 most recently used, freshest first. Drives the welcome cards.
   List<ConnectionConfig> get recent {
-    final stamped = _connections
-        .where((c) => c.lastConnectedAt != null)
-        .toList()
-      ..sort((a, b) => b.lastConnectedAt!.compareTo(a.lastConnectedAt!));
+    final stamped =
+        _connections.where((c) => c.lastConnectedAt != null).toList()
+          ..sort((a, b) => b.lastConnectedAt!.compareTo(a.lastConnectedAt!));
     return stamped.take(3).toList();
   }
 

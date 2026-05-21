@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 /// toolbars (table view, query editor, …).
 class Rail extends StatelessWidget {
   const Rail({super.key, this.height = 18});
+
   final double height;
 
   @override
@@ -80,6 +81,7 @@ class _HoverableState extends State<Hoverable> {
 /// next to buttons.
 class KbdChip extends StatelessWidget {
   const KbdChip(this.text, {super.key});
+
   final String text;
 
   @override
@@ -293,10 +295,7 @@ class EmptyState extends StatelessWidget {
                 ),
               ),
             ],
-            if (action != null) ...[
-              const SizedBox(height: Insets.xl),
-              action!,
-            ],
+            if (action != null) ...[const SizedBox(height: Insets.xl), action!],
           ],
         ),
       ),

@@ -8,28 +8,26 @@ class QueryResult {
     this.rowIds,
     this.columnSchemas,
     this.truncatedAt,
-  })  : error = null,
-        isError = false;
+  }) : error = null,
+       isError = false;
 
-  QueryResult.command({
-    required this.affectedRows,
-    required this.elapsed,
-  })  : columns = const [],
-        rows = const [],
-        rowIds = null,
-        columnSchemas = null,
-        truncatedAt = null,
-        error = null,
-        isError = false;
+  QueryResult.command({required this.affectedRows, required this.elapsed})
+    : columns = const [],
+      rows = const [],
+      rowIds = null,
+      columnSchemas = null,
+      truncatedAt = null,
+      error = null,
+      isError = false;
 
   QueryResult.failure({required this.error, required this.elapsed})
-      : columns = const [],
-        rows = const [],
-        rowIds = null,
-        columnSchemas = null,
-        truncatedAt = null,
-        affectedRows = null,
-        isError = true;
+    : columns = const [],
+      rows = const [],
+      rowIds = null,
+      columnSchemas = null,
+      truncatedAt = null,
+      affectedRows = null,
+      isError = true;
 
   final List<String> columns;
   final List<List<Object?>> rows;
@@ -59,11 +57,7 @@ class QueryResult {
 /// Source-side identity of a single column in a [QueryResult]. Populated
 /// directly from the driver's RowDescription frame.
 class ResultColumnSchema {
-  ResultColumnSchema({
-    required this.name,
-    this.tableOid,
-    this.columnAttNum,
-  });
+  ResultColumnSchema({required this.name, this.tableOid, this.columnAttNum});
 
   final String name;
 

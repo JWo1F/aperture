@@ -62,6 +62,7 @@ class Palette {
   final Color bgDeep;
   final Color bg;
   final Color surface;
+
   /// Alias for surface2; kept for backward compatibility.
   final Color surfaceAlt;
   final Color surface2;
@@ -72,15 +73,18 @@ class Palette {
   final Color sidebarRowActive;
 
   final Color border;
+
   /// Softer hairline — subtler than border, used for per-tab right dividers.
   final Color borderSoft;
   final Color borderStrong;
+
   /// Very subtle white/black hairline for internal dividers.
   final Color hairline;
 
   final Color textPrimary;
   final Color textSecondary;
   final Color textMuted;
+
   /// Fourth text tier — dimmer than textMuted, for de-emphasised annotations.
   final Color text4;
 
@@ -92,6 +96,7 @@ class Palette {
   final Color success;
   final Color error;
   final Color dangerSoft;
+
   /// Kept for backward compat; same as warn.
   final Color warning;
   final Color warn;
@@ -222,6 +227,7 @@ class AppColors {
   static Palette _palette = darkPalette;
 
   static Palette get palette => _palette;
+
   static AppBrightness get brightness => _palette.brightness;
 
   static void setPalette(Palette p) {
@@ -229,53 +235,87 @@ class AppColors {
   }
 
   static Color get bgDeep => _palette.bgDeep;
+
   static Color get bg => _palette.bg;
+
   static Color get surface => _palette.surface;
+
   static Color get surfaceAlt => _palette.surfaceAlt;
+
   static Color get surface2 => _palette.surface2;
+
   static Color get surfaceHover => _palette.surfaceHover;
 
   static Color get sidebarTint => _palette.sidebarTint;
+
   static Color get sidebarRowHover => _palette.sidebarRowHover;
+
   static Color get sidebarRowActive => _palette.sidebarRowActive;
 
   static Color get border => _palette.border;
+
   static Color get borderSoft => _palette.borderSoft;
+
   static Color get borderStrong => _palette.borderStrong;
+
   static Color get hairline => _palette.hairline;
 
   static Color get textPrimary => _palette.textPrimary;
+
   static Color get textSecondary => _palette.textSecondary;
+
   static Color get textMuted => _palette.textMuted;
+
   static Color get text4 => _palette.text4;
 
   static Color get accent => _palette.accent;
+
   static Color get accentHover => _palette.accentHover;
+
   static Color get accentSoft => _palette.accentSoft;
+
   static Color get accentRing => _palette.accentRing;
 
   static Color get success => _palette.success;
+
   static Color get error => _palette.error;
+
   static Color get dangerSoft => _palette.dangerSoft;
+
   static Color get warning => _palette.warning;
+
   static Color get warn => _palette.warn;
+
   static Color get info => _palette.info;
 
   static Color get tNull => _palette.tNull;
+
   static Color get tNum => _palette.tNum;
+
   static Color get tStr => _palette.tStr;
+
   static Color get tBool => _palette.tBool;
+
   static Color get tUuid => _palette.tUuid;
+
   static Color get tDate => _palette.tDate;
+
   static Color get tJson => _palette.tJson;
+
   static Color get tFk => _palette.tFk;
 
   static Color get sqlKeyword => _palette.sqlKeyword;
+
   static Color get sqlString => _palette.sqlString;
+
   static Color get sqlNumber => _palette.sqlNumber;
+
   static Color get sqlComment => _palette.sqlComment;
+
   static Color get sqlFunction => _palette.sqlFunction;
+
   static Color get sqlIdentifier => _palette.sqlIdentifier;
+
   static Color get sqlOperator => _palette.sqlOperator;
 }
 
@@ -352,10 +392,7 @@ class AppTheme {
             ),
           ],
         ),
-        textStyle: TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 11.5,
-        ),
+        textStyle: TextStyle(color: AppColors.textPrimary, fontSize: 11.5),
         waitDuration: const Duration(milliseconds: 400),
       ),
       scrollbarTheme: ScrollbarThemeData(

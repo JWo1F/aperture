@@ -95,10 +95,8 @@ class _Kind {
 // Regexes for numeric input — `FilteringTextInputFormatter.allow` runs
 // per-character, so a digit-or-sign filter is enough to keep alpha out;
 // validity of the assembled value falls to Postgres on apply.
-final _intFilter =
-    FilteringTextInputFormatter.allow(RegExp(r'[0-9\-]'));
-final _numberFilter =
-    FilteringTextInputFormatter.allow(RegExp(r'[0-9\-+.eE]'));
+final _intFilter = FilteringTextInputFormatter.allow(RegExp(r'[0-9\-]'));
+final _numberFilter = FilteringTextInputFormatter.allow(RegExp(r'[0-9\-+.eE]'));
 
 final _kBool = _Kind(
   id: _KindId.bool,
@@ -303,8 +301,9 @@ String _initialTz(Object? raw, CellEditValue? pending) {
   if (pending is CellLiteral) {
     final s = pending.value;
     if (s != null) {
-      final m = RegExp(r'(?:[+-]\d{2}(?::?\d{2})?|\b[A-Z][A-Za-z_/+\-0-9]{1,})$')
-          .firstMatch(s.trim());
+      final m = RegExp(
+        r'(?:[+-]\d{2}(?::?\d{2})?|\b[A-Z][A-Za-z_/+\-0-9]{1,})$',
+      ).firstMatch(s.trim());
       if (m != null) {
         final hit = m.group(0)!;
         // Don't mistake the date's first 4-digit year for a tz.
@@ -442,6 +441,7 @@ class _PanelState extends State<_Panel> {
   // Date/time/datetime state
   DateTime? _moment;
   DateTime? _baselineMoment;
+
   // Bumped whenever Now/Today resets the moment; passed as a Key to the
   // time/calendar sub-widgets so they refresh their internal state without
   // losing the cursor during normal user typing.
@@ -459,14 +459,15 @@ class _PanelState extends State<_Panel> {
     final k = widget.kind.id;
     switch (k) {
       case _KindId.bool:
-        _baselineBool =
-            _initialBool(widget.originalValue, widget.pendingEdit);
+        _baselineBool = _initialBool(widget.originalValue, widget.pendingEdit);
         _bool = _baselineBool;
       case _KindId.date:
       case _KindId.time:
       case _KindId.datetime:
-        _baselineMoment =
-            _initialMoment(widget.originalValue, widget.pendingEdit);
+        _baselineMoment = _initialMoment(
+          widget.originalValue,
+          widget.pendingEdit,
+        );
         _moment = _baselineMoment;
         if (widget.kind.withTimezone) {
           _baselineTz = _initialTz(widget.originalValue, widget.pendingEdit);
@@ -474,8 +475,7 @@ class _PanelState extends State<_Panel> {
         }
       case _KindId.text:
       case _KindId.json:
-        _baselineText =
-            _initialText(widget.originalValue, widget.pendingEdit);
+        _baselineText = _initialText(widget.originalValue, widget.pendingEdit);
         _text = k == _KindId.json
             ? CodeEditorController(text: _baselineText, language: 'json')
             : TextEditingController(text: _baselineText);
@@ -516,13 +516,20 @@ class _PanelState extends State<_Panel> {
       case _KindId.date:
         widget.onCommit(CellLiteral(_formatDate(_moment!)));
       case _KindId.time:
-        widget.onCommit(CellLiteral(
-          _formatTime(_moment!, tz: widget.kind.withTimezone ? _tz : null),
-        ));
+        widget.onCommit(
+          CellLiteral(
+            _formatTime(_moment!, tz: widget.kind.withTimezone ? _tz : null),
+          ),
+        );
       case _KindId.datetime:
-        widget.onCommit(CellLiteral(
-          _formatDateTime(_moment!, tz: widget.kind.withTimezone ? _tz : null),
-        ));
+        widget.onCommit(
+          CellLiteral(
+            _formatDateTime(
+              _moment!,
+              tz: widget.kind.withTimezone ? _tz : null,
+            ),
+          ),
+        );
       case _KindId.json:
         // Validate before committing — empty input is allowed (and means
         // "send the empty string", e.g. for an empty jsonb column).
@@ -552,6 +559,7 @@ class _PanelState extends State<_Panel> {
   }
 
   void _setNull() => widget.onCommit(const CellLiteral(null));
+
   void _setDefault() => widget.onCommit(const CellDefault());
 
   /// Footer hint string, mirroring the design's `.ce-hint`: commit affordance
@@ -671,8 +679,15 @@ class _PanelState extends State<_Panel> {
       final m = _moment ?? n;
       _moment = zeroTime
           ? DateTime(n.year, n.month, n.day)
-          : DateTime(n.year, n.month, n.day, m.hour, m.minute, m.second,
-              m.millisecond);
+          : DateTime(
+              n.year,
+              n.month,
+              n.day,
+              m.hour,
+              m.minute,
+              m.second,
+              m.millisecond,
+            );
       _resetTick++;
     });
   }
@@ -709,10 +724,7 @@ class _PanelState extends State<_Panel> {
                   label: '−1 day',
                   onTap: () => _shiftDate(days: -1),
                 ),
-                _QuickAction(
-                  label: '+1 day',
-                  onTap: () => _shiftDate(days: 1),
-                ),
+                _QuickAction(label: '+1 day', onTap: () => _shiftDate(days: 1)),
               ],
             ),
             Expanded(
@@ -746,10 +758,7 @@ class _PanelState extends State<_Panel> {
                   primary: true,
                   onTap: _setToNow,
                 ),
-                _QuickAction(
-                  label: 'round :00',
-                  onTap: _roundHour,
-                ),
+                _QuickAction(label: 'round :00', onTap: _roundHour),
                 _QuickAction(
                   label: '+1 hour',
                   onTap: () => _shiftHour(hours: 1),
@@ -814,8 +823,8 @@ class _PanelState extends State<_Panel> {
         );
       case _KindId.text:
       case _KindId.json:
-        final isNumber = widget.kind.label == 'number' ||
-            widget.kind.label == 'int';
+        final isNumber =
+            widget.kind.label == 'number' || widget.kind.label == 'int';
         if (isNumber) {
           return _NumberBody(
             controller: _text!,
@@ -840,10 +849,14 @@ class _PanelState extends State<_Panel> {
 }
 
 String _pad(int n) => n.toString().padLeft(2, '0');
+
 String _pad3(int n) => n.toString().padLeft(3, '0');
+
 String _formatDate(DateTime d) => '${d.year}-${_pad(d.month)}-${_pad(d.day)}';
+
 String _formatTime(DateTime d, {String? tz}) {
-  final base = '${_pad(d.hour)}:${_pad(d.minute)}:${_pad(d.second)}'
+  final base =
+      '${_pad(d.hour)}:${_pad(d.minute)}:${_pad(d.second)}'
       '.${_pad3(d.millisecond)}';
   final t = tz?.trim() ?? '';
   return t.isEmpty ? base : '$base $t';
@@ -874,8 +887,10 @@ class _Header extends StatelessWidget {
   ({String label, Color color})? _flag() {
     if (isPrimaryKey) return (label: 'read-only', color: AppColors.warn);
     return switch (pendingEdit) {
-      CellLiteral(:final value) when value == null =>
-        (label: 'NULL', color: AppColors.accent),
+      CellLiteral(:final value) when value == null => (
+        label: 'NULL',
+        color: AppColors.accent,
+      ),
       CellLiteral() => (label: 'edited', color: AppColors.accent),
       CellDefault() => (label: 'DEFAULT', color: AppColors.accent),
       null => null,
@@ -919,10 +934,7 @@ class _Header extends StatelessWidget {
               typeLabel,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTheme.mono(
-                size: 10.5,
-                color: AppColors.textMuted,
-              ),
+              style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
             ),
           ),
           if (flag != null) ...[
@@ -982,17 +994,11 @@ class _Footer extends StatelessWidget {
               kindHint,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTheme.mono(
-                size: 10.5,
-                color: AppColors.textMuted,
-              ),
+              style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
             ),
           ),
           if (hasPending) ...[
-            _PillButton(
-              label: 'revert',
-              onPressed: onRevert,
-            ),
+            _PillButton(label: 'revert', onPressed: onRevert),
             const SizedBox(width: 4),
           ],
           _PillButton(
@@ -1007,10 +1013,7 @@ class _Footer extends StatelessWidget {
             onPressed: hasDefault ? onSetDefault : null,
           ),
           const SizedBox(width: 6),
-          _PillButton(
-            label: 'cancel',
-            onPressed: onCancel,
-          ),
+          _PillButton(label: 'cancel', onPressed: onCancel),
           const SizedBox(width: 4),
           _PillButton(
             label: 'save  ⌘↵',
@@ -1042,27 +1045,24 @@ class _PillButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !disabled;
     return Hoverable(
-      cursor:
-          enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
       onTap: enabled ? onPressed : null,
       builder: (context, hovering) {
         final Color bg = primary
             ? (enabled
-                ? (hovering ? AppColors.accentHover : AppColors.accent)
-                : AppColors.accent.withValues(alpha: 0.4))
+                  ? (hovering ? AppColors.accentHover : AppColors.accent)
+                  : AppColors.accent.withValues(alpha: 0.4))
             : (hovering && enabled
-                ? AppColors.surfaceHover
-                : Colors.transparent);
+                  ? AppColors.surfaceHover
+                  : Colors.transparent);
         final Color border = primary
             ? Colors.transparent
             : (enabled ? AppColors.border : AppColors.border);
         final Color fg = primary
             ? Colors.white
             : (enabled
-                ? (hovering
-                    ? AppColors.textPrimary
-                    : AppColors.textSecondary)
-                : AppColors.text4);
+                  ? (hovering ? AppColors.textPrimary : AppColors.textSecondary)
+                  : AppColors.text4);
         return AnimatedContainer(
           duration: const Duration(milliseconds: 100),
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
@@ -1117,40 +1117,28 @@ class _TextBody extends StatelessWidget {
               focusNode: focus,
               singleLine: !multiline,
               fontSize: 12,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               inputFormatters: inputFormatters,
               onChanged: (_) => onChanged(),
             ),
           ),
           if (error != null)
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 7,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
                 color: const Color(0x33FB7185),
-                border: Border(
-                  top: BorderSide(color: AppColors.error),
-                ),
+                border: Border(top: BorderSide(color: AppColors.error)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.error_outline,
-                      size: 13, color: AppColors.error),
+                  Icon(Icons.error_outline, size: 13, color: AppColors.error),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       error!,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTheme.mono(
-                        size: 11,
-                        color: AppColors.error,
-                      ),
+                      style: AppTheme.mono(size: 11, color: AppColors.error),
                     ),
                   ),
                 ],
@@ -1163,7 +1151,11 @@ class _TextBody extends StatelessWidget {
 }
 
 class _BoolBody extends StatelessWidget {
-  const _BoolBody({required this.value, required this.onChange, required this.onNull});
+  const _BoolBody({
+    required this.value,
+    required this.onChange,
+    required this.onNull,
+  });
 
   final bool? value;
   final ValueChanged<bool> onChange;
@@ -1256,6 +1248,7 @@ class _CalendarBody extends StatefulWidget {
     required this.resetTick,
     required this.onChange,
   });
+
   final DateTime initial;
   final int resetTick;
   final ValueChanged<DateTime> onChange;
@@ -1350,6 +1343,7 @@ class _CalendarThemedState extends State<_CalendarThemed> {
   }
 
   int _daysInMonth(int y, int m) => DateTime(y, m + 1, 0).day;
+
   int _firstDow(int y, int m) => DateTime(y, m, 1).weekday % 7;
 
   void _prev() {
@@ -1406,11 +1400,7 @@ class _CalendarThemedState extends State<_CalendarThemed> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
-      children: [
-        _header(),
-        _dow(),
-        _grid(cells, today),
-      ],
+      children: [_header(), _dow(), _grid(cells, today)],
     );
   }
 
@@ -1488,7 +1478,15 @@ class _CalendarThemedState extends State<_CalendarThemed> {
       ),
       child: Row(
         children: [
-          for (final l in const ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'])
+          for (final l in const [
+            'SUN',
+            'MON',
+            'TUE',
+            'WED',
+            'THU',
+            'FRI',
+            'SAT',
+          ])
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
@@ -1524,11 +1522,13 @@ class _CalendarThemedState extends State<_CalendarThemed> {
   }
 
   Widget _cellWidget(_CalCell cell, DateTime today, int colIndex) {
-    final isToday = !cell.outside &&
+    final isToday =
+        !cell.outside &&
         cell.day == today.day &&
         _vm == today.month &&
         _vy == today.year;
-    final isSel = !cell.outside &&
+    final isSel =
+        !cell.outside &&
         cell.day == widget.initial.day &&
         _vm == widget.initial.month &&
         _vy == widget.initial.year;
@@ -1538,22 +1538,24 @@ class _CalendarThemedState extends State<_CalendarThemed> {
         final ny = cell.next
             ? (_vm == 12 ? _vy + 1 : _vy)
             : cell.outside
-                ? (_vm == 1 ? _vy - 1 : _vy)
-                : _vy;
+            ? (_vm == 1 ? _vy - 1 : _vy)
+            : _vy;
         final nm = cell.next
             ? (_vm == 12 ? 1 : _vm + 1)
             : cell.outside
-                ? (_vm == 1 ? 12 : _vm - 1)
-                : _vm;
-        widget.onChange(DateTime(
-          ny,
-          nm,
-          cell.day,
-          widget.initial.hour,
-          widget.initial.minute,
-          widget.initial.second,
-          widget.initial.millisecond,
-        ));
+            ? (_vm == 1 ? 12 : _vm - 1)
+            : _vm;
+        widget.onChange(
+          DateTime(
+            ny,
+            nm,
+            cell.day,
+            widget.initial.hour,
+            widget.initial.minute,
+            widget.initial.second,
+            widget.initial.millisecond,
+          ),
+        );
         setState(() {
           _vy = ny;
           _vm = nm;
@@ -1563,13 +1565,13 @@ class _CalendarThemedState extends State<_CalendarThemed> {
         final Color bg = isSel
             ? AppColors.accent
             : (hovering && !cell.outside
-                ? AppColors.sidebarRowHover
-                : Colors.transparent);
+                  ? AppColors.sidebarRowHover
+                  : Colors.transparent);
         final Color fg = isSel
             ? Colors.white
             : cell.outside
-                ? AppColors.text4.withValues(alpha: 0.45)
-                : (isToday ? AppColors.textPrimary : AppColors.textSecondary);
+            ? AppColors.text4.withValues(alpha: 0.45)
+            : (isToday ? AppColors.textPrimary : AppColors.textSecondary);
         return Container(
           height: 30,
           decoration: BoxDecoration(
@@ -1589,9 +1591,7 @@ class _CalendarThemedState extends State<_CalendarThemed> {
                 style: AppTheme.mono(
                   size: 11.5,
                   color: fg,
-                  weight: isToday || isSel
-                      ? FontWeight.w600
-                      : FontWeight.w400,
+                  weight: isToday || isSel ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
               if (isToday)
@@ -1620,6 +1620,7 @@ class _CalCell {
     required this.outside,
     required this.next,
   });
+
   final int day;
   final bool outside;
   final bool next;
@@ -1627,10 +1628,7 @@ class _CalCell {
 
 // ignore: unused_element
 class _CalendarThemedLegacy extends StatelessWidget {
-  const _CalendarThemedLegacy({
-    required this.initial,
-    required this.onChange,
-  });
+  const _CalendarThemedLegacy({required this.initial, required this.onChange});
 
   final DateTime initial;
   final ValueChanged<DateTime> onChange;
@@ -1703,10 +1701,7 @@ class _CalendarThemedLegacy extends StatelessWidget {
           surface: AppColors.bg,
           onSurface: AppColors.textPrimary,
         ),
-        iconTheme: IconThemeData(
-          color: AppColors.textSecondary,
-          size: 16,
-        ),
+        iconTheme: IconThemeData(color: AppColors.textSecondary, size: 16),
       ),
       child: CalendarDatePicker(
         initialDate: initial,
@@ -1830,10 +1825,8 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
           if (widget.withTz) ...[
             Divider(height: 1, color: AppColors.border),
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child:
-                  _TzInput(value: widget.tz, onChange: widget.onTzChange),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: _TzInput(value: widget.tz, onChange: widget.onTzChange),
             ),
           ],
         ],
@@ -1844,11 +1837,8 @@ class _DateTimeBodyState extends State<_DateTimeBody> {
 
 /// Four small numeric fields HH : MM : SS . MS, value flows out via [onChange].
 class _TimeInput extends StatefulWidget {
-  const _TimeInput({
-    super.key,
-    required this.initial,
-    required this.onChange,
-  });
+  const _TimeInput({super.key, required this.initial, required this.onChange});
+
   final DateTime initial;
   final void Function(int hour, int minute, int second, int ms) onChange;
 
@@ -1949,17 +1939,15 @@ class _TimeInputState extends State<_TimeInput> {
   }
 
   Widget _sep(String c) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Text(
-          c,
-          style: AppTheme.mono(size: 15, color: AppColors.textMuted),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    child: Text(c, style: AppTheme.mono(size: 15, color: AppColors.textMuted)),
+  );
 }
 
 /// Timezone text input — accepts free-form `UTC`, `+02:00`, `Europe/Berlin`, …
 class _TzInput extends StatefulWidget {
   const _TzInput({required this.value, required this.onChange});
+
   final String value;
   final ValueChanged<String> onChange;
 
@@ -2019,8 +2007,7 @@ class _TzInputState extends State<_TzInput> {
             decoration: InputDecoration(
               isCollapsed: true,
               hintText: 'UTC / +02:00 / Europe/Berlin',
-              hintStyle:
-                  AppTheme.mono(size: 11.5, color: AppColors.textMuted),
+              hintStyle: AppTheme.mono(size: 11.5, color: AppColors.textMuted),
               filled: true,
               fillColor: AppColors.surface,
               contentPadding: const EdgeInsets.symmetric(
@@ -2070,35 +2057,89 @@ class _MonoValueLine extends StatelessWidget {
   int _daysInMonth(int y, int m) => DateTime(y, m + 1, 0).day;
 
   void _setYear(int v) {
-    onChange(DateTime(v, moment.month, moment.day, moment.hour,
-        moment.minute, moment.second, moment.millisecond));
+    onChange(
+      DateTime(
+        v,
+        moment.month,
+        moment.day,
+        moment.hour,
+        moment.minute,
+        moment.second,
+        moment.millisecond,
+      ),
+    );
   }
 
   void _setMonth(int v) {
     final clampedDay = moment.day.clamp(1, _daysInMonth(moment.year, v));
-    onChange(DateTime(moment.year, v, clampedDay, moment.hour,
-        moment.minute, moment.second, moment.millisecond));
+    onChange(
+      DateTime(
+        moment.year,
+        v,
+        clampedDay,
+        moment.hour,
+        moment.minute,
+        moment.second,
+        moment.millisecond,
+      ),
+    );
   }
 
   void _setDay(int v) {
     final clampedDay = v.clamp(1, _daysInMonth(moment.year, moment.month));
-    onChange(DateTime(moment.year, moment.month, clampedDay, moment.hour,
-        moment.minute, moment.second, moment.millisecond));
+    onChange(
+      DateTime(
+        moment.year,
+        moment.month,
+        clampedDay,
+        moment.hour,
+        moment.minute,
+        moment.second,
+        moment.millisecond,
+      ),
+    );
   }
 
   void _setHour(int v) {
-    onChange(DateTime(moment.year, moment.month, moment.day, v,
-        moment.minute, moment.second, moment.millisecond));
+    onChange(
+      DateTime(
+        moment.year,
+        moment.month,
+        moment.day,
+        v,
+        moment.minute,
+        moment.second,
+        moment.millisecond,
+      ),
+    );
   }
 
   void _setMinute(int v) {
-    onChange(DateTime(moment.year, moment.month, moment.day, moment.hour, v,
-        moment.second, moment.millisecond));
+    onChange(
+      DateTime(
+        moment.year,
+        moment.month,
+        moment.day,
+        moment.hour,
+        v,
+        moment.second,
+        moment.millisecond,
+      ),
+    );
   }
 
   void _setSecond(int v) {
-    onChange(DateTime(moment.year, moment.month, moment.day, moment.hour,
-        moment.minute, v, moment.millisecond));
+    onChange(
+      DateTime(
+        moment.year,
+        moment.month,
+        moment.day,
+        moment.hour,
+        moment.minute,
+        v,
+        moment.millisecond,
+      ),
+    );
   }
 
   @override
@@ -2253,8 +2294,7 @@ class _SegState extends State<_Seg> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _focus.requestFocus();
-      _c.selection =
-          TextSelection(baseOffset: 0, extentOffset: _c.text.length);
+      _c.selection = TextSelection(baseOffset: 0, extentOffset: _c.text.length);
     });
   }
 
@@ -2287,8 +2327,7 @@ class _SegState extends State<_Seg> {
         height: 24,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color:
-              hovering ? AppColors.surfaceHover : Colors.transparent,
+          color: hovering ? AppColors.surfaceHover : Colors.transparent,
           borderRadius: BorderRadius.circular(3),
         ),
         child: Text(
@@ -2341,39 +2380,33 @@ class _SegState extends State<_Seg> {
 
 class _Punct extends StatelessWidget {
   const _Punct(this.text);
+
   final String text;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 1),
-      child: Text(
-        text,
-        style: AppTheme.mono(
-          size: 14,
-          color: AppColors.text4,
-        ),
-      ),
+      child: Text(text, style: AppTheme.mono(size: 14, color: AppColors.text4)),
     );
   }
 }
 
 class _AtPunct extends StatelessWidget {
   const _AtPunct();
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(left: 4, right: 6),
-      child: Text(
-        '@',
-        style: AppTheme.mono(size: 14, color: AppColors.text4),
-      ),
+      child: Text('@', style: AppTheme.mono(size: 14, color: AppColors.text4)),
     );
   }
 }
 
 class _TzChip extends StatelessWidget {
   const _TzChip({required this.value, required this.onChange});
+
   final String value;
   final ValueChanged<String> onChange;
 
@@ -2502,17 +2535,10 @@ class _TzChip extends StatelessWidget {
               children: [
                 Text(
                   display,
-                  style: AppTheme.mono(
-                    size: 14,
-                    color: AppColors.accent,
-                  ),
+                  style: AppTheme.mono(size: 14, color: AppColors.accent),
                 ),
                 const SizedBox(width: 3),
-                Icon(
-                  Icons.expand_more,
-                  size: 10,
-                  color: AppColors.text4,
-                ),
+                Icon(Icons.expand_more, size: 10, color: AppColors.text4),
               ],
             ),
           ),
@@ -2526,6 +2552,7 @@ class _TzChip extends StatelessWidget {
 /// `primary` action lights in the accent, others stay quiet.
 class _QuickActionsRow extends StatelessWidget {
   const _QuickActionsRow({required this.children});
+
   final List<_QuickAction> children;
 
   @override
@@ -2540,11 +2567,7 @@ class _QuickActionsRow extends StatelessWidget {
           for (var i = 0; i < children.length; i++) ...[
             Expanded(child: children[i]),
             if (i < children.length - 1)
-              Container(
-                width: 1,
-                height: 28,
-                color: AppColors.hairline,
-              ),
+              Container(width: 1, height: 28, color: AppColors.hairline),
           ],
         ],
       ),
@@ -2574,8 +2597,7 @@ class _QuickAction extends StatelessWidget {
         final Color bg = primary && hovering
             ? AppColors.accentSoft
             : (hovering ? AppColors.sidebarRowHover : Colors.transparent);
-        final Color fgHover =
-            hovering && !primary ? AppColors.textPrimary : fg;
+        final Color fgHover = hovering && !primary ? AppColors.textPrimary : fg;
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
           alignment: Alignment.center,
@@ -2604,7 +2626,6 @@ class _QuickAction extends StatelessWidget {
   }
 }
 
-
 /// Right-aligned mono input + vertical stepper for the number kind.
 /// Matches the design's `.num-field` / `.num-steppers` layout.
 class _NumberBody extends StatefulWidget {
@@ -2627,10 +2648,8 @@ class _NumberBody extends StatefulWidget {
 class _NumberBodyState extends State<_NumberBody> {
   void _bump(int delta) {
     final raw = widget.controller.text.trim();
-    final current =
-        num.tryParse(raw.isEmpty ? '0' : raw) ?? num.parse('0');
-    final next =
-        widget.intOnly ? (current + delta).round() : current + delta;
+    final current = num.tryParse(raw.isEmpty ? '0' : raw) ?? num.parse('0');
+    final next = widget.intOnly ? (current + delta).round() : current + delta;
     widget.controller.text = next.toString();
     widget.onChanged();
   }
@@ -2658,27 +2677,22 @@ class _NumberBodyState extends State<_NumberBody> {
                   inputFormatters: [
                     widget.intOnly ? _intFilter : _numberFilter,
                   ],
-                  style: AppTheme.mono(
-                    size: 12,
-                    color: AppColors.textPrimary,
-                  ).copyWith(
-                    fontFeatures: const [
-                      FontFeature.tabularFigures(),
-                    ],
-                  ),
+                  style: AppTheme.mono(size: 12, color: AppColors.textPrimary)
+                      .copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                   decoration: const InputDecoration(
                     isCollapsed: true,
                     border: InputBorder.none,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                   ),
                   onChanged: (_) => widget.onChanged(),
                 ),
               ),
-              Container(
-                width: 1,
-                color: AppColors.border,
-              ),
+              Container(width: 1, color: AppColors.border),
               Column(
                 children: [
                   _StepperBtn(
@@ -2702,6 +2716,7 @@ class _NumberBodyState extends State<_NumberBody> {
 
 class _StepperBtn extends StatelessWidget {
   const _StepperBtn({required this.icon, required this.onTap});
+
   final IconData icon;
   final VoidCallback onTap;
 

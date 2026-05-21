@@ -10,6 +10,7 @@ sealed class CellEditValue {
 
 class CellLiteral extends CellEditValue {
   const CellLiteral(this.value);
+
   final String? value;
 }
 

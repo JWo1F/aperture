@@ -14,20 +14,20 @@ class SavedQuery {
   final DateTime? updatedAt;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'sql': sql,
-        if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'sql': sql,
+    if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
+  };
 
   factory SavedQuery.fromJson(Map<String, dynamic> j) => SavedQuery(
-        id: j['id'] as String,
-        name: j['name'] as String? ?? 'Query',
-        sql: j['sql'] as String? ?? '',
-        updatedAt: j['updatedAt'] is String
-            ? DateTime.tryParse(j['updatedAt'] as String)
-            : null,
-      );
+    id: j['id'] as String,
+    name: j['name'] as String? ?? 'Query',
+    sql: j['sql'] as String? ?? '',
+    updatedAt: j['updatedAt'] is String
+        ? DateTime.tryParse(j['updatedAt'] as String)
+        : null,
+  );
 
   SavedQuery copyWith({String? name, String? sql, DateTime? updatedAt}) =>
       SavedQuery(

@@ -21,6 +21,7 @@ class TableGlyph extends StatelessWidget {
 
 class _TablePainter extends CustomPainter {
   _TablePainter(this.color);
+
   final Color color;
 
   @override

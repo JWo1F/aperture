@@ -172,12 +172,14 @@ List<SqlStatement> parseSqlStatements(String sql) {
       final raw = sql.substring(currentStart, i);
       final trimmed = raw.trim();
       if (trimmed.isNotEmpty && trimmed != ';') {
-        out.add(SqlStatement(
-          text: trimmed,
-          startOffset: currentStart,
-          endOffset: i,
-          startLine: currentStartLine,
-        ));
+        out.add(
+          SqlStatement(
+            text: trimmed,
+            startOffset: currentStart,
+            endOffset: i,
+            startLine: currentStartLine,
+          ),
+        );
       }
       while (i < length && _isBlank(sql.codeUnitAt(i))) {
         if (sql.codeUnitAt(i) == 0x0A) line++;
@@ -197,12 +199,14 @@ List<SqlStatement> parseSqlStatements(String sql) {
     final raw = sql.substring(currentStart);
     final trimmed = raw.trim();
     if (trimmed.isNotEmpty) {
-      out.add(SqlStatement(
-        text: trimmed,
-        startOffset: currentStart,
-        endOffset: length,
-        startLine: currentStartLine,
-      ));
+      out.add(
+        SqlStatement(
+          text: trimmed,
+          startOffset: currentStart,
+          endOffset: length,
+          startLine: currentStartLine,
+        ),
+      );
     }
   }
 

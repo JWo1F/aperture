@@ -58,6 +58,7 @@ Future<void> showExportDialog(
 
 class _ExportBody extends StatefulWidget {
   const _ExportBody({required this.target});
+
   final ExportTarget target;
 
   @override
@@ -187,11 +188,7 @@ class _ExportBodyState extends State<_ExportBody> {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.ios_share,
-                size: 14,
-                color: AppColors.accent,
-              ),
+              Icon(Icons.ios_share, size: 14, color: AppColors.accent),
               const SizedBox(width: 8),
               Text(
                 'Export',
@@ -232,7 +229,8 @@ class _ExportBodyState extends State<_ExportBody> {
               scope: _Scope.current,
               selected: _scope,
               label: 'Current page',
-              hint: '$currentCount row${currentCount == 1 ? '' : 's'} '
+              hint:
+                  '$currentCount row${currentCount == 1 ? '' : 's'} '
                   'already loaded',
               onSelect: () => setState(() => _scope = _Scope.current),
             ),
@@ -241,7 +239,8 @@ class _ExportBodyState extends State<_ExportBody> {
               scope: _Scope.all,
               selected: _scope,
               label: 'All filtered rows',
-              hint: '~$allCount row${allCount == 1 ? '' : 's'} '
+              hint:
+                  '~$allCount row${allCount == 1 ? '' : 's'} '
                   '(re-fetched from the database)',
               onSelect: () => setState(() => _scope = _Scope.all),
             ),
@@ -258,8 +257,7 @@ class _ExportBodyState extends State<_ExportBody> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.error_outline,
-                      size: 13, color: AppColors.error),
+                  Icon(Icons.error_outline, size: 13, color: AppColors.error),
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
@@ -288,11 +286,11 @@ class _ExportBodyState extends State<_ExportBody> {
               AppButton(
                 label: _busy
                     ? (_destination == _Destination.clipboard
-                        ? 'Copying…'
-                        : 'Exporting…')
+                          ? 'Copying…'
+                          : 'Exporting…')
                     : (_destination == _Destination.clipboard
-                        ? 'Copy'
-                        : 'Export…'),
+                          ? 'Copy'
+                          : 'Export…'),
                 icon: _destination == _Destination.clipboard
                     ? Icons.content_copy
                     : Icons.save_alt,
@@ -309,6 +307,7 @@ class _ExportBodyState extends State<_ExportBody> {
 
 class _FormatChips extends StatelessWidget {
   const _FormatChips({required this.selected, required this.onSelect});
+
   final ExportFormat selected;
   final ValueChanged<ExportFormat> onSelect;
 
@@ -370,6 +369,7 @@ class _FormatChip extends StatelessWidget {
 
 class _DestinationChips extends StatelessWidget {
   const _DestinationChips({required this.selected, required this.onSelect});
+
   final _Destination selected;
   final ValueChanged<_Destination> onSelect;
 
@@ -441,8 +441,7 @@ class _DestinationChip extends StatelessWidget {
               label,
               style: AppTheme.mono(
                 size: 11.5,
-                color:
-                    selected ? AppColors.accent : AppColors.textSecondary,
+                color: selected ? AppColors.accent : AppColors.textSecondary,
                 weight: FontWeight.w600,
               ),
             ),
@@ -474,10 +473,7 @@ class _ScopeChoice extends StatelessWidget {
     return Hoverable(
       onTap: onSelect,
       builder: (context, hovering) => Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: Insets.md,
-          vertical: 9,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: Insets.md, vertical: 9),
         decoration: BoxDecoration(
           color: isSelected
               ? AppColors.accentSoft
@@ -495,9 +491,7 @@ class _ScopeChoice extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected
-                      ? AppColors.accent
-                      : AppColors.borderStrong,
+                  color: isSelected ? AppColors.accent : AppColors.borderStrong,
                   width: 1.5,
                 ),
               ),

@@ -19,9 +19,13 @@ class CatalogController extends ChangeNotifier {
   Object? _lastError;
 
   DatabaseCatalog get catalog => _catalog;
+
   List<DbSchema> get schemas => _catalog.schemas;
+
   int get generation => _generation;
+
   bool get isPhase1Loading => _phase1Loading;
+
   Object? get lastError => _lastError;
 
   /// Bumps the generation counter, clears the catalog, and returns the new
@@ -151,6 +155,7 @@ class CatalogController extends ChangeNotifier {
   }
 
   DbTable? relation(int oid) => _catalog.relation(oid);
+
   DbTable? relationByName(String schema, String table) =>
       _catalog.relationByName(schema, table);
 

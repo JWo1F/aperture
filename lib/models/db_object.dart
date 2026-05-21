@@ -145,6 +145,7 @@ class DbEnum {
   final List<String> labels;
 
   String get qualifiedName => qualify(schema, name);
+
   String get qualifiedKey => '$schema.$name';
 }
 

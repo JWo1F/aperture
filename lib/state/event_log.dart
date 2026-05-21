@@ -30,7 +30,9 @@ class EventLog extends ChangeNotifier {
   int _unread = 0;
 
   List<LogEvent> get events => List.unmodifiable(_events);
+
   bool get isVisible => _visible;
+
   int get unreadCount => _unread;
 
   IOSink? _fileSink;
@@ -76,8 +78,9 @@ class EventLog extends ChangeNotifier {
       final day = _today();
       if (_fileDay != day) {
         await _fileSink?.close();
-        _fileSink = File('${logsDir.path}/$day.ndjson')
-            .openWrite(mode: FileMode.append);
+        _fileSink = File(
+          '${logsDir.path}/$day.ndjson',
+        ).openWrite(mode: FileMode.append);
         _fileDay = day;
       }
       _fileSink!.writeln(jsonEncode(event.toJson()));

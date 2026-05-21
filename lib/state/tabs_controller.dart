@@ -43,7 +43,9 @@ class TabsController extends ChangeNotifier {
   final Map<String, Timer> _autoRefreshTimers = {};
 
   List<WorkspaceTab> get tabs => List.unmodifiable(_tabs);
+
   int get activeIndex => _activeIndex;
+
   WorkspaceTab? get activeTab =>
       _tabs.isEmpty ? null : _tabs[_activeIndex.clamp(0, _tabs.length - 1)];
 
@@ -195,8 +197,7 @@ class TabsController extends ChangeNotifier {
 
   Future<void> openSchema(DbTable table) async {
     final existing = _tabs.indexWhere(
-      (t) =>
-          t is SchemaTab && t.table.qualifiedName == table.qualifiedName,
+      (t) => t is SchemaTab && t.table.qualifiedName == table.qualifiedName,
     );
     if (existing != -1) {
       _select(existing);
@@ -264,8 +265,7 @@ class TabsController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      tab.totalRows =
-          await service.countRows(tab.table, filter: tab.filter);
+      tab.totalRows = await service.countRows(tab.table, filter: tab.filter);
       tab.result = await service.fetchTablePage(
         tab.table,
         limit: tab.pageSize,
@@ -276,8 +276,10 @@ class TabsController extends ChangeNotifier {
       );
       tab.lastRefreshedAt = DateTime.now();
     } catch (e) {
-      tab.result =
-          QueryResult.failure(error: e.toString(), elapsed: Duration.zero);
+      tab.result = QueryResult.failure(
+        error: e.toString(),
+        elapsed: Duration.zero,
+      );
     }
     tab.loading = false;
     notifyListeners();
@@ -387,8 +389,7 @@ class TabsController extends ChangeNotifier {
     final original = result.rows[row][column];
     final originalText = formatCellValue(original);
     final key = CellEdit(row, column);
-    final matchesOriginal =
-        value is CellLiteral && value.value == originalText;
+    final matchesOriginal = value is CellLiteral && value.value == originalText;
     if (matchesOriginal) {
       tab.edits.remove(key);
     } else {

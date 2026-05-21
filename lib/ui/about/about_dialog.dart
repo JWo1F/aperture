@@ -68,10 +68,7 @@ Future<void> showAboutDbv(BuildContext context) {
               const SizedBox(height: Insets.lg),
               Text(
                 _tagline,
-                style: AppTheme.ui(
-                  size: 12.5,
-                  color: AppColors.textSecondary,
-                ),
+                style: AppTheme.ui(size: 12.5, color: AppColors.textSecondary),
               ),
               const SizedBox(height: Insets.md),
               _bullet('Crash-safe atomic writes for connection state'),
@@ -97,28 +94,25 @@ Future<void> showAboutDbv(BuildContext context) {
 }
 
 Widget _bullet(String text) => Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 4,
-            height: 4,
-            margin: const EdgeInsets.only(top: 6, right: 8),
-            decoration: BoxDecoration(
-              color: AppColors.accent,
-              shape: BoxShape.circle,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              text,
-              style: AppTheme.ui(
-                size: 11.5,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-        ],
+  padding: const EdgeInsets.only(bottom: 4),
+  child: Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Container(
+        width: 4,
+        height: 4,
+        margin: const EdgeInsets.only(top: 6, right: 8),
+        decoration: BoxDecoration(
+          color: AppColors.accent,
+          shape: BoxShape.circle,
+        ),
       ),
-    );
+      Expanded(
+        child: Text(
+          text,
+          style: AppTheme.ui(size: 11.5, color: AppColors.textSecondary),
+        ),
+      ),
+    ],
+  ),
+);

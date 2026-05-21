@@ -11,7 +11,7 @@ import 'package:flutter/services.dart';
 /// and the window stays at its default position.
 class WindowFrame {
   WindowFrame({MethodChannel? channel})
-      : _channel = channel ?? const MethodChannel('dbv/window');
+    : _channel = channel ?? const MethodChannel('dbv/window');
 
   final MethodChannel _channel;
 

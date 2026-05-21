@@ -84,18 +84,23 @@ class AppState extends ChangeNotifier {
   // --- Preferences ------------------------------------------------------
 
   AppBrightness get brightness => preferences.brightness;
+
   void setBrightness(AppBrightness value) => preferences.setBrightness(value);
+
   void toggleBrightness() => preferences.toggleBrightness();
 
   bool get sidebarVisible => preferences.sidebarVisible;
+
   void toggleSidebar() => preferences.toggleSidebar();
 
   // --- Connection registry ---------------------------------------------
 
   List<ConnectionConfig> get connections => registry.all;
+
   List<ConnectionConfig> get recentConnections => registry.recent;
 
   void addConnection(ConnectionConfig config) => registry.add(config);
+
   void updateConnection(ConnectionConfig config) {
     registry.update(config);
     // Password rotation is an explicit, separate step — `update` is
@@ -115,8 +120,11 @@ class AppState extends ChangeNotifier {
   // --- Session ---------------------------------------------------------
 
   ConnectionConfig? get activeConnection => session.activeConnection;
+
   ConnectionStatus get status => session.status;
+
   String? get connectionError => session.error;
+
   String? get serverVersion => session.serverVersion;
 
   Future<void> connect(ConnectionConfig config) async {
@@ -208,19 +216,28 @@ class AppState extends ChangeNotifier {
   // --- Catalog ---------------------------------------------------------
 
   List<DbSchema> get schemas => catalog.schemas;
+
   bool get isCatalogLoading => catalog.isPhase1Loading;
+
   bool isSchemaExpanded(String name) => ui.isSchemaExpanded(name);
+
   List<DbColumn>? columnsFor(DbTable table) => catalog.columnsFor(table);
+
   Map<String, DbForeignKey>? foreignKeysFor(DbTable table) =>
       catalog.foreignKeysFor(table);
+
   Map<String, DbForeignKey> get aggregatedForeignKeys =>
       catalog.aggregatedForeignKeys;
+
   DbForeignKey? findForeignKey(int? sourceRelOid, String columnName) =>
       catalog.findForeignKey(sourceRelOid, columnName);
+
   DbTable? findPrimaryKeyOwner(String columnName) =>
       catalog.findPrimaryKeyOwner(columnName);
+
   DbTable? findPrimaryKeyOwnerByOid(int? sourceRelOid, String columnName) =>
       catalog.findPrimaryKeyOwnerByOid(sourceRelOid, columnName);
+
   Iterable<String> get loadedColumnNames => catalog.allColumnNames;
 
   Future<void> ensureColumns(DbTable table) async {}
@@ -228,65 +245,94 @@ class AppState extends ChangeNotifier {
   // --- Schema tree -----------------------------------------------------
 
   String get sidebarSearch => ui.sidebarSearch;
+
   void setSidebarSearch(String value) => ui.setSidebarSearch(value);
+
   void toggleSchema(String name) => ui.toggleSchema(name);
 
   // --- Tabs ------------------------------------------------------------
 
   List<WorkspaceTab> get tabs => tabsController.tabs;
+
   int get activeTabIndex => tabsController.activeIndex;
+
   WorkspaceTab? get activeTab => tabsController.activeTab;
+
   int get unappliedEditCount => tabsController.unappliedEditCount;
 
   void newQueryTab() => tabsController.newQueryTab();
+
   void selectTab(int index) => tabsController.selectTab(index);
+
   void closeTab(String id) => tabsController.closeTab(id);
+
   void closeOtherTabs(String keepId) => tabsController.closeOtherTabs(keepId);
-  void closeTabsToRight(String anchorId) => tabsController.closeTabsToRight(anchorId);
+
+  void closeTabsToRight(String anchorId) =>
+      tabsController.closeTabsToRight(anchorId);
+
   void closeAllTabs() => tabsController.closeAllTabs();
 
   Future<void> openSchema(DbTable table) => tabsController.openSchema(table);
+
   Future<void> reloadSchema(SchemaTab tab) => tabsController.reloadSchema(tab);
-  Future<TableTab> openTable(DbTable table) =>
-      tabsController.openTable(table);
+
+  Future<TableTab> openTable(DbTable table) => tabsController.openTable(table);
+
   void openSavedQuery(SavedQuery q) => tabsController.openSavedQuery(q);
 
   Future<void> loadTablePage(TableTab tab, int page) =>
       tabsController.loadTablePage(tab, page);
+
   Future<QueryResult> fetchAllForExport(TableTab tab) =>
       tabsController.fetchAllForExport(tab);
+
   Future<void> refreshTable(TableTab tab) => tabsController.refreshTable(tab);
 
   Future<void> setTableSelect(TableTab tab, String selectList) =>
       tabsController.setTableSelect(tab, selectList);
+
   Future<void> setTableFilter(TableTab tab, String filter) =>
       tabsController.setTableFilter(tab, filter);
+
   Future<void> setTableOrder(TableTab tab, String orderBy) =>
       tabsController.setTableOrder(tab, orderBy);
+
   Future<void> cycleTableOrder(TableTab tab, String column) =>
       tabsController.cycleTableOrder(tab, column);
+
   Future<void> setColumnSort(TableTab tab, String column, bool descending) =>
       tabsController.setColumnSort(tab, column, descending);
+
   Future<void> appendTableFilter(TableTab tab, String fragment) =>
       tabsController.appendTableFilter(tab, fragment);
+
   void setTableAutoRefresh(TableTab tab, Duration? interval) =>
       tabsController.setTableAutoRefresh(tab, interval);
+
   void setQueryAutoRefresh(QueryTab tab, Duration? interval) =>
       tabsController.setQueryAutoRefresh(tab, interval);
 
   void setCellEdit(TableTab tab, int row, int column, CellEditValue value) =>
       tabsController.setCellEdit(tab, row, column, value);
+
   void revertCellEdit(TableTab tab, int row, int column) =>
       tabsController.revertCellEdit(tab, row, column);
+
   void resetTableEdits(TableTab tab) => tabsController.resetTableEdits(tab);
+
   List<String> previewEditStatements(TableTab tab) =>
       tabsController.previewEditStatements(tab);
-  Future<String?> applyTableEdits(TableTab tab) => tabsController.applyTableEdits(tab);
+
+  Future<String?> applyTableEdits(TableTab tab) =>
+      tabsController.applyTableEdits(tab);
 
   Future<void> runQuery(QueryTab tab, {String? sqlOverride}) =>
       tabsController.runQuery(tab, sqlOverride: sqlOverride);
+
   Future<void> loadQueryPlan(QueryTab tab, {String? sqlOverride}) =>
       tabsController.loadQueryPlan(tab, sqlOverride: sqlOverride);
+
   void clearQueryMessages(QueryTab tab) {
     tab.messages.clear();
     perConnection.clearQueryMessages(tab.id);
@@ -295,25 +341,37 @@ class AppState extends ChangeNotifier {
 
   void updateQuerySql(QueryTab tab, String sql) =>
       tabsController.updateQuerySql(tab, sql);
-  void renameQuery(String id, String name) => tabsController.renameQuery(id, name);
+
+  void renameQuery(String id, String name) =>
+      tabsController.renameQuery(id, name);
+
   void deleteSavedQuery(String id) => tabsController.deleteSavedQuery(id);
+
   void duplicateSavedQuery(String id) => tabsController.duplicateSavedQuery(id);
 
   // --- Per-connection bags --------------------------------------------
 
   List<SavedQuery> get savedQueries => perConnection.savedQueries;
+
   bool isFavorite(DbTable table) => perConnection.isFavorite(table);
+
   void toggleFavorite(DbTable table) => perConnection.toggleFavorite(table);
+
   List<DbTable> get favoriteTables => perConnection.favoriteTables;
+
   List<DbTable> get recents => perConnection.recents;
+
   void persistColumnWidth(DbTable table, String column, double width) =>
       perConnection.persistColumnWidth(table, column, width);
 
   // --- Navigation history ---------------------------------------------
 
   bool get canGoBack => history.canGoBack;
+
   bool get canGoForward => history.canGoForward;
+
   void historyBack() => history.back(_applySnapshot);
+
   void historyForward() => history.forward(_applySnapshot);
 
   bool _applySnapshot(NavSnapshot snap) {
@@ -345,16 +403,23 @@ class AppState extends ChangeNotifier {
     Object? value,
   ) async {
     final tab = await tabsController.openTable(refTable);
-    await tabsController.setTableFilter(tab, equalityFragment(refColumn, value));
+    await tabsController.setTableFilter(
+      tab,
+      equalityFragment(refColumn, value),
+    );
   }
 
   Future<void> followForeignKey(DbForeignKey fk, Object? value) async {
     if (!fk.isSingleColumn) return;
-    final ref = catalog.relation(fk.refTableOid) ??
+    final ref =
+        catalog.relation(fk.refTableOid) ??
         catalog.relationByName(fk.refSchema, fk.refTable);
     if (ref == null) return;
     final tab = await tabsController.openTable(ref);
-    await tabsController.setTableFilter(tab, equalityFragment(fk.refColumn, value));
+    await tabsController.setTableFilter(
+      tab,
+      equalityFragment(fk.refColumn, value),
+    );
   }
 
   @override

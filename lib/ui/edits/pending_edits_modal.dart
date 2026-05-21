@@ -42,6 +42,7 @@ class _Body extends StatefulWidget {
     required this.onApply,
     required this.onRevert,
   });
+
   final List<String> statements;
   final Future<void> Function()? onApply;
   final VoidCallback? onRevert;
@@ -81,8 +82,7 @@ class _BodyState extends State<_Body> {
               ),
               const SizedBox(width: 10),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppColors.accentSoft,
                   borderRadius: BorderRadius.circular(4),
@@ -125,17 +125,12 @@ class _BodyState extends State<_Body> {
               : ListView.builder(
                   padding: EdgeInsets.zero,
                   itemCount: statements.length,
-                  itemBuilder: (_, i) => _StatementItem(
-                    sql: statements[i],
-                    monoStyle: mono,
-                  ),
+                  itemBuilder: (_, i) =>
+                      _StatementItem(sql: statements[i], monoStyle: mono),
                 ),
         ),
         Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 12,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           decoration: BoxDecoration(
             color: AppColors.bgDeep,
             border: Border(top: BorderSide(color: AppColors.hairline)),
@@ -161,8 +156,7 @@ class _BodyState extends State<_Body> {
               ],
               AppButton(
                 label: 'Close',
-                onPressed:
-                    _applying ? null : () => Navigator.of(context).pop(),
+                onPressed: _applying ? null : () => Navigator.of(context).pop(),
               ),
               if (widget.onApply != null) ...[
                 const SizedBox(width: 8),
@@ -200,10 +194,14 @@ class _StatementItem extends StatelessWidget {
   final String sql;
   final TextStyle monoStyle;
 
-  static final _relRe =
-      RegExp(r'UPDATE\s+("?[\w.]+"?\."?[\w.]+"?|"?[\w.]+"?)\s', caseSensitive: false);
-  static final _ctidRe =
-      RegExp(r"ctid\s*=\s*'\(([\d,]+)\)'", caseSensitive: false);
+  static final _relRe = RegExp(
+    r'UPDATE\s+("?[\w.]+"?\."?[\w.]+"?|"?[\w.]+"?)\s',
+    caseSensitive: false,
+  );
+  static final _ctidRe = RegExp(
+    r"ctid\s*=\s*'\(([\d,]+)\)'",
+    caseSensitive: false,
+  );
 
   ({String? relation, String? ctid}) _meta() {
     final r = _relRe.firstMatch(sql)?.group(1);
@@ -240,10 +238,7 @@ class _StatementItem extends StatelessWidget {
               if (meta.ctid != null)
                 Text(
                   'ctid ${meta.ctid}',
-                  style: AppTheme.mono(
-                    size: 10.5,
-                    color: AppColors.text4,
-                  ),
+                  style: AppTheme.mono(size: 10.5, color: AppColors.text4),
                 ),
               const SizedBox(width: 8),
               Hoverable(

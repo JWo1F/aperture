@@ -22,19 +22,20 @@ class QueryMessage {
   bool get isError => error != null;
 
   Map<String, dynamic> toJson() => {
-        'ts': timestamp.toIso8601String(),
-        'sql': sql,
-        if (elapsedMs != null) 'ms': elapsedMs,
-        if (affectedRows != null) 'affected': affectedRows,
-        if (error != null) 'error': error,
-      };
+    'ts': timestamp.toIso8601String(),
+    'sql': sql,
+    if (elapsedMs != null) 'ms': elapsedMs,
+    if (affectedRows != null) 'affected': affectedRows,
+    if (error != null) 'error': error,
+  };
 
   factory QueryMessage.fromJson(Map<String, dynamic> j) => QueryMessage(
-        timestamp: DateTime.tryParse(j['ts'] as String? ?? '') ??
-            DateTime.fromMillisecondsSinceEpoch(0),
-        sql: j['sql'] as String? ?? '',
-        elapsedMs: j['ms'] is int ? j['ms'] as int : null,
-        affectedRows: j['affected'] is int ? j['affected'] as int : null,
-        error: j['error'] as String?,
-      );
+    timestamp:
+        DateTime.tryParse(j['ts'] as String? ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0),
+    sql: j['sql'] as String? ?? '',
+    elapsedMs: j['ms'] is int ? j['ms'] as int : null,
+    affectedRows: j['affected'] is int ? j['affected'] as int : null,
+    error: j['error'] as String?,
+  );
 }

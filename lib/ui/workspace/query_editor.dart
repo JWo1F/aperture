@@ -128,10 +128,7 @@ class _QueryEditorState extends State<QueryEditor> {
 
   void _runStatement(SqlStatement stmt) {
     widget.tab.view = QueryResultsView.results;
-    context.read<AppState>().runQuery(
-          widget.tab,
-          sqlOverride: stmt.text,
-        );
+    context.read<AppState>().runQuery(widget.tab, sqlOverride: stmt.text);
   }
 
   void _runAtCursor() {
@@ -162,8 +159,7 @@ class _QueryEditorState extends State<QueryEditor> {
           result: tab.result!,
           widths: tab.columnWidths,
           foreignKeys: _resolveFks(state, tab.result!),
-          onFollowForeignKey: (fk, value) =>
-              state.followForeignKey(fk, value),
+          onFollowForeignKey: (fk, value) => state.followForeignKey(fk, value),
           findRowOwner: (col) => _findRowOwner(state, tab.result!, col),
           onFindRow: (table, col, value) =>
               state.findRowInTable(table, col, value),
@@ -190,7 +186,8 @@ class _QueryEditorState extends State<QueryEditor> {
     final state = context.watch<AppState>();
     final tab = widget.tab;
 
-    final activeStmt = _cursorStmt != null &&
+    final activeStmt =
+        _cursorStmt != null &&
             _cursorStmt! >= 1 &&
             _cursorStmt! <= _statements.length
         ? _statements[_cursorStmt! - 1]
@@ -199,8 +196,8 @@ class _QueryEditorState extends State<QueryEditor> {
       if (activeStmt != null)
         LineBand(
           startLine: activeStmt.startLine,
-          endLine: activeStmt.startLine +
-              '\n'.allMatches(activeStmt.text).length,
+          endLine:
+              activeStmt.startLine + '\n'.allMatches(activeStmt.text).length,
           color: AppColors.accent.withValues(alpha: 0.06),
         ),
     ];
@@ -259,8 +256,9 @@ class _QueryEditorState extends State<QueryEditor> {
       children: [
         _Toolbar(
           tab: tab,
-          onRunStatement:
-              tab.running || _statements.isEmpty ? null : _runAtCursor,
+          onRunStatement: tab.running || _statements.isEmpty
+              ? null
+              : _runAtCursor,
           onRunAll: tab.running ? null : _runAll,
         ),
         Expanded(
@@ -274,8 +272,10 @@ class _QueryEditorState extends State<QueryEditor> {
               const handleHeight = 6.0;
               const minSide = 80.0;
               final available =
-                  (constraints.maxHeight - dividerHeight - handleHeight)
-                      .clamp(0.0, double.infinity);
+                  (constraints.maxHeight - dividerHeight - handleHeight).clamp(
+                    0.0,
+                    double.infinity,
+                  );
               final fraction = state.preferences.queryResultsFraction;
               double resultsHeight = available * fraction;
               // Enforce a per-side pixel minimum on top of the fraction
@@ -283,8 +283,10 @@ class _QueryEditorState extends State<QueryEditor> {
               // height that paints an overflow stripe if the pane shrinks
               // below it, and ClipRect below hides what's left over.
               if (available >= minSide * 2) {
-                resultsHeight = resultsHeight
-                    .clamp(minSide, available - minSide);
+                resultsHeight = resultsHeight.clamp(
+                  minSide,
+                  available - minSide,
+                );
               }
               final editorHeight = available - resultsHeight;
               return Column(
@@ -318,7 +320,6 @@ class _QueryEditorState extends State<QueryEditor> {
     );
   }
 }
-
 
 /// Drag handle between the editor and the results pane. Captures the
 /// starting fraction (and the available height at that instant) on drag
@@ -407,7 +408,6 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
-
 /// Filled-accent button used as the primary "Run" in the query toolbar.
 class _QtPrimaryButton extends StatelessWidget {
   const _QtPrimaryButton({
@@ -416,6 +416,7 @@ class _QtPrimaryButton extends StatelessWidget {
     required this.kbd,
     required this.onPressed,
   });
+
   final String label;
   final IconData icon;
   final List<String> kbd;
@@ -425,8 +426,7 @@ class _QtPrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     return Hoverable(
-      cursor:
-          enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
       onTap: onPressed,
       builder: (context, hovering) {
         final bg = !enabled
@@ -436,10 +436,7 @@ class _QtPrimaryButton extends StatelessWidget {
           duration: const Duration(milliseconds: 100),
           height: 24,
           padding: const EdgeInsets.only(left: 9, right: 6),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: Radii.brSm,
-          ),
+          decoration: BoxDecoration(color: bg, borderRadius: Radii.brSm),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -471,6 +468,7 @@ class _QtBorderButton extends StatelessWidget {
     this.kbd,
     required this.onPressed,
   });
+
   final String label;
   final IconData icon;
   final List<String>? kbd;
@@ -480,8 +478,7 @@ class _QtBorderButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     return Hoverable(
-      cursor:
-          enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
       onTap: onPressed,
       builder: (context, hovering) {
         final fg = enabled
@@ -531,6 +528,7 @@ class _QtBorderButton extends StatelessWidget {
 /// chip so it reads correctly on the primary button background.
 class _QtInlineKbd extends StatelessWidget {
   const _QtInlineKbd({required this.parts, this.onAccent = false});
+
   final List<String> parts;
   final bool onAccent;
 
@@ -553,9 +551,7 @@ class _QtInlineKbd extends StatelessWidget {
                   ? Colors.white.withValues(alpha: 0.18)
                   : AppColors.surface2,
               borderRadius: BorderRadius.circular(onAccent ? 3 : 4),
-              border: onAccent
-                  ? null
-                  : Border.all(color: AppColors.border),
+              border: onAccent ? null : Border.all(color: AppColors.border),
             ),
             child: Text(
               parts[i],
@@ -577,6 +573,7 @@ class _QtInlineKbd extends StatelessWidget {
 /// the footer pagebar so they don't double up here.
 class _ResultsDivider extends StatelessWidget {
   const _ResultsDivider({required this.tab});
+
   final QueryTab tab;
 
   @override
@@ -587,9 +584,7 @@ class _ResultsDivider extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: AppColors.bgDeep,
-        border: Border(
-          bottom: BorderSide(color: AppColors.border, width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
       ),
       child: Row(
         children: [
@@ -651,8 +646,8 @@ class _RdTab extends StatelessWidget {
                     color: active
                         ? AppColors.textPrimary
                         : (hovering
-                            ? AppColors.textSecondary
-                            : AppColors.textMuted),
+                              ? AppColors.textSecondary
+                              : AppColors.textMuted),
                     weight: FontWeight.w600,
                   ).copyWith(letterSpacing: 0.04 * 10.5),
                 ),
@@ -662,9 +657,7 @@ class _RdTab extends StatelessWidget {
                     badge!,
                     style: AppTheme.mono(
                       size: 10,
-                      color: active
-                          ? AppColors.accent
-                          : AppColors.textMuted,
+                      color: active ? AppColors.accent : AppColors.textMuted,
                       weight: FontWeight.w600,
                     ),
                   ),
@@ -677,10 +670,7 @@ class _RdTab extends StatelessWidget {
               left: 0,
               right: 0,
               bottom: -5,
-              child: Container(
-                height: 1,
-                color: AppColors.accent,
-              ),
+              child: Container(height: 1, color: AppColors.accent),
             ),
         ],
       ),
@@ -766,10 +756,7 @@ class _QueryPagebar extends StatelessWidget {
             else
               const PbStat(head: 'done'),
             const PbDot(),
-            PbStat(
-              head: '${result.elapsed.inMilliseconds}',
-              tail: 'ms',
-            ),
+            PbStat(head: '${result.elapsed.inMilliseconds}', tail: 'ms'),
             if (result.truncatedAt != null) ...[
               const PbDot(),
               PbStat(
@@ -780,10 +767,7 @@ class _QueryPagebar extends StatelessWidget {
           ],
           if (refreshedAt != null) ...[
             const PbDot(),
-            PbStat(
-              head: 'refreshed ',
-              mid: formatPagebarClock(refreshedAt),
-            ),
+            PbStat(head: 'refreshed ', mid: formatPagebarClock(refreshedAt)),
           ],
           const Spacer(),
           if (result != null) ...[
@@ -794,9 +778,7 @@ class _QueryPagebar extends StatelessWidget {
                   width: 5,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: result.isError
-                        ? AppColors.error
-                        : AppColors.success,
+                    color: result.isError ? AppColors.error : AppColors.success,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -805,9 +787,7 @@ class _QueryPagebar extends StatelessWidget {
                   result.isError ? 'error' : 'success',
                   style: AppTheme.mono(
                     size: 10.5,
-                    color: result.isError
-                        ? AppColors.error
-                        : AppColors.success,
+                    color: result.isError ? AppColors.error : AppColors.success,
                   ),
                 ),
               ],
@@ -818,8 +798,7 @@ class _QueryPagebar extends StatelessWidget {
             interval: tab.autoRefreshInterval,
             busy: tab.running,
             canRefresh: canRefresh,
-            onManualRefresh: () =>
-                state.runQuery(tab, sqlOverride: lastRunSql),
+            onManualRefresh: () => state.runQuery(tab, sqlOverride: lastRunSql),
             onSetInterval: (d) => state.setQueryAutoRefresh(tab, d),
           ),
         ],
@@ -827,5 +806,3 @@ class _QueryPagebar extends StatelessWidget {
     );
   }
 }
-
-

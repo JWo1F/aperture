@@ -28,6 +28,7 @@ Future<void> showCommandPalette(BuildContext context, AppState state) {
 
 class _PaletteScaffold extends StatelessWidget {
   const _PaletteScaffold({required this.state});
+
   final AppState state;
 
   @override
@@ -75,6 +76,7 @@ class _Cmd {
 
 class _Palette extends StatefulWidget {
   const _Palette({required this.state});
+
   final AppState state;
 
   @override
@@ -108,82 +110,98 @@ class _PaletteState extends State<_Palette> {
 
     // Actions
     if (state.status == ConnectionStatus.connected) {
-      cmds.add(_Cmd(
-        kind: _CmdKind.action,
-        label: 'New Query',
-        subtitle: 'Open a SQL editor tab',
-        icon: Icons.terminal,
-        run: state.newQueryTab,
-      ));
-      cmds.add(_Cmd(
-        kind: _CmdKind.action,
-        label: 'Refresh Catalog',
-        subtitle: 'Re-introspect the database',
-        icon: Icons.refresh,
-        run: state.refreshCatalog,
-      ));
-      cmds.add(_Cmd(
-        kind: _CmdKind.action,
-        label: 'Disconnect',
-        subtitle: state.activeConnection?.summary ?? '',
-        icon: Icons.power_settings_new,
-        run: state.disconnect,
-      ));
+      cmds.add(
+        _Cmd(
+          kind: _CmdKind.action,
+          label: 'New Query',
+          subtitle: 'Open a SQL editor tab',
+          icon: Icons.terminal,
+          run: state.newQueryTab,
+        ),
+      );
+      cmds.add(
+        _Cmd(
+          kind: _CmdKind.action,
+          label: 'Refresh Catalog',
+          subtitle: 'Re-introspect the database',
+          icon: Icons.refresh,
+          run: state.refreshCatalog,
+        ),
+      );
+      cmds.add(
+        _Cmd(
+          kind: _CmdKind.action,
+          label: 'Disconnect',
+          subtitle: state.activeConnection?.summary ?? '',
+          icon: Icons.power_settings_new,
+          run: state.disconnect,
+        ),
+      );
     }
 
-    cmds.add(_Cmd(
-      kind: _CmdKind.action,
-      label: 'Activity log',
-      subtitle: 'Show / hide  ⌘L',
-      icon: Icons.subject,
-      run: state.eventLog.toggleVisible,
-    ));
-    cmds.add(_Cmd(
-      kind: _CmdKind.action,
-      label: 'About dbv',
-      subtitle: 'Version + shortcuts',
-      icon: Icons.info_outline,
-      run: () => showAboutDbv(context),
-    ));
+    cmds.add(
+      _Cmd(
+        kind: _CmdKind.action,
+        label: 'Activity log',
+        subtitle: 'Show / hide  ⌘L',
+        icon: Icons.subject,
+        run: state.eventLog.toggleVisible,
+      ),
+    );
+    cmds.add(
+      _Cmd(
+        kind: _CmdKind.action,
+        label: 'About dbv',
+        subtitle: 'Version + shortcuts',
+        icon: Icons.info_outline,
+        run: () => showAboutDbv(context),
+      ),
+    );
 
     // Connections
     for (final conn in state.connections) {
       final isActive = state.activeConnection?.id == conn.id;
-      cmds.add(_Cmd(
-        kind: _CmdKind.connection,
-        label: conn.name,
-        subtitle: conn.summary,
-        icon: isActive ? Icons.lan : Icons.lan_outlined,
-        searchTokens: [conn.host, conn.database, conn.username],
-        run: () => state.connect(conn),
-      ));
+      cmds.add(
+        _Cmd(
+          kind: _CmdKind.connection,
+          label: conn.name,
+          subtitle: conn.summary,
+          icon: isActive ? Icons.lan : Icons.lan_outlined,
+          searchTokens: [conn.host, conn.database, conn.username],
+          run: () => state.connect(conn),
+        ),
+      );
     }
 
     // Recent tables
     for (final t in state.recents) {
-      cmds.add(_Cmd(
-        kind: _CmdKind.recent,
-        label: t.name,
-        subtitle: 'Recent · ${t.schema}',
-        icon: Icons.history,
-        searchTokens: [t.schema, t.qualifiedName],
-        run: () => state.openTable(t),
-      ));
+      cmds.add(
+        _Cmd(
+          kind: _CmdKind.recent,
+          label: t.name,
+          subtitle: 'Recent · ${t.schema}',
+          icon: Icons.history,
+          searchTokens: [t.schema, t.qualifiedName],
+          run: () => state.openTable(t),
+        ),
+      );
     }
 
     // All tables
     for (final s in state.schemas) {
       for (final t in s.tables) {
-        cmds.add(_Cmd(
-          kind: _CmdKind.table,
-          label: t.name,
-          subtitle: t.schema,
-          icon: t.isView
-              ? Icons.visibility_outlined
-              : Icons.table_rows_outlined,
-          searchTokens: [t.schema, t.qualifiedName],
-          run: () => state.openTable(t),
-        ));
+        cmds.add(
+          _Cmd(
+            kind: _CmdKind.table,
+            label: t.name,
+            subtitle: t.schema,
+            icon: t.isView
+                ? Icons.visibility_outlined
+                : Icons.table_rows_outlined,
+            searchTokens: [t.schema, t.qualifiedName],
+            run: () => state.openTable(t),
+          ),
+        );
       }
     }
 
@@ -204,14 +222,19 @@ class _PaletteState extends State<_Palette> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final filtered = _filtered();
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      setState(() => _selected =
-          filtered.isEmpty ? 0 : (_selected + 1) % filtered.length);
+      setState(
+        () => _selected = filtered.isEmpty
+            ? 0
+            : (_selected + 1) % filtered.length,
+      );
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      setState(() => _selected = filtered.isEmpty
-          ? 0
-          : (_selected - 1 + filtered.length) % filtered.length);
+      setState(
+        () => _selected = filtered.isEmpty
+            ? 0
+            : (_selected - 1 + filtered.length) % filtered.length,
+      );
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.enter) {
@@ -228,7 +251,9 @@ class _PaletteState extends State<_Palette> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered();
-    final selected = filtered.isEmpty ? 0 : _selected.clamp(0, filtered.length - 1);
+    final selected = filtered.isEmpty
+        ? 0
+        : _selected.clamp(0, filtered.length - 1);
 
     return Container(
       width: 580,
@@ -246,41 +271,42 @@ class _PaletteState extends State<_Palette> {
         ],
       ),
       child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _SearchInput(controller: _controller, focusNode: _focus),
-            Divider(height: 1, color: AppColors.hairline),
-            Flexible(
-              child: filtered.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Center(
-                        child: Text(
-                          'No matches',
-                          style: AppTheme.ui(color: AppColors.textMuted),
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      itemCount: filtered.length,
-                      itemBuilder: (_, i) => _Row(
-                        cmd: filtered[i],
-                        selected: i == selected,
-                        onTap: () => _run(filtered[i]),
-                        onHover: () => setState(() => _selected = i),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _SearchInput(controller: _controller, focusNode: _focus),
+          Divider(height: 1, color: AppColors.hairline),
+          Flexible(
+            child: filtered.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Center(
+                      child: Text(
+                        'No matches',
+                        style: AppTheme.ui(color: AppColors.textMuted),
                       ),
                     ),
-            ),
-            _Footer(count: filtered.length),
-          ],
-        ),
-      );
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    itemCount: filtered.length,
+                    itemBuilder: (_, i) => _Row(
+                      cmd: filtered[i],
+                      selected: i == selected,
+                      onTap: () => _run(filtered[i]),
+                      onHover: () => setState(() => _selected = i),
+                    ),
+                  ),
+          ),
+          _Footer(count: filtered.length),
+        ],
+      ),
+    );
   }
 }
 
 class _SearchInput extends StatelessWidget {
   const _SearchInput({required this.controller, required this.focusNode});
+
   final TextEditingController controller;
   final FocusNode focusNode;
 
@@ -400,6 +426,7 @@ class _Row extends StatelessWidget {
 
 class _KindBadge extends StatelessWidget {
   const _KindBadge({required this.kind});
+
   final _CmdKind kind;
 
   @override
@@ -426,6 +453,7 @@ class _KindBadge extends StatelessWidget {
 
 class _Footer extends StatelessWidget {
   const _Footer({required this.count});
+
   final int count;
 
   @override
@@ -456,6 +484,7 @@ class _Footer extends StatelessWidget {
 
 class _KeyHint extends StatelessWidget {
   const _KeyHint({required this.keys, required this.label});
+
   final List<String> keys;
   final String label;
 
@@ -478,8 +507,7 @@ class _KeyHint extends StatelessWidget {
           ),
           const SizedBox(width: 3),
         ],
-        Text(label,
-            style: AppTheme.ui(size: 10.5, color: AppColors.textMuted)),
+        Text(label, style: AppTheme.ui(size: 10.5, color: AppColors.textMuted)),
       ],
     );
   }

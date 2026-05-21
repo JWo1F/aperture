@@ -113,7 +113,8 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     final db = _database.text.trim();
     final name = _name.text.trim().isEmpty ? '$db @ $host' : _name.text.trim();
     return ConnectionConfig(
-      id: widget.existing?.id ??
+      id:
+          widget.existing?.id ??
           DateTime.now().microsecondsSinceEpoch.toString(),
       name: name,
       host: host,
@@ -162,9 +163,9 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
         _testStatus = _TestStatus.fail;
         _testElapsed = watch.elapsed;
         _testMessage = err.toString().replaceFirst(
-              RegExp(r'^[A-Za-z]+Exception:\s*'),
-              '',
-            );
+          RegExp(r'^[A-Za-z]+Exception:\s*'),
+          '',
+        );
       });
     } finally {
       try {
@@ -203,7 +204,10 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
                 _buildTabStrip(),
                 _buildRow(
                   label: 'NAME',
-                  child: _PlainInput(controller: _name, hint: 'connection name'),
+                  child: _PlainInput(
+                    controller: _name,
+                    hint: 'connection name',
+                  ),
                   trailing: const _Chip(text: 'display'),
                 ),
                 _buildHostPortRow(),
@@ -249,7 +253,11 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
               border: Border.all(color: AppColors.accentRing),
             ),
             alignment: Alignment.center,
-            child: Icon(Icons.storage_rounded, size: 16, color: AppColors.accent),
+            child: Icon(
+              Icons.storage_rounded,
+              size: 16,
+              color: AppColors.accent,
+            ),
           ),
           const SizedBox(width: 12),
           Text(
@@ -316,8 +324,10 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     required Widget child,
     Widget? trailing,
     Widget? labelOverride,
-    EdgeInsets padding =
-        const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    EdgeInsets padding = const EdgeInsets.symmetric(
+      horizontal: 20,
+      vertical: 12,
+    ),
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -330,20 +340,16 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
           children: [
             SizedBox(
               width: 96,
-              child: labelOverride ??
+              child:
+                  labelOverride ??
                   Text(
                     label,
-                    style: GoogleMonoEyebrow.style(
-                      color: AppColors.textMuted,
-                    ),
+                    style: GoogleMonoEyebrow.style(color: AppColors.textMuted),
                   ),
             ),
             const SizedBox(width: 12),
             Expanded(child: child),
-            if (trailing != null) ...[
-              const SizedBox(width: 12),
-              trailing,
-            ],
+            if (trailing != null) ...[const SizedBox(width: 12), trailing],
           ],
         ),
       ),
@@ -444,9 +450,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
           return Row(
             children: [
               Icon(
-                _sslMode == 'disable'
-                    ? Icons.lock_open
-                    : Icons.lock_outline,
+                _sslMode == 'disable' ? Icons.lock_open : Icons.lock_outline,
                 size: 14,
                 color: _sslMode == 'disable'
                     ? AppColors.textMuted
@@ -455,17 +459,13 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
               const SizedBox(width: 8),
               Text(
                 _sslMode,
-                style: AppTheme.mono(
-                  size: 12.5,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTheme.mono(size: 12.5, color: AppColors.textPrimary),
               ),
               const Spacer(),
               Icon(
                 Icons.expand_more,
                 size: 16,
-                color:
-                    hovering ? AppColors.textPrimary : AppColors.textMuted,
+                color: hovering ? AppColors.textPrimary : AppColors.textMuted,
               ),
             ],
           );
@@ -506,9 +506,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
                 Icon(
                   m == _sslMode ? Icons.check : Icons.circle,
                   size: m == _sslMode ? 14 : 4,
-                  color: m == _sslMode
-                      ? AppColors.accent
-                      : AppColors.textMuted,
+                  color: m == _sslMode ? AppColors.accent : AppColors.textMuted,
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -545,10 +543,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
           ],
         ],
       ),
-      trailing: _Chip(
-        text: hex,
-        tone: _ChipTone.mono,
-      ),
+      trailing: _Chip(text: hex, tone: _ChipTone.mono),
     );
   }
 
@@ -566,10 +561,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
           const SizedBox(width: 10),
           Text(
             'Save password in keychain',
-            style: AppTheme.ui(
-              size: 12.5,
-              color: AppColors.textSecondary,
-            ),
+            style: AppTheme.ui(size: 12.5, color: AppColors.textSecondary),
           ),
           const SizedBox(width: 32),
           _Toggle(
@@ -579,27 +571,18 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
           const SizedBox(width: 10),
           Text(
             'Read-only mode',
-            style: AppTheme.ui(
-              size: 12.5,
-              color: AppColors.textSecondary,
-            ),
+            style: AppTheme.ui(size: 12.5, color: AppColors.textSecondary),
           ),
         ],
       ),
       trailing: _readOnly
           ? Text(
               'blocks UPDATE / DELETE',
-              style: AppTheme.mono(
-                size: 11,
-                color: AppColors.textMuted,
-              ),
+              style: AppTheme.mono(size: 11, color: AppColors.textMuted),
             )
           : Text(
               'blocks UPDATE / DELETE',
-              style: AppTheme.mono(
-                size: 11,
-                color: AppColors.text4,
-              ),
+              style: AppTheme.mono(size: 11, color: AppColors.text4),
             ),
     );
   }
@@ -609,7 +592,9 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
   Widget _buildJdbcPreview() {
     final host = _host.text.trim().isEmpty ? 'localhost' : _host.text.trim();
     final port = _port.text.trim().isEmpty ? '5432' : _port.text.trim();
-    final db = _database.text.trim().isEmpty ? 'postgres' : _database.text.trim();
+    final db = _database.text.trim().isEmpty
+        ? 'postgres'
+        : _database.text.trim();
     final user = _username.text.trim().isEmpty
         ? 'postgres'
         : _username.text.trim();
@@ -762,9 +747,11 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
 /// can't lean on [AppTheme.eyebrow] directly because that one is Inter — the
 /// screenshot uses JetBrains Mono so labels visually align with values.
 class GoogleMonoEyebrow {
-  static TextStyle style({Color? color}) =>
-      AppTheme.mono(size: 10.5, color: color, weight: FontWeight.w500)
-          .copyWith(letterSpacing: 1.1);
+  static TextStyle style({Color? color}) => AppTheme.mono(
+    size: 10.5,
+    color: color,
+    weight: FontWeight.w500,
+  ).copyWith(letterSpacing: 1.1);
 }
 
 class _PlainInput extends StatelessWidget {
@@ -832,8 +819,9 @@ class _TabLabel extends StatelessWidget {
               const Spacer(),
               Text(
                 text,
-                style: GoogleMonoEyebrow.style(color: color)
-                    .copyWith(fontWeight: FontWeight.w600),
+                style: GoogleMonoEyebrow.style(
+                  color: color,
+                ).copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Container(
@@ -889,10 +877,7 @@ class _Chip extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: border),
       ),
-      child: Text(
-        text,
-        style: AppTheme.mono(size: 10.5, color: fg),
-      ),
+      child: Text(text, style: AppTheme.mono(size: 10.5, color: fg)),
     );
   }
 }
@@ -926,10 +911,7 @@ class _ColorDot extends StatelessWidget {
         ),
         child: Container(
           margin: EdgeInsets.all(selected ? 2.5 : 1),
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
       ),
     );
@@ -1033,12 +1015,7 @@ class _StatusPill extends StatelessWidget {
             color: dot,
             shape: BoxShape.circle,
             boxShadow: status == _TestStatus.ok
-                ? [
-                    BoxShadow(
-                      color: dot.withValues(alpha: 0.5),
-                      blurRadius: 6,
-                    ),
-                  ]
+                ? [BoxShadow(color: dot.withValues(alpha: 0.5), blurRadius: 6)]
                 : null,
           ),
         ),

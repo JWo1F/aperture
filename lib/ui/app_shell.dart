@@ -9,8 +9,8 @@ import '../models/connection_config.dart';
 import '../models/query_result.dart';
 import '../models/time_ago.dart';
 import '../state/app_state.dart';
-import '../theme/app_theme.dart';
 import '../state/workspace_tab.dart';
+import '../theme/app_theme.dart';
 import 'about/about_dialog.dart';
 import 'command_palette/command_palette.dart';
 import 'connection/connection_dialog.dart';
@@ -171,39 +171,39 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               ),
             ),
             child: Column(
-            children: [
-              const RepaintBoundary(child: _Toolbar()),
-              if (lost) _ConnectionLostBanner(state: state),
-              Expanded(
-                child: Row(
-                  children: [
-                    // Wrap the sidebar and workspace in RepaintBoundary so a
-                    // repaint in one side doesn't dirty the layer of the
-                    // other. Cell-edit repaints in the grid no longer ripple
-                    // back through the sidebar's compositor layer, and vice
-                    // versa.
-                    if (state.sidebarVisible) ...[
-                      const RepaintBoundary(child: Sidebar()),
-                      _SidebarResizeHandle(state: state),
-                    ],
-                    Expanded(
-                      child: RepaintBoundary(
-                        child: Container(
-                          color: AppColors.bg,
-                          child: showWorkspace
-                              ? const Workspace()
-                              : _WelcomePanel(state: state),
+              children: [
+                const RepaintBoundary(child: _Toolbar()),
+                if (lost) _ConnectionLostBanner(state: state),
+                Expanded(
+                  child: Row(
+                    children: [
+                      // Wrap the sidebar and workspace in RepaintBoundary so a
+                      // repaint in one side doesn't dirty the layer of the
+                      // other. Cell-edit repaints in the grid no longer ripple
+                      // back through the sidebar's compositor layer, and vice
+                      // versa.
+                      if (state.sidebarVisible) ...[
+                        const RepaintBoundary(child: Sidebar()),
+                        _SidebarResizeHandle(state: state),
+                      ],
+                      Expanded(
+                        child: RepaintBoundary(
+                          child: Container(
+                            color: AppColors.bg,
+                            child: showWorkspace
+                                ? const Workspace()
+                                : _WelcomePanel(state: state),
+                          ),
                         ),
                       ),
-                    ),
-                    if (state.eventLog.isVisible)
-                      _LogResizeHandle(state: state),
-                    const RepaintBoundary(child: LogPanel()),
-                  ],
+                      if (state.eventLog.isVisible)
+                        _LogResizeHandle(state: state),
+                      const RepaintBoundary(child: LogPanel()),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           ),
         ),
       ),
@@ -216,6 +216,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 /// the rebuilds that fire on every `setSidebarWidth` call mid-drag.
 class _SidebarResizeHandle extends StatefulWidget {
   const _SidebarResizeHandle({required this.state});
+
   final AppState state;
 
   @override
@@ -238,6 +239,7 @@ class _SidebarResizeHandleState extends State<_SidebarResizeHandle> {
 
 class _LogResizeHandle extends StatefulWidget {
   const _LogResizeHandle({required this.state});
+
   final AppState state;
 
   @override
@@ -251,8 +253,7 @@ class _LogResizeHandleState extends State<_LogResizeHandle> {
   Widget build(BuildContext context) {
     return ResizeHandle(
       axis: Axis.vertical,
-      onDragStart: () =>
-          _startWidth = widget.state.preferences.logPanelWidth,
+      onDragStart: () => _startWidth = widget.state.preferences.logPanelWidth,
       onDragUpdate: (dx) =>
           widget.state.preferences.setLogPanelWidth(_startWidth - dx),
     );
@@ -338,10 +339,7 @@ class _Toolbar extends StatelessWidget {
             bottom: BorderSide(color: AppColors.hairline, width: 1),
           ),
         ),
-        padding: EdgeInsets.only(
-          left: _trafficLightInset,
-          right: 4,
-        ),
+        padding: EdgeInsets.only(left: _trafficLightInset, right: 4),
         child: Row(
           children: [
             _TbIcon(
@@ -388,9 +386,7 @@ class _Toolbar extends StatelessWidget {
             // the search would drift away from the right edge.
             SizedBox(
               width: 220,
-              child: _TbSearch(
-                onTap: () => showCommandPalette(context, state),
-              ),
+              child: _TbSearch(onTap: () => showCommandPalette(context, state)),
             ),
             const _TbRail(),
             _TbIcon(
@@ -540,9 +536,7 @@ class _TbIcon extends StatelessWidget {
       message: tooltip,
       waitDuration: const Duration(milliseconds: 350),
       child: Hoverable(
-        cursor: enabled
-            ? SystemMouseCursors.click
-            : SystemMouseCursors.basic,
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
         onTap: onPressed,
         builder: (context, hovering) {
           final Color fg = enabled
@@ -556,10 +550,7 @@ class _TbIcon extends StatelessWidget {
             width: 26,
             height: 26,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: Radii.brSm,
-            ),
+            decoration: BoxDecoration(color: bg, borderRadius: Radii.brSm),
             child: Icon(icon, size: 14, color: fg),
           );
         },
@@ -571,6 +562,7 @@ class _TbIcon extends StatelessWidget {
 /// Accent pill that surfaces the cross-tab pending edit count.
 class _PendingPill extends StatelessWidget {
   const _PendingPill({required this.count, required this.onTap});
+
   final int count;
   final VoidCallback onTap;
 
@@ -629,6 +621,7 @@ class _PendingPill extends StatelessWidget {
 /// border, magnifier glyph, hint text, kbd chip.
 class _TbSearch extends StatelessWidget {
   const _TbSearch({required this.onTap});
+
   final VoidCallback onTap;
 
   @override
@@ -656,10 +649,7 @@ class _TbSearch extends StatelessWidget {
                   'Find tables, queries…',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTheme.mono(
-                    size: 11,
-                    color: AppColors.textMuted,
-                  ),
+                  style: AppTheme.mono(size: 11, color: AppColors.textMuted),
                 ),
               ),
               const SizedBox(width: 8),
@@ -675,6 +665,7 @@ class _TbSearch extends StatelessWidget {
 /// Tiny kbd group rendered with the design's surface-2 chip styling.
 class _MonoKbd extends StatelessWidget {
   const _MonoKbd({required this.parts});
+
   final List<String> parts;
 
   @override
@@ -839,16 +830,13 @@ class _ConnectionPillState extends State<ConnectionPill> {
     final conn = state.activeConnection;
     final (Color dot, String connLabel) = switch (state.status) {
       ConnectionStatus.connected => (
-          AppColors.success,
-          conn?.name ?? 'connected',
-        ),
+        AppColors.success,
+        conn?.name ?? 'connected',
+      ),
       ConnectionStatus.connecting => (AppColors.accent, 'connecting…'),
       ConnectionStatus.lost => (AppColors.warning, conn?.name ?? 'lost'),
       ConnectionStatus.error => (AppColors.error, 'no connection'),
-      ConnectionStatus.disconnected => (
-          AppColors.textMuted,
-          'no connection',
-        ),
+      ConnectionStatus.disconnected => (AppColors.textMuted, 'no connection'),
     };
     final schema = _activeSchema(state) ?? 'public';
 
@@ -860,13 +848,10 @@ class _ConnectionPillState extends State<ConnectionPill> {
           height: 26,
           padding: const EdgeInsets.only(left: 8, right: 8),
           decoration: BoxDecoration(
-            color:
-                hovering ? AppColors.surfaceHover : AppColors.surface,
+            color: hovering ? AppColors.surfaceHover : AppColors.surface,
             borderRadius: Radii.brSm,
             border: Border.all(
-              color: hovering
-                  ? AppColors.borderStrong
-                  : AppColors.border,
+              color: hovering ? AppColors.borderStrong : AppColors.border,
             ),
           ),
           child: Row(
@@ -911,10 +896,7 @@ class _ConnectionPillState extends State<ConnectionPill> {
                 const SizedBox(width: 6),
                 Text(
                   '/',
-                  style: AppTheme.mono(
-                    size: 11.5,
-                    color: AppColors.text4,
-                  ),
+                  style: AppTheme.mono(size: 11.5, color: AppColors.text4),
                 ),
                 const SizedBox(width: 6),
                 ConstrainedBox(
@@ -931,11 +913,7 @@ class _ConnectionPillState extends State<ConnectionPill> {
                 ),
               ],
               const SizedBox(width: 4),
-              Icon(
-                Icons.expand_more,
-                size: 12,
-                color: AppColors.text4,
-              ),
+              Icon(Icons.expand_more, size: 12, color: AppColors.text4),
             ],
           ),
         ),
@@ -953,6 +931,7 @@ class _ConnectionPillState extends State<ConnectionPill> {
 
 class _ConnectionPickerPanel extends StatelessWidget {
   const _ConnectionPickerPanel({required this.onClose});
+
   final VoidCallback onClose;
 
   Future<void> _newConnection(BuildContext context) async {
@@ -1000,10 +979,7 @@ class _ConnectionPickerPanel extends StatelessWidget {
                   ),
                   child: Text(
                     'No saved connections yet.',
-                    style: AppTheme.ui(
-                      size: 11.5,
-                      color: AppColors.textMuted,
-                    ),
+                    style: AppTheme.ui(size: 11.5, color: AppColors.textMuted),
                   ),
                 )
               else
@@ -1121,8 +1097,7 @@ class _ConnPickerRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (active)
-              Icon(Icons.check, size: 13, color: AppColors.accent),
+            if (active) Icon(Icons.check, size: 13, color: AppColors.accent),
           ],
         ),
       ),
@@ -1329,6 +1304,7 @@ class _RecentCard extends StatelessWidget {
     required this.onTap,
     required this.onEdit,
   });
+
   final ConnectionConfig config;
   final VoidCallback onTap;
   final VoidCallback onEdit;
@@ -1400,10 +1376,7 @@ class _RecentCard extends StatelessWidget {
                 else if (ts != null)
                   Text(
                     timeAgo(ts),
-                    style: AppTheme.mono(
-                      size: 10,
-                      color: AppColors.textMuted,
-                    ),
+                    style: AppTheme.mono(size: 10, color: AppColors.textMuted),
                   ),
               ],
             ),
@@ -1412,10 +1385,7 @@ class _RecentCard extends StatelessWidget {
               config.summary,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTheme.mono(
-                size: 11,
-                color: AppColors.textSecondary,
-              ),
+              style: AppTheme.mono(size: 11, color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -1426,6 +1396,7 @@ class _RecentCard extends StatelessWidget {
 
 class _NewConnectionLink extends StatelessWidget {
   const _NewConnectionLink({required this.onTap});
+
   final VoidCallback onTap;
 
   @override
@@ -1441,11 +1412,7 @@ class _NewConnectionLink extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               'New connection',
-              style: AppTheme.ui(
-                size: 12,
-                color: fg,
-                weight: FontWeight.w500,
-              ),
+              style: AppTheme.ui(size: 12, color: fg, weight: FontWeight.w500),
             ),
           ],
         );
@@ -1456,6 +1423,7 @@ class _NewConnectionLink extends StatelessWidget {
 
 class _EmptyBlock extends StatelessWidget {
   const _EmptyBlock({required this.hasAny, required this.onNew});
+
   final bool hasAny;
   final VoidCallback onNew;
 
@@ -1488,6 +1456,7 @@ class _EmptyBlock extends StatelessWidget {
 
 class _ErrorBox extends StatelessWidget {
   const _ErrorBox({required this.message});
+
   final String message;
 
   @override
@@ -1504,8 +1473,7 @@ class _ErrorBox extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.error_outline,
-                size: 15, color: AppColors.error),
+            Icon(Icons.error_outline, size: 15, color: AppColors.error),
             const SizedBox(width: Insets.sm),
             Flexible(
               child: Text(
@@ -1522,4 +1490,3 @@ class _ErrorBox extends StatelessWidget {
     );
   }
 }
-

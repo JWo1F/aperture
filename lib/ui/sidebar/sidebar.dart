@@ -54,6 +54,7 @@ class Sidebar extends StatelessWidget {
 
 class _ConnHeader extends StatelessWidget {
   const _ConnHeader({required this.state});
+
   final AppState state;
 
   @override
@@ -69,8 +70,7 @@ class _ConnHeader extends StatelessWidget {
     };
 
     final version = state.serverVersion;
-    final menuEnabled =
-        connected || state.status == ConnectionStatus.lost;
+    final menuEnabled = connected || state.status == ConnectionStatus.lost;
 
     return Hoverable(
       onTap: menuEnabled
@@ -110,10 +110,7 @@ class _ConnHeader extends StatelessWidget {
                 version,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppTheme.mono(
-                  size: 10.5,
-                  color: AppColors.text4,
-                ),
+                style: AppTheme.mono(size: 10.5, color: AppColors.text4),
               ),
               const SizedBox(width: 4),
             ],
@@ -145,9 +142,7 @@ void _openConnMenu(BuildContext context, AppState state, Offset position) {
     entries: [
       CmItem(
         icon: Icons.refresh,
-        label: state.isCatalogLoading
-            ? 'Refreshing schema…'
-            : 'Refresh schema',
+        label: state.isCatalogLoading ? 'Refreshing schema…' : 'Refresh schema',
         enabled: !state.isCatalogLoading,
         onTap: state.refreshCatalog,
       ),
@@ -166,6 +161,7 @@ void _openConnMenu(BuildContext context, AppState state, Offset position) {
 
 class _Body extends StatelessWidget {
   const _Body({required this.state});
+
   final AppState state;
 
   @override
@@ -191,14 +187,13 @@ class _Body extends StatelessWidget {
               for (final t in favorites)
                 _TreeRow(
                   indent: 0,
-                  twisty: Icon(
-                    Icons.star,
-                    size: 9,
-                    color: AppColors.warn,
-                  ),
+                  twisty: Icon(Icons.star, size: 9, color: AppColors.warn),
                   icon: t.isView
-                      ? Icon(Icons.visibility_outlined,
-                          size: 11, color: AppColors.textMuted)
+                      ? Icon(
+                          Icons.visibility_outlined,
+                          size: 11,
+                          color: AppColors.textMuted,
+                        )
                       : TableGlyph(size: 11, color: AppColors.textMuted),
                   name: '${t.schema}.${t.name}',
                   active: t.qualifiedName == activeId,
@@ -216,8 +211,11 @@ class _Body extends StatelessWidget {
               for (final t in recents.take(8))
                 _TreeRow(
                   indent: 0,
-                  twisty: Icon(Icons.schedule,
-                      size: 10, color: AppColors.text4),
+                  twisty: Icon(
+                    Icons.schedule,
+                    size: 10,
+                    color: AppColors.text4,
+                  ),
                   name: '${t.schema}.${t.name}',
                   active: t.qualifiedName == activeId,
                   onTap: () => state.openTable(t),
@@ -302,10 +300,7 @@ class _Section extends StatelessWidget {
               ),
               Text(
                 '$count',
-                style: AppTheme.mono(
-                  size: 10,
-                  color: AppColors.text4,
-                ),
+                style: AppTheme.mono(size: 10, color: AppColors.text4),
               ),
             ],
           ),
@@ -321,6 +316,7 @@ class _Section extends StatelessWidget {
 /// uppercase letter-spacing 0.06em, text-4.
 class _SubEyebrow extends StatelessWidget {
   const _SubEyebrow({required this.label, required this.count});
+
   final String label;
   final int count;
 
@@ -376,8 +372,11 @@ class _SchemaBlock extends StatelessWidget {
             size: 12,
             color: AppColors.text4,
           ),
-          icon: Icon(Icons.folder_outlined,
-              size: 11, color: AppColors.textMuted),
+          icon: Icon(
+            Icons.folder_outlined,
+            size: 11,
+            color: AppColors.textMuted,
+          ),
           name: schema.name,
           meta: '$total',
           onTap: () => state.toggleSchema(schema.name),
@@ -401,8 +400,11 @@ class _SchemaBlock extends StatelessWidget {
             for (final v in views)
               _TreeRow(
                 indent: 1,
-                icon: Icon(Icons.visibility_outlined,
-                    size: 11, color: AppColors.info),
+                icon: Icon(
+                  Icons.visibility_outlined,
+                  size: 11,
+                  color: AppColors.info,
+                ),
                 name: v.name,
                 active: v.qualifiedName == activeId,
                 onTap: () => state.openTable(v),
@@ -415,8 +417,11 @@ class _SchemaBlock extends StatelessWidget {
             for (final v in matViews)
               _TreeRow(
                 indent: 1,
-                icon: Icon(Icons.layers_outlined,
-                    size: 11, color: AppColors.info),
+                icon: Icon(
+                  Icons.layers_outlined,
+                  size: 11,
+                  color: AppColors.info,
+                ),
                 name: v.name,
                 active: v.qualifiedName == activeId,
                 onTap: () => state.openTable(v),
@@ -471,10 +476,7 @@ class _TreeRow extends StatelessWidget {
               height: AppLayout.treeRowHeight,
               margin: const EdgeInsets.symmetric(horizontal: 4),
               padding: EdgeInsets.only(left: leftBase, right: 8),
-              decoration: BoxDecoration(
-                color: rowBg,
-                borderRadius: Radii.brSm,
-              ),
+              decoration: BoxDecoration(color: rowBg, borderRadius: Radii.brSm),
               child: Row(
                 children: [
                   SizedBox(
@@ -508,10 +510,7 @@ class _TreeRow extends StatelessWidget {
                   if (meta != null)
                     Text(
                       meta!,
-                      style: AppTheme.mono(
-                        size: 10.5,
-                        color: AppColors.text4,
-                      ),
+                      style: AppTheme.mono(size: 10.5, color: AppColors.text4),
                     ),
                 ],
               ),
@@ -556,8 +555,7 @@ class _SavedQueryRow extends StatefulWidget {
 class _SavedQueryRowState extends State<_SavedQueryRow> {
   void _openMenu(Offset position) {
     final query = widget.query;
-    void copy(String text) =>
-        Clipboard.setData(ClipboardData(text: text));
+    void copy(String text) => Clipboard.setData(ClipboardData(text: text));
 
     showContextMenu(
       context,
@@ -610,8 +608,11 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
     final ts = widget.query.updatedAt;
     return _TreeRow(
       indent: 0,
-      twisty: Icon(Icons.description_outlined,
-          size: 10, color: AppColors.text4),
+      twisty: Icon(
+        Icons.description_outlined,
+        size: 10,
+        color: AppColors.text4,
+      ),
       name: widget.query.name,
       meta: ts == null ? null : timeAgo(ts),
       active: widget.active,
@@ -625,6 +626,7 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
 
 class _FooterStatus extends StatelessWidget {
   const _FooterStatus({required this.state});
+
   final AppState state;
 
   @override
@@ -668,10 +670,7 @@ class _FooterStatus extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             label,
-            style: AppTheme.mono(
-              size: 10,
-              color: AppColors.textMuted,
-            ),
+            style: AppTheme.mono(size: 10, color: AppColors.textMuted),
           ),
         ],
       ),
@@ -690,8 +689,7 @@ void _openTableMenu(
   final qualified = '"${table.schema}"."${table.name}"';
   final isFav = state.isFavorite(table);
 
-  void copy(String value) =>
-      Clipboard.setData(ClipboardData(text: value));
+  void copy(String value) => Clipboard.setData(ClipboardData(text: value));
 
   showContextMenu(
     context,
@@ -743,6 +741,7 @@ void _openTableMenu(
 
 class _AllConnectionsList extends StatelessWidget {
   const _AllConnectionsList({required this.state});
+
   final AppState state;
 
   Future<void> _newConnection(BuildContext context) async {
@@ -786,19 +785,14 @@ class _AllConnectionsList extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   child: Text(
                     'No saved connections yet.',
-                    style: AppTheme.ui(
-                      size: 12,
-                      color: AppColors.textMuted,
-                    ),
+                    style: AppTheme.ui(size: 12, color: AppColors.textMuted),
                   ),
                 )
               : ListView.builder(
                   padding: const EdgeInsets.only(bottom: 8),
                   itemCount: list.length,
-                  itemBuilder: (_, i) => _SavedConnectionRow(
-                    config: list[i],
-                    state: state,
-                  ),
+                  itemBuilder: (_, i) =>
+                      _SavedConnectionRow(config: list[i], state: state),
                 ),
         ),
         Divider(height: 1, color: AppColors.hairline),
@@ -832,6 +826,7 @@ class _AllConnectionsList extends StatelessWidget {
 
 class _SavedConnectionRow extends StatelessWidget {
   const _SavedConnectionRow({required this.config, required this.state});
+
   final ConnectionConfig config;
   final AppState state;
 
@@ -879,19 +874,13 @@ class _SavedConnectionRow extends StatelessWidget {
                     ts == null ? config.summary : timeAgo(ts),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTheme.mono(
-                      size: 10,
-                      color: AppColors.textMuted,
-                    ),
+                    style: AppTheme.mono(size: 10, color: AppColors.textMuted),
                   ),
                 ],
               ),
             ),
             if (hovering) ...[
-              _MiniIcon(
-                icon: Icons.edit_outlined,
-                onTap: () => _edit(context),
-              ),
+              _MiniIcon(icon: Icons.edit_outlined, onTap: () => _edit(context)),
               _MiniIcon(icon: Icons.delete_outline, onTap: _delete),
             ],
           ],
@@ -903,6 +892,7 @@ class _SavedConnectionRow extends StatelessWidget {
 
 class _MiniIcon extends StatelessWidget {
   const _MiniIcon({required this.icon, required this.onTap});
+
   final IconData icon;
   final VoidCallback onTap;
 
@@ -933,8 +923,9 @@ class _RenameQueryDialog extends StatefulWidget {
 }
 
 class _RenameQueryDialogState extends State<_RenameQueryDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initial);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
 
   @override
   void dispose() {

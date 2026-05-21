@@ -52,9 +52,7 @@ class Workspace extends StatelessWidget {
             child: IndexedStack(
               index: state.activeTabIndex.clamp(0, state.tabs.length - 1),
               sizing: StackFit.expand,
-              children: [
-                for (final t in state.tabs) _content(t),
-              ],
+              children: [for (final t in state.tabs) _content(t)],
             ),
           ),
         ],
@@ -80,9 +78,7 @@ class _TabStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.bgDeep,
-      ),
+      decoration: BoxDecoration(color: AppColors.bgDeep),
       child: SizedBox(
         height: 32,
         child: Stack(
@@ -121,8 +117,7 @@ class _TabStrip extends StatelessWidget {
                           tab: state.tabs[i],
                           active: i == state.activeTabIndex,
                           onTap: () => state.selectTab(i),
-                          onClose: () =>
-                              state.closeTab(state.tabs[i].id),
+                          onClose: () => state.closeTab(state.tabs[i].id),
                           onContextMenu: (pos) => _showTabMenu(
                             context,
                             state: state,
@@ -149,6 +144,7 @@ class _TabStrip extends StatelessWidget {
 /// continues the inactive-tab hairline cleanly.
 class _NewTabButton extends StatelessWidget {
   const _NewTabButton({required this.onTap});
+
   final VoidCallback onTap;
 
   @override
@@ -239,10 +235,10 @@ class _Tab extends StatefulWidget {
 
 class _TabState extends State<_Tab> {
   IconData get _tabIcon => switch (widget.tab) {
-        QueryTab() => Icons.terminal,
-        SchemaTab() => Icons.data_object,
-        TableTab() => Icons.table_rows_outlined,
-      };
+    QueryTab() => Icons.terminal,
+    SchemaTab() => Icons.data_object,
+    TableTab() => Icons.table_rows_outlined,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -261,9 +257,7 @@ class _TabState extends State<_Tab> {
             // Inactive tabs stay transparent so the rule reads through.
             color: widget.active
                 ? AppColors.bg
-                : (hovering
-                    ? const Color(0x06FFFFFF)
-                    : Colors.transparent),
+                : (hovering ? const Color(0x06FFFFFF) : Colors.transparent),
             border: Border(
               right: BorderSide(color: AppColors.borderSoft, width: 1),
               top: widget.active
@@ -278,9 +272,7 @@ class _TabState extends State<_Tab> {
               Icon(
                 _tabIcon,
                 size: 11,
-                color: widget.active
-                    ? AppColors.textMuted
-                    : AppColors.text4,
+                color: widget.active ? AppColors.textMuted : AppColors.text4,
               ),
               const SizedBox(width: 6),
               Flexible(
@@ -293,8 +285,8 @@ class _TabState extends State<_Tab> {
                     color: widget.active
                         ? AppColors.textPrimary
                         : (hovering
-                            ? AppColors.textSecondary
-                            : AppColors.textMuted),
+                              ? AppColors.textSecondary
+                              : AppColors.textMuted),
                   ),
                 ),
               ),
@@ -317,8 +309,8 @@ class _TabState extends State<_Tab> {
                     size: 8,
                     color: showClose
                         ? (closeHovering
-                            ? AppColors.textPrimary
-                            : AppColors.textMuted)
+                              ? AppColors.textPrimary
+                              : AppColors.textMuted)
                         : Colors.transparent,
                   ),
                 ),

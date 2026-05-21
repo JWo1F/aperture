@@ -40,10 +40,7 @@ class LogPanel extends StatelessWidget {
               children: [
                 Icon(Icons.subject, size: 12, color: AppColors.textMuted),
                 const SizedBox(width: 6),
-                Text(
-                  'Activity log',
-                  style: AppTheme.eyebrow(),
-                ),
+                Text('Activity log', style: AppTheme.eyebrow()),
                 const Spacer(),
                 Text(
                   '${log.events.length} event${log.events.length == 1 ? '' : 's'}',
@@ -83,6 +80,7 @@ class LogPanel extends StatelessWidget {
 
 class _CloseButton extends StatelessWidget {
   const _CloseButton({required this.onTap});
+
   final VoidCallback onTap;
 
   @override
@@ -109,6 +107,7 @@ class _CloseButton extends StatelessWidget {
 /// instance so SQL bodies in the activity log are tokenised the same way
 /// as in the editor and DDL viewer.
 bool _pgsqlRegistered = false;
+
 void _ensurePgsqlRegistered() {
   if (_pgsqlRegistered) return;
   highlight.registerLanguage('pgsql', pgsql);
@@ -125,6 +124,7 @@ const int _collapsedMaxLines = 4;
 
 class _LogRow extends StatefulWidget {
   const _LogRow({required this.event});
+
   final LogEvent event;
 
   @override
@@ -152,6 +152,7 @@ class _LogRowState extends State<_LogRow> {
   }
 
   String _two(int n) => n.toString().padLeft(2, '0');
+
   String _time(DateTime t) =>
       '${_two(t.hour)}:${_two(t.minute)}:${_two(t.second)}';
 
@@ -210,10 +211,7 @@ class _LogRowState extends State<_LogRow> {
     final overflows = _overflows(body);
     final maxLines = _expanded || !overflows ? null : _collapsedMaxLines;
 
-    final bodyStyle = AppTheme.mono(
-      size: 11.5,
-      color: AppColors.textPrimary,
-    );
+    final bodyStyle = AppTheme.mono(size: 11.5, color: AppColors.textPrimary);
 
     // Collapsed `SelectableText` (maxLines != null) would still allow the
     // hidden tail to scroll into view via drag/wheel inside the widget,
@@ -240,10 +238,7 @@ class _LogRowState extends State<_LogRow> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: Insets.md,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: Insets.md, vertical: 6),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
@@ -263,28 +258,19 @@ class _LogRowState extends State<_LogRow> {
               const SizedBox(width: 6),
               Text(
                 _time(event.timestamp),
-                style: AppTheme.mono(
-                  size: 10,
-                  color: AppColors.textMuted,
-                ),
+                style: AppTheme.mono(size: 10, color: AppColors.textMuted),
               ),
               const SizedBox(width: 8),
               if (event.elapsed != null)
                 Text(
                   '${event.elapsed!.inMilliseconds}ms',
-                  style: AppTheme.mono(
-                    size: 10,
-                    color: AppColors.textMuted,
-                  ),
+                  style: AppTheme.mono(size: 10, color: AppColors.textMuted),
                 ),
               const Spacer(),
               if (event.affectedRows != null)
                 Text(
                   '${event.affectedRows} row${event.affectedRows == 1 ? '' : 's'}',
-                  style: AppTheme.mono(
-                    size: 10,
-                    color: AppColors.textMuted,
-                  ),
+                  style: AppTheme.mono(size: 10, color: AppColors.textMuted),
                 ),
               if (event.sql != null && event.sql!.isNotEmpty) ...[
                 const SizedBox(width: 8),
@@ -292,10 +278,7 @@ class _LogRowState extends State<_LogRow> {
               ],
             ],
           ),
-          if (body.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            bodyWidget,
-          ],
+          if (body.isNotEmpty) ...[const SizedBox(height: 2), bodyWidget],
           if (overflows) ...[
             const SizedBox(height: 2),
             _ExpandToggle(

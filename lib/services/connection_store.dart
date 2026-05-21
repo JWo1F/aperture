@@ -16,8 +16,8 @@ import 'password_vault.dart';
 /// debug rebuilds re-sign the app so the prompts repeat every launch.
 class ConnectionStore {
   ConnectionStore({AtomicJsonFile? file, PasswordVault? vault})
-      : _file = file ?? AtomicJsonFile('connections.json'),
-        _vault = vault ?? PasswordVault();
+    : _file = file ?? AtomicJsonFile('connections.json'),
+      _vault = vault ?? PasswordVault();
 
   final AtomicJsonFile _file;
   final PasswordVault _vault;
@@ -31,9 +31,7 @@ class ConnectionStore {
       try {
         final id = item['id'] as String?;
         if (id == null) continue;
-        configs.add(
-          ConnectionConfig.fromJson({...item, 'password': ''}),
-        );
+        configs.add(ConnectionConfig.fromJson({...item, 'password': ''}));
       } catch (e, st) {
         developer.log(
           'failed to parse connection entry',

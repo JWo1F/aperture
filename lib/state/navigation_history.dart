@@ -8,10 +8,10 @@ import 'workspace_tab.dart';
 /// well as tab switches.
 class NavSnapshot {
   const NavSnapshot.focus(this.tabId)
-      : filter = null,
-        selectList = null,
-        orderBy = null,
-        page = null;
+    : filter = null,
+      selectList = null,
+      orderBy = null,
+      page = null;
 
   const NavSnapshot.table(
     this.tabId, {
@@ -40,8 +40,7 @@ class NavSnapshot {
       other.page == page;
 
   @override
-  int get hashCode =>
-      Object.hash(tabId, filter, selectList, orderBy, page);
+  int get hashCode => Object.hash(tabId, filter, selectList, orderBy, page);
 }
 
 /// Browser-style back/forward history over workspace tabs and per-table
@@ -59,6 +58,7 @@ class NavigationHistory extends ChangeNotifier {
   int _suppressDepth = 0;
 
   bool get canGoBack => _index > 0;
+
   bool get canGoForward => _index < _entries.length - 1;
 
   /// Suppresses snapshot pushes for the duration of [body]. Useful when an
@@ -79,13 +79,15 @@ class NavigationHistory extends ChangeNotifier {
 
   void pushTab(WorkspaceTab tab) {
     if (tab is TableTab) {
-      _push(NavSnapshot.table(
-        tab.id,
-        filter: tab.filter,
-        selectList: tab.selectList,
-        orderBy: tab.orderBy,
-        page: tab.page,
-      ));
+      _push(
+        NavSnapshot.table(
+          tab.id,
+          filter: tab.filter,
+          selectList: tab.selectList,
+          orderBy: tab.orderBy,
+          page: tab.page,
+        ),
+      );
     } else {
       _push(NavSnapshot.focus(tab.id));
     }
@@ -106,11 +108,9 @@ class NavigationHistory extends ChangeNotifier {
 
   /// Walk backward through snapshots until [apply] accepts one (tab still
   /// exists). Snapshots that target a removed tab are skipped silently.
-  void back(bool Function(NavSnapshot) apply) =>
-      _walk(apply, forward: false);
+  void back(bool Function(NavSnapshot) apply) => _walk(apply, forward: false);
 
-  void forward(bool Function(NavSnapshot) apply) =>
-      _walk(apply, forward: true);
+  void forward(bool Function(NavSnapshot) apply) => _walk(apply, forward: true);
 
   void _walk(bool Function(NavSnapshot) apply, {required bool forward}) {
     while ((forward && _index < _entries.length - 1) ||

@@ -1,11 +1,9 @@
 import 'dart:convert';
-
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/db_object.dart';
 import '../../models/order_term.dart';
@@ -105,6 +103,7 @@ class _ResultsGridState extends State<ResultsGrid> {
       ValueNotifier<_GridSelection>(_GridSelection.empty);
 
   int? get _selRow => _selection.value.focus?.$1;
+
   int? get _selCol => _selection.value.focus?.$2;
 
   /// In-progress drag anchor: the cell where the pointer went down. While

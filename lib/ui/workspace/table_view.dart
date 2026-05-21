@@ -4,10 +4,10 @@ import 'package:provider/provider.dart';
 import '../../models/db_object.dart';
 import '../../models/order_term.dart';
 import '../../models/value_format.dart';
+import '../../services/sql_complete.dart';
 import '../../state/app_state.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
-import '../../services/sql_complete.dart';
 import '../edits/pending_edits_modal.dart';
 import '../widgets/code_editor.dart';
 import '../widgets/common.dart';
@@ -35,75 +35,75 @@ class TableView extends StatelessWidget {
           child: ColoredBox(
             color: AppColors.bg,
             child: tab.result == null
-              ? (tab.loading
-                  ? Center(
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.accent,
-                        ),
-                      ),
-                    )
-                  : const EmptyState(
-                      icon: Icons.warning_amber_outlined,
-                      title: 'Could not load data',
-                    ))
-              : Stack(
-                  // Force non-positioned children (the ResultsGrid) to fill
-                  // the available Stack box. Without this, the grid sizes to
-                  // its content (28px header + 0-N rows) and leaves the rest
-                  // of the body painted in `var(--bg)`, which looked like
-                  // bottom padding on the clause bar.
-                  fit: StackFit.expand,
-                  children: [
-                        ResultsGrid(
-                          result: tab.result!,
-                          editable: !tab.table.isView &&
-                              !(state.activeConnection?.readOnly ?? false),
-                          edits: tab.edits,
-                          widths: tab.columnWidths,
-                          onWidthChanged: (col, w) =>
-                              state.persistColumnWidth(tab.table, col, w),
-                          onEditCell: (row, col, value) =>
-                              state.setCellEdit(tab, row, col, value),
-                          onRevertEdit: (row, col) =>
-                              state.revertCellEdit(tab, row, col),
-                          order: parseOrderBy(tab.orderBy),
-                          onSortColumn: (column) =>
-                              state.cycleTableOrder(tab, column),
-                          onSetSort: (column, desc) =>
-                              state.setColumnSort(tab, column, desc),
-                          onAddFilter: (column, value, not) =>
-                              _addFilter(state, column, value, not),
-                          foreignKeys: state.foreignKeysFor(tab.table),
-                          onFollowForeignKey: (fk, value) =>
-                              state.followForeignKey(fk, value),
-                          columnMeta: _columnMeta(state),
-                          findRowOwner: (col) {
-                            final owner = state.findPrimaryKeyOwner(col);
-                            // Skip the redundant "Find row in {this table}"
-                            // when the PK match is the table we're viewing.
-                            if (owner == null ||
-                                owner.qualifiedName ==
-                                    tab.table.qualifiedName) {
-                              return null;
-                            }
-                            return owner;
-                          },
-                          onFindRow: (table, col, value) =>
-                              state.findRowInTable(table, col, value),
-                        ),
-                        if (tab.loading)
-                          const Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            child: _RefreshBar(),
+                ? (tab.loading
+                      ? Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.accent,
+                            ),
                           ),
-                      ],
-                    ),
+                        )
+                      : const EmptyState(
+                          icon: Icons.warning_amber_outlined,
+                          title: 'Could not load data',
+                        ))
+                : Stack(
+                    // Force non-positioned children (the ResultsGrid) to fill
+                    // the available Stack box. Without this, the grid sizes to
+                    // its content (28px header + 0-N rows) and leaves the rest
+                    // of the body painted in `var(--bg)`, which looked like
+                    // bottom padding on the clause bar.
+                    fit: StackFit.expand,
+                    children: [
+                      ResultsGrid(
+                        result: tab.result!,
+                        editable:
+                            !tab.table.isView &&
+                            !(state.activeConnection?.readOnly ?? false),
+                        edits: tab.edits,
+                        widths: tab.columnWidths,
+                        onWidthChanged: (col, w) =>
+                            state.persistColumnWidth(tab.table, col, w),
+                        onEditCell: (row, col, value) =>
+                            state.setCellEdit(tab, row, col, value),
+                        onRevertEdit: (row, col) =>
+                            state.revertCellEdit(tab, row, col),
+                        order: parseOrderBy(tab.orderBy),
+                        onSortColumn: (column) =>
+                            state.cycleTableOrder(tab, column),
+                        onSetSort: (column, desc) =>
+                            state.setColumnSort(tab, column, desc),
+                        onAddFilter: (column, value, not) =>
+                            _addFilter(state, column, value, not),
+                        foreignKeys: state.foreignKeysFor(tab.table),
+                        onFollowForeignKey: (fk, value) =>
+                            state.followForeignKey(fk, value),
+                        columnMeta: _columnMeta(state),
+                        findRowOwner: (col) {
+                          final owner = state.findPrimaryKeyOwner(col);
+                          // Skip the redundant "Find row in {this table}"
+                          // when the PK match is the table we're viewing.
+                          if (owner == null ||
+                              owner.qualifiedName == tab.table.qualifiedName) {
+                            return null;
+                          }
+                          return owner;
+                        },
+                        onFindRow: (table, col, value) =>
+                            state.findRowInTable(table, col, value),
+                      ),
+                      if (tab.loading)
+                        const Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: _RefreshBar(),
+                        ),
+                    ],
+                  ),
           ),
         ),
         _PaginationBar(tab: tab, state: state),
@@ -236,11 +236,8 @@ class _TableToolbarState extends State<_TableToolbar> {
 
     final columns = widget.state.columnsFor(tab.table) ?? const [];
     CodeSuggestProvider clauseSuggest(List<String> keywords) {
-      return (req) => completeClause(
-            req: req,
-            columns: columns,
-            extraKeywords: keywords,
-          );
+      return (req) =>
+          completeClause(req: req, columns: columns, extraKeywords: keywords);
     }
 
     // Mirror the design's `.tab-content` grid — the clause bar sits flush
@@ -329,9 +326,7 @@ class _ClauseBar extends StatelessWidget {
                     Colors.transparent,
                   ],
                 ),
-                border: Border(
-                  right: BorderSide(color: AppColors.hairline),
-                ),
+                border: Border(right: BorderSide(color: AppColors.hairline)),
               ),
             ),
             // Clause rows stacked vertically.
@@ -408,6 +403,7 @@ class _ClauseRow extends StatefulWidget {
   final bool active;
   final IconData actionIcon;
   final String actionTooltip;
+
   /// Omits the bottom hairline on the last row (the outer bar border covers it).
   final bool isLast;
   final CodeSuggestProvider suggest;
@@ -518,19 +514,13 @@ class _ClauseRowState extends State<_ClauseRow> {
                 width: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: hovering
-                      ? AppColors.surfaceHover
-                      : Colors.transparent,
-                  border: Border(
-                    left: BorderSide(color: AppColors.hairline),
-                  ),
+                  color: hovering ? AppColors.surfaceHover : Colors.transparent,
+                  border: Border(left: BorderSide(color: AppColors.hairline)),
                 ),
                 child: Icon(
                   widget.actionIcon,
                   size: 13,
-                  color: widget.active
-                      ? AppColors.accent
-                      : AppColors.textMuted,
+                  color: widget.active ? AppColors.accent : AppColors.textMuted,
                 ),
               ),
             ),
@@ -591,18 +581,12 @@ class _PaginationBar extends StatelessWidget {
             const PbDot(),
             Text(
               '${result.elapsed.inMilliseconds}ms',
-              style: AppTheme.mono(
-                size: 10.5,
-                color: AppColors.textMuted,
-              ),
+              style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
             ),
           ],
           if (refreshedAt != null) ...[
             const PbDot(),
-            PbStat(
-              head: 'refreshed ',
-              mid: formatPagebarClock(refreshedAt),
-            ),
+            PbStat(head: 'refreshed ', mid: formatPagebarClock(refreshedAt)),
           ],
           const Spacer(),
           if (pendingCount > 0) ...[
@@ -643,9 +627,9 @@ class _PaginationBar extends StatelessWidget {
   }
 }
 
-
 class _PendingChip extends StatelessWidget {
   const _PendingChip({required this.count, required this.onTap});
+
   final int count;
   final VoidCallback onTap;
 

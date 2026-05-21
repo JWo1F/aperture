@@ -97,6 +97,7 @@ class CodeEditorController extends TextEditingController {
 }
 
 final _registeredLanguages = <String>{};
+
 void _registerLanguage(String name) {
   if (!_registeredLanguages.add(name)) return;
   switch (name) {
@@ -197,17 +198,18 @@ class _CodeEditorState extends State<CodeEditor> {
   double _rowHeightPx = 0;
 
   // Autocomplete
-  final ValueNotifier<_PopupState> _popup =
-      ValueNotifier(const _PopupState.hidden());
+  final ValueNotifier<_PopupState> _popup = ValueNotifier(
+    const _PopupState.hidden(),
+  );
   OverlayEntry? _overlay;
   int _suggestSeq = 0;
   Timer? _suggestDebounce;
 
   TextStyle get _bodyStyle => GoogleFonts.jetBrainsMono(
-        fontSize: widget.fontSize,
-        height: widget.lineHeight,
-        color: widget.textColor ?? AppColors.textPrimary,
-      );
+    fontSize: widget.fontSize,
+    height: widget.lineHeight,
+    color: widget.textColor ?? AppColors.textPrimary,
+  );
 
   double get _lineBox => widget.fontSize * widget.lineHeight;
 
@@ -275,7 +277,8 @@ class _CodeEditorState extends State<CodeEditor> {
 
     final key = ev.logicalKey;
     final hk = HardwareKeyboard.instance;
-    final noModifier = !hk.isShiftPressed &&
+    final noModifier =
+        !hk.isShiftPressed &&
         !hk.isMetaPressed &&
         !hk.isAltPressed &&
         !hk.isControlPressed;
@@ -337,8 +340,10 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _scheduleSuggest() {
     _suggestDebounce?.cancel();
-    _suggestDebounce =
-        Timer(const Duration(milliseconds: 300), _requestSuggestions);
+    _suggestDebounce = Timer(
+      const Duration(milliseconds: 300),
+      _requestSuggestions,
+    );
   }
 
   Future<void> _requestSuggestions() async {
@@ -348,8 +353,7 @@ class _CodeEditorState extends State<CodeEditor> {
 
     final text = widget.controller.text;
     final cursor = widget.controller.selection.baseOffset;
-    if (cursor < 0 ||
-        widget.controller.selection.extentOffset != cursor) {
+    if (cursor < 0 || widget.controller.selection.extentOffset != cursor) {
       _dismissPopup();
       return;
     }
@@ -365,12 +369,14 @@ class _CodeEditorState extends State<CodeEditor> {
     }
 
     final seq = ++_suggestSeq;
-    final res = await provider(SuggestRequest(
-      text: text,
-      cursor: cursor,
-      token: token,
-      tokenStart: tokenStart,
-    ));
+    final res = await provider(
+      SuggestRequest(
+        text: text,
+        cursor: cursor,
+        token: token,
+        tokenStart: tokenStart,
+      ),
+    );
     if (!mounted || seq != _suggestSeq) return;
 
     if (res.isEmpty) {
@@ -526,8 +532,7 @@ class _CodeEditorState extends State<CodeEditor> {
 
     final totalHeight = tp.height;
     for (var i = 0; i < lines.length; i++) {
-      final nextTop =
-          i + 1 < lines.length ? topsPx[i + 1] : totalHeight;
+      final nextTop = i + 1 < lines.length ? topsPx[i + 1] : totalHeight;
       heightsPx[i] = (nextTop - topsPx[i]).clamp(0, double.infinity);
     }
 
@@ -556,7 +561,8 @@ class _CodeEditorState extends State<CodeEditor> {
         link: _link,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final bodyWidth = constraints.maxWidth -
+            final bodyWidth =
+                constraints.maxWidth -
                 _effectiveGutterWidth -
                 widget.padding.left -
                 widget.padding.right;
@@ -640,11 +646,13 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   Widget _buildBand(LineBand band) {
-    final start = band.startLine <= band.endLine ? band.startLine : band.endLine;
+    final start = band.startLine <= band.endLine
+        ? band.startLine
+        : band.endLine;
     final end = band.startLine <= band.endLine ? band.endLine : band.startLine;
     final top = widget.padding.top + _topPx(start) - _scrollOffset;
-    final bottom = widget.padding.top + _topPx(end) + _heightPx(end) -
-        _scrollOffset;
+    final bottom =
+        widget.padding.top + _topPx(end) + _heightPx(end) - _scrollOffset;
     return Positioned(
       left: _effectiveGutterWidth,
       right: 0,
@@ -666,8 +674,7 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   Widget _buildLineNumber(int i) {
-    final digitsWidth =
-        _effectiveGutterWidth - widget.iconColumnWidth - 8;
+    final digitsWidth = _effectiveGutterWidth - widget.iconColumnWidth - 8;
     return Positioned(
       left: 0,
       top: widget.padding.top + _topPx(i) - _scrollOffset,
@@ -726,7 +733,8 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   Widget _buildHint() {
-    final style = widget.hintStyle ??
+    final style =
+        widget.hintStyle ??
         _bodyStyle.copyWith(
           color: AppColors.text4,
           fontStyle: FontStyle.italic,
@@ -734,9 +742,7 @@ class _CodeEditorState extends State<CodeEditor> {
     return Positioned(
       left: _effectiveGutterWidth + widget.padding.left,
       top: widget.padding.top,
-      child: IgnorePointer(
-        child: Text(widget.hintText!, style: style),
-      ),
+      child: IgnorePointer(child: Text(widget.hintText!, style: style)),
     );
   }
 
@@ -774,11 +780,11 @@ class _PopupState {
   });
 
   const _PopupState.hidden()
-      : items = const [],
-        selected = 0,
-        tokenStart = 0,
-        cursor = 0,
-        anchor = Offset.zero;
+    : items = const [],
+      selected = 0,
+      tokenStart = 0,
+      cursor = 0,
+      anchor = Offset.zero;
 
   final List<CodeSuggestion> items;
   final int selected;
@@ -794,14 +800,13 @@ class _PopupState {
     int? tokenStart,
     int? cursor,
     Offset? anchor,
-  }) =>
-      _PopupState(
-        items: items ?? this.items,
-        selected: selected ?? this.selected,
-        tokenStart: tokenStart ?? this.tokenStart,
-        cursor: cursor ?? this.cursor,
-        anchor: anchor ?? this.anchor,
-      );
+  }) => _PopupState(
+    items: items ?? this.items,
+    selected: selected ?? this.selected,
+    tokenStart: tokenStart ?? this.tokenStart,
+    cursor: cursor ?? this.cursor,
+    anchor: anchor ?? this.anchor,
+  );
 }
 
 class _AutocompletePopup extends StatelessWidget {
@@ -877,8 +882,9 @@ class _AutocompletePopup extends StatelessWidget {
                             color: active
                                 ? AppColors.textPrimary
                                 : AppColors.textSecondary,
-                            fontWeight:
-                                active ? FontWeight.w600 : FontWeight.w400,
+                            fontWeight: active
+                                ? FontWeight.w600
+                                : FontWeight.w400,
                           ),
                         ),
                       ),

@@ -11,6 +11,7 @@ import '../models/connection_config.dart';
 /// as the technical detail line.
 class FriendlyConnectError {
   FriendlyConnectError({required this.message, required this.detail});
+
   final String message;
   final String detail;
 

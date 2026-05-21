@@ -7,8 +7,9 @@ import 'driver_decoder.dart';
 import 'postgres_service.dart';
 import 'sql_identifier.dart';
 
-List<Object?> _decodeRow(List<Object?> raw) =>
-    [for (final v in raw) decodeDriverValue(v)];
+List<Object?> _decodeRow(List<Object?> raw) => [
+  for (final v in raw) decodeDriverValue(v),
+];
 
 /// Per-relation database operations: paging, exporting, applying cell
 /// edits, building the DDL for the schema viewer.
@@ -78,11 +79,10 @@ class TableRepository {
       );
       watch.stop();
 
-      final dataSchemas =
-          withCtid ? result.schema.columns.sublist(1) : result.schema.columns;
-      final columns = dataSchemas
-          .map((c) => c.columnName ?? 'column')
-          .toList();
+      final dataSchemas = withCtid
+          ? result.schema.columns.sublist(1)
+          : result.schema.columns;
+      final columns = dataSchemas.map((c) => c.columnName ?? 'column').toList();
       final columnSchemas = dataSchemas
           .map(
             (c) => ResultColumnSchema(
@@ -129,8 +129,7 @@ class TableRepository {
     String orderBy = '',
     String selectList = '*',
   }) async {
-    final order =
-        orderBy.trim().isEmpty ? '' : ' ORDER BY ${orderBy.trim()}';
+    final order = orderBy.trim().isEmpty ? '' : ' ORDER BY ${orderBy.trim()}';
     final watch = Stopwatch()..start();
     final projection = _projection(selectList, aliased: false);
     final result = await _db.execute(
@@ -201,10 +200,14 @@ class TableRepository {
 
     final colNames = [for (final r in columns) quoteIdent(r[0] as String)];
     final colTypes = [for (final r in columns) r[1] as String];
-    final nameWidth =
-        colNames.fold<int>(0, (m, s) => s.length > m ? s.length : m);
-    final typeWidth =
-        colTypes.fold<int>(0, (m, s) => s.length > m ? s.length : m);
+    final nameWidth = colNames.fold<int>(
+      0,
+      (m, s) => s.length > m ? s.length : m,
+    );
+    final typeWidth = colTypes.fold<int>(
+      0,
+      (m, s) => s.length > m ? s.length : m,
+    );
 
     final colLines = <String>[];
     for (var i = 0; i < columns.length; i++) {
@@ -253,8 +256,9 @@ class TableRepository {
         "IS '$escaped';",
       );
     }
-    final tableComment =
-        comment.isEmpty ? null : comment.first.first as String?;
+    final tableComment = comment.isEmpty
+        ? null
+        : comment.first.first as String?;
     if (tableComment != null) {
       buf.writeln();
       final escaped = tableComment.replaceAll("'", "''");
@@ -343,9 +347,9 @@ String _renderUpdate(
 }
 
 String _renderAssignment(CellEditValue value) => switch (value) {
-      CellLiteral(:final value) => _literal(value),
-      CellDefault() => 'DEFAULT',
-    };
+  CellLiteral(:final value) => _literal(value),
+  CellDefault() => 'DEFAULT',
+};
 
 /// Renders a value as a SQL literal. Strings stay untyped ('unknown') so
 /// Postgres coerces them into the target column type; single quotes are
@@ -380,6 +384,7 @@ class StaleRowException implements Exception {
 /// sees a raw driver exception type.
 class EditFailureException implements Exception {
   EditFailureException(this.message);
+
   final String message;
 
   @override

@@ -16,6 +16,7 @@ List<InlineSpan> jsonSpans(String source, TextStyle base) {
 }
 
 bool _registered = false;
+
 void _registerOnce() {
   if (_registered) return;
   highlight.registerLanguage('json', json);

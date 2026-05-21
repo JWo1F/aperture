@@ -32,6 +32,7 @@ class SchemaView extends StatelessWidget {
 
 class _Toolbar extends StatelessWidget {
   const _Toolbar({required this.tab, required this.state});
+
   final SchemaTab tab;
   final AppState state;
 
@@ -115,6 +116,7 @@ class _Toolbar extends StatelessWidget {
 
 class _Body extends StatelessWidget {
   const _Body({required this.tab});
+
   final SchemaTab tab;
 
   @override
@@ -139,18 +141,15 @@ class _Body extends StatelessWidget {
       );
     }
     if (tab.ddl == null) {
-      return const EmptyState(
-        icon: Icons.code,
-        title: 'No DDL',
-      );
+      return const EmptyState(icon: Icons.code, title: 'No DDL');
     }
 
-    final base = AppTheme.mono(size: 12, color: AppColors.textPrimary)
-        .copyWith(height: 1.65);
+    final base = AppTheme.mono(
+      size: 12,
+      color: AppColors.textPrimary,
+    ).copyWith(height: 1.65);
     final raw = tab.ddl!;
-    final ddl = raw.endsWith('\n')
-        ? raw.substring(0, raw.length - 1)
-        : raw;
+    final ddl = raw.endsWith('\n') ? raw.substring(0, raw.length - 1) : raw;
     final parsed = highlight.parse(ddl, language: 'pgsql');
 
     return Container(
@@ -217,6 +216,7 @@ class _Body extends StatelessWidget {
 
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle({required this.label});
+
   final String label;
 
   @override
