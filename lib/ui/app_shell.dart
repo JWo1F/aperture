@@ -52,10 +52,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final state = context.read<AppState>();
-      state.onPassphraseNeeded = () => showMasterPassphraseUnlock(
-        context,
-        state.masterPassphrase,
-      );
+      state.onPassphraseNeeded = () =>
+          showMasterPassphraseUnlock(context, state.masterPassphrase);
     });
   }
 
@@ -149,9 +147,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // out of this widget's rebuild path. The sidebar / log-panel /
     // workspace subtrees subscribe to their own state independently.
     final state = context.read<AppState>();
-    final status = context.select<AppState, ConnectionStatus>(
-      (s) => s.status,
-    );
+    final status = context.select<AppState, ConnectionStatus>((s) => s.status);
     final sidebarVisible = context.select<AppState, bool>(
       (s) => s.sidebarVisible,
     );
@@ -346,13 +342,9 @@ class _Toolbar extends StatelessWidget {
     // pending-edit count and the active tab's exportable result are the
     // only fields driving any visible change in here.
     final state = context.read<AppState>();
-    final pending = context.select<AppState, int>(
-      (s) => s.unappliedEditCount,
-    );
+    final pending = context.select<AppState, int>((s) => s.unappliedEditCount);
     final canGoBack = context.select<AppState, bool>((s) => s.canGoBack);
-    final canGoForward = context.select<AppState, bool>(
-      (s) => s.canGoForward,
-    );
+    final canGoForward = context.select<AppState, bool>((s) => s.canGoForward);
     final brightness = context.select<AppState, AppBrightness>(
       (s) => s.brightness,
     );
@@ -369,7 +361,6 @@ class _Toolbar extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanStart: (_) => _windowChannel.invokeMethod('startDrag'),
-      onDoubleTap: () => _windowChannel.invokeMethod('toggleZoom'),
       child: Container(
         height: 36,
         decoration: BoxDecoration(
@@ -383,62 +374,84 @@ class _Toolbar extends StatelessWidget {
           ),
         ),
         padding: EdgeInsets.only(left: _trafficLightInset, right: 4),
-        child: Row(
+        child: Stack(
           children: [
-            _TbIcon(
-              icon: Icons.view_sidebar_outlined,
-              tooltip: 'Toggle sidebar',
-              onPressed: state.toggleSidebar,
-            ),
-            const _TbRail(),
-            _TbIcon(
-              icon: Icons.arrow_back,
-              tooltip: 'Back  ⌘[',
-              onPressed: canGoBack ? state.historyBack : null,
-            ),
-            _TbIcon(
-              icon: Icons.arrow_forward,
-              tooltip: 'Forward  ⌘]',
-              onPressed: canGoForward ? state.historyForward : null,
-            ),
-            const SizedBox(width: 8),
-            const _TbGroupRail(),
-            const SizedBox(width: 10),
-            const ConnectionPill(),
-            const SizedBox(width: 8),
-            const _TbGroupRail(),
-            const SizedBox(width: 8),
-            _TbIcon(
-              icon: Icons.ios_share,
-              tooltip: 'Export…',
-              onPressed: canExport
-                  ? () =>
-                        _openExportForActiveTab(context, state, state.activeTab)
-                  : null,
-            ),
-            const Spacer(),
-            if (pending > 0) ...[
-              _PendingPill(
-                count: pending,
-                onTap: () => _openPendingForActiveTab(context, state),
+            // Double-tap-to-zoom lives on a background layer *behind* the
+            // button row, never as an ancestor of it. A
+            // DoubleTapGestureRecognizer on an ancestor keeps the gesture
+            // arena open for kDoubleTapTimeout (300ms) on every tap while it
+            // waits for a possible second tap — that delay was making every
+            // toolbar button feel sluggish. As a Stack sibling it only sees
+            // taps that land on the empty toolbar background.
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onDoubleTap: () => _windowChannel.invokeMethod('toggleZoom'),
               ),
-              const _TbRail(),
-            ],
-            // Fixed-width search pill — making it Flexible would force it
-            // to compete with the Spacer above for leftover space, so on a
-            // wide window the spacer would collapse to half its slack and
-            // the search would drift away from the right edge.
-            SizedBox(
-              width: 220,
-              child: _TbSearch(onTap: () => showCommandPalette(context, state)),
             ),
-            const _TbRail(),
-            _TbIcon(
-              icon: brightness == AppBrightness.dark
-                  ? Icons.dark_mode_outlined
-                  : Icons.light_mode_outlined,
-              tooltip: 'Toggle theme',
-              onPressed: state.toggleBrightness,
+            Row(
+              children: [
+                _TbIcon(
+                  icon: Icons.view_sidebar_outlined,
+                  tooltip: 'Toggle sidebar',
+                  onPressed: state.toggleSidebar,
+                ),
+                const _TbRail(),
+                _TbIcon(
+                  icon: Icons.arrow_back,
+                  tooltip: 'Back  ⌘[',
+                  onPressed: canGoBack ? state.historyBack : null,
+                ),
+                _TbIcon(
+                  icon: Icons.arrow_forward,
+                  tooltip: 'Forward  ⌘]',
+                  onPressed: canGoForward ? state.historyForward : null,
+                ),
+                const SizedBox(width: 8),
+                const _TbGroupRail(),
+                const SizedBox(width: 10),
+                const ConnectionPill(),
+                const SizedBox(width: 8),
+                const _TbGroupRail(),
+                const SizedBox(width: 8),
+                _TbIcon(
+                  icon: Icons.ios_share,
+                  tooltip: 'Export…',
+                  onPressed: canExport
+                      ? () => _openExportForActiveTab(
+                          context,
+                          state,
+                          state.activeTab,
+                        )
+                      : null,
+                ),
+                const Spacer(),
+                if (pending > 0) ...[
+                  _PendingPill(
+                    count: pending,
+                    onTap: () => _openPendingForActiveTab(context, state),
+                  ),
+                  const _TbRail(),
+                ],
+                // Fixed-width search pill — making it Flexible would force it
+                // to compete with the Spacer above for leftover space, so on a
+                // wide window the spacer would collapse to half its slack and
+                // the search would drift away from the right edge.
+                SizedBox(
+                  width: 220,
+                  child: _TbSearch(
+                    onTap: () => showCommandPalette(context, state),
+                  ),
+                ),
+                const _TbRail(),
+                _TbIcon(
+                  icon: brightness == AppBrightness.dark
+                      ? Icons.dark_mode_outlined
+                      : Icons.light_mode_outlined,
+                  tooltip: 'Toggle theme',
+                  onPressed: state.toggleBrightness,
+                ),
+              ],
             ),
           ],
         ),
@@ -693,11 +706,15 @@ class _TbSearch extends StatelessWidget {
                   'Find tables, queries…',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTheme.mono(size: 11, color: AppColors.textMuted),
+                  style: AppTheme.ui(
+                    size: 11,
+                    color: AppColors.textMuted,
+                    weight: FontWeight.w400,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
-              const _MonoKbd(parts: ['⌘', 'K']),
+              const _TbKbd(parts: ['⌘', 'K']),
             ],
           ),
         ),
@@ -707,8 +724,8 @@ class _TbSearch extends StatelessWidget {
 }
 
 /// Tiny kbd group rendered with the design's surface-2 chip styling.
-class _MonoKbd extends StatelessWidget {
-  const _MonoKbd({required this.parts});
+class _TbKbd extends StatelessWidget {
+  const _TbKbd({required this.parts});
 
   final List<String> parts;
 
@@ -730,7 +747,7 @@ class _MonoKbd extends StatelessWidget {
             ),
             child: Text(
               parts[i],
-              style: AppTheme.mono(
+              style: AppTheme.ui(
                 size: 10,
                 color: AppColors.textSecondary,
                 weight: FontWeight.w500,
@@ -874,9 +891,7 @@ class _ConnectionPillState extends State<ConnectionPill> {
     // name, and the schema of the current tab. Subscribe to each slice
     // narrowly so widget-resize ticks and other unrelated notifications
     // don't repaint the pill.
-    final status = context.select<AppState, ConnectionStatus>(
-      (s) => s.status,
-    );
+    final status = context.select<AppState, ConnectionStatus>((s) => s.status);
     final connName = context.select<AppState, String?>(
       (s) => s.activeConnection?.name,
     );
@@ -939,7 +954,7 @@ class _ConnectionPillState extends State<ConnectionPill> {
                   connLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTheme.mono(
+                  style: AppTheme.ui(
                     size: 11.5,
                     color: AppColors.textPrimary,
                     weight: FontWeight.w600,
@@ -950,7 +965,11 @@ class _ConnectionPillState extends State<ConnectionPill> {
                 const SizedBox(width: 6),
                 Text(
                   '/',
-                  style: AppTheme.mono(size: 11.5, color: AppColors.text4),
+                  style: AppTheme.ui(
+                    size: 11.5,
+                    color: AppColors.text4,
+                    weight: FontWeight.w400,
+                  ),
                 ),
                 const SizedBox(width: 6),
                 ConstrainedBox(
@@ -959,9 +978,10 @@ class _ConnectionPillState extends State<ConnectionPill> {
                     schema,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTheme.mono(
+                    style: AppTheme.ui(
                       size: 11.5,
                       color: AppColors.textSecondary,
+                      weight: FontWeight.w400,
                     ),
                   ),
                 ),
