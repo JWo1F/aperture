@@ -77,7 +77,9 @@ class ResultsGrid extends StatefulWidget {
 
 class _ResultsGridState extends State<ResultsGrid> {
   static const double _rowHeight = 26;
-  static const double _indexWidth = 56;
+  // Matches the WHERE / SELECT / ORDER label column in the clausebar so the
+  // grid's left gutter aligns with the clauses above.
+  static const double _indexWidth = 64;
   static const double _handleWidth = 7;
 
   // The body owns horizontal scroll outright; the header reads its offset
@@ -87,6 +89,11 @@ class _ResultsGridState extends State<ResultsGrid> {
   // rubbery on macOS.
   final ScrollController _hBody = ScrollController();
   final ScrollController _vBody = ScrollController();
+  // The index column is pinned to the left of the horizontal scroll area but
+  // still tracks vertical scroll. It runs its own ListView with a follower
+  // controller; `_syncIndexScroll` mirrors `_vBody`'s offset on every body
+  // scroll notification.
+  final ScrollController _vIndex = ScrollController();
 
   /// Focus node for the grid body — owns keyboard shortcuts (⌘C / Ctrl-C
   /// to copy the selected cell, Esc to clear the selection). Lazily takes
@@ -141,7 +148,10 @@ class _ResultsGridState extends State<ResultsGrid> {
   static const double _autoMin = 64;
   static const double _autoMax = 200;
   static const double _cellPad = 20; // 9px each side + 2 fudge
-  static const double _headerExtra = 28; // sort icon + spacing + resize handle
+  // 10px padding L + 10px R + 7px resize handle + small fudge
+  static const double _headerChrome = 30;
+  static const double _headerKeyIcon = 15; // 10px icon + 5px spacing
+  static const double _headerSortIcon = 13; // 11px icon + 2px spacing
   static const int _autoSampleRows = 50;
 
   @override
@@ -205,12 +215,19 @@ class _ResultsGridState extends State<ResultsGrid> {
   /// fixed sample is enough to pick a reasonable default — the user can drag
   /// the handle if it guesses short.
   double _autoWidth(String column, int columnIndex) {
-    final headerStyle = AppTheme.mono(size: 11.5, weight: FontWeight.w600);
+    final headerStyle = AppTheme.mono(size: 11, weight: FontWeight.w600);
 
     _measurer
       ..text = TextSpan(text: column, style: headerStyle)
       ..layout();
-    var widest = _measurer.width + _headerExtra;
+    var headerExtra = _headerChrome;
+    final meta = widget.columnMeta?[column];
+    final hasKeyIcon =
+        (meta?.isPrimaryKey ?? false) ||
+        (widget.foreignKeys?.containsKey(column) ?? false);
+    if (hasKeyIcon) headerExtra += _headerKeyIcon;
+    if (widget.onSortColumn != null) headerExtra += _headerSortIcon;
+    var widest = _measurer.width + headerExtra;
 
     final rows = widget.result.rows;
     final n = rows.length < _autoSampleRows ? rows.length : _autoSampleRows;
@@ -245,6 +262,7 @@ class _ResultsGridState extends State<ResultsGrid> {
   void dispose() {
     _hBody.dispose();
     _vBody.dispose();
+    _vIndex.dispose();
     _gridFocus.dispose();
     _measurer.dispose();
     _selection.dispose();
@@ -479,15 +497,15 @@ class _ResultsGridState extends State<ResultsGrid> {
       }
     }
     if (_hBody.hasClients) {
-      var left = _indexWidth;
+      var left = 0.0;
       for (var i = 0; i < col; i++) {
         left += _widths[i];
       }
       final right = left + _widths[col];
       final viewport = _hBody.position.viewportDimension;
       final offset = _hBody.offset;
-      if (left < offset + _indexWidth) {
-        _hBody.jumpTo(math.max(0, left - _indexWidth));
+      if (left < offset) {
+        _hBody.jumpTo(math.max(0, left));
       } else if (right > offset + viewport) {
         _hBody.jumpTo(right - viewport);
       }
@@ -499,8 +517,8 @@ class _ResultsGridState extends State<ResultsGrid> {
   /// Maps a local-position pointer event on the body Listener to its cell.
   /// Returns `null` for clicks on the row-number gutter or outside the grid.
   (int, int)? _cellAt(Offset localPos) {
-    if (localPos.dx < _indexWidth) return null;
-    var x = _indexWidth;
+    if (localPos.dx < 0) return null;
+    var x = 0.0;
     int? col;
     for (var c = 0; c < _widths.length; c++) {
       final next = x + _widths[c];
@@ -528,7 +546,7 @@ class _ResultsGridState extends State<ResultsGrid> {
     if (box is! RenderBox) return Rect.zero;
     final origin = box.localToGlobal(Offset.zero);
 
-    var contentX = _indexWidth;
+    var contentX = 0.0;
     for (var i = 0; i < col; i++) {
       contentX += _widths[i];
     }
@@ -776,12 +794,12 @@ class _ResultsGridState extends State<ResultsGrid> {
       );
     }
 
-    final totalWidth = _indexWidth + _widths.fold<double>(0, (s, w) => s + w);
+    final dataWidth = _widths.fold<double>(0, (s, w) => s + w);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildHeader(result.columns, totalWidth),
+        _buildHeader(result.columns, dataWidth),
         Expanded(
           child: result.rows.isEmpty
               ? const EmptyState(
@@ -789,29 +807,17 @@ class _ResultsGridState extends State<ResultsGrid> {
                   title: 'No rows',
                   message: 'This query returned an empty result set.',
                 )
-              : _buildBody(result, totalWidth),
+              : _buildBody(result, dataWidth),
         ),
       ],
     );
   }
 
-  Widget _buildHeader(List<String> columns, double totalWidth) {
-    final headerRow = SizedBox(
-      width: totalWidth,
+  Widget _buildHeader(List<String> columns, double dataWidth) {
+    final dataHeaderRow = SizedBox(
+      width: dataWidth,
       child: Row(
         children: [
-          Container(
-            width: _indexWidth,
-            height: 28,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              border: Border(right: BorderSide(color: AppColors.border)),
-            ),
-            child: Text(
-              '#',
-              style: AppTheme.mono(size: 10, color: AppColors.text4),
-            ),
-          ),
           for (var i = 0; i < columns.length; i++)
             _HeaderCell(
               label: columns[i],
@@ -819,11 +825,8 @@ class _ResultsGridState extends State<ResultsGrid> {
               handleWidth: _handleWidth,
               sort: _sortFor(columns[i]),
               sortPriority: _sortPriority(columns[i]),
-              isForeignKey:
-                  widget.foreignKeys?.containsKey(columns[i]) ?? false,
-              isPrimaryKey:
-                  widget.columnMeta?[columns[i]]?.isPrimaryKey ?? false,
-              typeLabel: widget.columnMeta?[columns[i]]?.dataType,
+              meta: widget.columnMeta?[columns[i]],
+              foreignKey: widget.foreignKeys?[columns[i]],
               onSort: widget.onSortColumn == null
                   ? null
                   : () => widget.onSortColumn!(columns[i]),
@@ -838,45 +841,72 @@ class _ResultsGridState extends State<ResultsGrid> {
       ),
     );
 
+    final indexHeader = Container(
+      width: _indexWidth,
+      height: 28,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.bgDeep,
+        border: Border(
+          right: BorderSide(color: AppColors.border),
+          bottom: BorderSide(color: AppColors.border),
+        ),
+      ),
+      child: Text(
+        '#',
+        style: AppTheme.mono(size: 10, color: AppColors.text4),
+      ),
+    );
+
     // RepaintBoundary isolates the header's pixels from the body's. The
     // body's RepaintBoundary already prevents the reverse direction; this
     // one stops a header repaint (sort indicator flicker, resize-handle
     // hover) from invalidating the cells layer underneath.
     return RepaintBoundary(
-      child: Container(
+      child: SizedBox(
         height: 28,
-        decoration: BoxDecoration(
-          color: AppColors.bgDeep,
-          border: Border(bottom: BorderSide(color: AppColors.border)),
-        ),
-        // ClipRect alone would force the header row to fit the viewport
-        // (Transform passes parent constraints through). OverflowBox grants
-        // it the same unbounded horizontal space the body's scroll view has,
-        // so the Row lays out at `totalWidth` and we translate it sideways
-        // to mirror the body's scroll offset.
-        child: ClipRect(
-          child: AnimatedBuilder(
-            animation: _hBody,
-            builder: (_, child) {
-              final offset = _hBody.hasClients ? _hBody.offset : 0.0;
-              return OverflowBox(
-                minWidth: 0,
-                maxWidth: double.infinity,
-                alignment: Alignment.topLeft,
-                child: Transform.translate(
-                  offset: Offset(-offset, 0),
-                  child: child,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            indexHeader,
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColors.bgDeep,
+                  border: Border(bottom: BorderSide(color: AppColors.border)),
                 ),
-              );
-            },
-            child: headerRow,
+              // ClipRect alone would force the header row to fit the viewport
+              // (Transform passes parent constraints through). OverflowBox grants
+              // it the same unbounded horizontal space the body's scroll view has,
+              // so the Row lays out at `dataWidth` and we translate it sideways
+              // to mirror the body's scroll offset.
+              child: ClipRect(
+                child: AnimatedBuilder(
+                  animation: _hBody,
+                  builder: (_, child) {
+                    final offset = _hBody.hasClients ? _hBody.offset : 0.0;
+                    return OverflowBox(
+                      minWidth: 0,
+                      maxWidth: double.infinity,
+                      alignment: Alignment.topLeft,
+                      child: Transform.translate(
+                        offset: Offset(-offset, 0),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: dataHeaderRow,
+                ),
+              ),
+            ),
           ),
+        ],
         ),
       ),
     );
   }
 
-  Widget _buildBody(QueryResult result, double totalWidth) {
+  Widget _buildBody(QueryResult result, double dataWidth) {
     // Suppress Material's auto-injected desktop scrollbars — we draw our
     // own via the outer Scrollbar wrappers, and the default behavior would
     // stack a second vertical bar against the ListView. Inheriting platform
@@ -895,109 +925,145 @@ class _ResultsGridState extends State<ResultsGrid> {
           child: Focus(
             focusNode: _gridFocus,
             onKeyEvent: _handleKey,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                // Expanding to at least the viewport width keeps row stripes
-                // flush to the right edge when the table is narrower than
-                // its container, and collapses the redundant horizontal
-                // scrollbar in that case.
-                final bodyWidth = totalWidth < constraints.maxWidth
-                    ? constraints.maxWidth
-                    : totalWidth;
-                // The outer RepaintBoundary isolates the body's pixels
-                // from the scrollbar thumb overlay so vertical thumb
-                // drags don't force a repaint of every visible row.
-                //
-                // A single Listener + GestureDetector at the body level
-                // owns click / double-click / right-click for every cell.
-                // Per-cell pointer handlers used to be allocated for every
-                // new row that scrolled into view — that churn was the
-                // biggest cost during fast scrolling. We hit-test (row,
-                // column) from the pointer's local position instead.
-                return RepaintBoundary(
-                  child: SingleChildScrollView(
-                    controller: _hBody,
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: bodyWidth,
-                      child: Builder(
-                        builder: (bodyCtx) {
-                          _bodyCtx = bodyCtx;
-                          return Listener(
-                            behavior: HitTestBehavior.translucent,
-                            onPointerDown: (e) {
-                              final cell = _cellAt(e.localPosition);
-                              if (cell == null) return;
-                              _beginPointerSelection(cell.$1, cell.$2);
-                            },
-                            onPointerMove: (e) {
-                              if (_drag == null) return;
-                              final cell = _cellAt(e.localPosition);
-                              if (cell == null) return;
-                              _extendDragTo(cell.$1, cell.$2);
-                            },
-                            onPointerUp: (_) => _drag = null,
-                            onPointerCancel: (_) => _drag = null,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onDoubleTapDown: widget.editable
-                                  ? (d) {
-                                      final cell = _cellAt(d.localPosition);
-                                      if (cell == null) return;
-                                      final (r, c) = cell;
-                                      _openCellPicker(
-                                        bodyCtx,
-                                        r,
-                                        c,
-                                        result.rows[r][c],
-                                      );
-                                    }
-                                  : null,
-                              onSecondaryTapDown: (d) {
-                                final cell = _cellAt(d.localPosition);
-                                if (cell == null) return;
-                                final (r, c) = cell;
-                                // Right-clicking inside an existing
-                                // multi-selection keeps it intact so a
-                                // "Copy" from the menu reflects the whole
-                                // range; clicking outside collapses to
-                                // the targeted cell.
-                                if (!_selection.value.contains(r, c)) {
-                                  _selectCell(r, c);
-                                }
-                                _openCellMenu(
-                                  bodyCtx,
-                                  d.globalPosition,
-                                  r,
-                                  c,
-                                  result.rows[r][c],
-                                );
-                              },
-                              child: ListView.builder(
-                                controller: _vBody,
-                                itemCount: result.rows.length,
-                                itemExtent: _rowHeight,
-                                // Rows hold no local state (selection lives
-                                // in a ValueNotifier on the grid). Skipping
-                                // the per-child AutomaticKeepAlive wrapper
-                                // means one less widget allocated per row
-                                // that scrolls into view.
-                                addAutomaticKeepAlives: false,
-                                itemBuilder: (_, r) =>
-                                    _buildRow(r, result.rows[r], bodyWidth),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                );
-              },
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildIndexColumn(result.rows.length),
+                Expanded(child: _buildDataArea(result, dataWidth)),
+              ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  /// Fixed-width left rail with row numbers. Vertically tracks `_vBody` via
+  /// `_syncIndexScroll`, so it doesn't move horizontally with the data area.
+  Widget _buildIndexColumn(int rowCount) {
+    return SizedBox(
+      width: _indexWidth,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.bg,
+          border: Border(right: BorderSide(color: AppColors.border)),
+        ),
+        child: ScrollConfiguration(
+          // Hide the system scrollbar — the index column piggybacks on the
+          // data area's vertical scrollbar.
+          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+          child: ListView.builder(
+            controller: _vIndex,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: rowCount,
+            itemExtent: _rowHeight,
+            addAutomaticKeepAlives: false,
+            itemBuilder: (_, r) => _IndexCell(
+              row: r,
+              selection: _selection,
+              height: _rowHeight,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDataArea(QueryResult result, double dataWidth) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bodyWidth = dataWidth < constraints.maxWidth
+            ? constraints.maxWidth
+            : dataWidth;
+        return RepaintBoundary(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (n) {
+              if (n.metrics.axis == Axis.vertical && _vIndex.hasClients) {
+                final target = _vBody.hasClients ? _vBody.offset : 0.0;
+                if ((_vIndex.position.pixels - target).abs() > 0.01) {
+                  _vIndex.jumpTo(
+                    target.clamp(
+                      _vIndex.position.minScrollExtent,
+                      _vIndex.position.maxScrollExtent,
+                    ),
+                  );
+                }
+              }
+              return false;
+            },
+            child: SingleChildScrollView(
+              controller: _hBody,
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: bodyWidth,
+                child: Builder(
+                  builder: (bodyCtx) {
+                    _bodyCtx = bodyCtx;
+                    return Listener(
+                      behavior: HitTestBehavior.translucent,
+                      onPointerDown: (e) {
+                        final cell = _cellAt(e.localPosition);
+                        if (cell == null) return;
+                        _beginPointerSelection(cell.$1, cell.$2);
+                      },
+                      onPointerMove: (e) {
+                        if (_drag == null) return;
+                        final cell = _cellAt(e.localPosition);
+                        if (cell == null) return;
+                        _extendDragTo(cell.$1, cell.$2);
+                      },
+                      onPointerUp: (_) => _drag = null,
+                      onPointerCancel: (_) => _drag = null,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onDoubleTapDown: widget.editable
+                            ? (d) {
+                                final cell = _cellAt(d.localPosition);
+                                if (cell == null) return;
+                                final (r, c) = cell;
+                                _openCellPicker(
+                                  bodyCtx,
+                                  r,
+                                  c,
+                                  result.rows[r][c],
+                                );
+                              }
+                            : null,
+                        onSecondaryTapDown: (d) {
+                          final cell = _cellAt(d.localPosition);
+                          if (cell == null) return;
+                          final (r, c) = cell;
+                          if (!_selection.value.contains(r, c)) {
+                            _selectCell(r, c);
+                          }
+                          _openCellMenu(
+                            bodyCtx,
+                            d.globalPosition,
+                            r,
+                            c,
+                            result.rows[r][c],
+                          );
+                        },
+                        child: ListView.builder(
+                          controller: _vBody,
+                          itemCount: result.rows.length,
+                          itemExtent: _rowHeight,
+                          // Rows hold no local state (selection lives in a
+                          // ValueNotifier). Skipping per-child keepalives
+                          // saves a widget allocation per row that scrolls in.
+                          addAutomaticKeepAlives: false,
+                          itemBuilder: (_, r) =>
+                              _buildRow(r, result.rows[r], bodyWidth),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1034,35 +1100,7 @@ class _ResultsGridState extends State<ResultsGrid> {
                   color: bg,
                   border: Border(bottom: BorderSide(color: AppColors.hairline)),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: _indexWidth,
-                      height: _rowHeight,
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.bg,
-                        border: Border(
-                          right: BorderSide(color: AppColors.border),
-                        ),
-                      ),
-                      child: Text(
-                        '${row + 1}',
-                        style: AppTheme.mono(
-                          size: 10,
-                          color: hasSelection
-                              ? AppColors.accent
-                              : AppColors.text4,
-                          weight: hasSelection
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                        ),
-                      ),
-                    ),
-                    ...cells,
-                  ],
-                ),
+                child: Row(children: cells),
               );
 
               if (!hasSelection) return body;
@@ -1073,7 +1111,7 @@ class _ResultsGridState extends State<ResultsGrid> {
               final overlays = <Widget>[];
               for (final segment in segments) {
                 final (sc0, sc1) = segment;
-                var x = _indexWidth;
+                var x = 0.0;
                 for (var c = 0; c < sc0; c++) {
                   x += _widths[c];
                 }
@@ -1098,7 +1136,7 @@ class _ResultsGridState extends State<ResultsGrid> {
               if (focus != null &&
                   focus.$1 == row &&
                   focus.$2 < _widths.length) {
-                var x = _indexWidth;
+                var x = 0.0;
                 for (var c = 0; c < focus.$2; c++) {
                   x += _widths[c];
                 }
@@ -1237,6 +1275,49 @@ class _ResultsGridState extends State<ResultsGrid> {
 /// and ValueListenableBuilder updates inside the row all preserve the
 /// hover indicator instead of flickering it off and re-acquiring it on
 /// the next pointer event.
+/// One cell in the pinned row-number rail. Rebuilds only when the selection
+/// touches this row (via the row-segment lookup) — most scroll ticks leave it
+/// untouched.
+class _IndexCell extends StatelessWidget {
+  const _IndexCell({
+    required this.row,
+    required this.selection,
+    required this.height,
+  });
+
+  final int row;
+  final ValueListenable<_GridSelection> selection;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<_GridSelection>(
+      valueListenable: selection,
+      builder: (_, sel, _) {
+        final hasSelection = sel.rowSegments(row).isNotEmpty;
+        return SizedBox(
+          height: height,
+          child: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 10),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppColors.hairline)),
+            ),
+            child: Text(
+              '${row + 1}',
+              style: AppTheme.mono(
+                size: 10,
+                color: hasSelection ? AppColors.accent : AppColors.text4,
+                weight: hasSelection ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _RowHoverScope extends StatefulWidget {
   const _RowHoverScope({required this.builder});
 
@@ -1273,9 +1354,8 @@ class _HeaderCell extends StatefulWidget {
     required this.sort,
     required this.sortPriority,
     this.onSort,
-    this.isForeignKey = false,
-    this.isPrimaryKey = false,
-    this.typeLabel,
+    this.meta,
+    this.foreignKey,
   });
 
   final String label;
@@ -1285,9 +1365,12 @@ class _HeaderCell extends StatefulWidget {
   final OrderTerm? sort;
   final int sortPriority;
   final VoidCallback? onSort;
-  final bool isForeignKey;
-  final bool isPrimaryKey;
-  final String? typeLabel;
+  final DbColumn? meta;
+  final DbForeignKey? foreignKey;
+
+  bool get isPrimaryKey => meta?.isPrimaryKey ?? false;
+
+  bool get isForeignKey => foreignKey != null;
 
   @override
   State<_HeaderCell> createState() => _HeaderCellState();
@@ -1304,88 +1387,90 @@ class _HeaderCellState extends State<_HeaderCell> {
         ? AppColors.tFk
         : AppColors.textPrimary;
 
+    Widget hoverable = Hoverable(
+      cursor: sortable
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
+      onTap: widget.onSort,
+      builder: (context, hovering) => Container(
+        decoration: BoxDecoration(
+          color: hovering && sortable
+              ? AppColors.surfaceHover
+              : AppColors.bgDeep,
+          border: Border(
+            right: BorderSide(color: AppColors.hairline, width: 1),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        alignment: Alignment.centerLeft,
+        child: Row(
+          children: [
+            if (widget.isPrimaryKey) ...[
+              Icon(Icons.vpn_key, size: 10, color: AppColors.accent),
+              const SizedBox(width: 5),
+            ] else if (widget.isForeignKey) ...[
+              Icon(Icons.north_east, size: 10, color: AppColors.tFk),
+              const SizedBox(width: 5),
+            ],
+            Flexible(
+              child: Text(
+                widget.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTheme.mono(
+                  size: 11,
+                  color: nameColor,
+                  weight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (sort != null) ...[
+              const Spacer(),
+              Icon(
+                sort.descending
+                    ? Icons.arrow_downward
+                    : Icons.arrow_upward,
+                size: 11,
+                color: AppColors.accent,
+              ),
+              if (widget.sortPriority > 0) ...[
+                const SizedBox(width: 2),
+                Text(
+                  '${widget.sortPriority}',
+                  style: AppTheme.mono(
+                    size: 9,
+                    color: AppColors.accent,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+
+    final tooltip = _buildTooltip();
+    if (tooltip != null) {
+      hoverable = Tooltip(
+        richMessage: tooltip,
+        waitDuration: const Duration(milliseconds: 350),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: Radii.brSm,
+          border: Border.all(color: AppColors.border),
+        ),
+        child: hoverable,
+      );
+    }
+
     return SizedBox(
       width: widget.width,
       height: 28,
       child: Stack(
         children: [
-          Hoverable(
-            cursor: sortable
-                ? SystemMouseCursors.click
-                : SystemMouseCursors.basic,
-            onTap: widget.onSort,
-            builder: (context, hovering) => Container(
-              decoration: BoxDecoration(
-                color: hovering && sortable
-                    ? AppColors.surfaceHover
-                    : AppColors.bgDeep,
-                border: Border(
-                  right: BorderSide(color: AppColors.hairline, width: 1),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              alignment: Alignment.centerLeft,
-              child: Row(
-                children: [
-                  if (widget.isPrimaryKey) ...[
-                    Icon(Icons.vpn_key, size: 10, color: AppColors.accent),
-                    const SizedBox(width: 5),
-                  ] else if (widget.isForeignKey) ...[
-                    Icon(Icons.north_east, size: 10, color: AppColors.tFk),
-                    const SizedBox(width: 5),
-                  ],
-                  Flexible(
-                    child: Text(
-                      widget.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTheme.mono(
-                        size: 11,
-                        color: nameColor,
-                        weight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  if (widget.typeLabel != null) ...[
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        widget.typeLabel!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTheme.mono(
-                          size: 10,
-                          color: AppColors.text4,
-                          weight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (sort != null) ...[
-                    const Spacer(),
-                    Icon(
-                      sort.descending
-                          ? Icons.arrow_downward
-                          : Icons.arrow_upward,
-                      size: 11,
-                      color: AppColors.accent,
-                    ),
-                    if (widget.sortPriority > 0) ...[
-                      const SizedBox(width: 2),
-                      Text(
-                        '${widget.sortPriority}',
-                        style: AppTheme.mono(
-                          size: 9,
-                          color: AppColors.accent,
-                          weight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ],
-                ],
-              ),
-            ),
-          ),
+          hoverable,
           Positioned(
             right: 0,
             top: 0,
@@ -1403,6 +1488,70 @@ class _HeaderCellState extends State<_HeaderCell> {
         ],
       ),
     );
+  }
+
+  InlineSpan? _buildTooltip() {
+    final meta = widget.meta;
+    final fk = widget.foreignKey;
+    if (meta == null && fk == null) return null;
+
+    final mono = AppTheme.mono(size: 11.5, color: AppColors.textPrimary);
+    final monoMuted = AppTheme.mono(size: 11.5, color: AppColors.textMuted);
+    final monoAccent = AppTheme.mono(
+      size: 11.5,
+      color: AppColors.accent,
+      weight: FontWeight.w600,
+    );
+    final monoFk = AppTheme.mono(size: 11.5, color: AppColors.tFk);
+    final uiComment = AppTheme.ui(
+      size: 11.5,
+      color: AppColors.textSecondary,
+    ).copyWith(fontStyle: FontStyle.italic);
+
+    final lines = <InlineSpan>[
+      TextSpan(
+        text: widget.label,
+        style: mono.copyWith(fontWeight: FontWeight.w600),
+      ),
+    ];
+
+    if (meta != null) {
+      final mods = <String>[];
+      if (!meta.nullable) mods.add('NOT NULL');
+      if (meta.hasDefault) mods.add('DEFAULT');
+      final detail = mods.isEmpty
+          ? meta.dataType
+          : '${meta.dataType} · ${mods.join(' · ')}';
+      lines.add(TextSpan(text: '\n$detail', style: monoMuted));
+    }
+
+    if (meta?.isPrimaryKey ?? false) {
+      lines.add(TextSpan(text: '\nPRIMARY KEY', style: monoAccent));
+    }
+
+    if (fk != null) {
+      final ref = fk.isSingleColumn
+          ? '${fk.refSchema}.${fk.refTable}.${fk.refColumns.first}'
+          : '${fk.refSchema}.${fk.refTable} (${fk.refColumns.join(", ")})';
+      final actions = <String>[];
+      if (fk.onUpdate != null && fk.onUpdate!.isNotEmpty) {
+        actions.add('ON UPDATE ${fk.onUpdate}');
+      }
+      if (fk.onDelete != null && fk.onDelete!.isNotEmpty) {
+        actions.add('ON DELETE ${fk.onDelete}');
+      }
+      lines.add(TextSpan(text: '\n→ $ref', style: monoFk));
+      if (actions.isNotEmpty) {
+        lines.add(TextSpan(text: '\n${actions.join(' · ')}', style: monoMuted));
+      }
+    }
+
+    final comment = meta?.comment;
+    if (comment != null && comment.isNotEmpty) {
+      lines.add(TextSpan(text: '\n$comment', style: uiComment));
+    }
+
+    return TextSpan(children: lines);
   }
 }
 
