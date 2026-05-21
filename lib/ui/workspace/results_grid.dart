@@ -570,6 +570,17 @@ class _ResultsGridState extends State<ResultsGrid> {
     return false;
   }
 
+  static const int _tooltipMaxChars = 400;
+
+  String _truncateForTooltip(String text) {
+    final firstNewline = text.indexOf('\n');
+    final hardCap = firstNewline >= 0 && firstNewline < _tooltipMaxChars
+        ? firstNewline
+        : _tooltipMaxChars;
+    if (text.length <= hardCap && firstNewline < 0) return text;
+    return '${text.substring(0, hardCap).trimRight()}…';
+  }
+
   // --- context menu ----------------------------------------------------
 
   void _openCellMenu(
@@ -1126,7 +1137,7 @@ class _ResultsGridState extends State<ResultsGrid> {
           ),
         );
         tooltipUseful = _wantsTooltip(original, displayValue);
-        tooltipText = displayValue;
+        tooltipText = _truncateForTooltip(displayValue);
       }
     }
 
