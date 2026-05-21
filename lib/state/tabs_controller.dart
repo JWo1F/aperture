@@ -8,6 +8,7 @@ import '../models/order_term.dart';
 import '../models/query_result.dart';
 import '../models/saved_query.dart';
 import '../models/value_format.dart';
+import '../services/db_service.dart';
 import '../services/postgres_service.dart';
 import 'catalog_controller.dart';
 import 'navigation_history.dart';
@@ -551,10 +552,11 @@ class TabsController extends ChangeNotifier {
   }
 
   List<String> previewEditStatements(TableTab tab) {
-    if (!tab.hasEdits) return const [];
+    final service = session.service;
+    if (service == null || !tab.hasEdits) return const [];
     final batch = _buildBatch(tab);
     if (batch.isEmpty) return const [];
-    return buildEditStatements(tab.table, batch);
+    return service.previewEditStatements(tab.table, batch);
   }
 
   Future<String?> applyTableEdits(TableTab tab) async {
@@ -644,6 +646,17 @@ class TabsController extends ChangeNotifier {
     if (service == null || sql == null || sql.trim().isEmpty) return;
     if (tab.planLoading) return;
     if (tab.planSourceSql == sql && tab.planJson != null) return;
+
+    // The visual plan reads Postgres' `EXPLAIN (FORMAT JSON)`; SQLite's
+    // `EXPLAIN QUERY PLAN` is a different shape entirely.
+    if (service is! PostgresService) {
+      tab.beginPlan();
+      tab.completePlan(
+        error: 'The visual query plan is available for PostgreSQL only.',
+        sourceSql: sql,
+      );
+      return;
+    }
 
     tab.beginPlan();
 

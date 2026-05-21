@@ -1,6 +1,6 @@
 import 'package:dbv/models/cell_edit.dart';
 import 'package:dbv/models/db_object.dart';
-import 'package:dbv/services/table_repository.dart';
+import 'package:dbv/services/postgres_table_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -16,7 +16,7 @@ void main() {
 
   group('buildEditStatements', () {
     test('renders one UPDATE per ctid with quoted columns', () {
-      final stmts = buildEditStatements(
+      final stmts = buildPostgresEditStatements(
         table,
         updates({
           '(0,5)': {
@@ -33,7 +33,7 @@ void main() {
     });
 
     test('renders NULL for a null literal', () {
-      final stmts = buildEditStatements(
+      final stmts = buildPostgresEditStatements(
         table,
         updates({
           '(0,1)': {'note': const CellLiteral(null)},
@@ -43,7 +43,7 @@ void main() {
     });
 
     test('renders DEFAULT for CellDefault', () {
-      final stmts = buildEditStatements(
+      final stmts = buildPostgresEditStatements(
         table,
         updates({
           '(0,1)': {'created_at': const CellDefault()},
@@ -53,7 +53,7 @@ void main() {
     });
 
     test('doubles single quotes inside the literal', () {
-      final stmts = buildEditStatements(
+      final stmts = buildPostgresEditStatements(
         table,
         updates({
           '(0,1)': {'name': const CellLiteral("O'Brien")},
@@ -63,7 +63,7 @@ void main() {
     });
 
     test('escapes embedded quotes in column names', () {
-      final stmts = buildEditStatements(
+      final stmts = buildPostgresEditStatements(
         table,
         updates({
           '(0,1)': {'weird"col': const CellLiteral('x')},
@@ -73,7 +73,7 @@ void main() {
     });
 
     test('one statement per ctid', () {
-      final stmts = buildEditStatements(
+      final stmts = buildPostgresEditStatements(
         table,
         updates({
           '(0,1)': {'a': const CellLiteral('1')},
@@ -84,7 +84,7 @@ void main() {
     });
 
     test('renders one DELETE per ctid', () {
-      final stmts = buildEditStatements(
+      final stmts = buildPostgresEditStatements(
         table,
         EditBatch(deleteCtids: ['(0,3)', '(0,4)']),
       );
@@ -95,7 +95,7 @@ void main() {
     });
 
     test('renders INSERT with column list and DEFAULT for PK', () {
-      final stmts = buildEditStatements(
+      final stmts = buildPostgresEditStatements(
         table,
         EditBatch(
           inserts: [
@@ -116,7 +116,7 @@ void main() {
     });
 
     test('empty INSERT falls back to DEFAULT VALUES', () {
-      final stmts = buildEditStatements(
+      final stmts = buildPostgresEditStatements(
         table,
         EditBatch(inserts: [PendingInsert()]),
       );
@@ -124,7 +124,7 @@ void main() {
     });
 
     test('orders updates → deletes → inserts', () {
-      final stmts = buildEditStatements(
+      final stmts = buildPostgresEditStatements(
         table,
         EditBatch(
           updatesByCtid: {

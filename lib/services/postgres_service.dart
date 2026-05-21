@@ -1,42 +1,21 @@
 import 'package:postgres/postgres.dart';
 
-import '../models/cell_edit.dart';
 import '../models/connection_config.dart';
 import '../models/db_object.dart';
 import '../models/query_result.dart';
+import 'db_service.dart';
 import 'driver_decoder.dart';
-import 'introspector.dart';
+import 'postgres_introspector.dart';
+import 'postgres_table_repository.dart';
 import 'safe_query.dart';
-import 'table_repository.dart';
-
-export '../models/cell_edit.dart' show EditBatch, PendingInsert;
-export 'table_repository.dart'
-    show
-        TableRepository,
-        StaleRowException,
-        EditFailureException,
-        buildEditStatements;
 
 List<Object?> _decodeRow(List<Object?> raw) => [
   for (final v in raw) decodeDriverValue(v),
 ];
 
-/// Called for every SQL statement that crosses the driver — successful or
-/// not. Lives on a single channel so swapping in a different driver (SQLite,
-/// future remote backends) is a matter of providing a new implementation
-/// of [PostgresService.execute] and [PostgresService.runTx], not chasing
-/// scattered `Connection.execute` calls.
-typedef QueryLogger =
-    void Function({
-      required String sql,
-      required Duration elapsed,
-      required int? affectedRows,
-      required String? error,
-    });
-
 /// Runs [sql] on [session], times it, and reports the outcome to [logger]
 /// before either returning the [Result] or rethrowing. The single point
-/// every SQL statement in the app flows through.
+/// every Postgres statement in the app flows through.
 Future<Result> _logged(
   Session session,
   String sql, {
@@ -94,34 +73,32 @@ class TxScope {
   );
 }
 
-/// Facade over a single live Postgres connection. Owns the connection
-/// lifecycle ([connect] / [close]) and is the single SQL channel for the
-/// rest of the app — [TableRepository] and [Introspector] both run their
-/// statements through [execute] / [runTx] so every query passes the same
-/// logging point.
-class PostgresService {
+/// [DbService] implementation backed by a single live Postgres connection.
+/// Owns the connection lifecycle ([connect] / [close]) and is the single
+/// SQL channel for the Postgres path — [PostgresTableRepository] and
+/// [PostgresIntrospector] both run their statements through [execute] /
+/// [runTx] so every query passes the same logging point.
+class PostgresService implements DbService {
   PostgresService(this.config, {this.onQueryRun, this.onEditApplied});
 
+  @override
   final ConnectionConfig config;
 
   /// Fires for every SQL statement executed through this service, whether
-  /// it originated in [runQuery], in [TableRepository], in [Introspector],
-  /// or inside a transaction via [runTx].
+  /// it originated in [runQuery], in [PostgresTableRepository], in
+  /// [PostgresIntrospector], or inside a transaction via [runTx].
   final QueryLogger? onQueryRun;
 
   /// Called after every UPDATE batch from cell editing.
-  final void Function({
-    required int statementCount,
-    required Duration elapsed,
-    required String? error,
-  })?
-  onEditApplied;
+  final EditLogger? onEditApplied;
 
   Connection? _connection;
-  TableRepository? _repository;
+  PostgresTableRepository? _repository;
 
+  @override
   bool get isConnected => _connection?.isOpen ?? false;
 
+  @override
   Future<void> connect() async {
     _connection = await Connection.open(
       Endpoint(
@@ -137,9 +114,10 @@ class PostgresService {
         applicationName: 'dbv',
       ),
     );
-    _repository = TableRepository(this);
+    _repository = PostgresTableRepository(this);
   }
 
+  @override
   Future<void> close() async {
     await _connection?.close();
     _connection = null;
@@ -161,7 +139,8 @@ class PostgresService {
   }
 
   /// Catalog introspector bound to this connection.
-  Introspector get introspector => Introspector(this);
+  @override
+  Introspector get introspector => PostgresIntrospector(this);
 
   /// The single SQL channel. Every statement issued by the app flows
   /// through here so [onQueryRun] sees it before it hits the wire.
@@ -189,9 +168,11 @@ class PostgresService {
 
   // --- Delegations preserved so existing call sites compile ----------
 
+  @override
   Future<int> countRows(DbTable table, {String filter = ''}) =>
       tableRepository.countRows(table, filter: filter);
 
+  @override
   Future<QueryResult> fetchTablePage(
     DbTable table, {
     required int limit,
@@ -208,6 +189,7 @@ class PostgresService {
     selectList: selectList,
   );
 
+  @override
   Future<QueryResult> fetchAllTableRows(
     DbTable table, {
     String filter = '',
@@ -220,8 +202,15 @@ class PostgresService {
     selectList: selectList,
   );
 
-  Future<String> loadTableDdl(DbTable table) => tableRepository.loadDdl(table);
+  @override
+  Future<String> loadTableDdl(DbTable table) =>
+      tableRepository.loadDdl(table);
 
+  @override
+  List<String> previewEditStatements(DbTable table, EditBatch batch) =>
+      buildPostgresEditStatements(table, batch);
+
+  @override
   Future<int> applyTableEdits(DbTable table, EditBatch batch) async {
     final watch = Stopwatch()..start();
     try {
@@ -244,6 +233,26 @@ class PostgresService {
     }
   }
 
+  /// Reads `SHOW server_version` and reduces it to a `vMAJOR.MINOR` tag.
+  /// Postgres returns something like `16.4 (Homebrew)`; we strip the
+  /// parenthetical and keep the first two segments.
+  @override
+  Future<String?> fetchVersionTag() async {
+    try {
+      final res = await runQuery('SHOW server_version');
+      if (res.isError || res.rows.isEmpty) return null;
+      final s = res.rows.first.first?.toString().trim() ?? '';
+      if (s.isEmpty) return null;
+      final head = s.split(' ').first;
+      final parts = head.split('.');
+      return parts.length >= 2
+          ? 'v${parts[0]}.${parts[1]}'
+          : 'v${parts.first}';
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Default cap applied to bare top-level `SELECT` statements that don't
   /// carry their own LIMIT. Prevents an unbounded `SELECT *` from
   /// materialising an entire billion-row table in the isolate. Statements
@@ -255,6 +264,7 @@ class PostgresService {
   /// to bare SELECTs and shaping the driver result into a [QueryResult].
   /// Logging happens in [execute] so this method just translates the
   /// outcome — no separate log entry is emitted here.
+  @override
   Future<QueryResult> runQuery(String sql) async {
     final safe = applyDefaultLimit(sql, limit: defaultSelectLimit);
     final watch = Stopwatch()..start();

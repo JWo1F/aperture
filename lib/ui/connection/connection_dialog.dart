@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/connection_config.dart';
+import '../../services/db_service.dart';
 import '../../services/one_password_client.dart';
-import '../../services/postgres_service.dart';
 import '../../state/app_state.dart';
 import '../../state/master_passphrase.dart';
 import '../../theme/app_theme.dart';
@@ -244,15 +244,13 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
           return;
       }
     }
-    final svc = PostgresService(cfg);
+    final svc = createDbService(cfg);
     final watch = Stopwatch()..start();
     try {
       await svc.connect();
-      final r = await svc.execute('SHOW server_version');
+      final tag = await svc.fetchVersionTag();
       watch.stop();
-      final raw = r.isNotEmpty ? r.first.first?.toString() ?? '' : '';
-      // Trim trailing build metadata: "16.2 (Debian 16.2-1)" → "16.2"
-      final v = raw.split(RegExp(r'\s+')).first;
+      final v = (tag ?? '').replaceFirst(RegExp(r'^v'), '');
       if (!mounted) return;
       setState(() {
         _testStatus = _TestStatus.ok;

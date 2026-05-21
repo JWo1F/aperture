@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/connection_config.dart';
 import '../models/log_event.dart';
 import '../services/connect_errors.dart';
-import '../services/postgres_service.dart';
+import '../services/db_service.dart';
 import 'event_log.dart';
 
 /// Lifecycle of the active connection from the UI's perspective.
@@ -17,7 +17,7 @@ import 'event_log.dart';
 /// their place.
 enum ConnectionStatus { disconnected, connecting, connected, lost, error }
 
-/// The currently-open Postgres connection. Owns the [PostgresService]
+/// The currently-open database connection. Owns the [DbService]
 /// lifecycle and the user-facing status / error message.
 class SessionController extends ChangeNotifier {
   SessionController({
@@ -28,7 +28,7 @@ class SessionController extends ChangeNotifier {
   final Duration keepaliveInterval;
   final EventLog? log;
 
-  PostgresService? _service;
+  DbService? _service;
   ConnectionConfig? _activeConnection;
   ConnectionStatus _status = ConnectionStatus.disconnected;
   String? _error;
@@ -36,7 +36,7 @@ class SessionController extends ChangeNotifier {
   Timer? _keepaliveTimer;
   bool _keepalivePending = false;
 
-  PostgresService? get service => _service;
+  DbService? get service => _service;
 
   ConnectionConfig? get activeConnection => _activeConnection;
 
@@ -66,7 +66,7 @@ class SessionController extends ChangeNotifier {
   Future<bool> connect(ConnectionConfig config) async {
     _cancelKeepalive();
     await _service?.close();
-    _service = PostgresService(
+    _service = createDbService(
       config,
       onQueryRun:
           ({
@@ -204,31 +204,16 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Reads `SHOW server_version` and reduces it to a `vMAJOR.MINOR` tag
-  /// suitable for the sidebar header (the design's `v16.4`). Postgres
-  /// returns something like `16.4 (Homebrew)`; we strip the parenthetical
-  /// and keep the first two segments.
+  /// Asks the service for its short version tag (the sidebar header's
+  /// `v16.4` / `v3.45`) out of band. Failures are non-fatal — they just
+  /// leave the header without a tag.
   Future<void> _fetchServerVersion() async {
     final svc = _service;
     if (svc == null || !svc.isConnected) return;
-    try {
-      final res = await svc.runQuery('SHOW server_version');
-      if (res.isError || res.rows.isEmpty) return;
-      final raw = res.rows.first.first;
-      final s = raw?.toString().trim() ?? '';
-      if (s.isEmpty) return;
-      // Strip everything from the first space onwards (e.g. "(Homebrew)"),
-      // then keep up to two version segments.
-      final head = s.split(' ').first;
-      final parts = head.split('.');
-      final tag = parts.length >= 2
-          ? 'v${parts[0]}.${parts[1]}'
-          : 'v${parts.first}';
-      _serverVersion = tag;
-      notifyListeners();
-    } catch (_) {
-      // Non-fatal — leave the header without a version tag.
-    }
+    final tag = await svc.fetchVersionTag();
+    if (tag == null || tag.isEmpty) return;
+    _serverVersion = tag;
+    notifyListeners();
   }
 
   void _startKeepalive() {

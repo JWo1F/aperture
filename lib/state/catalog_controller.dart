@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/db_catalog.dart';
 import '../models/db_object.dart';
-import '../services/postgres_service.dart';
+import '../services/db_service.dart';
 
 /// Live introspected catalog (schemas, columns, FKs, indexes, enums,
 /// domains) plus the generation counter that guards background loads.
@@ -41,7 +41,7 @@ class CatalogController extends ChangeNotifier {
   }
 
   /// Run phase 0 (schemas only) under [gen]. Late arrivals are dropped.
-  Future<List<DbSchema>?> runPhase0(PostgresService service, int gen) async {
+  Future<List<DbSchema>?> runPhase0(DbService service, int gen) async {
     final introspector = service.introspector;
     final schemas = await introspector.loadSchemas();
     if (gen != _generation) return null;
@@ -63,7 +63,7 @@ class CatalogController extends ChangeNotifier {
   /// Run phase 1 (columns/FKs/indexes/enums/domains) under [gen]. The five
   /// sweeps run in parallel; any error leaves the catalog in its phase-0
   /// state and surfaces on [lastError].
-  Future<void> runPhase1(PostgresService service, int gen) async {
+  Future<void> runPhase1(DbService service, int gen) async {
     _phase1Loading = true;
     _lastError = null;
     notifyListeners();
