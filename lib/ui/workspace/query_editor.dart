@@ -545,32 +545,36 @@ class _QtInlineKbd extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final double dim = onAccent ? 15 : 16;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var i = 0; i < parts.length; i++) ...[
-          if (i > 0) const SizedBox(width: 2),
+          if (i > 0) const SizedBox(width: 3),
           Container(
-            constraints: BoxConstraints(
-              minWidth: onAccent ? 13 : 16,
-              minHeight: onAccent ? 13 : 16,
-            ),
-            padding: EdgeInsets.symmetric(horizontal: onAccent ? 3 : 4),
+            height: dim,
+            constraints: BoxConstraints(minWidth: dim),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: onAccent
-                  ? Colors.white.withValues(alpha: 0.18)
-                  : AppColors.surface2,
-              borderRadius: BorderRadius.circular(onAccent ? 3 : 4),
+                  ? Colors.white.withValues(alpha: 0.16)
+                  : AppColors.surface,
+              borderRadius: BorderRadius.circular(4),
               border: onAccent ? null : Border.all(color: AppColors.border),
             ),
             child: Text(
               parts[i],
+              textAlign: TextAlign.center,
+              // height: 1.0 collapses the mono font's 1.4 line box so the
+              // glyph sits centred instead of riding the cap's top edge.
               style: AppTheme.mono(
                 size: onAccent ? 9.5 : 10,
-                color: onAccent ? Colors.white : AppColors.textSecondary,
+                color: onAccent
+                    ? Colors.white.withValues(alpha: 0.92)
+                    : AppColors.textMuted,
                 weight: FontWeight.w500,
-              ),
+              ).copyWith(height: 1.0),
             ),
           ),
         ],
