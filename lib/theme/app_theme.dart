@@ -162,28 +162,28 @@ const Palette darkPalette = Palette(
   sqlOperator: Color(0xFF9097A3),
 );
 
-/// Off-white "paper" surface with the same indigo accent. The bg is a touch
-/// cooler than pure white so adjacent surfaces (white) read as elevated
-/// rather than identical, the way Linear and Things layer their light mode.
+/// Off-white "paper" surface with the same indigo accent. Surfaces lean on
+/// cool neutral grays so the palette stays in the same slate family as the
+/// dark variant — no warm/sepia cast, no yellow numbers.
 const Palette lightPalette = Palette(
   brightness: AppBrightness.light,
-  bgDeep: Color(0xFFEBE6DC),
+  bgDeep: Color(0xFFEDEFF3),
   bg: Color(0xFFF4F5F7),
   surface: Color(0xFFFFFFFF),
-  surfaceAlt: Color(0xFFF0EBE2),
-  surface2: Color(0xFFF0EBE2),
+  surfaceAlt: Color(0xFFF1F2F5),
+  surface2: Color(0xFFF1F2F5),
   surfaceHover: Color(0xFFE7E9ED),
   sidebarTint: Color(0xFFFAFBFC),
   sidebarRowHover: Color(0xFFEDEFF3),
   sidebarRowActive: Color(0x224F6FE8),
   border: Color(0xFFE2E4E9),
-  borderSoft: Color(0xFFDAD4C6),
+  borderSoft: Color(0xFFEAECF0),
   borderStrong: Color(0xFFCBCED5),
   hairline: Color(0x14000000),
   textPrimary: Color(0xFF15171C),
   textSecondary: Color(0xFF5A6170),
   textMuted: Color(0xFF98A0AC),
-  text4: Color(0xFFC4BFB4),
+  text4: Color(0xFFBEC3CC),
   accent: Color(0xFF4F6FE8),
   accentHover: Color(0xFF3A5BD9),
   accentSoft: Color(0x224F6FE8),
@@ -191,22 +191,22 @@ const Palette lightPalette = Palette(
   success: Color(0xFF10A372),
   error: Color(0xFFE0445C),
   dangerSoft: Color(0x1FB0322F),
-  warning: Color(0xFF9C7228),
-  warn: Color(0xFF9C7228),
+  warning: Color(0xFFB45A1F),
+  warn: Color(0xFFB45A1F),
   info: Color(0xFF2F6FE5),
-  tNull: Color(0xFFA29D8E),
-  tNum: Color(0xFF6E5A1F),
+  tNull: Color(0xFF98A0AC),
+  tNum: Color(0xFF1F4E8C),
   tStr: Color(0xFF1A1815),
   tBool: Color(0xFF2F7A4F),
   tUuid: Color(0xFF3A4A6B),
   tDate: Color(0xFF6B3A78),
-  tJson: Color(0xFF8A5A1F),
+  tJson: Color(0xFF7A3FB0),
   tFk: Color(0xFF2A3FAA),
   // Syntax tones tuned for dark text on light bg — slightly desaturated so a
   // long query doesn't feel like a stained-glass window.
   sqlKeyword: Color(0xFF3A5BD9),
   sqlString: Color(0xFF1F7A4D),
-  sqlNumber: Color(0xFFB04A12),
+  sqlNumber: Color(0xFF1F4E8C),
   sqlComment: Color(0xFF8A8F99),
   sqlFunction: Color(0xFF7A3FB0),
   sqlIdentifier: Color(0xFF15171C),
