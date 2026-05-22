@@ -747,4 +747,39 @@ void main() {
       expect(out.first.label, '*');
     });
   });
+
+  group('DELETE / UPDATE completion', () {
+    final cat = _catalog(
+      [_t(1, 'public', 'users')],
+      columns: {
+        1: [_c('id', 'int', pk: true), _c('name', 'text')],
+      },
+    );
+
+    List<CodeSuggestion> run(String text) => completeQueryEditor(
+      req: _req(text, manualTrigger: true),
+      catalog: cat,
+      stmtText: text,
+    );
+
+    test('DELETE FROM <table> offers WHERE / USING / RETURNING', () {
+      final out = run('DELETE FROM users ');
+      final labels = out.map((s) => s.label).toSet();
+      expect(labels, containsAll(['WHERE', 'USING', 'RETURNING']));
+      expect(labels, isNot(contains('GROUP BY')));
+      expect(labels, isNot(contains('JOIN')));
+    });
+
+    test('DELETE … WHERE continues into RETURNING, not ORDER BY', () {
+      final labels = run('DELETE FROM users WHERE name ').map((s) => s.label);
+      expect(labels, contains('RETURNING'));
+      expect(labels, isNot(contains('ORDER BY')));
+    });
+
+    test('UPDATE <table> offers SET', () {
+      final out = run('UPDATE users ');
+      expect(out.any((s) => s.label == 'SET'), isTrue);
+      expect(out.any((s) => s.label == 'JOIN'), isFalse);
+    });
+  });
 }

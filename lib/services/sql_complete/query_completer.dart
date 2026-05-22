@@ -67,7 +67,8 @@ List<CodeSuggestion> completeQueryEditor({
   // genuinely want them, and return an empty pool for free-identifier
   // slots. A null result means the caret sits in a SELECT sub-body
   // (`INSERT … SELECT`, `CREATE … AS SELECT`) — fall through.
-  switch (statementKindOf(stmtText)) {
+  final kind = statementKindOf(stmtText);
+  switch (kind) {
     case StatementKind.insert:
       final ins = completeInsertPool(
         req: req,
@@ -102,6 +103,7 @@ List<CodeSuggestion> completeQueryEditor({
     stmtText: stmtText,
     localCursor: localCursor,
     scope: scope,
+    kind: kind,
   );
   return rankAndLimit(pool, req.token, manualTrigger: softTrigger);
 }

@@ -12,12 +12,16 @@ import 'text_scan.dart';
 /// Completion for SELECT and the read-shaped clauses shared by UPDATE /
 /// DELETE (FROM, JOIN, WHERE, GROUP/ORDER BY, …). Returns an unranked
 /// candidate pool; the orchestrator scores it against the typed token.
+///
+/// [kind] tailors the keywords offered after a table / predicate so a
+/// DELETE doesn't get `GROUP BY` and an UPDATE target gets `SET`.
 List<CodeSuggestion> completeSelectPool({
   required SuggestRequest req,
   required DatabaseCatalog catalog,
   required String stmtText,
   required int localCursor,
   required SqlScope scope,
+  required StatementKind kind,
 }) {
   // Right after a JOIN keyword — bare table names plus the FK-aware join
   // templates (`orders ON orders.user_id = users.id`). The templates only
@@ -94,8 +98,18 @@ List<CodeSuggestion> completeSelectPool({
         pool.addAll(keywordsToSuggestions(selectTailKeywords));
       }
     case SqlClause.from:
+      // After `DELETE FROM t` only WHERE / USING / RETURNING are legal —
+      // a plain SELECT's FROM continues into GROUP BY / JOIN / UNION / …
+      pool.addAll(
+        keywordsToSuggestions(
+          kind == StatementKind.delete
+              ? deleteTailKeywords
+              : selectTailKeywords,
+        ),
+      );
     case SqlClause.updateTable:
-      pool.addAll(keywordsToSuggestions(selectTailKeywords));
+      // `UPDATE <table>` is always followed by SET.
+      pool.addAll(keywordsToSuggestions(const ['SET']));
     case SqlClause.join:
       pool.addAll(keywordsToSuggestions(joinTailKeywords));
     case SqlClause.insertInto:
@@ -104,7 +118,15 @@ List<CodeSuggestion> completeSelectPool({
     case SqlClause.having:
     case SqlClause.on:
       pool.addAll(keywordsToSuggestions(whereKeywords));
-      pool.addAll(keywordsToSuggestions(selectTailKeywords));
+      // A WHERE in a DELETE / UPDATE ends the statement bar RETURNING;
+      // only a SELECT's WHERE continues into GROUP BY / ORDER BY / JOIN.
+      pool.addAll(
+        keywordsToSuggestions(
+          kind == StatementKind.delete || kind == StatementKind.update
+              ? const ['RETURNING']
+              : selectTailKeywords,
+        ),
+      );
     case SqlClause.orderBy:
     case SqlClause.groupBy:
       pool.addAll(keywordsToSuggestions(orderKeywords));
@@ -112,8 +134,10 @@ List<CodeSuggestion> completeSelectPool({
     case SqlClause.limit:
       pool.addAll(keywordsToSuggestions(['OFFSET']));
     case SqlClause.set:
-      // Columns of the UPDATE target are already in scope via parseScope.
-      break;
+      // Columns of the UPDATE target are already in scope via parseScope;
+      // once an assignment is written the statement continues into
+      // WHERE / FROM / RETURNING.
+      pool.addAll(keywordsToSuggestions(const ['WHERE', 'FROM', 'RETURNING']));
     case SqlClause.values_:
       pool.addAll(keywordsToSuggestions(['DEFAULT', 'NULL', 'RETURNING']));
     case SqlClause.returning:
