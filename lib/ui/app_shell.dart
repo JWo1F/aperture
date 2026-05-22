@@ -799,18 +799,18 @@ class _TbKbd extends StatelessWidget {
         for (var i = 0; i < parts.length; i++) ...[
           if (i > 0) const SizedBox(width: 2),
           Container(
-            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            constraints: const BoxConstraints(minWidth: 13, minHeight: 13),
+            padding: const EdgeInsets.symmetric(horizontal: 2),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: AppColors.surface2,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(3),
               border: Border.all(color: AppColors.border),
             ),
             child: Text(
               parts[i],
               style: AppTheme.ui(
-                size: 10,
+                size: 9,
                 color: AppColors.textSecondary,
                 weight: FontWeight.w500,
               ),
