@@ -34,6 +34,24 @@ class _SidebarState extends State<Sidebar> {
   final FocusNode _searchFocus = FocusNode();
   String _query = '';
 
+  late final AppState _state = context.read<AppState>();
+
+  /// The sidebar mirrors connections, the session, the catalog, the
+  /// per-connection lists, the open tabs and preferences. Listening to just
+  /// those child controllers — rather than `context.watch<AppState>()`,
+  /// which fires for all ten — keeps a navigation-history push, an
+  /// event-log append, or a passphrase change from rebuilding the whole
+  /// schema list.
+  late final Listenable _sidebarDeps = Listenable.merge([
+    _state.preferences,
+    _state.registry,
+    _state.session,
+    _state.catalog,
+    _state.perConnection,
+    _state.tabsController,
+    _state.ui,
+  ]);
+
   @override
   void initState() {
     super.initState();
@@ -55,37 +73,42 @@ class _SidebarState extends State<Sidebar> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final connected = state.status == ConnectionStatus.connected;
+    return ListenableBuilder(
+      listenable: _sidebarDeps,
+      builder: (context, _) {
+        final state = _state;
+        final connected = state.status == ConnectionStatus.connected;
 
-    return Container(
-      width: state.preferences.sidebarWidth,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [AppColors.sidebarTint, AppColors.bgDeep],
-          stops: const [0.0, 1.0],
-        ),
-        border: Border(right: BorderSide(color: AppColors.hairline)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ConnHero(state: state),
-          if (connected) ...[
-            _SearchBar(controller: _searchCtrl, focusNode: _searchFocus),
-            Expanded(
-              child: _Body(
-                state: state,
-                query: _query.trim().toLowerCase(),
-              ),
+        return Container(
+          width: state.preferences.sidebarWidth,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [AppColors.sidebarTint, AppColors.bgDeep],
+              stops: const [0.0, 1.0],
             ),
-          ] else
-            Expanded(child: _AllConnectionsList(state: state)),
-          _FooterStatus(state: state),
-        ],
-      ),
+            border: Border(right: BorderSide(color: AppColors.hairline)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ConnHero(state: state),
+              if (connected) ...[
+                _SearchBar(controller: _searchCtrl, focusNode: _searchFocus),
+                Expanded(
+                  child: _Body(
+                    state: state,
+                    query: _query.trim().toLowerCase(),
+                  ),
+                ),
+              ] else
+                Expanded(child: _AllConnectionsList(state: state)),
+              _FooterStatus(state: state),
+            ],
+          ),
+        );
+      },
     );
   }
 }
