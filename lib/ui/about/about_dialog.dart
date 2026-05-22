@@ -5,7 +5,7 @@ import '../widgets/common.dart';
 
 /// Build/version is wired in here rather than read from pubspec at runtime
 /// so the About dialog stays a zero-dependency widget. Bump on release.
-const _version = '1.5.3';
+const _version = '1.5.4';
 const _tagline = 'A native macOS client for PostgreSQL and SQLite.';
 
 Future<void> showAboutAperture(BuildContext context) {

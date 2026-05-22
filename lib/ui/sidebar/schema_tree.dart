@@ -289,85 +289,73 @@ class _SchemaBlock extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Hoverable(
+        _TreeRow(
+          indent: 0,
+          height: 26,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
           onTap: () => deps.ui.toggleSchema(schema.name),
-          builder: (context, hovering) {
-            return Container(
-              height: 26,
-              margin: const EdgeInsets.symmetric(horizontal: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 6),
+          children: [
+            AnimatedRotation(
+              turns: expanded ? 0.25 : 0,
+              duration: const Duration(milliseconds: 120),
+              curve: Curves.easeOut,
+              child: Icon(
+                Icons.chevron_right_rounded,
+                size: 14,
+                color: AppColors.textMuted,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Container(
+              width: 14,
+              height: 14,
               decoration: BoxDecoration(
-                color: hovering
-                    ? AppColors.sidebarRowHover
-                    : Colors.transparent,
-                borderRadius: Radii.brSm,
+                color: expanded
+                    ? tint.withValues(alpha: 0.16)
+                    : AppColors.surface,
+                borderRadius: const BorderRadius.all(Radii.xs),
+                border: Border.all(
+                  color: expanded
+                      ? tint.withValues(alpha: 0.5)
+                      : AppColors.borderSoft,
+                ),
               ),
-              child: Row(
-                children: [
-                  AnimatedRotation(
-                    turns: expanded ? 0.25 : 0,
-                    duration: const Duration(milliseconds: 120),
-                    curve: Curves.easeOut,
-                    child: Icon(
-                      Icons.chevron_right_rounded,
-                      size: 14,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: expanded
-                          ? tint.withValues(alpha: 0.16)
-                          : AppColors.surface,
-                      borderRadius: const BorderRadius.all(Radii.xs),
-                      border: Border.all(
-                        color: expanded
-                            ? tint.withValues(alpha: 0.5)
-                            : AppColors.borderSoft,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      schema.name.isEmpty
-                          ? '?'
-                          : schema.name.substring(0, 1).toUpperCase(),
-                      style: AppTheme.ui(
-                        size: 8.5,
-                        color: expanded ? tint : AppColors.textMuted,
-                        weight: FontWeight.w700,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: SidebarHighlightedText(
-                      text: schema.name,
-                      match: query,
-                      style: AppTheme.ui(
-                        size: 12,
-                        color: AppColors.textSecondary,
-                        weight: FontWeight.w600,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '${tables.length}',
-                    style: AppTheme.ui(
-                      size: 10.5,
-                      color: AppColors.text4,
-                      weight: FontWeight.w500,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ],
+              alignment: Alignment.center,
+              child: Text(
+                schema.name.isEmpty
+                    ? '?'
+                    : schema.name.substring(0, 1).toUpperCase(),
+                style: AppTheme.ui(
+                  size: 8.5,
+                  color: expanded ? tint : AppColors.textMuted,
+                  weight: FontWeight.w700,
+                  letterSpacing: 0,
+                ),
               ),
-            );
-          },
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SidebarHighlightedText(
+                text: schema.name,
+                match: query,
+                style: AppTheme.ui(
+                  size: 12,
+                  color: AppColors.textSecondary,
+                  weight: FontWeight.w600,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+            Text(
+              '${tables.length}',
+              style: AppTheme.ui(
+                size: 10.5,
+                color: AppColors.text4,
+                weight: FontWeight.w500,
+                letterSpacing: 0,
+              ),
+            ),
+          ],
         ),
         if (expanded)
           for (final t in tables)
@@ -435,98 +423,59 @@ class _TableRow extends StatelessWidget {
     bool expanded,
     String nodeId,
   ) {
-    final leftBase = 14.0 + indent * 18.0;
-    return Hoverable(
+    final stat = tableStat(table);
+    return _TreeRow(
+      indent: indent,
+      height: 24,
+      active: active,
+      tint: tint,
       onTap: () => deps.tabs.openTable(table),
       onSecondaryTapDown: (d) =>
           openTableMenu(context, deps, table, d.globalPosition),
-      builder: (context, hovering) {
+      childrenBuilder: (hovering) {
         final showStar = hovering || isFav;
-        final stat = tableStat(table);
-        final rowBg = active
-            ? tint.withValues(alpha: 0.13)
-            : (hovering ? AppColors.sidebarRowHover : Colors.transparent);
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              height: 24,
-              margin: const EdgeInsets.symmetric(horizontal: 6),
-              padding: EdgeInsets.only(left: leftBase, right: 6),
-              decoration: BoxDecoration(
-                color: rowBg,
-                borderRadius: Radii.brSm,
-              ),
-              child: Row(
-                children: [
-                  _DetailChevron(
-                    expanded: expanded,
-                    onTap: () => deps.ui.toggleNode(nodeId),
-                  ),
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: Center(child: _kindIcon(table.kind, active, tint)),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: SidebarHighlightedText(
-                      text: table.name,
-                      match: query,
-                      style: AppTheme.ui(
-                        size: 12,
-                        color: active
-                            ? AppColors.textPrimary
-                            : AppColors.textSecondary,
-                        weight: active ? FontWeight.w600 : FontWeight.w400,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ),
-                  if (stat != null) ...[
-                    const SizedBox(width: 6),
-                    Text(
-                      stat,
-                      style: AppTheme.mono(
-                        size: 9.5,
-                        color: AppColors.textSecondary.withValues(alpha: 0.3),
-                        weight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                  if (showStar)
-                    _StarToggle(
-                      filled: isFav,
-                      onTap: () => deps.perConnection.toggleFavorite(table),
-                    ),
-                ],
+        return [
+          _DetailChevron(
+            expanded: expanded,
+            onTap: () => deps.ui.toggleNode(nodeId),
+          ),
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: Center(child: _kindIcon(table.kind, active, tint)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SidebarHighlightedText(
+              text: table.name,
+              match: query,
+              style: AppTheme.ui(
+                size: 12,
+                color: active
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+                weight: active ? FontWeight.w600 : FontWeight.w400,
+                letterSpacing: 0,
               ),
             ),
-            if (active)
-              Positioned(
-                left: 0,
-                top: 5,
-                bottom: 5,
-                child: Container(
-                  width: 2.5,
-                  decoration: BoxDecoration(
-                    color: tint,
-                    borderRadius: const BorderRadius.only(
-                      topRight: Radius.circular(2),
-                      bottomRight: Radius.circular(2),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: tint.withValues(alpha: 0.45),
-                        blurRadius: 6,
-                        spreadRadius: 0,
-                      ),
-                    ],
-                  ),
-                ),
+          ),
+          if (stat != null) ...[
+            const SizedBox(width: 6),
+            Text(
+              stat,
+              style: AppTheme.mono(
+                size: 9.5,
+                color: AppColors.textSecondary.withValues(alpha: 0.3),
+                weight: FontWeight.w400,
               ),
+            ),
           ],
-        );
+          if (showStar)
+            _StarToggle(
+              filled: isFav,
+              onTap: () => deps.perConnection.toggleFavorite(table),
+            ),
+        ];
       },
     );
   }
@@ -551,6 +500,101 @@ class _TableRow extends StatelessWidget {
           color: active ? tint : AppColors.info,
         );
     }
+  }
+}
+
+/// Row skeleton shared by every entry in the schema tree (`_SchemaBlock`,
+/// `_TableRow`, `_DetailFolder`, `_DetailLeaf`): horizontal margin, hover
+/// tint, indent-based left padding, and the optional left rail + tinted
+/// background that mark an active selection. Callers supply only the row's
+/// inner [children]; pass [childrenBuilder] instead when those children
+/// depend on hover state (e.g. a hover-revealed star button).
+class _TreeRow extends StatelessWidget {
+  const _TreeRow({
+    required this.indent,
+    required this.height,
+    this.children,
+    this.childrenBuilder,
+    this.active = false,
+    this.tint,
+    this.onTap,
+    this.onSecondaryTapDown,
+    this.padding,
+    this.cursor,
+  }) : assert(
+         (children == null) != (childrenBuilder == null),
+         'Provide exactly one of children or childrenBuilder',
+       );
+
+  final int indent;
+  final double height;
+  final List<Widget>? children;
+  final List<Widget> Function(bool hovering)? childrenBuilder;
+  final bool active;
+  final Color? tint;
+  final VoidCallback? onTap;
+  final GestureTapDownCallback? onSecondaryTapDown;
+  final EdgeInsetsGeometry? padding;
+  final MouseCursor? cursor;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedPadding =
+        padding ?? EdgeInsets.only(left: 14.0 + indent * 18.0, right: 6);
+    final row = Hoverable(
+      onTap: onTap,
+      onSecondaryTapDown: onSecondaryTapDown,
+      cursor: cursor ?? SystemMouseCursors.click,
+      builder: (context, hovering) {
+        final activeTint = tint;
+        final rowBg = active && activeTint != null
+            ? activeTint.withValues(alpha: 0.13)
+            : (hovering ? AppColors.sidebarRowHover : Colors.transparent);
+        return Container(
+          height: height,
+          margin: const EdgeInsets.symmetric(horizontal: 6),
+          padding: resolvedPadding,
+          decoration: BoxDecoration(
+            color: rowBg,
+            borderRadius: Radii.brSm,
+          ),
+          child: Row(
+            children: children ?? childrenBuilder!(hovering),
+          ),
+        );
+      },
+    );
+
+    if (!active || tint == null) return row;
+    final activeTint = tint!;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        row,
+        Positioned(
+          left: 0,
+          top: 5,
+          bottom: 5,
+          child: Container(
+            width: 2.5,
+            decoration: BoxDecoration(
+              color: activeTint,
+              borderRadius: const BorderRadius.only(
+                topRight: Radius.circular(2),
+                bottomRight: Radius.circular(2),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: activeTint.withValues(alpha: 0.45),
+                  blurRadius: 6,
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -761,59 +805,45 @@ class _DetailFolder extends StatelessWidget {
   Widget build(BuildContext context) {
     final id = '$scope/${table.qualifiedKey}/$folder';
     final expanded = deps.ui.isNodeExpanded(id);
-    final leftBase = 14.0 + indent * 18.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Hoverable(
+        _TreeRow(
+          indent: indent,
+          height: 24,
           onTap: () => deps.ui.toggleNode(id),
-          builder: (context, hovering) {
-            return Container(
-              height: 24,
-              margin: const EdgeInsets.symmetric(horizontal: 6),
-              padding: EdgeInsets.only(left: leftBase, right: 6),
-              decoration: BoxDecoration(
-                color: hovering
-                    ? AppColors.sidebarRowHover
-                    : Colors.transparent,
-                borderRadius: Radii.brSm,
+          children: [
+            _DetailChevron(expanded: expanded),
+            Icon(
+              Icons.folder_outlined,
+              size: 13,
+              color: AppColors.textMuted,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                folder,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTheme.ui(
+                  size: 12,
+                  color: AppColors.textSecondary,
+                  weight: FontWeight.w400,
+                  letterSpacing: 0,
+                ),
               ),
-              child: Row(
-                children: [
-                  _DetailChevron(expanded: expanded),
-                  Icon(
-                    Icons.folder_outlined,
-                    size: 13,
-                    color: AppColors.textMuted,
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      folder,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTheme.ui(
-                        size: 12,
-                        color: AppColors.textSecondary,
-                        weight: FontWeight.w400,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '$count',
-                    style: AppTheme.ui(
-                      size: 10,
-                      color: AppColors.text4,
-                      weight: FontWeight.w500,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ],
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '$count',
+              style: AppTheme.ui(
+                size: 10,
+                color: AppColors.text4,
+                weight: FontWeight.w500,
+                letterSpacing: 0,
               ),
-            );
-          },
+            ),
+          ],
         ),
         if (expanded) ...children,
       ],
@@ -840,64 +870,52 @@ class _DetailLeaf extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final leftBase = 14.0 + indent * 18.0;
-    return Hoverable(
+    return _TreeRow(
+      indent: indent,
+      height: 22,
       onTap: onTap,
       cursor: onTap != null
           ? SystemMouseCursors.click
           : SystemMouseCursors.basic,
-      builder: (context, hovering) {
-        return Container(
-          height: 22,
-          margin: const EdgeInsets.symmetric(horizontal: 6),
-          padding: EdgeInsets.only(left: leftBase, right: 6),
-          decoration: BoxDecoration(
-            color: hovering ? AppColors.sidebarRowHover : Colors.transparent,
-            borderRadius: Radii.brSm,
-          ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 12,
-                height: 12,
-                child: Center(child: leading),
-              ),
-              const SizedBox(width: 8),
-              // Name and detail share one paragraph so the ellipsis trims the
-              // trailing detail first — the name keeps priority for the row's
-              // width instead of being capped at an even flex split.
-              Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(
-                        text: name,
-                        style: AppTheme.ui(
-                          size: 12,
-                          color: AppColors.textSecondary,
-                          weight: FontWeight.w400,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                      if (detail != null)
-                        TextSpan(
-                          text: '  $detail',
-                          style: AppTheme.mono(
-                            size: 9.5,
-                            color: AppColors.textMuted,
-                            weight: FontWeight.w400,
-                          ),
-                        ),
-                    ],
+      children: [
+        SizedBox(
+          width: 12,
+          height: 12,
+          child: Center(child: leading),
+        ),
+        const SizedBox(width: 8),
+        // Name and detail share one paragraph so the ellipsis trims the
+        // trailing detail first — the name keeps priority for the row's
+        // width instead of being capped at an even flex split.
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: name,
+                  style: AppTheme.ui(
+                    size: 12,
+                    color: AppColors.textSecondary,
+                    weight: FontWeight.w400,
+                    letterSpacing: 0,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
+                if (detail != null)
+                  TextSpan(
+                    text: '  $detail',
+                    style: AppTheme.mono(
+                      size: 9.5,
+                      color: AppColors.textMuted,
+                      weight: FontWeight.w400,
+                    ),
+                  ),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }
