@@ -229,6 +229,15 @@ String _describeNode(String type) {
   return _nodeDescriptions[type] ?? 'A planner operation.';
 }
 
+/// Inclusive wall-time (or planner cost) for a raw plan-node map. Matches
+/// [_PlanNode.inclusiveMs]; kept as a free function so a node's children
+/// can be summed without building a [_PlanNode] for each.
+double _inclusiveMsOf(Map<String, dynamic> node) {
+  final t = (node['Actual Total Time'] as num?)?.toDouble();
+  if (t != null) return t * ((node['Actual Loops'] as num?)?.toInt() ?? 1);
+  return (node['Total Cost'] as num?)?.toDouble() ?? 0;
+}
+
 // --- main tree ------------------------------------------------------------
 
 class _PlanTree extends StatelessWidget {
@@ -255,10 +264,10 @@ class _PlanTree extends StatelessWidget {
     final rows = <_PlanNode>[];
     _flatten(root, 0, const [], null, rows);
     final totalMs = rows.fold<double>(0, (m, r) {
-      final v = r.nodeMs;
+      final v = r.selfMs;
       return v > m ? v : m;
     });
-    final slowest = rows.reduce((a, b) => a.nodeMs >= b.nodeMs ? a : b);
+    final slowest = rows.reduce((a, b) => a.selfMs >= b.selfMs ? a : b);
     final planningMs = (planJson['Planning Time'] as num?)?.toDouble();
     final executionMs = (planJson['Execution Time'] as num?)?.toDouble();
     final analyzed = executionMs != null;
@@ -381,13 +390,28 @@ class _PlanNode {
 
   double? get totalCost => (node['Total Cost'] as num?)?.toDouble();
 
-  /// Total wall-time spent inside this node — per-loop time × loop count.
-  /// Falls back to planner cost when ANALYZE wasn't used, so the bar still
-  /// conveys relative weight on plain EXPLAIN.
-  double get nodeMs {
-    final t = actualTotalTime;
-    if (t != null) return t * (actualLoops ?? 1);
-    return totalCost ?? 0;
+  /// Cumulative wall-time for this node *and its entire subtree* — per-loop
+  /// time × loop count. Postgres reports time inclusively, so the root's
+  /// value is always the whole query; this is not the figure to rank nodes
+  /// by (see [selfMs]). Falls back to planner cost when ANALYZE wasn't used.
+  double get inclusiveMs => _inclusiveMsOf(node);
+
+  /// Wall-time spent in this node *alone* — its inclusive time minus the
+  /// inclusive time of its direct children. This is what answers "where did
+  /// the query spend its time": ranking by [inclusiveMs] would always crown
+  /// the root, since by definition it contains every other node. Clamped at
+  /// zero — rounding and parallel-worker accounting can make the
+  /// subtraction land slightly negative.
+  double get selfMs {
+    final children =
+        (node['Plans'] as List?)?.cast<Map<String, dynamic>>() ??
+        const <Map<String, dynamic>>[];
+    var childSum = 0.0;
+    for (final c in children) {
+      childSum += _inclusiveMsOf(c);
+    }
+    final self = inclusiveMs - childSum;
+    return self < 0 ? 0 : self;
   }
 
   /// Headline target — the relation/index this node operates on.
@@ -626,7 +650,7 @@ class _NodeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fraction = totalMs > 0 ? (node.nodeMs / totalMs) : 0.0;
+    final fraction = totalMs > 0 ? (node.selfMs / totalMs) : 0.0;
     final pct = (fraction * 100).round();
     final cardColor = isSlowest
         ? AppColors.warning.withValues(alpha: 0.06)
@@ -885,8 +909,10 @@ class _CardHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final target = node.target;
-    final t = node.actualTotalTime;
-    final ms = t == null ? null : t * (node.actualLoops ?? 1);
+    // Self time, not the inclusive subtree total — the headline figure,
+    // the % chip and the bar all describe the work done in this node
+    // alone, so the "slowest" card is also the one with the fullest bar.
+    final analyzed = node.actualTotalTime != null;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -903,9 +929,9 @@ class _CardHeader extends StatelessWidget {
         ],
         if (isSlowest) ...[const SizedBox(width: 8), _SlowestPill()],
         const Spacer(),
-        if (ms != null) ...[
+        if (analyzed) ...[
           Text(
-            '${ms.toStringAsFixed(2)} ms',
+            '${node.selfMs.toStringAsFixed(2)} ms',
             style: AppTheme.mono(
               size: 12,
               color: AppColors.textPrimary,
@@ -916,7 +942,7 @@ class _CardHeader extends StatelessWidget {
           _PercentChip(pct: pct),
         ] else if (node.totalCost != null) ...[
           Text(
-            'cost ${node.totalCost!.toStringAsFixed(1)}',
+            'cost ${node.selfMs.toStringAsFixed(1)}',
             style: AppTheme.mono(size: 11.5, color: AppColors.textSecondary),
           ),
         ],
