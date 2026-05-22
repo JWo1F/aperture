@@ -456,6 +456,7 @@ class _Body extends StatelessWidget {
                   isFav: true,
                   indent: 0,
                   query: query,
+                  scope: 'pin',
                 ),
             ],
           ),
@@ -472,6 +473,7 @@ class _Body extends StatelessWidget {
                   isFav: favKeys.contains(t.qualifiedKey),
                   indent: 0,
                   query: query,
+                  scope: 'freq',
                 ),
             ],
           ),
@@ -746,6 +748,7 @@ class _SchemaBlock extends StatelessWidget {
               isFav: favKeys.contains(t.qualifiedKey),
               indent: 1,
               query: query,
+              scope: 'tree',
             ),
       ],
     );
@@ -762,6 +765,7 @@ class _TableRow extends StatelessWidget {
     required this.isFav,
     required this.indent,
     required this.query,
+    required this.scope,
   });
 
   final DbTable table;
@@ -771,22 +775,38 @@ class _TableRow extends StatelessWidget {
   final int indent;
   final String query;
 
+  /// Section the row lives in (`pin` / `freq` / `tree`). Folded into the
+  /// detail-tree node ids so the same table expanded in one section stays
+  /// collapsed in the others.
+  final String scope;
+
   @override
   Widget build(BuildContext context) {
     final tint = AppColors.connectionTint(state.activeConnection?.color);
-    final expanded = state.isNodeExpanded(table.qualifiedKey);
-    final row = _buildRow(context, tint, expanded);
+    final nodeId = '$scope/${table.qualifiedKey}';
+    final expanded = state.isNodeExpanded(nodeId);
+    final row = _buildRow(context, tint, expanded, nodeId);
     if (!expanded) return row;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         row,
-        _TableDetail(table: table, state: state, indent: indent + 1),
+        _TableDetail(
+          table: table,
+          state: state,
+          indent: indent + 1,
+          scope: scope,
+        ),
       ],
     );
   }
 
-  Widget _buildRow(BuildContext context, Color tint, bool expanded) {
+  Widget _buildRow(
+    BuildContext context,
+    Color tint,
+    bool expanded,
+    String nodeId,
+  ) {
     final leftBase = 14.0 + indent * 18.0;
     return Hoverable(
       onTap: () => state.openTable(table),
@@ -813,7 +833,7 @@ class _TableRow extends StatelessWidget {
                 children: [
                   _DetailChevron(
                     expanded: expanded,
-                    onTap: () => state.toggleNode(table.qualifiedKey),
+                    onTap: () => state.toggleNode(nodeId),
                   ),
                   SizedBox(
                     width: 14,
@@ -952,11 +972,13 @@ class _TableDetail extends StatelessWidget {
     required this.table,
     required this.state,
     required this.indent,
+    required this.scope,
   });
 
   final DbTable table;
   final AppState state;
   final int indent;
+  final String scope;
 
   @override
   Widget build(BuildContext context) {
@@ -981,6 +1003,7 @@ class _TableDetail extends StatelessWidget {
           _DetailFolder(
             table: table,
             state: state,
+            scope: scope,
             indent: indent,
             folder: 'columns',
             count: columns.length,
@@ -1012,6 +1035,7 @@ class _TableDetail extends StatelessWidget {
           _DetailFolder(
             table: table,
             state: state,
+            scope: scope,
             indent: indent,
             folder: 'keys',
             count: keys.length,
@@ -1035,6 +1059,7 @@ class _TableDetail extends StatelessWidget {
           _DetailFolder(
             table: table,
             state: state,
+            scope: scope,
             indent: indent,
             folder: 'foreign keys',
             count: foreignKeys.length,
@@ -1061,6 +1086,7 @@ class _TableDetail extends StatelessWidget {
           _DetailFolder(
             table: table,
             state: state,
+            scope: scope,
             indent: indent,
             folder: 'indexes',
             count: indexes.length,
@@ -1090,6 +1116,7 @@ class _DetailFolder extends StatelessWidget {
   const _DetailFolder({
     required this.table,
     required this.state,
+    required this.scope,
     required this.indent,
     required this.folder,
     required this.count,
@@ -1098,6 +1125,7 @@ class _DetailFolder extends StatelessWidget {
 
   final DbTable table;
   final AppState state;
+  final String scope;
   final int indent;
   final String folder;
   final int count;
@@ -1105,7 +1133,7 @@ class _DetailFolder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final id = '${table.qualifiedKey} $folder';
+    final id = '$scope/${table.qualifiedKey}/$folder';
     final expanded = state.isNodeExpanded(id);
     final leftBase = 14.0 + indent * 18.0;
     return Column(
@@ -1209,14 +1237,15 @@ class _DetailLeaf extends StatelessWidget {
                 child: Center(child: leading),
               ),
               const SizedBox(width: 8),
+              // Name and detail share one paragraph so the ellipsis trims the
+              // trailing detail first — the name keeps priority for the row's
+              // width instead of being capped at an even flex split.
               Expanded(
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: name,
                         style: AppTheme.ui(
                           size: 12,
                           color: AppColors.textSecondary,
@@ -1224,23 +1253,19 @@ class _DetailLeaf extends StatelessWidget {
                           letterSpacing: 0,
                         ),
                       ),
-                    ),
-                    if (detail != null) ...[
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          detail!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      if (detail != null)
+                        TextSpan(
+                          text: '  $detail',
                           style: AppTheme.mono(
                             size: 9.5,
                             color: AppColors.textMuted,
                             weight: FontWeight.w400,
                           ),
                         ),
-                      ),
                     ],
-                  ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
