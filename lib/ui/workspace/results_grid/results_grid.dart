@@ -604,32 +604,38 @@ class _ResultsGridState extends State<ResultsGrid> {
           children: [
             indexHeader,
             Expanded(
+              // Border sits in the foreground: each HeaderCell paints an
+              // opaque bgDeep fill over the full 28px height, so a
+              // background-position border would be hidden behind the cells.
               child: DecoratedBox(
+                position: DecorationPosition.foreground,
                 decoration: BoxDecoration(
-                  color: AppColors.bgDeep,
                   border: Border(bottom: BorderSide(color: AppColors.border)),
                 ),
-                // ClipRect alone would force the header row to fit the
-                // viewport. OverflowBox grants it the same unbounded
-                // horizontal space the body's scroll view has, so the Row
-                // lays out at `dataWidth` and we translate it sideways to
-                // mirror the body's scroll offset.
-                child: ClipRect(
-                  child: AnimatedBuilder(
-                    animation: _hBody,
-                    builder: (_, child) {
-                      final offset = _hBody.hasClients ? _hBody.offset : 0.0;
-                      return OverflowBox(
-                        minWidth: 0,
-                        maxWidth: double.infinity,
-                        alignment: Alignment.topLeft,
-                        child: Transform.translate(
-                          offset: Offset(-offset, 0),
-                          child: child,
-                        ),
-                      );
-                    },
-                    child: dataHeaderRow,
+                child: ColoredBox(
+                  color: AppColors.bgDeep,
+                  // ClipRect alone would force the header row to fit the
+                  // viewport. OverflowBox grants it the same unbounded
+                  // horizontal space the body's scroll view has, so the Row
+                  // lays out at `dataWidth` and we translate it sideways to
+                  // mirror the body's scroll offset.
+                  child: ClipRect(
+                    child: AnimatedBuilder(
+                      animation: _hBody,
+                      builder: (_, child) {
+                        final offset = _hBody.hasClients ? _hBody.offset : 0.0;
+                        return OverflowBox(
+                          minWidth: 0,
+                          maxWidth: double.infinity,
+                          alignment: Alignment.topLeft,
+                          child: Transform.translate(
+                            offset: Offset(-offset, 0),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: dataHeaderRow,
+                    ),
                   ),
                 ),
               ),
