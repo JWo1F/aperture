@@ -746,7 +746,6 @@ class _SchemaBlock extends StatelessWidget {
               isFav: favKeys.contains(t.qualifiedKey),
               indent: 1,
               query: query,
-              expandable: true,
             ),
       ],
     );
@@ -763,7 +762,6 @@ class _TableRow extends StatelessWidget {
     required this.isFav,
     required this.indent,
     required this.query,
-    this.expandable = false,
   });
 
   final DbTable table;
@@ -773,15 +771,10 @@ class _TableRow extends StatelessWidget {
   final int indent;
   final String query;
 
-  /// Schema-tree rows carry a disclosure chevron and expand into a
-  /// columns / keys / foreign keys / indexes subtree. Pinned and Frequent
-  /// rows are flat shortcuts and stay collapsed.
-  final bool expandable;
-
   @override
   Widget build(BuildContext context) {
     final tint = AppColors.connectionTint(state.activeConnection?.color);
-    final expanded = expandable && state.isNodeExpanded(table.qualifiedKey);
+    final expanded = state.isNodeExpanded(table.qualifiedKey);
     final row = _buildRow(context, tint, expanded);
     if (!expanded) return row;
     return Column(
@@ -818,11 +811,10 @@ class _TableRow extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  if (expandable)
-                    _DetailChevron(
-                      expanded: expanded,
-                      onTap: () => state.toggleNode(table.qualifiedKey),
-                    ),
+                  _DetailChevron(
+                    expanded: expanded,
+                    onTap: () => state.toggleNode(table.qualifiedKey),
+                  ),
                   SizedBox(
                     width: 14,
                     height: 14,
@@ -995,17 +987,22 @@ class _TableDetail extends StatelessWidget {
             children: [
               for (final c in columns)
                 _DetailLeaf(
-                  indent: indent + 1,
-                  icon: c.isPrimaryKey
-                      ? Icons.key_rounded
-                      : (fkColumns.contains(c.name)
-                            ? Icons.link_rounded
-                            : Icons.crop_landscape),
-                  iconColor: c.isPrimaryKey
-                      ? tint
-                      : (fkColumns.contains(c.name)
-                            ? AppColors.info
-                            : AppColors.text4),
+                  indent: indent + 2,
+                  leading: ColumnGlyph(
+                    size: 12,
+                    color: AppColors.textMuted,
+                    filled: !c.nullable,
+                    mark: c.isPrimaryKey
+                        ? ColumnMark.primaryKey
+                        : (fkColumns.contains(c.name)
+                              ? ColumnMark.foreignKey
+                              : ColumnMark.none),
+                    markColor: c.isPrimaryKey
+                        ? tint
+                        : (fkColumns.contains(c.name)
+                              ? AppColors.info
+                              : null),
+                  ),
                   name: c.name,
                   detail: c.dataType,
                 ),
@@ -1021,9 +1018,12 @@ class _TableDetail extends StatelessWidget {
             children: [
               for (final k in keys)
                 _DetailLeaf(
-                  indent: indent + 1,
-                  icon: Icons.key_rounded,
-                  iconColor: k.isPrimary ? tint : AppColors.textMuted,
+                  indent: indent + 2,
+                  leading: Icon(
+                    Icons.key_rounded,
+                    size: 12,
+                    color: k.isPrimary ? tint : AppColors.textMuted,
+                  ),
                   name: k.name,
                   detail:
                       '(${k.columns.join(', ')})'
@@ -1041,9 +1041,12 @@ class _TableDetail extends StatelessWidget {
             children: [
               for (final fk in foreignKeys)
                 _DetailLeaf(
-                  indent: indent + 1,
-                  icon: Icons.link_rounded,
-                  iconColor: AppColors.info,
+                  indent: indent + 2,
+                  leading: Icon(
+                    Icons.link_rounded,
+                    size: 12,
+                    color: AppColors.info,
+                  ),
                   name: fk.constraintName,
                   detail:
                       '(${fk.localColumns.join(', ')}) → ${fk.refTable}',
@@ -1064,9 +1067,12 @@ class _TableDetail extends StatelessWidget {
             children: [
               for (final ix in indexes)
                 _DetailLeaf(
-                  indent: indent + 1,
-                  icon: Icons.bolt_rounded,
-                  iconColor: AppColors.textMuted,
+                  indent: indent + 2,
+                  leading: Icon(
+                    Icons.bolt_rounded,
+                    size: 12,
+                    color: AppColors.textMuted,
+                  ),
                   name: ix.name,
                   detail:
                       '(${ix.columns.join(', ')})'
@@ -1133,7 +1139,7 @@ class _DetailFolder extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTheme.ui(
-                        size: 11.5,
+                        size: 12,
                         color: AppColors.textSecondary,
                         weight: FontWeight.w400,
                         letterSpacing: 0,
@@ -1166,16 +1172,14 @@ class _DetailFolder extends StatelessWidget {
 class _DetailLeaf extends StatelessWidget {
   const _DetailLeaf({
     required this.indent,
-    required this.icon,
-    required this.iconColor,
+    required this.leading,
     required this.name,
     this.detail,
     this.onTap,
   });
 
   final int indent;
-  final IconData icon;
-  final Color iconColor;
+  final Widget leading;
   final String name;
   final String? detail;
   final VoidCallback? onTap;
@@ -1199,7 +1203,11 @@ class _DetailLeaf extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(icon, size: 12, color: iconColor),
+              SizedBox(
+                width: 12,
+                height: 12,
+                child: Center(child: leading),
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Row(
@@ -1210,7 +1218,7 @@ class _DetailLeaf extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTheme.ui(
-                          size: 11.5,
+                          size: 12,
                           color: AppColors.textSecondary,
                           weight: FontWeight.w400,
                           letterSpacing: 0,
@@ -1261,7 +1269,7 @@ class _DetailMessageRow extends StatelessWidget {
       child: Text(
         text,
         style: AppTheme.ui(
-          size: 11,
+          size: 12,
           color: AppColors.textMuted,
           weight: FontWeight.w400,
           letterSpacing: 0,
