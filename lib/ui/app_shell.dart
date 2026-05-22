@@ -809,11 +809,13 @@ class _TbKbd extends StatelessWidget {
             ),
             child: Text(
               parts[i],
+              // height: 1.0 — AppTheme.ui's 1.35 line box would inflate the
+              // chip well past its 13px minHeight.
               style: AppTheme.ui(
                 size: 9,
                 color: AppColors.textSecondary,
                 weight: FontWeight.w500,
-              ),
+              ).copyWith(height: 1.0),
             ),
           ),
         ],
