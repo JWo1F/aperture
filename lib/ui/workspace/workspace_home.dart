@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/connection_config.dart';
+import '../../models/count_format.dart';
 import '../../models/db_object.dart';
 import '../../models/saved_query.dart';
 import '../../models/time_ago.dart';
@@ -516,15 +517,15 @@ class _StatRibbon extends StatelessWidget {
         label: schemas == 1 ? 'schema' : 'schemas',
       ),
       _StatCell(
-        value: loading ? '—' : _compactCount(tables),
+        value: loading ? '—' : compactCount(tables),
         label: tables == 1 ? 'table' : 'tables',
       ),
       _StatCell(
-        value: loading ? '—' : _compactCount(views),
+        value: loading ? '—' : compactCount(views),
         label: views == 1 ? 'view' : 'views',
       ),
       _StatCell(
-        value: loading || totalSize == 0 ? '—' : _compactBytes(totalSize),
+        value: loading || totalSize == 0 ? '—' : compactBytes(totalSize),
         label: 'on disk',
       ),
     ];
@@ -898,7 +899,7 @@ class _SizeBar extends StatelessWidget {
                     const SizedBox(width: 12),
                     if (table.rowEstimate != null) ...[
                       Text(
-                        '${_compactCount(table.rowEstimate!)} rows',
+                        '${compactCount(table.rowEstimate!)} rows',
                         style: AppTheme.mono(
                           size: 10,
                           color: AppColors.textMuted,
@@ -907,7 +908,7 @@ class _SizeBar extends StatelessWidget {
                       const SizedBox(width: 10),
                     ],
                     Text(
-                      _compactBytes(table.sizeBytes!),
+                      compactBytes(table.sizeBytes!),
                       style: AppTheme.mono(
                         size: 11,
                         weight: FontWeight.w600,
@@ -990,7 +991,7 @@ class _TableRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stat = _tableStat(table);
+    final stat = tableStat(table);
     return Hoverable(
       onTap: onTap,
       builder: (context, hovering) => AnimatedContainer(
@@ -1206,50 +1207,4 @@ class _TextAction extends StatelessWidget {
       ),
     );
   }
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// Formatters
-// ──────────────────────────────────────────────────────────────────────────
-
-/// Faint "rows / size" suffix for a table row, e.g. `110k / 10GB`.
-String? _tableStat(DbTable table) {
-  final parts = <String>[
-    if (table.rowEstimate != null) _compactCount(table.rowEstimate!),
-    if (table.sizeBytes != null) _compactBytes(table.sizeBytes!),
-  ];
-  return parts.isEmpty ? null : parts.join(' / ');
-}
-
-/// Human-friendly row count: `940`, `1.2k`, `110k`, `3.4M`, `2.1B`.
-String _compactCount(int n) {
-  if (n < 1000) return '$n';
-  if (n < 1000000) {
-    final k = n / 1000;
-    return k >= 99.95 ? '${k.round()}k' : '${k.toStringAsFixed(1)}k';
-  }
-  if (n < 1000000000) {
-    final m = n / 1000000;
-    return m >= 99.95 ? '${m.round()}M' : '${m.toStringAsFixed(1)}M';
-  }
-  return '${(n / 1000000000).toStringAsFixed(1)}B';
-}
-
-/// Human-friendly byte size: `512B`, `48KB`, `10GB`, `1.4TB`.
-String _compactBytes(int bytes) {
-  const kb = 1024.0;
-  const mb = kb * 1024;
-  const gb = mb * 1024;
-  const tb = gb * 1024;
-  if (bytes < kb) return '${bytes}B';
-  if (bytes < mb) return '${(bytes / kb).round()}KB';
-  if (bytes < gb) {
-    final v = bytes / mb;
-    return v >= 99.95 ? '${v.round()}MB' : '${v.toStringAsFixed(1)}MB';
-  }
-  if (bytes < tb) {
-    final v = bytes / gb;
-    return v >= 99.95 ? '${v.round()}GB' : '${v.toStringAsFixed(1)}GB';
-  }
-  return '${(bytes / tb).toStringAsFixed(1)}TB';
 }
