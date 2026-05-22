@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import '../../../theme/app_theme.dart';
 import '../../cell_picker/cell_picker.dart';
 import '../../widgets/common.dart';
 import 'cell_context_menu.dart';
+import 'cell_style.dart';
 import 'column_widths.dart';
 import 'format_cache.dart';
 import 'grid_metrics.dart';
@@ -140,6 +142,16 @@ class _ResultsGridState extends State<ResultsGrid> {
 
   BuildContext? _bodyCtx;
 
+  // Hover tooltip — a single overlay owned by the grid. Per-cell Tooltip
+  // widgets each spun up an AnimationController on build, so a scroll frame
+  // that built 15 fresh rows allocated dozens of them; one pointer-driven
+  // overlay removes that churn.
+  final OverlayPortalController _tooltipCtrl = OverlayPortalController();
+  Timer? _tooltipTimer;
+  (int, int)? _tooltipCell;
+  String _tooltipText = '';
+  Rect _tooltipAnchor = Rect.zero;
+
   int? get _selRow => _selection.value.focus?.$1;
 
   int? get _selCol => _selection.value.focus?.$2;
@@ -166,6 +178,7 @@ class _ResultsGridState extends State<ResultsGrid> {
     if (resultChanged) {
       _selection.reset();
       _formatCache.clear();
+      _dismissTooltip();
     }
     if (!_widths.matches(widget.result.columns) || resultChanged) {
       _syncWidths();
@@ -177,6 +190,7 @@ class _ResultsGridState extends State<ResultsGrid> {
 
   @override
   void dispose() {
+    _tooltipTimer?.cancel();
     _hBody.dispose();
     _vBody.dispose();
     _vIndex.dispose();
@@ -383,6 +397,94 @@ class _ResultsGridState extends State<ResultsGrid> {
       origin.dy + viewportY,
       _widths[col],
       kRowHeight,
+    );
+  }
+
+  // --- hover tooltip ---------------------------------------------------
+
+  /// Pointer moved within the grid body — (re)arm the hover tooltip for the
+  /// cell now under the cursor. A miss on the same cell is a cheap no-op so
+  /// ordinary mouse movement doesn't restart the timer.
+  void _handleCellHover(BuildContext bodyCtx, Offset localPos) {
+    final cell = _cellAt(localPos);
+    if (cell == _tooltipCell) return;
+    _tooltipCell = cell;
+    _tooltipTimer?.cancel();
+    if (_tooltipCtrl.isShowing) _tooltipCtrl.hide();
+    if (cell == null) return;
+    _tooltipTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      final text = _tooltipFor(cell.$1, cell.$2);
+      if (text == null) return;
+      _tooltipText = text;
+      _tooltipAnchor = _cellRect(bodyCtx, cell.$1, cell.$2);
+      _tooltipCtrl.show();
+    });
+  }
+
+  void _dismissTooltip() {
+    _tooltipTimer?.cancel();
+    _tooltipCell = null;
+    if (_tooltipCtrl.isShowing) _tooltipCtrl.hide();
+  }
+
+  /// Tooltip text for a cell, or null when one isn't warranted. Mirrors the
+  /// display branches in [GridRow] — structured values always get a tooltip,
+  /// plain text only once it's long enough to be clipped.
+  String? _tooltipFor(int row, int column) {
+    final pending = _pendingFor(row, column);
+    if (pending is CellDefault) return null;
+    final original = _originalAt(row, column);
+    final isEdited = pending != null && !_isInsertRow(row);
+    final String? value = pending is CellLiteral
+        ? pending.value
+        : _formatCache.format(_slots[row].sourceIdx, column, original);
+    if (value == null) return null;
+    final structured = !isEdited && (original is Map || original is List);
+    if (structured || wantsTooltip(original, value)) {
+      return truncateForTooltip(value);
+    }
+    return null;
+  }
+
+  Widget _buildHoverTooltip(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    const maxWidth = 360.0;
+    const gap = 6.0;
+    final double left = _tooltipAnchor.left
+        .clamp(8.0, math.max(8.0, screen.width - maxWidth - 8.0))
+        .toDouble();
+    // Prefer above the cell; flip below when the cell sits too near the top
+    // edge for a few wrapped lines to fit.
+    final above = _tooltipAnchor.top >= 170.0;
+    return Positioned(
+      left: left,
+      top: above ? null : _tooltipAnchor.bottom + gap,
+      bottom: above ? screen.height - _tooltipAnchor.top + gap : null,
+      child: IgnorePointer(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: maxWidth),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceAlt,
+              borderRadius: Radii.brSm,
+              border: Border.all(color: AppColors.borderStrong),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadow,
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Text(
+              _tooltipText,
+              style: AppTheme.mono(size: 11.5, color: AppColors.textPrimary),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -687,111 +789,128 @@ class _ResultsGridState extends State<ResultsGrid> {
         final bodyWidth = dataWidth < constraints.maxWidth
             ? constraints.maxWidth
             : dataWidth;
-        return RepaintBoundary(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (n) {
-              if (n.metrics.axis == Axis.vertical && _vIndex.hasClients) {
-                final target = _vBody.hasClients ? _vBody.offset : 0.0;
-                if ((_vIndex.position.pixels - target).abs() > 0.01) {
-                  _vIndex.jumpTo(
-                    target.clamp(
-                      _vIndex.position.minScrollExtent,
-                      _vIndex.position.maxScrollExtent,
-                    ),
-                  );
+        return OverlayPortal(
+          controller: _tooltipCtrl,
+          overlayChildBuilder: _buildHoverTooltip,
+          child: RepaintBoundary(
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (n) {
+                // Any scroll slides cells out from under the cursor — drop a
+                // pending or visible hover tooltip rather than leave it
+                // anchored to a stale position.
+                _dismissTooltip();
+                if (n.metrics.axis == Axis.vertical && _vIndex.hasClients) {
+                  final target = _vBody.hasClients ? _vBody.offset : 0.0;
+                  if ((_vIndex.position.pixels - target).abs() > 0.01) {
+                    _vIndex.jumpTo(
+                      target.clamp(
+                        _vIndex.position.minScrollExtent,
+                        _vIndex.position.maxScrollExtent,
+                      ),
+                    );
+                  }
                 }
-              }
-              return false;
-            },
-            child: SingleChildScrollView(
-              controller: _hBody,
-              scrollDirection: Axis.horizontal,
-              child: SizedBox(
-                width: bodyWidth,
-                child: Builder(
-                  builder: (bodyCtx) {
-                    _bodyCtx = bodyCtx;
-                    return Listener(
-                      behavior: HitTestBehavior.translucent,
-                      onPointerDown: (e) {
-                        final cell = _cellAt(e.localPosition);
-                        if (cell == null) return;
-                        _selection.beginPointer(cell.$1, cell.$2);
-                        if (!_gridFocus.hasFocus) _gridFocus.requestFocus();
-                      },
-                      onPointerMove: (e) {
-                        if (!_selection.isDragging) return;
-                        final cell = _cellAt(e.localPosition);
-                        if (cell == null) return;
-                        _selection.extendDrag(cell.$1, cell.$2);
-                      },
-                      onPointerUp: (_) => _selection.endDrag(),
-                      onPointerCancel: (_) => _selection.endDrag(),
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onDoubleTapDown: widget.editable
-                            ? (d) {
-                                final cell = _cellAt(d.localPosition);
-                                if (cell == null) return;
-                                final (r, c) = cell;
-                                _openCellPicker(
-                                  bodyCtx,
-                                  r,
-                                  c,
-                                  _originalAt(r, c),
-                                );
-                              }
-                            : null,
-                        onSecondaryTapDown: (d) {
-                          final cell = _cellAt(d.localPosition);
-                          if (cell == null) return;
-                          final (r, c) = cell;
-                          if (!_selection.value.contains(r, c)) {
-                            _selection.selectCell(r, c);
+                return false;
+              },
+              child: SingleChildScrollView(
+                controller: _hBody,
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: bodyWidth,
+                  child: Builder(
+                    builder: (bodyCtx) {
+                      _bodyCtx = bodyCtx;
+                      return MouseRegion(
+                        onHover: (e) =>
+                            _handleCellHover(bodyCtx, e.localPosition),
+                        onExit: (_) => _dismissTooltip(),
+                        child: Listener(
+                          behavior: HitTestBehavior.translucent,
+                          onPointerDown: (e) {
+                            _dismissTooltip();
+                            final cell = _cellAt(e.localPosition);
+                            if (cell == null) return;
+                            _selection.beginPointer(cell.$1, cell.$2);
                             if (!_gridFocus.hasFocus) {
                               _gridFocus.requestFocus();
                             }
-                          }
-                          _openCellMenu(
-                            bodyCtx,
-                            d.globalPosition,
-                            r,
-                            c,
-                            _originalAt(r, c),
-                          );
-                        },
-                        child: ListView.builder(
-                          controller: _vBody,
-                          itemCount: _totalRowCount,
-                          itemExtent: kRowHeight,
-                          // Rows hold no local state (selection lives in a
-                          // ValueNotifier). Skipping per-child keepalives
-                          // saves a widget allocation per row scrolled in.
-                          addAutomaticKeepAlives: false,
-                          itemBuilder: (_, r) {
-                            final slot = _slots[r];
-                            final values = slot.isInsert
-                                ? const <Object?>[]
-                                : result.rows[slot.sourceIdx];
-                            return GridRow(
-                              row: r,
-                              sourceIdx: slot.sourceIdx,
-                              isInsert: slot.isInsert,
-                              isDeleted: _isDeletedRow(r),
-                              values: values,
-                              rowWidth: bodyWidth,
-                              columns: result.columns,
-                              columnMeta: widget.columnMeta,
-                              widths: _widths,
-                              selection: _selection,
-                              pendingFor: (col) => _pendingFor(r, col),
-                              formatCache: _formatCache,
-                            );
                           },
+                          onPointerMove: (e) {
+                            if (!_selection.isDragging) return;
+                            final cell = _cellAt(e.localPosition);
+                            if (cell == null) return;
+                            _selection.extendDrag(cell.$1, cell.$2);
+                          },
+                          onPointerUp: (_) => _selection.endDrag(),
+                          onPointerCancel: (_) => _selection.endDrag(),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.translucent,
+                            onDoubleTapDown: widget.editable
+                                ? (d) {
+                                    final cell = _cellAt(d.localPosition);
+                                    if (cell == null) return;
+                                    final (r, c) = cell;
+                                    _openCellPicker(
+                                      bodyCtx,
+                                      r,
+                                      c,
+                                      _originalAt(r, c),
+                                    );
+                                  }
+                                : null,
+                            onSecondaryTapDown: (d) {
+                              final cell = _cellAt(d.localPosition);
+                              if (cell == null) return;
+                              final (r, c) = cell;
+                              if (!_selection.value.contains(r, c)) {
+                                _selection.selectCell(r, c);
+                                if (!_gridFocus.hasFocus) {
+                                  _gridFocus.requestFocus();
+                                }
+                              }
+                              _openCellMenu(
+                                bodyCtx,
+                                d.globalPosition,
+                                r,
+                                c,
+                                _originalAt(r, c),
+                              );
+                            },
+                            child: ListView.builder(
+                              controller: _vBody,
+                              itemCount: _totalRowCount,
+                              itemExtent: kRowHeight,
+                              // Rows hold no local state (selection lives in
+                              // a ValueNotifier). Skipping per-child
+                              // keepalives saves a widget allocation per row
+                              // scrolled in.
+                              addAutomaticKeepAlives: false,
+                              itemBuilder: (_, r) {
+                                final slot = _slots[r];
+                                final values = slot.isInsert
+                                    ? const <Object?>[]
+                                    : result.rows[slot.sourceIdx];
+                                return GridRow(
+                                  row: r,
+                                  sourceIdx: slot.sourceIdx,
+                                  isInsert: slot.isInsert,
+                                  isDeleted: _isDeletedRow(r),
+                                  values: values,
+                                  rowWidth: bodyWidth,
+                                  columns: result.columns,
+                                  columnMeta: widget.columnMeta,
+                                  widths: _widths,
+                                  selection: _selection,
+                                  pendingFor: (col) => _pendingFor(r, col),
+                                  formatCache: _formatCache,
+                                );
+                              },
+                            ),
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
             ),

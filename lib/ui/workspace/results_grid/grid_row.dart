@@ -170,8 +170,6 @@ class GridRow extends StatelessWidget {
     final isEdited = pending != null && !isInsert;
 
     final Widget content;
-    final bool tooltipUseful;
-    final String tooltipText;
 
     if (pending is CellDefault) {
       content = Text(
@@ -181,8 +179,6 @@ class GridRow extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       );
-      tooltipUseful = false;
-      tooltipText = 'DEFAULT';
     } else {
       // Pending edits (raw user-typed strings) bypass the cache — they can
       // change on every keystroke. Original values flow through the cache.
@@ -190,21 +186,17 @@ class GridRow extends StatelessWidget {
       final String? displayValue = fromPending
           ? pending.value
           : formatCache.format(sourceIdx, column, original);
-      final bool isNull = displayValue == null;
 
-      if (isNull) {
+      if (displayValue == null) {
         content = Text(
           'NULL',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: gridNullStyle,
         );
-        tooltipUseful = false;
-        tooltipText = 'NULL';
       } else {
         // The cell paints one ellipsized line — render a length-capped
         // string so the layout engine never shapes a multi-kilobyte value.
-        // Tooltips still receive the full [displayValue].
         final String display = fromPending
             ? truncateForCell(displayValue)
             : formatCache.displayText(sourceIdx, column, original)!;
@@ -215,8 +207,6 @@ class GridRow extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           );
-          tooltipUseful = true;
-          tooltipText = truncateForTooltip(displayValue);
         } else {
           content = Text(
             display,
@@ -231,25 +221,13 @@ class GridRow extends StatelessWidget {
                     ),
             ),
           );
-          tooltipUseful = wantsTooltip(original, displayValue);
-          tooltipText = truncateForTooltip(displayValue);
         }
       }
     }
 
-    Widget rendered = content;
-    if (tooltipUseful) {
-      rendered = Tooltip(
-        message: tooltipText,
-        waitDuration: const Duration(milliseconds: 300),
-        preferBelow: false,
-        textStyle: AppTheme.mono(size: 11.5, color: AppColors.textPrimary),
-        child: rendered,
-      );
-    }
-
-    // Pointer handling lives at the body level — cells reduce to a sized
-    // Container, which keeps the per-row widget allocation small.
+    // Pointer handling and hover tooltips live at the body level — cells
+    // reduce to a sized Container, which keeps the per-row widget allocation
+    // small. See ResultsGrid._handleCellHover for the single hover overlay.
     final cell = Container(
       width: widths[column],
       height: kRowHeight,
@@ -263,7 +241,7 @@ class GridRow extends StatelessWidget {
               ),
             )
           : null,
-      child: rendered,
+      child: content,
     );
     // Dim deleted cells without losing legibility — pairs with the red row
     // tint + stripe for an unmistakable "going away" read.
