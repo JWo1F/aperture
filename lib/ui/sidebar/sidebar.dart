@@ -1259,48 +1259,54 @@ class _LiveDotState extends State<_LiveDot>
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 12,
-      height: 12,
-      child: AnimatedBuilder(
-        animation: _ctrl,
-        builder: (context, _) {
-          final t = _ctrl.value;
-          final ringOpacity = widget.pulse ? (1 - t) * 0.45 : 0.0;
-          final ringSize = widget.pulse ? 5 + t * 7 : 0.0;
-          return Stack(
-            alignment: Alignment.center,
-            children: [
-              if (widget.pulse)
-                Container(
-                  width: ringSize,
-                  height: ringSize,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: widget.color.withValues(alpha: ringOpacity),
-                      width: 1,
+    // The pulse repeats for as long as the connection is live. Without a
+    // boundary its 60fps markNeedsPaint bubbles up and repaints the whole
+    // sidebar every frame; the boundary confines the repaint to this 12px
+    // layer and leaves the sidebar composited from cache.
+    return RepaintBoundary(
+      child: SizedBox(
+        width: 12,
+        height: 12,
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (context, _) {
+            final t = _ctrl.value;
+            final ringOpacity = widget.pulse ? (1 - t) * 0.45 : 0.0;
+            final ringSize = widget.pulse ? 5 + t * 7 : 0.0;
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                if (widget.pulse)
+                  Container(
+                    width: ringSize,
+                    height: ringSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: widget.color.withValues(alpha: ringOpacity),
+                        width: 1,
+                      ),
                     ),
                   ),
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: widget.color,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: widget.color.withValues(alpha: 0.5),
+                        blurRadius: 4,
+                        spreadRadius: 0,
+                      ),
+                    ],
+                  ),
                 ),
-              Container(
-                width: 5,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: widget.color,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: widget.color.withValues(alpha: 0.5),
-                      blurRadius: 4,
-                      spreadRadius: 0,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }
