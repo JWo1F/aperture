@@ -17,7 +17,7 @@ import '../widgets/pagebar.dart';
 import '../widgets/resize_handle.dart';
 import 'query_messages_view.dart';
 import 'query_plan_view.dart';
-import 'results_grid.dart';
+import 'results_grid/results_grid.dart';
 
 /// Syntax-highlighted SQL editor over the result grid.
 ///

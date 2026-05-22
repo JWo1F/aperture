@@ -12,7 +12,7 @@ import '../edits/pending_edits_modal.dart';
 import '../widgets/code_editor.dart';
 import '../widgets/common.dart';
 import '../widgets/pagebar.dart';
-import 'results_grid.dart';
+import 'results_grid/results_grid.dart';
 
 /// Data view for a single relation: a toolbar with row filter, sort, and
 /// pending-edit actions, the editable row grid, and a pagination footer.
