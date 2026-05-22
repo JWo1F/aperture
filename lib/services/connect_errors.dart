@@ -24,6 +24,17 @@ FriendlyConnectError friendlyConnectError(
   ConnectionConfig config,
 ) {
   final detail = error.toString();
+
+  if (config.engine == DbEngine.sqlite) {
+    // SQLite failures are file-level (missing path, permission, corrupt
+    // header) — the driver/IO message is already actionable; just strip a
+    // leading `Exception:` prefix from our own pre-flight checks.
+    return FriendlyConnectError(
+      message: detail.replaceFirst(RegExp(r'^Exception:\s*'), ''),
+      detail: detail,
+    );
+  }
+
   final host = '${config.host}:${config.port}';
 
   if (error is SocketException) {

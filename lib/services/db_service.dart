@@ -4,6 +4,7 @@ import '../models/db_object.dart';
 import '../models/query_result.dart';
 import 'introspector.dart';
 import 'postgres_service.dart';
+import 'sqlite_service.dart';
 
 export '../models/cell_edit.dart' show EditBatch, PendingInsert;
 export 'introspector.dart' show Introspector;
@@ -103,6 +104,9 @@ DbService createDbService(
     onQueryRun: onQueryRun,
     onEditApplied: onEditApplied,
   ),
-  // SqliteService is wired into this branch once the SQLite driver lands.
-  DbEngine.sqlite => throw UnimplementedError('SQLite engine not yet wired'),
+  DbEngine.sqlite => SqliteService(
+    config,
+    onQueryRun: onQueryRun,
+    onEditApplied: onEditApplied,
+  ),
 };
