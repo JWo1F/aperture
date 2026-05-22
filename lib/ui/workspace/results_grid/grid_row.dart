@@ -5,8 +5,10 @@ import '../../../models/cell_edit.dart';
 import '../../../models/db_object.dart';
 import '../../../theme/app_theme.dart';
 import 'cell_content.dart';
+import 'cell_style.dart';
 import 'column_widths.dart';
 import 'format_cache.dart';
+import 'grid_cell.dart';
 import 'grid_metrics.dart';
 import 'grid_selection.dart';
 
@@ -66,21 +68,15 @@ class GridRow extends StatelessWidget {
           final segments = sel.rowSegments(row);
           final hasSelection = segments.isNotEmpty;
           // Insert / delete row tints layer below the selection tint so a
-          // selected pending-insert still reads as selected.
-          final Color baseBg = isInsert
-              ? AppColors.gridRowInsert
-              : isDeleted
-              ? AppColors.gridRowDelete
-              : Colors.transparent;
-          final Color hoverBg = hovering
-              ? AppColors.gridRowHover
-              : Colors.transparent;
-          final Color selectionBg = hasSelection
-              ? AppColors.gridRowSelection
-              : Colors.transparent;
-          final bg = Color.alphaBlend(
-            selectionBg,
-            Color.alphaBlend(hoverBg, baseBg),
+          // selected pending-insert still reads as selected. The row paints
+          // hover / selection / focus once at the row level (overlay below),
+          // so [GridCell] is told not to repaint those — only the per-cell
+          // edit decoration lives inside each cell.
+          final bg = gridRowFill(
+            isInsert: isInsert,
+            isDeleted: isDeleted,
+            isHovered: hovering,
+            isRowSelected: hasSelection,
           );
 
           final body = Container(
@@ -169,8 +165,12 @@ class GridRow extends StatelessWidget {
     // already accent-tinted, so per-cell highlighting becomes noise.
     final isEdited = pending != null && !isInsert;
 
-    final content = Text.rich(
-      gridCellSpan(
+    return GridCell(
+      width: widths[column],
+      isInsert: isInsert,
+      isDeleted: isDeleted,
+      isEdited: isEdited,
+      content: gridCellSpan(
         pending: pending,
         isInsert: isInsert,
         sourceIdx: sourceIdx,
@@ -179,34 +179,7 @@ class GridRow extends StatelessWidget {
         formatCache: formatCache,
         dataType: columnMeta?[columns[column]]?.dataType,
       ),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
     );
-
-    // Pointer handling and the hover expansion live at the body level — cells
-    // reduce to a sized Container, which keeps the per-row widget allocation
-    // small. See ResultsGrid._handleCellHover for the single hover overlay.
-    // The right hairline draws the column separator (the header cells carry
-    // the matching one); an edited cell adds the accent stripe on the left.
-    final cell = Container(
-      width: widths[column],
-      height: kRowHeight,
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(horizontal: 9),
-      decoration: BoxDecoration(
-        color: isEdited ? AppColors.accentSoft : null,
-        border: Border(
-          right: BorderSide(color: AppColors.hairline, width: 1),
-          left: isEdited
-              ? BorderSide(color: AppColors.accent, width: 2)
-              : BorderSide.none,
-        ),
-      ),
-      child: content,
-    );
-    // Dim deleted cells without losing legibility — pairs with the red row
-    // tint + stripe for an unmistakable "going away" read.
-    return isDeleted ? Opacity(opacity: 0.55, child: cell) : cell;
   }
 }
 

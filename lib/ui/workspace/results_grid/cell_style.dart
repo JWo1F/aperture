@@ -1,6 +1,34 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+
+/// Translucent row-state overlay blended in this order: insert/delete base,
+/// then hover, then selection. Returns a partially-transparent colour so the
+/// caller can either paint it over the (transparent) grid background as the
+/// row does, or pre-blend it over an opaque backdrop as the hover expansion
+/// does for its standalone overlay.
+Color gridRowFill({
+  required bool isInsert,
+  required bool isDeleted,
+  required bool isHovered,
+  required bool isRowSelected,
+}) {
+  final Color baseBg = isInsert
+      ? AppColors.gridRowInsert
+      : isDeleted
+      ? AppColors.gridRowDelete
+      : Colors.transparent;
+  final Color hoverBg = isHovered
+      ? AppColors.gridRowHover
+      : Colors.transparent;
+  final Color selectionBg = isRowSelected
+      ? AppColors.gridRowSelection
+      : Colors.transparent;
+  return Color.alphaBlend(
+    selectionBg,
+    Color.alphaBlend(hoverBg, baseBg),
+  );
+}
 
 /// Type-aware foreground colour for a cell value. The runtime value class
 /// decides first; for nulls and plain strings the catalog [dataType] is the

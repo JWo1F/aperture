@@ -15,6 +15,7 @@ import 'cell_content.dart';
 import 'cell_context_menu.dart';
 import 'column_widths.dart';
 import 'format_cache.dart';
+import 'grid_cell.dart';
 import 'grid_metrics.dart';
 import 'grid_row.dart';
 import 'grid_selection.dart';
@@ -448,10 +449,10 @@ class _ResultsGridState extends State<ResultsGrid> {
   }
 
   /// An exact clone of the hovered cell, grown rightward so its full value
-  /// fits on one line. Replicates the cell's background, edit decoration,
-  /// selection tint and focus ring so it reads as the cell itself widening.
-  /// Width spans from the value's natural width (min: the column) up to the
-  /// data viewport's right edge.
+  /// fits on one line. Width spans from the value's natural width (min: the
+  /// column) up to the data viewport's right edge. The visual contract —
+  /// row-fill blend, edit decoration, focus ring, deleted-row dimming — is
+  /// shared with [GridRow] through [GridCell].
   Widget _expansionCell(
     BuildContext bodyCtx,
     int row,
@@ -475,100 +476,39 @@ class _ResultsGridState extends State<ResultsGrid> {
     final isInsert = slot.isInsert;
     final isDeleted = _isDeletedRow(row);
     final pending = _pendingFor(row, column);
-    final isEdited = pending != null && !isInsert;
-
-    // Background — mirrors GridRow: an insert/delete base, the hover tint
-    // (the cell is hovered, by definition), and the row-wide selection tint
-    // when any cell in the row is selected. Blended onto an opaque grid bg.
-    final baseBg = isInsert
-        ? AppColors.gridRowInsert
-        : isDeleted
-        ? AppColors.gridRowDelete
-        : Colors.transparent;
-    final rowBg = Color.alphaBlend(
-      sel.rowSegments(row).isNotEmpty
-          ? AppColors.gridRowSelection
-          : Colors.transparent,
-      Color.alphaBlend(AppColors.gridRowHover, baseBg),
-    );
-    var fill = Color.alphaBlend(rowBg, AppColors.bg);
-    if (isEdited) fill = Color.alphaBlend(AppColors.accentSoft, fill);
-
-    final isSelectedCell = sel.contains(row, column);
-    final isFocusCell = sel.focus == (row, column);
-
-    final span = gridCellSpan(
-      pending: pending,
-      isInsert: isInsert,
-      sourceIdx: slot.sourceIdx,
-      column: column,
-      original: _originalAt(row, column),
-      formatCache: _formatCache,
-      dataType: widget.columnMeta?[widget.result.columns[column]]?.dataType,
-      maxChars: kExpandedMaxChars,
-    );
-
-    // The cell sizes to its own value: at least the column width, at most
-    // the distance to the viewport's right edge. Letting the Text lay itself
-    // out — rather than pre-measuring with a TextPainter — means the box hugs
-    // the real glyph run exactly, so no value is clipped a few characters
-    // short of the border. The Align hugs the text horizontally (widthFactor)
-    // while still centring it in the row vertically.
-    Widget cell = ConstrainedBox(
-      constraints: BoxConstraints(minWidth: colWidth, maxWidth: maxWidth),
-      child: Container(
-        height: kRowHeight,
-        padding: const EdgeInsets.symmetric(horizontal: 9),
-        decoration: BoxDecoration(
-          color: fill,
-          border: Border(
-            right: BorderSide(color: AppColors.hairline, width: 1),
-            bottom: BorderSide(color: AppColors.hairline, width: 1),
-            left: isEdited
-                ? BorderSide(color: AppColors.accent, width: 2)
-                : BorderSide.none,
-          ),
-        ),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          widthFactor: 1,
-          child: Text.rich(
-            span,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ),
-    );
-
-    if (isSelectedCell || isFocusCell) {
-      cell = Stack(
-        children: [
-          cell,
-          if (isSelectedCell)
-            Positioned.fill(
-              child: ColoredBox(color: AppColors.gridRowSelection),
-            ),
-          if (isFocusCell)
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.fromBorderSide(
-                    BorderSide(color: AppColors.accent, width: 1.5),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      );
-    }
-
-    if (isDeleted) cell = Opacity(opacity: 0.55, child: cell);
 
     return Positioned(
       left: rect.left,
       top: rect.top,
-      child: IgnorePointer(child: cell),
+      child: IgnorePointer(
+        child: GridCell(
+          width: colWidth,
+          maxWidth: maxWidth,
+          isInsert: isInsert,
+          isDeleted: isDeleted,
+          isEdited: pending != null && !isInsert,
+          // The expansion is standalone — it paints the row's hover/selection
+          // tints itself (hovered by definition) and pre-blends them over an
+          // opaque grid bg so they don't vanish into whatever sits behind.
+          isHovered: true,
+          isRowSelected: sel.rowSegments(row).isNotEmpty,
+          isSelected: sel.contains(row, column),
+          isFocus: sel.focus == (row, column),
+          backdrop: AppColors.bg,
+          bottomBorder: true,
+          content: gridCellSpan(
+            pending: pending,
+            isInsert: isInsert,
+            sourceIdx: slot.sourceIdx,
+            column: column,
+            original: _originalAt(row, column),
+            formatCache: _formatCache,
+            dataType:
+                widget.columnMeta?[widget.result.columns[column]]?.dataType,
+            maxChars: kExpandedMaxChars,
+          ),
+        ),
+      ),
     );
   }
 
