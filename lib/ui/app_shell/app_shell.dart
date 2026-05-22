@@ -5,6 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
+import '../../state/event_log.dart';
+import '../../state/preferences_controller.dart';
+import '../../state/session_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../command_palette/command_palette.dart';
@@ -136,13 +139,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // out of this widget's rebuild path. The sidebar / log-panel /
     // workspace subtrees subscribe to their own state independently.
     final state = context.read<AppState>();
-    final status = context.select<AppState, ConnectionStatus>((s) => s.status);
-    final sidebarVisible = context.select<AppState, bool>(
-      (s) => s.sidebarVisible,
+    final status = context.select<SessionController, ConnectionStatus>(
+      (s) => s.status,
     );
-    final logVisible = context.select<AppState, bool>(
-      (s) => s.eventLog.isVisible,
+    final sidebarVisible = context.select<PreferencesController, bool>(
+      (p) => p.sidebarVisible,
     );
+    final logVisible = context.select<EventLog, bool>((l) => l.isVisible);
     final connected = status == ConnectionStatus.connected;
     final lost = status == ConnectionStatus.lost;
     final showWorkspace = connected || lost;

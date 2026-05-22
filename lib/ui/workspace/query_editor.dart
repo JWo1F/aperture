@@ -9,6 +9,7 @@ import '../../models/query_result.dart';
 import '../../services/sql_complete.dart';
 import '../../services/sql_statements.dart';
 import '../../state/app_state.dart';
+import '../../state/preferences_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/code_editor.dart';
@@ -190,8 +191,8 @@ class _QueryEditorState extends State<QueryEditor> {
     // state we still need to react to is the editor/results split — pulled
     // narrowly so a sidebar drag doesn't reach this widget.
     final state = context.read<AppState>();
-    final fraction = context.select<AppState, double>(
-      (s) => s.preferences.queryResultsFraction,
+    final fraction = context.select<PreferencesController, double>(
+      (p) => p.queryResultsFraction,
     );
     final tab = widget.tab;
 

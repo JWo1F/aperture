@@ -5,6 +5,9 @@ import 'package:macos_window_utils/macos_window_utils.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
+import '../../state/navigation_history.dart';
+import '../../state/preferences_controller.dart';
+import '../../state/tabs_controller.dart';
 import '../../theme/app_theme.dart';
 import '../command_palette/command_palette.dart';
 import 'connection_pill.dart';
@@ -86,17 +89,23 @@ class _ToolbarState extends State<Toolbar> {
     // pending-edit count and the active tab's exportable result are the
     // only fields driving any visible change in here.
     final state = context.read<AppState>();
-    final pending = context.select<AppState, int>((s) => s.unappliedEditCount);
-    final canGoBack = context.select<AppState, bool>((s) => s.canGoBack);
-    final canGoForward = context.select<AppState, bool>((s) => s.canGoForward);
-    final brightness = context.select<AppState, AppBrightness>(
-      (s) => s.brightness,
+    final pending = context.select<TabsController, int>(
+      (t) => t.unappliedEditCount,
+    );
+    final canGoBack = context.select<NavigationHistory, bool>(
+      (h) => h.canGoBack,
+    );
+    final canGoForward = context.select<NavigationHistory, bool>(
+      (h) => h.canGoForward,
+    );
+    final brightness = context.select<PreferencesController, AppBrightness>(
+      (p) => p.brightness,
     );
     // Export availability tracks the active tab's id + its result
     // existence. Selecting both as a record means switching tabs or
     // running a query updates this; mere width drags don't.
-    final exportKey = context.select<AppState, (String?, bool)>((s) {
-      final tab = s.activeTab;
+    final exportKey = context.select<TabsController, (String?, bool)>((t) {
+      final tab = t.activeTab;
       final result = exportableResult(tab);
       return (tab?.id, result != null);
     });

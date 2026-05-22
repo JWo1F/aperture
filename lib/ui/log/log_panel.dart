@@ -5,8 +5,8 @@ import 'package:highlight/languages/pgsql.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/log_event.dart';
-import '../../state/app_state.dart';
 import '../../state/event_log.dart';
+import '../../state/preferences_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
 import '../widgets/common.dart';
@@ -18,16 +18,16 @@ class LogPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.read<AppState>();
     // Width reflects the user's drag on the LogPanel resize handle. We
     // pull it narrowly so a sidebar drag (a separate preferences field
     // notify) doesn't rebuild the log panel.
-    final width = context.select<AppState, double>(
-      (s) => s.preferences.logPanelWidth,
+    final width = context.select<PreferencesController, double>(
+      (p) => p.logPanelWidth,
     );
+    final log = context.read<EventLog>();
     return ListenableBuilder(
-      listenable: state.eventLog,
-      builder: (_, _) => _build(context, state.eventLog, width),
+      listenable: log,
+      builder: (_, _) => _build(context, log, width),
     );
   }
 

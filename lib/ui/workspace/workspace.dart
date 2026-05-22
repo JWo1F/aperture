@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
+import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
@@ -16,16 +16,18 @@ class Workspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tabsKey = context.select<AppState, String>(
-      (s) => s.tabs.map((t) => t.id).join('|'),
+    final tabsKey = context.select<TabsController, String>(
+      (t) => t.tabs.map((tab) => tab.id).join('|'),
     );
-    final activeIndex = context.select<AppState, int>((s) => s.activeTabIndex);
+    final activeIndex = context.select<TabsController, int>(
+      (t) => t.activeIndex,
+    );
 
     if (tabsKey.isEmpty) {
       return const WorkspaceHome();
     }
 
-    final tabs = context.read<AppState>().tabs;
+    final tabs = context.read<TabsController>().tabs;
     return Container(
       color: AppColors.bg,
       child: Column(
@@ -61,15 +63,17 @@ class _TabStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.read<AppState>();
+    final tabsController = context.read<TabsController>();
     // Depend on the tab set itself, not just the active index — closing a
-    // non-active tab leaves activeTabIndex unchanged, and without this the
+    // non-active tab leaves activeIndex unchanged, and without this the
     // strip would keep rendering the already-closed tab.
-    context.select<AppState, String>(
-      (s) => s.tabs.map((t) => t.id).join('|'),
+    context.select<TabsController, String>(
+      (t) => t.tabs.map((tab) => tab.id).join('|'),
     );
-    final tabs = state.tabs;
-    final activeIndex = context.select<AppState, int>((s) => s.activeTabIndex);
+    final tabs = tabsController.tabs;
+    final activeIndex = context.select<TabsController, int>(
+      (t) => t.activeIndex,
+    );
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -96,11 +100,12 @@ class _TabStrip extends StatelessWidget {
                           builder: (_, _) => _Tab(
                             tab: tabs[i],
                             active: i == activeIndex,
-                            onTap: () => state.selectTab(i),
-                            onClose: () => state.closeTab(tabs[i].id),
+                            onTap: () => tabsController.selectTab(i),
+                            onClose: () =>
+                                tabsController.closeTab(tabs[i].id),
                             onContextMenu: (pos) => _showTabMenu(
                               context,
-                              state: state,
+                              tabsController: tabsController,
                               tab: tabs[i],
                               position: pos,
                               canCloseRight: i < tabs.length - 1,
@@ -111,7 +116,7 @@ class _TabStrip extends StatelessWidget {
                   ),
                 ),
               ),
-              _NewTabButton(onTap: state.newQueryTab),
+              _NewTabButton(onTap: tabsController.newQueryTab),
             ],
           ),
         ),
@@ -166,7 +171,7 @@ class _NewTabButton extends StatelessWidget {
 
 void _showTabMenu(
   BuildContext context, {
-  required AppState state,
+  required TabsController tabsController,
   required WorkspaceTab tab,
   required Offset position,
   required bool canCloseRight,
@@ -179,27 +184,27 @@ void _showTabMenu(
         icon: Icons.close,
         label: 'Close',
         shortcut: '⌘W',
-        onTap: () => state.closeTab(tab.id),
+        onTap: () => tabsController.closeTab(tab.id),
       ),
       CmItem(
         icon: Icons.layers_clear_outlined,
         label: 'Close others',
-        enabled: state.tabs.length > 1,
-        onTap: () => state.closeOtherTabs(tab.id),
+        enabled: tabsController.tabs.length > 1,
+        onTap: () => tabsController.closeOtherTabs(tab.id),
       ),
       CmItem(
         icon: Icons.last_page,
         label: 'Close tabs to the right',
         enabled: canCloseRight,
-        onTap: () => state.closeTabsToRight(tab.id),
+        onTap: () => tabsController.closeTabsToRight(tab.id),
       ),
       const CmDivider(),
       CmItem(
         icon: Icons.delete_sweep_outlined,
         label: 'Close all',
-        enabled: state.tabs.isNotEmpty,
+        enabled: tabsController.tabs.isNotEmpty,
         danger: true,
-        onTap: state.closeAllTabs,
+        onTap: tabsController.closeAllTabs,
       ),
     ],
   );

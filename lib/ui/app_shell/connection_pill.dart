@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../models/connection_config.dart';
 import '../../state/app_state.dart';
+import '../../state/connection_registry.dart';
+import '../../state/session_controller.dart';
+import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../connection/connection_dialog.dart';
@@ -67,15 +70,17 @@ class _ConnectionPillState extends State<ConnectionPill> {
     // name, and the schema of the current tab. Subscribe to each slice
     // narrowly so widget-resize ticks and other unrelated notifications
     // don't repaint the pill.
-    final status = context.select<AppState, ConnectionStatus>((s) => s.status);
-    final connName = context.select<AppState, String?>(
+    final status = context.select<SessionController, ConnectionStatus>(
+      (s) => s.status,
+    );
+    final connName = context.select<SessionController, String?>(
       (s) => s.activeConnection?.name,
     );
-    final connColor = context.select<AppState, int?>(
+    final connColor = context.select<SessionController, int?>(
       (s) => s.activeConnection?.color,
     );
-    final schema = context.select<AppState, String>(
-      (s) => _activeSchema(s) ?? 'public',
+    final schema = context.select<TabsController, String>(
+      (t) => _activeSchema(t.activeTab) ?? 'public',
     );
     final tint = AppColors.connectionTint(connColor);
     final (Color dot, String connLabel) = switch (status) {
@@ -175,8 +180,7 @@ class _ConnectionPillState extends State<ConnectionPill> {
     );
   }
 
-  String? _activeSchema(AppState state) {
-    final tab = state.activeTab;
+  String? _activeSchema(WorkspaceTab? tab) {
     if (tab is TableTab) return tab.table.schema;
     if (tab is SchemaTab) return tab.table.schema;
     return null;
@@ -199,8 +203,11 @@ class _ConnectionPickerPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final active = state.activeConnection?.id;
+    final state = context.read<AppState>();
+    final active = context.select<SessionController, String?>(
+      (s) => s.activeConnection?.id,
+    );
+    final connections = context.watch<ConnectionRegistry>().all;
 
     return Material(
       color: Colors.transparent,
@@ -225,7 +232,7 @@ class _ConnectionPickerPanel extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (state.connections.isEmpty)
+              if (connections.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -241,9 +248,9 @@ class _ConnectionPickerPanel extends StatelessWidget {
                   child: ListView.builder(
                     padding: EdgeInsets.zero,
                     shrinkWrap: true,
-                    itemCount: state.connections.length,
+                    itemCount: connections.length,
                     itemBuilder: (_, i) {
-                      final c = state.connections[i];
+                      final c = connections[i];
                       return _ConnPickerRow(
                         config: c,
                         active: c.id == active,

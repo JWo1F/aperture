@@ -8,6 +8,10 @@ import '../../models/db_object.dart';
 import '../../models/saved_query.dart';
 import '../../models/time_ago.dart';
 import '../../state/app_state.dart';
+import '../../state/catalog_controller.dart';
+import '../../state/per_connection_store.dart';
+import '../../state/session_controller.dart';
+import '../../state/tabs_controller.dart';
 import '../../theme/app_theme.dart';
 import '../command_palette/command_palette.dart';
 import '../widgets/common.dart';
@@ -23,12 +27,16 @@ class WorkspaceHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final conn = state.activeConnection;
+    final state = context.read<AppState>();
+    final session = context.watch<SessionController>();
+    final catalog = context.watch<CatalogController>();
+    final perConnection = context.watch<PerConnectionStore>();
+    final tabs = context.read<TabsController>();
+    final conn = session.activeConnection;
     final tint = AppColors.connectionTint(conn?.color);
 
     final relations = [
-      for (final s in state.schemas) ...s.tables,
+      for (final s in catalog.schemas) ...s.tables,
     ];
     final tableCount = relations.where((r) => !r.isView).length;
     final viewCount = relations.where((r) => r.isView).length;
@@ -38,10 +46,10 @@ class WorkspaceHome extends StatelessWidget {
     ]..sort((a, b) => b.sizeBytes!.compareTo(a.sizeBytes!));
     final totalSize = sized.fold<int>(0, (sum, r) => sum + r.sizeBytes!);
 
-    final recents = state.recents;
-    final frequent = state.frequentTables(limit: 6);
+    final recents = perConnection.recents;
+    final frequent = perConnection.frequentTables(limit: 6);
     final jumpBack = recents.isNotEmpty ? recents : frequent;
-    final queries = state.savedQueries;
+    final queries = perConnection.savedQueries;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -69,22 +77,22 @@ class WorkspaceHome extends StatelessWidget {
                         _Hero(
                           connection: conn,
                           tint: tint,
-                          serverVersion: state.serverVersion,
+                          serverVersion: session.serverVersion,
                         ),
                         const SizedBox(height: 26),
                         _StatRibbon(
-                          schemas: state.schemas.length,
+                          schemas: catalog.schemas.length,
                           tables: tableCount,
                           views: viewCount,
                           totalSize: totalSize,
-                          loading:
-                              state.schemas.isEmpty && state.isCatalogLoading,
+                          loading: catalog.schemas.isEmpty &&
+                              catalog.isPhase1Loading,
                         ),
                         const SizedBox(height: 14),
                         _QuickActions(
                           tint: tint,
                           narrow: narrow,
-                          onNewQuery: state.newQueryTab,
+                          onNewQuery: tabs.newQueryTab,
                           onSearch: () => showCommandPalette(context, state),
                         ),
                         const SizedBox(height: 28),
@@ -94,16 +102,16 @@ class WorkspaceHome extends StatelessWidget {
                           jumpIsFrequent: recents.isEmpty && frequent.isNotEmpty,
                           queries: queries,
                           tint: tint,
-                          onOpenTable: state.openTable,
-                          onOpenQuery: state.openSavedQuery,
-                          onNewQuery: state.newQueryTab,
+                          onOpenTable: tabs.openTable,
+                          onOpenQuery: tabs.openSavedQuery,
+                          onNewQuery: tabs.newQueryTab,
                         ),
                         if (sized.isNotEmpty) ...[
                           const SizedBox(height: 24),
                           _LargestTables(
                             tables: sized.take(6).toList(),
                             tint: tint,
-                            onOpen: state.openTable,
+                            onOpen: tabs.openTable,
                           ),
                         ],
                       ],

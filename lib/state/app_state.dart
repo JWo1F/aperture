@@ -33,32 +33,20 @@ typedef PassphraseUnlockRequest = Future<bool> Function();
 ///
 /// Each concern (preferences, connection registry, live session, catalog,
 /// per-connection bags, tabs, navigation history, schema-tree UI) lives in
-/// its own [ChangeNotifier]. [AppState] owns one instance of each, wires
-/// cross-controller flows (e.g. connect → bump catalog generation → reset
-/// tabs → clear navigation history), and re-broadcasts every child's
-/// notifications so existing UI bindings that watch `AppState` continue to
-/// work without churn.
+/// its own [ChangeNotifier]. [AppState] owns one instance of each and wires
+/// the cross-controller flows that span more than one of them (e.g.
+/// connect → bump catalog generation → reset tabs → clear navigation
+/// history).
 ///
-/// New UI code is encouraged to watch the specific controller it cares
-/// about instead (via `context.watch<TabsController>()` or similar) to
-/// avoid rebuilding on unrelated state changes.
+/// The controllers are republished individually into the widget tree (see
+/// `main.dart`'s [MultiProvider]); UI watches the specific controller it
+/// depends on so an unrelated notification — a catalog tick, a cell edit,
+/// a log append — never rebuilds it. [AppState] itself is read
+/// non-reactively (via `context.read`) only to invoke the orchestration
+/// methods below; it deliberately does NOT re-broadcast its children, so
+/// nothing should `watch`/`select` it.
 class AppState extends ChangeNotifier {
   AppState() {
-    _children = [
-      preferences,
-      masterPassphrase,
-      registry,
-      session,
-      catalog,
-      perConnection,
-      tabsController,
-      history,
-      ui,
-      eventLog,
-    ];
-    for (final c in _children) {
-      c.addListener(notifyListeners);
-    }
     unawaited(_hydrate());
   }
 
@@ -90,8 +78,6 @@ class AppState extends ChangeNotifier {
     perConnection: perConnection,
   );
 
-  late final List<ChangeNotifier> _children;
-
   Future<void> _hydrate() async {
     await preferences.hydrate();
     await masterPassphrase.hydrate();
@@ -102,11 +88,7 @@ class AppState extends ChangeNotifier {
 
   AppBrightness get brightness => preferences.brightness;
 
-  void setBrightness(AppBrightness value) => preferences.setBrightness(value);
-
   void toggleBrightness() => preferences.toggleBrightness();
-
-  bool get sidebarVisible => preferences.sidebarVisible;
 
   void toggleSidebar() => preferences.toggleSidebar();
 
@@ -272,15 +254,7 @@ class AppState extends ChangeNotifier {
   DbTable? findPrimaryKeyOwnerByOid(int? sourceRelOid, String columnName) =>
       catalog.findPrimaryKeyOwnerByOid(sourceRelOid, columnName);
 
-  Iterable<String> get loadedColumnNames => catalog.allColumnNames;
-
-  Future<void> ensureColumns(DbTable table) async {}
-
   // --- Schema tree -----------------------------------------------------
-
-  String get sidebarSearch => ui.sidebarSearch;
-
-  void setSidebarSearch(String value) => ui.setSidebarSearch(value);
 
   void toggleSchema(String name) => ui.toggleSchema(name);
 
@@ -292,8 +266,6 @@ class AppState extends ChangeNotifier {
 
   List<WorkspaceTab> get tabs => tabsController.tabs;
 
-  int get activeTabIndex => tabsController.activeIndex;
-
   WorkspaceTab? get activeTab => tabsController.activeTab;
 
   int get unappliedEditCount => tabsController.unappliedEditCount;
@@ -301,15 +273,6 @@ class AppState extends ChangeNotifier {
   void newQueryTab() => tabsController.newQueryTab();
 
   void selectTab(int index) => tabsController.selectTab(index);
-
-  void closeTab(String id) => tabsController.closeTab(id);
-
-  void closeOtherTabs(String keepId) => tabsController.closeOtherTabs(keepId);
-
-  void closeTabsToRight(String anchorId) =>
-      tabsController.closeTabsToRight(anchorId);
-
-  void closeAllTabs() => tabsController.closeAllTabs();
 
   Future<void> openSchema(DbTable table) => tabsController.openSchema(table);
 
@@ -475,9 +438,9 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
-    for (final c in _children) {
-      c.removeListener(notifyListeners);
-    }
+    // AppState owns the controllers' lifecycle. The `.value` providers in
+    // `main.dart` republish these same instances but never dispose them,
+    // so disposal stays here and happens exactly once.
     tabsController.dispose();
     perConnection.dispose();
     history.dispose();

@@ -6,6 +6,7 @@ import '../../models/order_term.dart';
 import '../../models/value_format.dart';
 import '../../services/sql_complete.dart';
 import '../../state/app_state.dart';
+import '../../state/session_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../edits/pending_edits_modal.dart';
@@ -32,7 +33,7 @@ class TableView extends StatelessWidget {
     // in the rest of AppState. readOnly is a connection-level slice
     // selected narrowly.
     final state = context.read<AppState>();
-    final readOnly = context.select<AppState, bool>(
+    final readOnly = context.select<SessionController, bool>(
       (s) => s.activeConnection?.readOnly ?? false,
     );
 
