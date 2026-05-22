@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:macos_window_utils/macos_window_utils.dart';
 import 'package:provider/provider.dart';
@@ -25,8 +27,38 @@ Future<void> main() async {
   runApp(const ApertureApp());
 }
 
-class ApertureApp extends StatelessWidget {
+class ApertureApp extends StatefulWidget {
   const ApertureApp({super.key});
+
+  @override
+  State<ApertureApp> createState() => _ApertureAppState();
+}
+
+class _ApertureAppState extends State<ApertureApp> {
+  late final AppState _appState;
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _appState = AppState();
+    // Pending favourite toggles / recent-table tracks / query autosaves
+    // sit in a 100 ms debounce on `ConnectionStore`. Without draining on
+    // exit, a quick toggle followed by ⌘Q would lose the mutation.
+    _lifecycle = AppLifecycleListener(
+      onExitRequested: () async {
+        await _appState.flush();
+        return AppExitResponse.exit;
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    _appState.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,8 +67,8 @@ class ApertureApp extends StatelessWidget {
     // `.value`, so widgets can watch the one controller they depend on and
     // rebuild granularly. `.value` providers never dispose what they hold —
     // disposal stays with AppState.
-    return ChangeNotifierProvider(
-      create: (_) => AppState(),
+    return ChangeNotifierProvider<AppState>.value(
+      value: _appState,
       child: Builder(
         builder: (context) {
           final appState = context.read<AppState>();

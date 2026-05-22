@@ -157,5 +157,16 @@ class ConnectionRegistry extends ChangeNotifier {
     return config.copyWith(password: '');
   }
 
-  void _persist() => unawaited(_store.save(_connections));
+  /// Funnel every mutation through the store's debounce. A burst of
+  /// per-connection bag updates (favourite toggle, recent track, use-count
+  /// bump, query autosave) coalesces into one write; the underlying
+  /// [AtomicJsonFile] also serializes any writes that do overlap, so
+  /// concurrent mutations can't race on rename(2).
+  void _persist() => _store.saveDebounced(_connections);
+
+  /// Forces any pending debounced write to land and awaits the in-flight
+  /// chain. Called from [AppState.dispose] via [AppState.flush] so the app
+  /// can't quit mid-debounce and silently lose a recently-toggled
+  /// favourite or a freshly-autosaved query.
+  Future<void> flush() => _store.flush();
 }

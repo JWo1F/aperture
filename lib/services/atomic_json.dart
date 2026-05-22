@@ -66,6 +66,11 @@ class AtomicJsonFile {
     return next;
   }
 
+  /// Resolves once every save scheduled before this call has finished. Used
+  /// by [ConnectionStore.flush] on shutdown to make sure pending writes
+  /// reach disk before the process exits.
+  Future<void> drain() => _writeChain;
+
   Future<void> _save(Object data) async {
     final file = await _file();
     final tmp = File('${file.path}.tmp');

@@ -259,6 +259,13 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  /// Drain any pending debounced writes to `connections.json` so a quit
+  /// while a favourite toggle / recent track / query autosave is still
+  /// buffered doesn't lose the mutation. `dispose()` can't be async, so
+  /// the app's shutdown hook (`AppLifecycleListener.onExitRequested`)
+  /// awaits this before letting Cocoa terminate the process.
+  Future<void> flush() => registry.flush();
+
   @override
   void dispose() {
     // AppState owns the controllers' lifecycle. The `.value` providers in
