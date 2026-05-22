@@ -372,10 +372,12 @@ class _AnimatedIris extends StatefulWidget {
 
 class _AnimatedIrisState extends State<_AnimatedIris>
     with SingleTickerProviderStateMixin {
+  // Plays a single 5-second intro flourish — one full rotation and two
+  // aperture breaths — then eases to a stop on a closed, home-rotation iris.
   late final AnimationController _c = AnimationController(
     vsync: this,
-    duration: const Duration(seconds: 14),
-  )..repeat();
+    duration: const Duration(seconds: 5),
+  )..forward();
 
   @override
   void dispose() {
@@ -390,7 +392,7 @@ class _AnimatedIrisState extends State<_AnimatedIris>
         animation: _c,
         builder: (context, child) => CustomPaint(
           painter: _IrisPainter(
-            t: _c.value,
+            t: Curves.easeOutCubic.transform(_c.value),
             tint: widget.tint,
             dim: AppColors.borderStrong,
           ),
@@ -876,7 +878,7 @@ class _SizeBar extends StatelessWidget {
                       color: table.isView ? AppColors.tDate : tint,
                     ),
                     const SizedBox(width: 9),
-                    Flexible(
+                    Expanded(
                       child: Text(
                         table.qualifiedKey,
                         maxLines: 1,
@@ -887,7 +889,7 @@ class _SizeBar extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 12),
                     if (table.rowEstimate != null) ...[
                       Text(
                         '${_compactCount(table.rowEstimate!)} rows',
