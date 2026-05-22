@@ -1,4 +1,4 @@
-# dbv — Project guide for Claude
+# Aperture — Project guide for Claude
 
 A macOS Flutter desktop app: a personal database viewer for PostgreSQL
 and SQLite. Built for **one user** (jwo1f),
