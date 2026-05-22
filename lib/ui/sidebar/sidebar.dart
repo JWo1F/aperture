@@ -1188,7 +1188,7 @@ class _FooterStatus extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _LiveDot(color: color, pulse: connected),
+          _LiveDot(color: color),
           const SizedBox(width: 8),
           Text(
             label,
@@ -1216,96 +1216,33 @@ class _FooterStatus extends StatelessWidget {
   }
 }
 
-class _LiveDot extends StatefulWidget {
-  const _LiveDot({required this.color, required this.pulse});
+/// Steady status dot for the sidebar footer. Deliberately not animated:
+/// a perpetual pulse keeps the whole app rendering at 60fps and never
+/// lets it idle. Status is carried by [color] alone.
+class _LiveDot extends StatelessWidget {
+  const _LiveDot({required this.color});
 
   final Color color;
-  final bool pulse;
-
-  @override
-  State<_LiveDot> createState() => _LiveDotState();
-}
-
-class _LiveDotState extends State<_LiveDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    );
-    if (widget.pulse) _ctrl.repeat();
-  }
-
-  @override
-  void didUpdateWidget(covariant _LiveDot old) {
-    super.didUpdateWidget(old);
-    if (widget.pulse && !_ctrl.isAnimating) {
-      _ctrl.repeat();
-    } else if (!widget.pulse && _ctrl.isAnimating) {
-      _ctrl.stop();
-      _ctrl.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
-    // The pulse repeats for as long as the connection is live. Without a
-    // boundary its 60fps markNeedsPaint bubbles up and repaints the whole
-    // sidebar every frame; the boundary confines the repaint to this 12px
-    // layer and leaves the sidebar composited from cache.
-    return RepaintBoundary(
-      child: SizedBox(
-        width: 12,
-        height: 12,
-        child: AnimatedBuilder(
-          animation: _ctrl,
-          builder: (context, _) {
-            final t = _ctrl.value;
-            final ringOpacity = widget.pulse ? (1 - t) * 0.45 : 0.0;
-            final ringSize = widget.pulse ? 5 + t * 7 : 0.0;
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                if (widget.pulse)
-                  Container(
-                    width: ringSize,
-                    height: ringSize,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: widget.color.withValues(alpha: ringOpacity),
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                Container(
-                  width: 5,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: widget.color,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: widget.color.withValues(alpha: 0.5),
-                        blurRadius: 4,
-                        spreadRadius: 0,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
+    return SizedBox(
+      width: 12,
+      height: 12,
+      child: Center(
+        child: Container(
+          width: 5,
+          height: 5,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.5),
+                blurRadius: 4,
+              ),
+            ],
+          ),
         ),
       ),
     );
