@@ -226,40 +226,20 @@ class SqliteService implements DbService {
       buildSqliteEditStatements(table, batch);
 
   @override
-  Future<int> applyTableEdits(DbTable table, EditBatch batch) async {
-    final watch = Stopwatch()..start();
-    try {
-      final affected = await tableRepository.applyEdits(table, batch);
-      watch.stop();
-      onEditApplied?.call(
-        statementCount: batch.statementCount,
-        elapsed: watch.elapsed,
-        error: null,
-      );
-      return affected;
-    } catch (e) {
-      watch.stop();
-      onEditApplied?.call(
-        statementCount: batch.statementCount,
-        elapsed: watch.elapsed,
-        error: e.toString(),
-      );
-      rethrow;
-    }
-  }
+  Future<int> applyTableEdits(DbTable table, EditBatch batch) => timedEdit(
+    batch: batch,
+    logger: onEditApplied,
+    apply: () => tableRepository.applyEdits(table, batch),
+  );
 
-  /// Reduces `sqlite_version()` (e.g. `3.45.1`) to a `vMAJOR.MINOR` tag.
+  /// Reduces `sqlite_version()` (e.g. `3.45.1`) to a `vMAJOR.MINOR` tag via
+  /// [versionTag].
   @override
   Future<String?> fetchVersionTag() async {
     try {
       final rs = select('SELECT sqlite_version()', log: false);
       if (rs.rows.isEmpty) return null;
-      final s = rs.rows.first.first?.toString().trim() ?? '';
-      if (s.isEmpty) return null;
-      final parts = s.split('.');
-      return parts.length >= 2
-          ? 'v${parts[0]}.${parts[1]}'
-          : 'v${parts.first}';
+      return versionTag(rs.rows.first.first?.toString() ?? '');
     } catch (_) {
       return null;
     }

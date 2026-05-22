@@ -91,6 +91,49 @@ abstract interface class DbService {
   Future<String?> fetchVersionTag();
 }
 
+/// Reduces a raw engine version string (Postgres `16.4 (Homebrew)`, SQLite
+/// `3.45.1`) to a short `vMAJOR.MINOR` tag for the sidebar header. Strips a
+/// trailing parenthetical (Postgres' build label) and keeps only the first
+/// two dotted segments. Returns null for an empty or whitespace-only input.
+String? versionTag(String raw) {
+  final s = raw.trim();
+  if (s.isEmpty) return null;
+  final head = s.split(' ').first;
+  final parts = head.split('.');
+  return parts.length >= 2 ? 'v${parts[0]}.${parts[1]}' : 'v${parts.first}';
+}
+
+/// Times [apply] and reports the outcome to [logger]. Returns the affected
+/// row count from `apply` on success; on failure reports the elapsed time +
+/// error to [logger] and rethrows so the caller still sees the original
+/// driver/engine exception. Shared timing skin around the per-engine
+/// `TableRepository.applyEdits` paths.
+Future<int> timedEdit({
+  required EditBatch batch,
+  required EditLogger? logger,
+  required Future<int> Function() apply,
+}) async {
+  final watch = Stopwatch()..start();
+  try {
+    final affected = await apply();
+    watch.stop();
+    logger?.call(
+      statementCount: batch.statementCount,
+      elapsed: watch.elapsed,
+      error: null,
+    );
+    return affected;
+  } catch (e) {
+    watch.stop();
+    logger?.call(
+      statementCount: batch.statementCount,
+      elapsed: watch.elapsed,
+      error: e.toString(),
+    );
+    rethrow;
+  }
+}
+
 /// Builds the right [DbService] for [config]'s engine. The session
 /// controller calls this instead of constructing a service directly so the
 /// rest of the app never branches on engine.

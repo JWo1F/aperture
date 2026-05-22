@@ -6,11 +6,8 @@ import '../models/query_result.dart';
 import 'driver_decoder.dart';
 import 'postgres_service.dart';
 import 'sql_identifier.dart';
+import 'sql_render.dart';
 import 'table_repository.dart';
-
-List<Object?> _decodeRow(List<Object?> raw) => [
-  for (final v in raw) decodeDriverValue(v),
-];
 
 /// Postgres per-relation operations: paging, exporting, applying cell edits,
 /// building DDL for the schema viewer.
@@ -21,11 +18,6 @@ class PostgresTableRepository implements TableRepository {
   PostgresTableRepository(this._db);
 
   final PostgresService _db;
-
-  String _whereClause(String filter) {
-    final trimmed = filter.trim();
-    return trimmed.isEmpty ? '' : ' WHERE $trimmed';
-  }
 
   /// Expands the user-supplied SELECT list into a projection clause. `*` and
   /// empty become `*` (qualified to `t.*` when the table is aliased);
@@ -54,7 +46,7 @@ class PostgresTableRepository implements TableRepository {
       if (estimate != null) return estimate;
     }
     final result = await _db.execute(
-      'SELECT count(*) FROM ${table.qualifiedName}${_whereClause(filter)}',
+      'SELECT count(*) FROM ${table.qualifiedName}${whereClause(filter)}',
       timeout: _pageQueryTimeout,
     );
     return (result.first.first as int?) ?? 0;
@@ -93,7 +85,7 @@ class PostgresTableRepository implements TableRepository {
     String selectList = '*',
   }) async {
     final watch = Stopwatch()..start();
-    final order = orderBy.trim().isEmpty ? '' : ' ORDER BY ${orderBy.trim()}';
+    final order = orderClause(orderBy);
     final withCtid = table.kind == DbRelationKind.table;
     final projection = _projection(selectList, aliased: withCtid);
     final ctidPrefix = withCtid ? 't.ctid::text AS __ctid, ' : '';
@@ -104,7 +96,7 @@ class PostgresTableRepository implements TableRepository {
       final result = await _db.execute(
         'SELECT $ctidPrefix$projection '
         '$fromClause'
-        '${_whereClause(filter)}'
+        '${whereClause(filter)}'
         '$order '
         'LIMIT $limit OFFSET $offset',
         timeout: _pageQueryTimeout,
@@ -130,9 +122,9 @@ class PostgresTableRepository implements TableRepository {
         final values = row.toList();
         if (withCtid) {
           rowIds!.add(values.first as String);
-          rows.add(_decodeRow(values.sublist(1)));
+          rows.add(decodeDriverRow(values.sublist(1)));
         } else {
-          rows.add(_decodeRow(values));
+          rows.add(decodeDriverRow(values));
         }
       }
 
@@ -162,18 +154,18 @@ class PostgresTableRepository implements TableRepository {
     String orderBy = '',
     String selectList = '*',
   }) async {
-    final order = orderBy.trim().isEmpty ? '' : ' ORDER BY ${orderBy.trim()}';
+    final order = orderClause(orderBy);
     final watch = Stopwatch()..start();
     final projection = _projection(selectList, aliased: false);
     final result = await _db.execute(
       'SELECT $projection FROM ${table.qualifiedName}'
-      '${_whereClause(filter)}$order',
+      '${whereClause(filter)}$order',
     );
     watch.stop();
     final columns = result.schema.columns
         .map((c) => c.columnName ?? 'column')
         .toList();
-    final rows = [for (final r in result) _decodeRow(r.toList())];
+    final rows = [for (final r in result) decodeDriverRow(r.toList())];
     return QueryResult.rows(
       columns: columns,
       rows: rows,
@@ -378,7 +370,7 @@ String _renderUpdate(
   Map<String, CellEditValue> assignments,
 ) {
   final lines = assignments.entries
-      .map((e) => '  ${quoteIdent(e.key)} = ${_renderAssignment(e.value)}')
+      .map((e) => '  ${quoteIdent(e.key)} = ${renderAssignment(e.value)}')
       .join(',\n');
   return 'UPDATE ${table.qualifiedName} SET\n'
       '$lines\n'
@@ -396,21 +388,8 @@ String _renderInsert(DbTable table, PendingInsert insert) {
   final cols = insert.values.keys.toList(growable: false);
   final colList = cols.map(quoteIdent).join(', ');
   final valList = cols
-      .map((c) => _renderAssignment(insert.values[c]!))
+      .map((c) => renderAssignment(insert.values[c]!))
       .join(', ');
   return 'INSERT INTO ${table.qualifiedName} ($colList)\n'
       'VALUES ($valList)';
-}
-
-String _renderAssignment(CellEditValue value) => switch (value) {
-  CellLiteral(:final value) => _literal(value),
-  CellDefault() => 'DEFAULT',
-};
-
-/// Renders a value as a SQL literal. Strings stay untyped ('unknown') so
-/// Postgres coerces them into the target column type; single quotes are
-/// doubled to neutralise injection.
-String _literal(String? value) {
-  if (value == null) return 'NULL';
-  return "'${value.replaceAll("'", "''")}'";
 }

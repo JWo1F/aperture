@@ -31,6 +31,14 @@ Object? decodeDriverValue(Object? raw) {
   return Uint8List.fromList(bytes);
 }
 
+/// Decodes every cell of a Postgres driver row through [decodeDriverValue].
+/// Lives next to the per-value decoder so both Postgres call sites
+/// (`PostgresService.runQuery`, `PostgresTableRepository.fetchPage`) share
+/// one implementation.
+List<Object?> decodeDriverRow(List<Object?> raw) => [
+  for (final v in raw) decodeDriverValue(v),
+];
+
 bool _containsBinaryControlBytes(List<int> bytes) {
   for (final b in bytes) {
     // Allow tab (9), LF (10), CR (13); reject any other sub-space control.

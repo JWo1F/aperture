@@ -4,6 +4,7 @@ import '../models/cell_edit.dart';
 import '../models/db_object.dart';
 import '../models/query_result.dart';
 import 'sql_identifier.dart';
+import 'sql_render.dart';
 import 'sqlite_service.dart';
 import 'table_repository.dart';
 
@@ -17,16 +18,6 @@ class SqliteTableRepository implements TableRepository {
 
   final SqliteService _db;
 
-  String _whereClause(String filter) {
-    final t = filter.trim();
-    return t.isEmpty ? '' : ' WHERE $t';
-  }
-
-  String _orderClause(String orderBy) {
-    final t = orderBy.trim();
-    return t.isEmpty ? '' : ' ORDER BY $t';
-  }
-
   String _projection(String selectList) {
     final t = selectList.trim();
     return t.isEmpty ? '*' : t;
@@ -35,7 +26,7 @@ class SqliteTableRepository implements TableRepository {
   @override
   Future<int> countRows(DbTable table, {String filter = ''}) async {
     final rs = _db.select(
-      'SELECT count(*) FROM ${table.qualifiedName}${_whereClause(filter)}',
+      'SELECT count(*) FROM ${table.qualifiedName}${whereClause(filter)}',
     );
     if (rs.rows.isEmpty) return 0;
     return (rs.rows.first.first as int?) ?? 0;
@@ -56,7 +47,7 @@ class SqliteTableRepository implements TableRepository {
     String selectList = '*',
   }) async {
     final tail =
-        '${_whereClause(filter)}${_orderClause(orderBy)} '
+        '${whereClause(filter)}${orderClause(orderBy)} '
         'LIMIT $limit OFFSET $offset';
     final projection = _projection(selectList);
     final watch = Stopwatch()..start();
@@ -130,7 +121,7 @@ class SqliteTableRepository implements TableRepository {
     final watch = Stopwatch()..start();
     final rs = _db.select(
       'SELECT ${_projection(selectList)} FROM ${table.qualifiedName}'
-      '${_whereClause(filter)}${_orderClause(orderBy)}',
+      '${whereClause(filter)}${orderClause(orderBy)}',
     );
     watch.stop();
     return QueryResult.rows(
@@ -253,7 +244,7 @@ String _renderUpdate(
   Map<String, CellEditValue> assignments,
 ) {
   final lines = assignments.entries
-      .map((e) => '  ${quoteIdent(e.key)} = ${_renderAssignment(e.value)}')
+      .map((e) => '  ${quoteIdent(e.key)} = ${renderAssignment(e.value)}')
       .join(',\n');
   return 'UPDATE ${table.qualifiedName} SET\n$lines\nWHERE rowid = $rowId';
 }
@@ -275,24 +266,10 @@ String _renderInsert(DbTable table, PendingInsert insert) {
   }
   final colList = cols.map(quoteIdent).join(', ');
   final valList = cols
-      .map((c) => _renderAssignment(insert.values[c]!))
+      .map((c) => renderAssignment(insert.values[c]!))
       .join(', ');
   return 'INSERT INTO ${table.qualifiedName} ($colList)\n'
       'VALUES ($valList)';
-}
-
-String _renderAssignment(CellEditValue value) => switch (value) {
-  CellLiteral(:final value) => _literal(value),
-  // Reachable only for UPDATE assignments; SQLite rejects `= DEFAULT` and
-  // the apply path surfaces that as an EditFailureException.
-  CellDefault() => 'DEFAULT',
-};
-
-/// Renders a value as a SQL literal. Single quotes are doubled to neutralise
-/// injection; SQLite's type affinity coerces the text into the column type.
-String _literal(String? value) {
-  if (value == null) return 'NULL';
-  return "'${value.replaceAll("'", "''")}'";
 }
 
 /// Reflows a verbatim `CREATE TABLE` statement onto one column/constraint per

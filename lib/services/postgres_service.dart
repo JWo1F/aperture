@@ -9,10 +9,6 @@ import 'postgres_introspector.dart';
 import 'postgres_table_repository.dart';
 import 'safe_query.dart';
 
-List<Object?> _decodeRow(List<Object?> raw) => [
-  for (final v in raw) decodeDriverValue(v),
-];
-
 /// Runs [sql] on [session], times it, and reports the outcome to [logger]
 /// before either returning the [Result] or rethrowing. The single point
 /// every Postgres statement in the app flows through.
@@ -211,43 +207,20 @@ class PostgresService implements DbService {
       buildPostgresEditStatements(table, batch);
 
   @override
-  Future<int> applyTableEdits(DbTable table, EditBatch batch) async {
-    final watch = Stopwatch()..start();
-    try {
-      final affected = await tableRepository.applyEdits(table, batch);
-      watch.stop();
-      onEditApplied?.call(
-        statementCount: batch.statementCount,
-        elapsed: watch.elapsed,
-        error: null,
-      );
-      return affected;
-    } catch (e) {
-      watch.stop();
-      onEditApplied?.call(
-        statementCount: batch.statementCount,
-        elapsed: watch.elapsed,
-        error: e.toString(),
-      );
-      rethrow;
-    }
-  }
+  Future<int> applyTableEdits(DbTable table, EditBatch batch) => timedEdit(
+    batch: batch,
+    logger: onEditApplied,
+    apply: () => tableRepository.applyEdits(table, batch),
+  );
 
-  /// Reads `SHOW server_version` and reduces it to a `vMAJOR.MINOR` tag.
-  /// Postgres returns something like `16.4 (Homebrew)`; we strip the
-  /// parenthetical and keep the first two segments.
+  /// Reads `SHOW server_version` and reduces it to a `vMAJOR.MINOR` tag via
+  /// [versionTag]. Postgres returns something like `16.4 (Homebrew)`.
   @override
   Future<String?> fetchVersionTag() async {
     try {
       final res = await runQuery('SHOW server_version');
       if (res.isError || res.rows.isEmpty) return null;
-      final s = res.rows.first.first?.toString().trim() ?? '';
-      if (s.isEmpty) return null;
-      final head = s.split(' ').first;
-      final parts = head.split('.');
-      return parts.length >= 2
-          ? 'v${parts[0]}.${parts[1]}'
-          : 'v${parts.first}';
+      return versionTag(res.rows.first.first?.toString() ?? '');
     } catch (_) {
       return null;
     }
@@ -291,7 +264,9 @@ class PostgresService implements DbService {
             ),
           )
           .toList();
-      final rows = [for (final row in result) _decodeRow(row.toList())];
+      final rows = [
+        for (final row in result) decodeDriverRow(row.toList()),
+      ];
 
       return QueryResult.rows(
         columns: columns,
