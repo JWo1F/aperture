@@ -36,7 +36,15 @@ class ApertureApp extends StatelessWidget {
             title: 'Aperture',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.build(brightness),
-            home: const AppShell(),
+            // Colours are read through the `AppColors` static shim, which
+            // Flutter's dependency tracking can't see — swapping the palette
+            // wouldn't repaint `const` subtrees or any branch a parent
+            // short-circuits. Keying the shell on brightness unmounts the
+            // whole tree on a theme switch so every widget rebuilds against
+            // the new palette. Workspace state lives in AppState (above
+            // MaterialApp) and survives; only transient widget state like
+            // scroll offset is reset.
+            home: AppShell(key: ValueKey(brightness)),
           );
         },
       ),
