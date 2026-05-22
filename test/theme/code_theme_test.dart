@@ -28,25 +28,15 @@ void main() {
       expect(spansToText(spans), source);
     });
 
-    test('source above 255 chars is split into highlighted head + plain tail',
-        () {
-      // 300-char string, just enough JSON shape to give the tokenizer
-      // something to chew on at the start. The exact head/tail boundary
-      // is at 255 chars.
-      final padding = 'x' * 280;
+    test('a long source is highlighted in full', () {
+      // jsonSpans no longer caps — callers truncate upstream. A long value
+      // is tokenized whole and round-trips losslessly.
+      final padding = 'x' * 1200;
       final source = '{"k":"$padding"}';
-      expect(source.length, greaterThan(255));
+      expect(source.length, greaterThan(1024));
       final spans = jsonSpans(source, base);
-      // The concatenated text round-trips losslessly — nothing is
-      // dropped, regardless of where the cap falls.
+      expect(spans, isNotEmpty);
       expect(spansToText(spans), source);
-    });
-
-    test('passing maxLength: null disables the cap', () {
-      final source = '"${'a' * 500}"';
-      expect(jsonSpans(source, base, maxLength: null), isNotEmpty);
-      // No assertion on which span is which; just confirming the call
-      // accepts the override and still produces output.
     });
   });
 }

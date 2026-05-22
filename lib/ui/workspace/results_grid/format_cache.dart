@@ -41,7 +41,7 @@ class FormatCache {
   }
 
   /// Highlighted JSON spans for [sourceRow], [column] using [source] as the
-  /// input. Source is bounded to 255 chars by `jsonSpans` itself.
+  /// input — [source] is the already-truncated cell display text.
   List<InlineSpan> spans(int sourceRow, int column, String source) {
     final byRow = _spans.putIfAbsent(sourceRow, () => <int, List<InlineSpan>>{});
     final cached = byRow[column];

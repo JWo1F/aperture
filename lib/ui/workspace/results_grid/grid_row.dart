@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../models/cell_edit.dart';
 import '../../../models/db_object.dart';
 import '../../../theme/app_theme.dart';
-import 'cell_style.dart';
+import 'cell_content.dart';
 import 'column_widths.dart';
 import 'format_cache.dart';
 import 'grid_metrics.dart';
@@ -169,78 +169,39 @@ class GridRow extends StatelessWidget {
     // already accent-tinted, so per-cell highlighting becomes noise.
     final isEdited = pending != null && !isInsert;
 
-    final Widget content;
+    final content = Text.rich(
+      gridCellSpan(
+        pending: pending,
+        isInsert: isInsert,
+        sourceIdx: sourceIdx,
+        column: column,
+        original: original,
+        formatCache: formatCache,
+        dataType: columnMeta?[columns[column]]?.dataType,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
 
-    if (pending is CellDefault) {
-      content = Text(
-        'DEFAULT',
-        style: gridCellStyle.copyWith(
-          color: AppColors.accent,
-          fontWeight: FontWeight.w600,
-        ),
-      );
-    } else {
-      // Pending edits (raw user-typed strings) bypass the cache — they can
-      // change on every keystroke. Original values flow through the cache.
-      final bool fromPending = pending is CellLiteral;
-      final String? displayValue = fromPending
-          ? pending.value
-          : formatCache.format(sourceIdx, column, original);
-
-      if (displayValue == null) {
-        content = Text(
-          'NULL',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: gridNullStyle,
-        );
-      } else {
-        // The cell paints one ellipsized line — render a length-capped
-        // string so the layout engine never shapes a multi-kilobyte value.
-        final String display = fromPending
-            ? truncateForCell(displayValue)
-            : formatCache.displayText(sourceIdx, column, original)!;
-
-        if (!isEdited && (original is Map || original is List)) {
-          content = Text.rich(
-            TextSpan(children: formatCache.spans(sourceIdx, column, display)),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          );
-        } else {
-          content = Text(
-            display,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: gridCellStyle.copyWith(
-              color: isEdited
-                  ? AppColors.textPrimary
-                  : cellColor(
-                      original,
-                      dataType: columnMeta?[columns[column]]?.dataType,
-                    ),
-            ),
-          );
-        }
-      }
-    }
-
-    // Pointer handling and hover tooltips live at the body level — cells
+    // Pointer handling and the hover expansion live at the body level — cells
     // reduce to a sized Container, which keeps the per-row widget allocation
     // small. See ResultsGrid._handleCellHover for the single hover overlay.
+    // The right hairline draws the column separator (the header cells carry
+    // the matching one); an edited cell adds the accent stripe on the left.
     final cell = Container(
       width: widths[column],
       height: kRowHeight,
       alignment: Alignment.centerLeft,
       padding: const EdgeInsets.symmetric(horizontal: 9),
-      decoration: isEdited
-          ? BoxDecoration(
-              color: AppColors.accentSoft,
-              border: Border(
-                left: BorderSide(color: AppColors.accent, width: 2),
-              ),
-            )
-          : null,
+      decoration: BoxDecoration(
+        color: isEdited ? AppColors.accentSoft : null,
+        border: Border(
+          right: BorderSide(color: AppColors.hairline, width: 1),
+          left: isEdited
+              ? BorderSide(color: AppColors.accent, width: 2)
+              : BorderSide.none,
+        ),
+      ),
       child: content,
     );
     // Dim deleted cells without losing legibility — pairs with the red row

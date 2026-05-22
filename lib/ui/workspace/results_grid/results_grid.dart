@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -12,12 +11,13 @@ import '../../../models/value_format.dart';
 import '../../../theme/app_theme.dart';
 import '../../cell_picker/cell_picker.dart';
 import '../../widgets/common.dart';
+import 'cell_content.dart';
 import 'cell_context_menu.dart';
-import 'cell_style.dart';
 import 'column_widths.dart';
 import 'format_cache.dart';
 import 'grid_metrics.dart';
 import 'grid_row.dart';
+import 'grid_selection.dart';
 import 'grid_slots.dart';
 import 'header_cell.dart';
 import 'index_column.dart';
@@ -142,15 +142,18 @@ class _ResultsGridState extends State<ResultsGrid> {
 
   BuildContext? _bodyCtx;
 
-  // Hover tooltip — a single overlay owned by the grid. Per-cell Tooltip
-  // widgets each spun up an AnimationController on build, so a scroll frame
-  // that built 15 fresh rows allocated dozens of them; one pointer-driven
-  // overlay removes that churn.
-  final OverlayPortalController _tooltipCtrl = OverlayPortalController();
-  Timer? _tooltipTimer;
-  (int, int)? _tooltipCell;
-  String _tooltipText = '';
-  Rect _tooltipAnchor = Rect.zero;
+  // Excel-style hover expansion — a single overlay owned by the grid. While
+  // the pointer rests on a cell the grid draws an exact clone of it, grown
+  // rightward over its neighbours so the full (≤1024-char) value fits on one
+  // line. The clone carries the cell's own selection / focus / edit / row
+  // state so it reads as the cell itself widening, not a floating overlay.
+  // One pointer-driven overlay (vs. a per-cell Tooltip, each of which spun up
+  // an AnimationController on build) keeps scroll frames free of that churn.
+  final OverlayPortalController _expandCtrl = OverlayPortalController();
+
+  /// Cell currently under the pointer, or null. A [ValueNotifier] so the
+  /// overlay child rebuilds on hover changes without rebuilding the grid.
+  final ValueNotifier<(int, int)?> _hoverCell = ValueNotifier(null);
 
   int? get _selRow => _selection.value.focus?.$1;
 
@@ -178,7 +181,7 @@ class _ResultsGridState extends State<ResultsGrid> {
     if (resultChanged) {
       _selection.reset();
       _formatCache.clear();
-      _dismissTooltip();
+      _dismissExpansion();
     }
     if (!_widths.matches(widget.result.columns) || resultChanged) {
       _syncWidths();
@@ -190,7 +193,7 @@ class _ResultsGridState extends State<ResultsGrid> {
 
   @override
   void dispose() {
-    _tooltipTimer?.cancel();
+    _hoverCell.dispose();
     _hBody.dispose();
     _vBody.dispose();
     _vIndex.dispose();
@@ -400,91 +403,173 @@ class _ResultsGridState extends State<ResultsGrid> {
     );
   }
 
-  // --- hover tooltip ---------------------------------------------------
+  // --- hover expansion -------------------------------------------------
 
-  /// Pointer moved within the grid body — (re)arm the hover tooltip for the
-  /// cell now under the cursor. A miss on the same cell is a cheap no-op so
-  /// ordinary mouse movement doesn't restart the timer.
-  void _handleCellHover(BuildContext bodyCtx, Offset localPos) {
+  /// Pointer moved within the grid body — point the expansion at the cell
+  /// now under the cursor, or hide it on a miss. Re-entering the same cell
+  /// is a cheap no-op so ordinary mouse movement does no work.
+  ///
+  /// Hit-testing keys on the cell's *own* rect: the expansion is
+  /// `IgnorePointer`, so once the pointer drifts past the source cell into
+  /// the expanded region — which sits over a neighbour's rect — this fires
+  /// for that neighbour. The expansion follows the cell genuinely hovered.
+  void _handleCellHover(Offset localPos) {
     final cell = _cellAt(localPos);
-    if (cell == _tooltipCell) return;
-    _tooltipCell = cell;
-    _tooltipTimer?.cancel();
-    if (_tooltipCtrl.isShowing) _tooltipCtrl.hide();
-    if (cell == null) return;
-    _tooltipTimer = Timer(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      final text = _tooltipFor(cell.$1, cell.$2);
-      if (text == null) return;
-      _tooltipText = text;
-      _tooltipAnchor = _cellRect(bodyCtx, cell.$1, cell.$2);
-      _tooltipCtrl.show();
-    });
-  }
-
-  void _dismissTooltip() {
-    _tooltipTimer?.cancel();
-    _tooltipCell = null;
-    if (_tooltipCtrl.isShowing) _tooltipCtrl.hide();
-  }
-
-  /// Tooltip text for a cell, or null when one isn't warranted. Mirrors the
-  /// display branches in [GridRow] — structured values always get a tooltip,
-  /// plain text only once it's long enough to be clipped.
-  String? _tooltipFor(int row, int column) {
-    final pending = _pendingFor(row, column);
-    if (pending is CellDefault) return null;
-    final original = _originalAt(row, column);
-    final isEdited = pending != null && !_isInsertRow(row);
-    final String? value = pending is CellLiteral
-        ? pending.value
-        : _formatCache.format(_slots[row].sourceIdx, column, original);
-    if (value == null) return null;
-    final structured = !isEdited && (original is Map || original is List);
-    if (structured || wantsTooltip(original, value)) {
-      return truncateForTooltip(value);
+    if (cell == _hoverCell.value) return;
+    _hoverCell.value = cell;
+    if (cell == null) {
+      _expandCtrl.hide();
+    } else if (!_expandCtrl.isShowing) {
+      _expandCtrl.show();
     }
-    return null;
   }
 
-  Widget _buildHoverTooltip(BuildContext context) {
-    final screen = MediaQuery.sizeOf(context);
-    const maxWidth = 360.0;
-    const gap = 6.0;
-    final double left = _tooltipAnchor.left
-        .clamp(8.0, math.max(8.0, screen.width - maxWidth - 8.0))
-        .toDouble();
-    // Prefer above the cell; flip below when the cell sits too near the top
-    // edge for a few wrapped lines to fit.
-    final above = _tooltipAnchor.top >= 170.0;
-    return Positioned(
-      left: left,
-      top: above ? null : _tooltipAnchor.bottom + gap,
-      bottom: above ? screen.height - _tooltipAnchor.top + gap : null,
-      child: IgnorePointer(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: maxWidth),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceAlt,
-              borderRadius: Radii.brSm,
-              border: Border.all(color: AppColors.borderStrong),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.shadow,
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Text(
-              _tooltipText,
-              style: AppTheme.mono(size: 11.5, color: AppColors.textPrimary),
-            ),
+  void _dismissExpansion() {
+    _hoverCell.value = null;
+    if (_expandCtrl.isShowing) _expandCtrl.hide();
+  }
+
+  /// The expansion overlay child. Rebuilds on hover changes (via [_hoverCell])
+  /// and on selection changes (via [_selection]) so a click that selects the
+  /// hovered cell repaints the expansion in its new selected state.
+  Widget _buildExpansion(BuildContext context) {
+    return ValueListenableBuilder<(int, int)?>(
+      valueListenable: _hoverCell,
+      builder: (context, cell, _) {
+        final bodyCtx = _bodyCtx;
+        if (cell == null || bodyCtx == null) return const SizedBox.shrink();
+        return ValueListenableBuilder<GridSelection>(
+          valueListenable: _selection,
+          builder: (context, sel, _) =>
+              _expansionCell(bodyCtx, cell.$1, cell.$2, sel),
+        );
+      },
+    );
+  }
+
+  /// An exact clone of the hovered cell, grown rightward so its full value
+  /// fits on one line. Replicates the cell's background, edit decoration,
+  /// selection tint and focus ring so it reads as the cell itself widening.
+  /// Width spans from the value's natural width (min: the column) up to the
+  /// data viewport's right edge.
+  Widget _expansionCell(
+    BuildContext bodyCtx,
+    int row,
+    int column,
+    GridSelection sel,
+  ) {
+    final rect = _cellRect(bodyCtx, row, column);
+    final colWidth = _widths[column];
+    // Cap: the distance from the cell's left edge to the viewport's right.
+    final double maxWidth;
+    if (_hBody.hasClients) {
+      final toRight = _hBody.position.viewportDimension -
+          _widths.offsetOf(column) +
+          _hBody.offset;
+      maxWidth = math.max(toRight, colWidth);
+    } else {
+      maxWidth = colWidth;
+    }
+
+    final slot = _slots[row];
+    final isInsert = slot.isInsert;
+    final isDeleted = _isDeletedRow(row);
+    final pending = _pendingFor(row, column);
+    final isEdited = pending != null && !isInsert;
+
+    // Background — mirrors GridRow: an insert/delete base, the hover tint
+    // (the cell is hovered, by definition), and the row-wide selection tint
+    // when any cell in the row is selected. Blended onto an opaque grid bg.
+    const transparent = Color(0x00000000);
+    final baseBg = isInsert
+        ? AppColors.gridRowInsert
+        : isDeleted
+        ? AppColors.gridRowDelete
+        : transparent;
+    final rowBg = Color.alphaBlend(
+      sel.rowSegments(row).isNotEmpty
+          ? AppColors.gridRowSelection
+          : transparent,
+      Color.alphaBlend(AppColors.gridRowHover, baseBg),
+    );
+    var fill = Color.alphaBlend(rowBg, AppColors.bg);
+    if (isEdited) fill = Color.alphaBlend(AppColors.accentSoft, fill);
+
+    final isSelectedCell = sel.contains(row, column);
+    final isFocusCell = sel.focus == (row, column);
+
+    final span = gridCellSpan(
+      pending: pending,
+      isInsert: isInsert,
+      sourceIdx: slot.sourceIdx,
+      column: column,
+      original: _originalAt(row, column),
+      formatCache: _formatCache,
+      dataType: widget.columnMeta?[widget.result.columns[column]]?.dataType,
+      maxChars: kExpandedMaxChars,
+    );
+
+    // The cell sizes to its own value: at least the column width, at most
+    // the distance to the viewport's right edge. Letting the Text lay itself
+    // out — rather than pre-measuring with a TextPainter — means the box hugs
+    // the real glyph run exactly, so no value is clipped a few characters
+    // short of the border. The Align hugs the text horizontally (widthFactor)
+    // while still centring it in the row vertically.
+    Widget cell = ConstrainedBox(
+      constraints: BoxConstraints(minWidth: colWidth, maxWidth: maxWidth),
+      child: Container(
+        height: kRowHeight,
+        padding: const EdgeInsets.symmetric(horizontal: 9),
+        decoration: BoxDecoration(
+          color: fill,
+          border: Border(
+            right: BorderSide(color: AppColors.hairline, width: 1),
+            bottom: BorderSide(color: AppColors.hairline, width: 1),
+            left: isEdited
+                ? BorderSide(color: AppColors.accent, width: 2)
+                : BorderSide.none,
+          ),
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          widthFactor: 1,
+          child: Text.rich(
+            span,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ),
+    );
+
+    if (isSelectedCell || isFocusCell) {
+      cell = Stack(
+        children: [
+          cell,
+          if (isSelectedCell)
+            Positioned.fill(
+              child: ColoredBox(color: AppColors.gridRowSelection),
+            ),
+          if (isFocusCell)
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.fromBorderSide(
+                    BorderSide(color: AppColors.accent, width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
+    if (isDeleted) cell = Opacity(opacity: 0.55, child: cell);
+
+    return Positioned(
+      left: rect.left,
+      top: rect.top,
+      child: IgnorePointer(child: cell),
     );
   }
 
@@ -790,15 +875,15 @@ class _ResultsGridState extends State<ResultsGrid> {
             ? constraints.maxWidth
             : dataWidth;
         return OverlayPortal(
-          controller: _tooltipCtrl,
-          overlayChildBuilder: _buildHoverTooltip,
+          controller: _expandCtrl,
+          overlayChildBuilder: _buildExpansion,
           child: RepaintBoundary(
             child: NotificationListener<ScrollNotification>(
               onNotification: (n) {
-                // Any scroll slides cells out from under the cursor — drop a
-                // pending or visible hover tooltip rather than leave it
-                // anchored to a stale position.
-                _dismissTooltip();
+                // Any scroll slides cells out from under the cursor — drop the
+                // hover expansion rather than leave it anchored to a stale
+                // position.
+                _dismissExpansion();
                 if (n.metrics.axis == Axis.vertical && _vIndex.hasClients) {
                   final target = _vBody.hasClients ? _vBody.offset : 0.0;
                   if ((_vIndex.position.pixels - target).abs() > 0.01) {
@@ -821,13 +906,13 @@ class _ResultsGridState extends State<ResultsGrid> {
                     builder: (bodyCtx) {
                       _bodyCtx = bodyCtx;
                       return MouseRegion(
-                        onHover: (e) =>
-                            _handleCellHover(bodyCtx, e.localPosition),
-                        onExit: (_) => _dismissTooltip(),
+                        onHover: (e) => _handleCellHover(e.localPosition),
+                        onExit: (_) => _dismissExpansion(),
                         child: Listener(
                           behavior: HitTestBehavior.translucent,
                           onPointerDown: (e) {
-                            _dismissTooltip();
+                            // The expansion is left up — a click selects the
+                            // cell, it shouldn't collapse back to one column.
                             final cell = _cellAt(e.localPosition);
                             if (cell == null) return;
                             _selection.beginPointer(cell.$1, cell.$2);

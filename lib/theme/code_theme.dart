@@ -42,31 +42,20 @@ Map<String, TextStyle> get apertureCodeStyles => {
 /// editor and the SQL editor. Used by the table grid to render Map/List
 /// cell values where dropping in a full `CodeEditor` isn't viable.
 ///
-/// Sources beyond [maxLength] are only highlighted up to that boundary;
-/// the tail is appended as a plain [base]-styled span. Grid cells render
-/// single-line with ellipsis, so the user never sees past a few hundred
-/// pixels of text — running the tokenizer over a 10kB JSON blob just to
-/// throw away 99% of the output would tank scroll perf. Pass a larger
-/// limit (or `null`) only where the full source is actually displayed.
-List<InlineSpan> jsonSpans(
-  String source,
-  TextStyle base, {
-  int? maxLength = 255,
-}) {
+/// Callers length-cap [source] themselves — the grid cell and its hover
+/// expansion each hand in an already-truncated string — so this highlights
+/// whatever it is given in full.
+List<InlineSpan> jsonSpans(String source, TextStyle base) {
   if (source.isEmpty) return const [];
   _ensureJsonRegistered();
-  final cap = maxLength;
-  if (cap == null || source.length <= cap) {
-    final parsed = highlight.parse(source, language: 'json');
-    return highlightNodesToSpans(parsed.nodes, base, apertureCodeStyles);
-  }
-  final head = source.substring(0, cap);
-  final tail = source.substring(cap);
-  final parsed = highlight.parse(head, language: 'json');
-  return [
-    ...highlightNodesToSpans(parsed.nodes, base, apertureCodeStyles),
-    TextSpan(text: tail, style: base),
-  ];
+  final parsed = highlight.parse(source, language: 'json');
+  // JSON's structural punctuation — { } [ ] : , — carries no highlight class,
+  // so it falls through to `base`. Pin that fallback to the operator tone (a
+  // live palette colour) so braces and colons read as a clean, theme-correct
+  // grey rather than inheriting whatever colour `base` froze with. The classed
+  // tokens — keys, strings, numbers — override the colour anyway.
+  final punctBase = base.copyWith(color: AppColors.sqlOperator);
+  return highlightNodesToSpans(parsed.nodes, punctBase, apertureCodeStyles);
 }
 
 bool _jsonRegistered = false;
