@@ -673,19 +673,17 @@ class TabsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Loads or refreshes the EXPLAIN plan for [tab].
+  /// Loads or refreshes the EXPLAIN plan for [tab]'s most-recent run.
   ///
-  /// When [sqlOverride] is given, plans that exact text instead of the
-  /// most-recent run. That powers the Plan tab's "Run as EXPLAIN"
-  /// affordance — the user can ask for a plan without having executed
-  /// the query first.
+  /// Plans `tab.lastRunSql` — the exact statement the Results tab shows —
+  /// so the plan and the result set always describe the same query.
   ///
   /// Uses ANALYZE/BUFFERS for plain SELECT, WITH, VALUES, TABLE (so the
   /// times are real numbers, not estimates); falls back to a non-executing
   /// EXPLAIN for statements that would mutate data or aren't planned at all.
-  Future<void> loadQueryPlan(QueryTab tab, {String? sqlOverride}) async {
+  Future<void> loadQueryPlan(QueryTab tab) async {
     final service = session.service;
-    final sql = sqlOverride ?? tab.lastRunSql;
+    final sql = tab.lastRunSql;
     if (service == null || sql == null || sql.trim().isEmpty) return;
     if (tab.planLoading) return;
 

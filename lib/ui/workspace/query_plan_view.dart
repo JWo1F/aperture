@@ -24,25 +24,27 @@ class QueryPlanView extends StatelessWidget {
   final QueryTab tab;
 
   void _runExplain(BuildContext context) {
-    final sql = tab.sql.trim();
-    if (sql.isEmpty) return;
-    context.read<AppState>().loadQueryPlan(tab, sqlOverride: sql);
+    if ((tab.lastRunSql ?? '').trim().isEmpty) return;
+    context.read<AppState>().loadQueryPlan(tab);
   }
 
   @override
   Widget build(BuildContext context) {
     if (tab.planLoading) return const _Spinner();
+    // The plan always describes `lastRunSql` — the query the Results tab
+    // shows — so it can't be requested before the query has been run.
+    final canExplain = (tab.lastRunSql ?? '').trim().isNotEmpty;
     if (tab.planError != null) {
       return _PlanError(
         message: tab.planError!,
-        onRetry: tab.sql.trim().isNotEmpty ? () => _runExplain(context) : null,
+        onRetry: canExplain ? () => _runExplain(context) : null,
       );
     }
     final json = tab.planJson;
     if (json == null) {
       return _PlanSuggestion(
-        enabled: tab.sql.trim().isNotEmpty,
-        onRun: tab.sql.trim().isNotEmpty ? () => _runExplain(context) : null,
+        enabled: canExplain,
+        onRun: canExplain ? () => _runExplain(context) : null,
       );
     }
     final stale = tab.lastRunSql != null && tab.planSourceSql != tab.lastRunSql;
@@ -107,14 +109,14 @@ class _PlanSuggestion extends StatelessWidget {
               enabled
                   ? 'EXPLAIN walks every step of the plan: which tables it '
                         'reads, how it joins them, and where time is spent.'
-                  : 'Write SQL in the editor above and the plan will '
-                        'become available here.',
+                  : 'Run a query first — the plan explains your most recent '
+                        'run, the same SQL the Results tab shows.',
               textAlign: TextAlign.center,
               style: AppTheme.mono(size: 11.5, color: AppColors.textMuted),
             ),
             const SizedBox(height: 14),
             AppButton(
-              label: 'Run as EXPLAIN',
+              label: 'Run EXPLAIN',
               icon: Icons.account_tree_outlined,
               primary: true,
               onPressed: onRun,

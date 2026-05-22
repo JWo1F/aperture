@@ -370,8 +370,7 @@ class AppState extends ChangeNotifier {
   Future<void> runQuery(QueryTab tab, {String? sqlOverride}) =>
       tabsController.runQuery(tab, sqlOverride: sqlOverride);
 
-  Future<void> loadQueryPlan(QueryTab tab, {String? sqlOverride}) =>
-      tabsController.loadQueryPlan(tab, sqlOverride: sqlOverride);
+  Future<void> loadQueryPlan(QueryTab tab) => tabsController.loadQueryPlan(tab);
 
   void clearQueryMessages(QueryTab tab) {
     tab.messages.clear();
