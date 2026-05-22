@@ -677,4 +677,74 @@ void main() {
       expect(out.first.label, '*');
     });
   });
+
+  group('INSERT completion', () {
+    final cat = _catalog(
+      [_t(1, 'public', 'users'), _t(2, 'public', 'orders')],
+      columns: {
+        1: [_c('id', 'int', pk: true), _c('email', 'text')],
+        2: [_c('id', 'int', pk: true), _c('user_id', 'int')],
+      },
+    );
+
+    List<CodeSuggestion> run(String text) => completeQueryEditor(
+      req: _req(text, manualTrigger: true),
+      catalog: cat,
+      stmtText: text,
+    );
+
+    test('INSERT INTO offers table names', () {
+      final out = run('INSERT INTO ');
+      expect(out.map((s) => s.label), containsAll(['users', 'orders']));
+    });
+
+    test('column list offers the target table columns', () {
+      final out = run('INSERT INTO users (');
+      expect(out.map((s) => s.label).toSet(), {'id', 'email'});
+    });
+
+    test('mid column list still offers columns', () {
+      final out = run('INSERT INTO users (id, ');
+      expect(out.map((s) => s.label).toSet(), {'id', 'email'});
+    });
+
+    test('after the table name offers VALUES / SELECT', () {
+      final out = run('INSERT INTO users ');
+      expect(
+        out.map((s) => s.label),
+        containsAll(['VALUES', 'SELECT', 'DEFAULT VALUES']),
+      );
+    });
+
+    test('after a closed column list offers VALUES / SELECT', () {
+      final out = run('INSERT INTO users (id) ');
+      expect(out.map((s) => s.label), containsAll(['VALUES', 'SELECT']));
+    });
+
+    test('after a VALUES tuple offers RETURNING / ON CONFLICT', () {
+      final out = run('INSERT INTO users (id) VALUES (1) ');
+      expect(
+        out.map((s) => s.label),
+        containsAll(['RETURNING', 'ON CONFLICT']),
+      );
+    });
+
+    test('ON CONFLICT offers the conflict actions', () {
+      final out = run('INSERT INTO users (id) VALUES (1) ON CONFLICT ');
+      expect(
+        out.map((s) => s.label),
+        containsAll(['DO NOTHING', 'DO UPDATE SET']),
+      );
+    });
+
+    test('RETURNING offers columns and star', () {
+      final out = run('INSERT INTO users (id) VALUES (1) RETURNING ');
+      expect(out.map((s) => s.label), containsAll(['*', 'id', 'email']));
+    });
+
+    test('INSERT … SELECT delegates to the SELECT completer', () {
+      final out = run('INSERT INTO users SELECT ');
+      expect(out.first.label, '*');
+    });
+  });
 }

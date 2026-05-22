@@ -3,6 +3,7 @@ import '../../models/db_object.dart';
 import '../../ui/widgets/code_editor.dart';
 import 'clause.dart';
 import 'ddl_completer.dart';
+import 'insert_completer.dart';
 import 'scope.dart';
 import 'select_completer.dart';
 import 'suggestions.dart';
@@ -61,20 +62,38 @@ List<CodeSuggestion> completeQueryEditor({
     );
   }
 
-  // DDL gets its own statement-aware matcher. A non-null pool is shown
-  // eagerly — the matcher only produces suggestions at slots that genuinely
-  // want them, and returns an empty pool for free-identifier slots. A null
-  // result means "this is a `CREATE … AS SELECT` body" — fall through.
-  if (statementKindOf(stmtText) == StatementKind.ddl) {
-    final ddl = completeDdlPool(
-      req: req,
-      catalog: catalog,
-      stmtText: stmtText,
-      localCursor: localCursor,
-    );
-    if (ddl != null) {
-      return rankAndLimit(ddl, req.token, manualTrigger: true);
-    }
+  // INSERT and DDL each get a statement-aware matcher. A non-null pool is
+  // shown eagerly — the matchers only emit suggestions at slots that
+  // genuinely want them, and return an empty pool for free-identifier
+  // slots. A null result means the caret sits in a SELECT sub-body
+  // (`INSERT … SELECT`, `CREATE … AS SELECT`) — fall through.
+  switch (statementKindOf(stmtText)) {
+    case StatementKind.insert:
+      final ins = completeInsertPool(
+        req: req,
+        catalog: catalog,
+        stmtText: stmtText,
+        localCursor: localCursor,
+      );
+      if (ins != null) {
+        return rankAndLimit(ins, req.token, manualTrigger: true);
+      }
+    case StatementKind.ddl:
+      final ddl = completeDdlPool(
+        req: req,
+        catalog: catalog,
+        stmtText: stmtText,
+        localCursor: localCursor,
+      );
+      if (ddl != null) {
+        return rankAndLimit(ddl, req.token, manualTrigger: true);
+      }
+    case StatementKind.select:
+    case StatementKind.update:
+    case StatementKind.delete:
+    case StatementKind.withCte:
+    case StatementKind.other:
+      break;
   }
 
   final pool = completeSelectPool(
