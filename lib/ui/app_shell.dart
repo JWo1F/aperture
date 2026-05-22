@@ -3,6 +3,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:macos_window_utils/macos/ns_window_delegate.dart';
+import 'package:macos_window_utils/macos_window_utils.dart';
 import 'package:provider/provider.dart';
 
 import '../models/connection_config.dart';
@@ -332,8 +334,65 @@ class _ConnectionLostBannerState extends State<_ConnectionLostBanner> {
   }
 }
 
-class _Toolbar extends StatelessWidget {
+class _Toolbar extends StatefulWidget {
   const _Toolbar();
+
+  @override
+  State<_Toolbar> createState() => _ToolbarState();
+}
+
+/// Bridges AppKit's full-screen transitions into [_ToolbarState] so the
+/// toolbar can drop the traffic-light inset — macOS hides the traffic
+/// lights in full screen, leaving that reserved width as dead space.
+class _FullScreenDelegate extends NSWindowDelegate {
+  _FullScreenDelegate(this.onChanged);
+
+  final ValueChanged<bool> onChanged;
+
+  @override
+  void windowDidEnterFullScreen() {
+    onChanged(true);
+    super.windowDidEnterFullScreen();
+  }
+
+  @override
+  void windowDidExitFullScreen() {
+    onChanged(false);
+    super.windowDidExitFullScreen();
+  }
+}
+
+class _ToolbarState extends State<_Toolbar> {
+  bool _fullScreen = false;
+  NSWindowDelegateHandle? _delegateHandle;
+
+  @override
+  void initState() {
+    super.initState();
+    _watchFullScreen();
+  }
+
+  Future<void> _watchFullScreen() async {
+    _delegateHandle = WindowManipulator.addNSWindowDelegate(
+      _FullScreenDelegate(_setFullScreen),
+    );
+    try {
+      _setFullScreen(await WindowManipulator.isWindowFullscreened());
+    } on MissingPluginException {
+      // Tests / non-macOS hosts — no native window to track.
+    }
+  }
+
+  void _setFullScreen(bool value) {
+    if (!mounted || _fullScreen == value) return;
+    setState(() => _fullScreen = value);
+  }
+
+  @override
+  void dispose() {
+    _delegateHandle?.removeFromHandler();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -373,7 +432,10 @@ class _Toolbar extends StatelessWidget {
             bottom: BorderSide(color: AppColors.hairline, width: 1),
           ),
         ),
-        padding: EdgeInsets.only(left: _trafficLightInset, right: 4),
+        padding: EdgeInsets.only(
+          left: _fullScreen ? 4 : _trafficLightInset,
+          right: 4,
+        ),
         child: Stack(
           children: [
             // Double-tap-to-zoom lives on a background layer *behind* the

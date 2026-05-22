@@ -8,7 +8,7 @@ import 'ui/app_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await WindowManipulator.initialize();
+  await WindowManipulator.initialize(enableWindowDelegate: true);
   await WindowManipulator.makeTitlebarTransparent();
   await WindowManipulator.enableFullSizeContentView();
   await WindowManipulator.hideTitle();
