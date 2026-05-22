@@ -44,7 +44,7 @@ class TextBody extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
-                color: const Color(0x33FB7185),
+                color: AppColors.dangerSoft,
                 border: Border(top: BorderSide(color: AppColors.error)),
               ),
               child: Row(

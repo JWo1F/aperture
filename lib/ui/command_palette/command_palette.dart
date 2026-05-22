@@ -13,7 +13,7 @@ Future<void> showCommandPalette(BuildContext context, AppState state) {
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Close palette',
-    barrierColor: const Color(0x88060708),
+    barrierColor: AppColors.scrim,
     transitionDuration: const Duration(milliseconds: 140),
     pageBuilder: (_, _, _) => const SizedBox.shrink(),
     transitionBuilder: (ctx, anim, _, _) {
@@ -619,9 +619,9 @@ class _PaletteState extends State<_Palette> {
         color: AppColors.surface,
         borderRadius: Radii.brLg,
         border: Border.all(color: AppColors.borderStrong),
-        boxShadow: const [
-          BoxShadow(color: Color(0xB3000000), blurRadius: 48, offset: Offset(0, 16)),
-          BoxShadow(color: Color(0x66000000), blurRadius: 8, offset: Offset(0, 2)),
+        boxShadow: [
+          BoxShadow(color: AppColors.shadow, blurRadius: 48, offset: const Offset(0, 16)),
+          BoxShadow(color: AppColors.shadow, blurRadius: 8, offset: const Offset(0, 2)),
         ],
       ),
       child: ClipRRect(

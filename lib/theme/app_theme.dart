@@ -39,6 +39,12 @@ class Palette {
     required this.warning,
     required this.warn,
     required this.info,
+    required this.shadow,
+    required this.scrim,
+    required this.gridRowHover,
+    required this.gridRowSelection,
+    required this.gridRowInsert,
+    required this.gridRowDelete,
     required this.tNull,
     required this.tNum,
     required this.tStr,
@@ -102,6 +108,21 @@ class Palette {
   final Color warn;
   final Color info;
 
+  /// Drop-shadow tint for elevated surfaces (menus, popovers, dialogs).
+  /// Near-opaque black in dark, a soft low-alpha tint in light — a pure
+  /// black shadow looks like a harsh halo on a light background.
+  final Color shadow;
+
+  /// Modal barrier / scrim that dims the workspace behind a dialog.
+  final Color scrim;
+
+  // Grid row state overlays. Alpha-blended over the row background, so they
+  // must stay translucent (an opaque value would erase the row striping).
+  final Color gridRowHover;
+  final Color gridRowSelection;
+  final Color gridRowInsert;
+  final Color gridRowDelete;
+
   // Type colors — used to tint data cells by column type.
   final Color tNull;
   final Color tNum;
@@ -150,6 +171,12 @@ const Palette darkPalette = Palette(
   warning: Color(0xFFC9933C),
   warn: Color(0xFFC9933C),
   info: Color(0xFF60A5FA),
+  shadow: Color(0x99000000),
+  scrim: Color(0x88000000),
+  gridRowHover: Color(0x06FFFFFF),
+  gridRowSelection: Color(0x1A5B7CFA),
+  gridRowInsert: Color(0x145B7CFA),
+  gridRowDelete: Color(0x1FE05D5D),
   tNull: Color(0xFF6B7180),
   tNum: Color(0xFFD6C68F),
   tStr: Color(0xFFBFD1E7),
@@ -199,6 +226,12 @@ const Palette lightPalette = Palette(
   warning: Color(0xFFB45A1F),
   warn: Color(0xFFB45A1F),
   info: Color(0xFF2F6FE5),
+  shadow: Color(0x1F1E2436),
+  scrim: Color(0x3315171C),
+  gridRowHover: Color(0x0A000000),
+  gridRowSelection: Color(0x1F4F6FE8),
+  gridRowInsert: Color(0x144F6FE8),
+  gridRowDelete: Color(0x1FE0445C),
   tNull: Color(0xFF98A0AC),
   tNum: Color(0xFF1F4E8C),
   tStr: Color(0xFF1A1815),
@@ -309,6 +342,18 @@ class AppColors {
 
   static Color get info => _palette.info;
 
+  static Color get shadow => _palette.shadow;
+
+  static Color get scrim => _palette.scrim;
+
+  static Color get gridRowHover => _palette.gridRowHover;
+
+  static Color get gridRowSelection => _palette.gridRowSelection;
+
+  static Color get gridRowInsert => _palette.gridRowInsert;
+
+  static Color get gridRowDelete => _palette.gridRowDelete;
+
   static Color get tNull => _palette.tNull;
 
   static Color get tNum => _palette.tNum;
@@ -405,11 +450,11 @@ class AppTheme {
           color: AppColors.surfaceAlt,
           borderRadius: Radii.brSm,
           border: Border.all(color: AppColors.borderStrong),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Color(0x55000000),
+              color: AppColors.shadow,
               blurRadius: 8,
-              offset: Offset(0, 2),
+              offset: const Offset(0, 2),
             ),
           ],
         ),

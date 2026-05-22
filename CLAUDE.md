@@ -42,6 +42,29 @@ doesn't.
 - Custom `TableGlyph` (CustomPaint) for table icons instead of Material's
   generic `Icons.table_rows_outlined`.
 
+## Theming — both light and dark are first-class
+
+The app ships **dark and light** variants of the Aperture theme. Both are
+shipping surfaces — any UI work MUST look correct in both.
+
+- Every color comes from the active `Palette` via the `AppColors` shim
+  (`lib/theme/app_theme.dart`). `darkPalette` and `lightPalette` are the
+  two sources of truth; `AppColors` swaps between them at runtime.
+- **Never hardcode a `Color(0x…)` or `Colors.white` / `Colors.black` for
+  anything theme-dependent** — surfaces, text, borders, tints, shadows,
+  scrims. A literal looks fine in whichever theme you tested and breaks in
+  the other (e.g. a white-alpha overlay vanishes on a light background; a
+  dark-accent ARGB is the wrong hue under the light accent).
+- If you need a color the palette doesn't have, **add a field to `Palette`**
+  (with both dark + light values) and an `AppColors` getter — don't inline
+  it. Shadows use `AppColors.shadow`, modal barriers use `AppColors.scrim`,
+  grid row states use `AppColors.gridRow*`.
+- `Colors.transparent` is theme-agnostic and fine. `Colors.white` is also
+  fine *only* as a foreground on a saturated accent/error/connection-color
+  background (white-on-indigo reads the same in both themes).
+- After UI changes, sanity-check both themes — toggle via the toolbar
+  button or the ⌘K command palette ("Switch to light/dark theme").
+
 User memories under
 `~/.claude/projects/-Users-jwo1f-work-jwo1f-dbv-dbv/memory/`:
 - `feedback_theme.md` — graphite + indigo direction
@@ -219,6 +242,9 @@ name collisions become an issue.
 - **Don't reach for AI-generic aesthetics**: Inter as display font,
   purple-on-white, evenly distributed pastel colors. Apply the existing
   palette via `AppColors`.
+- **Don't hardcode colors or test only one theme.** Every color goes
+  through `AppColors`; verify UI work in both light and dark. See
+  "Theming — both light and dark are first-class" above.
 - **Don't wait for permission to commit**. Each completed, verified
   feature gets its own commit immediately.
 

@@ -16,7 +16,7 @@ Future<void> showPendingEditsModal(
 }) {
   return showDialog(
     context: context,
-    barrierColor: const Color(0x88000000),
+    barrierColor: AppColors.scrim,
     builder: (_) => Dialog(
       backgroundColor: AppColors.surface,
       elevation: 0,

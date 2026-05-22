@@ -12,7 +12,7 @@ Future<bool> showMasterPassphraseSetup(
 ) async {
   final ok = await showDialog<bool>(
     context: context,
-    barrierColor: Colors.black54,
+    barrierColor: AppColors.scrim,
     builder: (_) => _PassphrasePanel(
       mode: _Mode.setup,
       passphrase: passphrase,
@@ -29,7 +29,7 @@ Future<bool> showMasterPassphraseUnlock(
 ) async {
   final ok = await showDialog<bool>(
     context: context,
-    barrierColor: Colors.black54,
+    barrierColor: AppColors.scrim,
     builder: (_) => _PassphrasePanel(
       mode: _Mode.unlock,
       passphrase: passphrase,
@@ -118,11 +118,11 @@ class _PassphrasePanelState extends State<_PassphrasePanel> {
             color: AppColors.surface,
             borderRadius: Radii.brLg,
             border: Border.all(color: AppColors.borderStrong),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: Color(0xAA000000),
+                color: AppColors.shadow,
                 blurRadius: 48,
-                offset: Offset(0, 16),
+                offset: const Offset(0, 16),
               ),
             ],
           ),

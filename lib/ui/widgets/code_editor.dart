@@ -1154,7 +1154,7 @@ class _AutocompletePopupState extends State<_AutocompletePopup> {
           border: Border.all(color: AppColors.border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.35),
+              color: AppColors.shadow,
               blurRadius: 14,
               offset: const Offset(0, 6),
             ),

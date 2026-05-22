@@ -131,11 +131,11 @@ class _Menu extends StatelessWidget {
           color: AppColors.surface,
           borderRadius: Radii.brMd,
           border: Border.all(color: AppColors.borderStrong),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Color(0x99000000),
+              color: AppColors.shadow,
               blurRadius: 28,
-              offset: Offset(0, 10),
+              offset: const Offset(0, 10),
             ),
           ],
         ),

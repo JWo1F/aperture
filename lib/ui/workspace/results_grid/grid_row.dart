@@ -68,15 +68,15 @@ class GridRow extends StatelessWidget {
           // Insert / delete row tints layer below the selection tint so a
           // selected pending-insert still reads as selected.
           final Color baseBg = isInsert
-              ? const Color(0x145B7CFA)
+              ? AppColors.gridRowInsert
               : isDeleted
-              ? const Color(0x1FE05D5D)
+              ? AppColors.gridRowDelete
               : Colors.transparent;
           final Color hoverBg = hovering
-              ? const Color(0x06FFFFFF)
+              ? AppColors.gridRowHover
               : Colors.transparent;
           final Color selectionBg = hasSelection
-              ? const Color(0x1A5B7CFA)
+              ? AppColors.gridRowSelection
               : Colors.transparent;
           final bg = Color.alphaBlend(
             selectionBg,
@@ -129,8 +129,8 @@ class GridRow extends StatelessWidget {
                 top: 0,
                 width: w,
                 height: kRowHeight,
-                child: const IgnorePointer(
-                  child: ColoredBox(color: Color(0x1A5B7CFA)),
+                child: IgnorePointer(
+                  child: ColoredBox(color: AppColors.gridRowSelection),
                 ),
               ),
             );

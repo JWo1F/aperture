@@ -226,10 +226,10 @@ class _PanelState extends State<Panel> {
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: AppColors.accent, width: 1.5),
             boxShadow: [
-              const BoxShadow(
-                color: Color(0x66000000),
+              BoxShadow(
+                color: AppColors.shadow,
                 blurRadius: 24,
-                offset: Offset(0, 8),
+                offset: const Offset(0, 8),
               ),
               BoxShadow(
                 color: AppColors.accentSoft,
