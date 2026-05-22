@@ -33,6 +33,17 @@ class SqliteService implements DbService {
   /// `LIMIT` are capped so an unbounded scan can't materialise a huge table.
   static const defaultSelectLimit = 10000;
 
+  /// Creates a fresh, empty SQLite database file at [path], replacing any
+  /// file already there. The header write forces SQLite to materialise the
+  /// file on disk so [connect]'s existence check passes afterwards.
+  static void createDatabaseFile(String path) {
+    final file = File(path);
+    if (file.existsSync()) file.deleteSync();
+    sqlite3.open(path)
+      ..execute('PRAGMA user_version = 0;')
+      ..dispose();
+  }
+
   Database? _db;
   SqliteTableRepository? _repository;
 

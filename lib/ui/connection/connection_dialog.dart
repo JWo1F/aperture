@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../models/connection_config.dart';
 import '../../services/db_service.dart';
 import '../../services/one_password_client.dart';
+import '../../services/sqlite_service.dart';
 import '../../state/app_state.dart';
 import '../../state/master_passphrase.dart';
 import '../../theme/app_theme.dart';
@@ -569,40 +570,56 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
         controller: _filePath,
         hint: '/path/to/database.sqlite',
       ),
-      trailing: Hoverable(
-        onTap: _pickFile,
-        builder: (_, hovering) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.folder_open_outlined,
-              size: 14,
-              color: hovering ? AppColors.textPrimary : AppColors.textMuted,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'Browse',
-              style: AppTheme.ui(
-                size: 12,
-                weight: FontWeight.w500,
-                color: hovering ? AppColors.textPrimary : AppColors.textMuted,
-              ),
-            ),
-          ],
-        ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _InlineAction(
+            icon: Icons.add,
+            label: 'New',
+            onTap: _createFile,
+          ),
+          const SizedBox(width: 14),
+          _InlineAction(
+            icon: Icons.folder_open_outlined,
+            label: 'Browse',
+            onTap: _pickFile,
+          ),
+        ],
       ),
     );
   }
 
+  static const _sqliteTypeGroup = XTypeGroup(
+    label: 'SQLite database',
+    extensions: ['db', 'sqlite', 'sqlite3', 'db3'],
+  );
+
   Future<void> _pickFile() async {
-    const group = XTypeGroup(
-      label: 'SQLite database',
-      extensions: ['db', 'sqlite', 'sqlite3', 'db3'],
+    final file = await openFile(
+      acceptedTypeGroups: const [_sqliteTypeGroup],
     );
-    final file = await openFile(acceptedTypeGroups: const [group]);
     if (file != null && mounted) {
       _filePath.text = file.path;
     }
+  }
+
+  Future<void> _createFile() async {
+    final location = await getSaveLocation(
+      suggestedName: 'database.sqlite',
+      acceptedTypeGroups: const [_sqliteTypeGroup],
+    );
+    if (location == null || !mounted) return;
+    try {
+      SqliteService.createDatabaseFile(location.path);
+    } catch (err) {
+      if (!mounted) return;
+      setState(() {
+        _testStatus = _TestStatus.fail;
+        _testMessage = 'Could not create database: $err';
+      });
+      return;
+    }
+    _filePath.text = location.path;
   }
 
   // ---------- credential source row -----------------------------------
@@ -1018,6 +1035,46 @@ class _PlainInput extends StatelessWidget {
         border: InputBorder.none,
         enabledBorder: InputBorder.none,
         focusedBorder: InputBorder.none,
+      ),
+    );
+  }
+}
+
+/// Compact icon + label action used in the SQLite file row ("New" /
+/// "Browse"); brightens on hover.
+class _InlineAction extends StatelessWidget {
+  const _InlineAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Hoverable(
+      onTap: onTap,
+      builder: (_, hovering) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: hovering ? AppColors.textPrimary : AppColors.textMuted,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: AppTheme.ui(
+              size: 12,
+              weight: FontWeight.w500,
+              color: hovering ? AppColors.textPrimary : AppColors.textMuted,
+            ),
+          ),
+        ],
       ),
     );
   }

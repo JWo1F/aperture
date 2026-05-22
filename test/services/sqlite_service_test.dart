@@ -261,4 +261,51 @@ void main() {
       expect(ddl, contains('CREATE INDEX idx_books_title'));
     });
   });
+
+  group('SqliteService.createDatabaseFile', () {
+    late Directory tmp;
+
+    setUp(() async {
+      tmp = await Directory.systemTemp.createTemp('dbv_sqlite_create');
+    });
+
+    tearDown(() async {
+      await tmp.delete(recursive: true);
+    });
+
+    test('materialises a connectable, empty database', () async {
+      final path = '${tmp.path}/fresh.sqlite';
+      SqliteService.createDatabaseFile(path);
+      expect(File(path).existsSync(), isTrue);
+
+      final svc = SqliteService(
+        ConnectionConfig(
+          id: 'c',
+          name: 'fresh',
+          engine: DbEngine.sqlite,
+          filePath: path,
+        ),
+      );
+      await svc.connect();
+      expect(svc.isConnected, isTrue);
+      expect(await svc.introspector.loadSchemas(), isEmpty);
+      await svc.close();
+    });
+
+    test('replaces an existing file with a fresh database', () async {
+      final path = '${tmp.path}/reused.sqlite';
+      final seed = sqlite3.open(path);
+      seed.execute('CREATE TABLE leftover (id INTEGER);');
+      seed.dispose();
+
+      SqliteService.createDatabaseFile(path);
+
+      final reopened = sqlite3.open(path);
+      final tables = reopened.select(
+        "SELECT name FROM sqlite_master WHERE type = 'table'",
+      );
+      reopened.dispose();
+      expect(tables, isEmpty);
+    });
+  });
 }
