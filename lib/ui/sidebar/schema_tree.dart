@@ -60,6 +60,8 @@ class SidebarBody extends StatelessWidget {
       (a, b) => a + b.tables.length,
     );
 
+    final catalogError = deps.catalog.lastError;
+
     final empty = favList.isEmpty &&
         frequent.isEmpty &&
         saved.isEmpty &&
@@ -124,6 +126,7 @@ class SidebarBody extends StatelessWidget {
           label: 'Schemas',
           badge: '$totalTables',
           children: [
+            if (catalogError != null) _CatalogErrorNotice(error: catalogError),
             for (final entry in visibleSchemas)
               SchemaBlock(
                 schema: entry.schema,
@@ -150,6 +153,61 @@ class SidebarBody extends StatelessWidget {
   String? _activeQueryId(TabsController tabs) {
     final tab = tabs.activeTab;
     return tab is QueryTab ? tab.id : null;
+  }
+}
+
+/// Slim banner shown inside the Schemas section when introspection
+/// failed. Without this the sidebar is indistinguishable from a
+/// legitimately-empty database after a phase-0 fetch error.
+class _CatalogErrorNotice extends StatelessWidget {
+  const _CatalogErrorNotice({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.error_outline_rounded,
+            size: 13,
+            color: AppColors.error,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Couldn't load schemas",
+                  style: AppTheme.ui(
+                    size: 11.5,
+                    color: AppColors.textSecondary,
+                    weight: FontWeight.w600,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  error.toString(),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.ui(
+                    size: 10.5,
+                    color: AppColors.textMuted,
+                    weight: FontWeight.w400,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

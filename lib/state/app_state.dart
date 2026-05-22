@@ -99,7 +99,6 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> connect(ConnectionConfig config) async {
-    final gen = catalog.beginGeneration();
     tabsController.clear();
     history.clear();
 
@@ -118,28 +117,15 @@ class AppState extends ChangeNotifier {
 
     final ok = await session.connect(resolved);
     if (!ok) return;
-    if (gen != catalog.generation) return;
 
-    try {
-      final svc = session.service!;
-      final schemas = await catalog.runPhase0(svc, gen);
-      if (schemas == null) return;
-      if (schemas.length == 1) ui.expandSingleSchema(schemas.first.name);
+    final schemas = await _loadCatalog(awaitPhase1: false);
+    if (schemas == null) return;
 
-      final stamped = resolved.copyWith(lastConnectedAt: DateTime.now());
-      // Pass an empty password so the registry's metadata-touch update
-      // doesn't write plaintext back into the store.
-      registry.update(stamped.copyWith(password: ''));
-      session.setActiveConnection(stamped);
-
-      // Phase 1 runs in the background; the listener on catalog will fire
-      // when it lands.
-      unawaited(catalog.runPhase1(svc, gen));
-    } catch (_) {
-      // Phase 0 fetch failed even though the connect succeeded — fall
-      // back to phase-0-empty so the UI shows the connection without
-      // data. The caller can refresh.
-    }
+    final stamped = resolved.copyWith(lastConnectedAt: DateTime.now());
+    // Empty password keeps the metadata-touch update from writing
+    // plaintext back into the store.
+    registry.update(stamped.copyWith(password: ''));
+    session.setActiveConnection(stamped);
   }
 
   /// Resolves the password for [config], pumping the UI through the
@@ -179,29 +165,28 @@ class AppState extends ChangeNotifier {
   Future<void> reconnect() async {
     final ok = await session.reconnect();
     if (!ok) return;
-    final svc = session.service;
-    if (svc == null) return;
-    final gen = catalog.beginGeneration();
-    try {
-      final schemas = await catalog.runPhase0(svc, gen);
-      if (schemas == null) return;
-      unawaited(catalog.runPhase1(svc, gen));
-    } catch (_) {
-      // catalog.lastError will carry the failure for the UI to display.
-    }
+    await _loadCatalog(awaitPhase1: false);
   }
 
   Future<void> refreshCatalog() async {
+    await _loadCatalog(awaitPhase1: true);
+  }
+
+  /// Shared catalog-loading shell for connect / reconnect / refresh.
+  /// Bumps the generation, runs phase 0, auto-expands a lone schema, and
+  /// then either awaits or backgrounds phase 1. Phase-0 and phase-1
+  /// failures land on [CatalogController.lastError] for the sidebar to
+  /// surface; this method never throws.
+  Future<List<DbSchema>?> _loadCatalog({required bool awaitPhase1}) async {
     final svc = session.service;
-    if (svc == null) return;
-    final gen = catalog.beginGeneration();
-    try {
-      final schemas = await catalog.runPhase0(svc, gen);
-      if (schemas == null) return;
-      await catalog.runPhase1(svc, gen);
-    } catch (_) {
-      // Surface left on catalog.lastError; UI can show a retry.
-    }
+    if (svc == null) return null;
+    final schemas = await catalog.load(svc, awaitPhase1: awaitPhase1);
+    if (schemas == null) return null;
+    // Auto-expand on every catalog load (not just initial connect): a
+    // reconnect or manual refresh that lands a one-schema database should
+    // show its tables the same way the first connect did.
+    if (schemas.length == 1) ui.expandSingleSchema(schemas.first.name);
+    return schemas;
   }
 
   // --- Query messages --------------------------------------------------

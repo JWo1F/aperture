@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/db_catalog.dart';
@@ -41,22 +43,50 @@ class CatalogController extends ChangeNotifier {
   }
 
   /// Run phase 0 (schemas only) under [gen]. Late arrivals are dropped.
+  /// Failures land on [lastError] so the sidebar can distinguish "couldn't
+  /// load schemas" from a legitimately empty database.
   Future<List<DbSchema>?> runPhase0(DbService service, int gen) async {
-    final introspector = service.introspector;
-    final schemas = await introspector.loadSchemas();
-    if (gen != _generation) return null;
-    final relationsByOid = <int, DbTable>{};
-    for (final s in schemas) {
-      for (final t in s.tables) {
-        relationsByOid[t.oid] = t;
+    try {
+      final introspector = service.introspector;
+      final schemas = await introspector.loadSchemas();
+      if (gen != _generation) return null;
+      final relationsByOid = <int, DbTable>{};
+      for (final s in schemas) {
+        for (final t in s.tables) {
+          relationsByOid[t.oid] = t;
+        }
       }
+      _catalog = DatabaseCatalog.empty.copyWith(
+        schemas: schemas,
+        relationsByOid: relationsByOid,
+        phases: {CatalogPhase.schemas},
+      );
+      notifyListeners();
+      return schemas;
+    } catch (e) {
+      if (gen == _generation) {
+        _lastError = e;
+        notifyListeners();
+      }
+      return null;
     }
-    _catalog = DatabaseCatalog.empty.copyWith(
-      schemas: schemas,
-      relationsByOid: relationsByOid,
-      phases: {CatalogPhase.schemas},
-    );
-    notifyListeners();
+  }
+
+  /// Bump the generation, fetch phase 0, then either await or background
+  /// phase 1. Returns the phase-0 schema list, or null if the fetch
+  /// failed or a newer generation superseded this load.
+  Future<List<DbSchema>?> load(
+    DbService service, {
+    required bool awaitPhase1,
+  }) async {
+    final gen = beginGeneration();
+    final schemas = await runPhase0(service, gen);
+    if (schemas == null) return null;
+    if (awaitPhase1) {
+      await runPhase1(service, gen);
+    } else {
+      unawaited(runPhase1(service, gen));
+    }
     return schemas;
   }
 
