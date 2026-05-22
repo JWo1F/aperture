@@ -678,7 +678,7 @@ class _TbIcon extends StatelessWidget {
               : AppColors.textMuted.withValues(alpha: 0.4);
           final Color bg = hovering && enabled
               ? AppColors.surfaceHover
-              : Colors.transparent;
+              : AppColors.surfaceHover.withValues(alpha: 0);
           return AnimatedContainer(
             duration: const Duration(milliseconds: 100),
             width: 26,

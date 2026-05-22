@@ -373,10 +373,14 @@ class EngineToggle extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected
               ? AppColors.accentSoft
-              : (hovering ? AppColors.surfaceHover : Colors.transparent),
+              : (hovering
+                    ? AppColors.surfaceHover
+                    : AppColors.surfaceHover.withValues(alpha: 0)),
           borderRadius: Radii.brSm,
           border: Border.all(
-            color: selected ? AppColors.accentRing : Colors.transparent,
+            color: selected
+                ? AppColors.accentRing
+                : AppColors.accentRing.withValues(alpha: 0),
           ),
         ),
         alignment: Alignment.center,
@@ -455,7 +459,9 @@ class CredentialSourceToggle extends StatelessWidget {
         height: 20,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? AppColors.accent : Colors.transparent,
+          color: selected
+              ? AppColors.accent
+              : AppColors.accent.withValues(alpha: 0),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(

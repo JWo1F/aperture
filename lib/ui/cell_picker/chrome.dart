@@ -185,7 +185,7 @@ class _PillButton extends StatelessWidget {
                   : AppColors.accent.withValues(alpha: 0.4))
             : (hovering && enabled
                   ? AppColors.surfaceHover
-                  : Colors.transparent);
+                  : AppColors.surfaceHover.withValues(alpha: 0));
         final Color border = primary
             ? Colors.transparent
             : (enabled ? AppColors.border : AppColors.border);

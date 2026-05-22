@@ -509,7 +509,9 @@ class _ClauseRowState extends State<_ClauseRow> {
                 width: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: hovering ? AppColors.surfaceHover : Colors.transparent,
+                  color: hovering
+                      ? AppColors.surfaceHover
+                      : AppColors.surfaceHover.withValues(alpha: 0),
                   border: Border(left: BorderSide(color: AppColors.hairline)),
                 ),
                 child: Icon(

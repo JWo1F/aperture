@@ -229,7 +229,7 @@ class IconAction extends StatelessWidget {
           height: 30,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: hovering && enabled ? hoverBg : Colors.transparent,
+            color: hovering && enabled ? hoverBg : hoverBg.withValues(alpha: 0),
             borderRadius: BorderRadius.circular(6),
           ),
           child: glyph,

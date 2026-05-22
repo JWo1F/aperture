@@ -147,10 +147,14 @@ class _NewTabButton extends StatelessWidget {
             height: 22,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: hovering ? AppColors.surface : Colors.transparent,
+              color: hovering
+                  ? AppColors.surface
+                  : AppColors.surface.withValues(alpha: 0),
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                color: hovering ? AppColors.borderSoft : Colors.transparent,
+                color: hovering
+                    ? AppColors.borderSoft
+                    : AppColors.borderSoft.withValues(alpha: 0),
                 width: 0.5,
               ),
             ),
@@ -262,10 +266,10 @@ class _Tab extends StatelessWidget {
                       AppColors.surfaceHover.withValues(alpha: 0.55),
                       AppColors.bgDeep,
                     )
-                  : Colors.transparent);
+                  : AppColors.bgDeep.withValues(alpha: 0));
         final borderColor = active
             ? AppColors.borderSoft
-            : Colors.transparent;
+            : AppColors.borderSoft.withValues(alpha: 0);
         final labelColor = active
             ? AppColors.textPrimary
             : (hovering ? AppColors.textSecondary : AppColors.textMuted);
@@ -371,7 +375,7 @@ class _CloseButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: visible && hovering
               ? AppColors.surfaceHover
-              : Colors.transparent,
+              : AppColors.surfaceHover.withValues(alpha: 0),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Icon(

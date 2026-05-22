@@ -503,7 +503,7 @@ class _QtBorderButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: hovering && enabled
                 ? AppColors.surfaceHover
-                : Colors.transparent,
+                : AppColors.surfaceHover.withValues(alpha: 0),
             borderRadius: Radii.brSm,
             border: Border.all(
               color: hovering && enabled
