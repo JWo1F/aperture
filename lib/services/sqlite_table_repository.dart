@@ -170,7 +170,11 @@ class SqliteTableRepository implements TableRepository {
       '${table.qualifiedName}',
     );
     buf.writeln();
-    buf.writeln(createSql == null ? '-- definition unavailable' : '$createSql;');
+    buf.writeln(
+      createSql == null
+          ? '-- definition unavailable'
+          : '${_prettyCreateTable(createSql)};',
+    );
     if (indexRows.isNotEmpty) {
       buf.writeln();
       buf.writeln('-- Indexes');
@@ -289,4 +293,76 @@ String _renderAssignment(CellEditValue value) => switch (value) {
 String _literal(String? value) {
   if (value == null) return 'NULL';
   return "'${value.replaceAll("'", "''")}'";
+}
+
+/// Reflows a verbatim `CREATE TABLE` statement onto one column/constraint per
+/// line. SQLite stores `CREATE` text exactly as written, and dumpers (Rails,
+/// etc.) emit the whole body on a single line. The parenthesised body is split
+/// on top-level commas — commas inside nested parens or quoted strings and
+/// identifiers (`'…'`, `"…"`, `` `…` ``, `[…]`) are left alone — and runs of
+/// whitespace outside quotes are collapsed. Non-table statements (views) and
+/// anything that fails to parse are returned untouched.
+String _prettyCreateTable(String sql) {
+  if (!RegExp(r'^\s*CREATE\s+TABLE', caseSensitive: false).hasMatch(sql)) {
+    return sql;
+  }
+  final open = sql.indexOf('(');
+  if (open < 0) return sql;
+
+  final parts = <String>[];
+  final current = StringBuffer();
+  var pendingSpace = false;
+  var depth = 0;
+  var close = -1;
+  String? quote;
+
+  void emit(String ch) {
+    if (pendingSpace && current.isNotEmpty) current.write(' ');
+    pendingSpace = false;
+    current.write(ch);
+  }
+
+  for (var i = open + 1; i < sql.length; i++) {
+    final ch = sql[i];
+    if (quote != null) {
+      current.write(ch);
+      if (ch == quote) {
+        if (quote != ']' && i + 1 < sql.length && sql[i + 1] == quote) {
+          current.write(sql[++i]);
+        } else {
+          quote = null;
+        }
+      }
+      continue;
+    }
+    if (ch == "'" || ch == '"' || ch == '`' || ch == '[') {
+      quote = ch == '[' ? ']' : ch;
+      emit(ch);
+    } else if (ch == '(') {
+      depth++;
+      emit(ch);
+    } else if (ch == ')' && depth == 0) {
+      close = i;
+      break;
+    } else if (ch == ')') {
+      depth--;
+      emit(ch);
+    } else if (ch == ',' && depth == 0) {
+      parts.add(current.toString().trim());
+      current.clear();
+      pendingSpace = false;
+    } else if (ch.trim().isEmpty) {
+      pendingSpace = true;
+    } else {
+      emit(ch);
+    }
+  }
+  if (close < 0) return sql;
+  parts.add(current.toString().trim());
+
+  final header = sql.substring(0, open).replaceAll(RegExp(r'\s+'), ' ').trim();
+  final body = parts.where((p) => p.isNotEmpty).map((p) => '  $p').join(',\n');
+  final trailer = sql.substring(close + 1).trim();
+  final out = '$header (\n$body\n)';
+  return trailer.isEmpty ? out : '$out $trailer';
 }
