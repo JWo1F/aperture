@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'state/app_state.dart';
 import 'theme/app_theme.dart';
-import 'ui/app_shell.dart';
+import 'ui/app_shell/app_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
