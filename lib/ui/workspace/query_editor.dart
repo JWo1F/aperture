@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/count_format.dart';
 import '../../models/db_object.dart';
 import '../../models/query_result.dart';
 import '../../services/sql_complete.dart';
@@ -19,7 +20,7 @@ import '../widgets/common.dart';
 import '../widgets/pagebar.dart';
 import '../widgets/resize_handle.dart';
 import 'query_messages_view.dart';
-import 'query_plan_view.dart';
+import 'query_plan/view/query_plan_view.dart';
 import 'results_grid/results_grid.dart';
 
 /// Syntax-highlighted SQL editor over the result grid.

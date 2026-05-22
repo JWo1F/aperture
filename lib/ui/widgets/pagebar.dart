@@ -113,17 +113,6 @@ class PbChev extends StatelessWidget {
   }
 }
 
-/// `12,345`-style grouping for the row-count stats.
-String withCommas(int n) {
-  final s = n.toString();
-  final buf = StringBuffer();
-  for (var i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
-    buf.write(s[i]);
-  }
-  return buf.toString();
-}
-
 /// `HH:MM:SS` clock used by "refreshed" stamps.
 String formatPagebarClock(DateTime dt) {
   String two(int n) => n.toString().padLeft(2, '0');

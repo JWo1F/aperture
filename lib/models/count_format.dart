@@ -10,6 +10,19 @@ String? tableStat(DbTable table) {
   return parts.isEmpty ? null : parts.join(' / ');
 }
 
+/// `12,345`-style thousands grouping. Used wherever a raw count or row
+/// estimate is shown in full precision (pagebars, query-plan metrics,
+/// advice copy).
+String withCommas(int n) {
+  final s = n.toString();
+  final buf = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
+    buf.write(s[i]);
+  }
+  return buf.toString();
+}
+
 /// Human-friendly row count: `940`, `1.2k`, `110k`, `3.4M`, `2.1B`.
 String compactCount(int n) {
   if (n < 1000) return '$n';
