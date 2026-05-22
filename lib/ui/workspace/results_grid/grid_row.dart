@@ -186,7 +186,8 @@ class GridRow extends StatelessWidget {
     } else {
       // Pending edits (raw user-typed strings) bypass the cache — they can
       // change on every keystroke. Original values flow through the cache.
-      final String? displayValue = pending is CellLiteral
+      final bool fromPending = pending is CellLiteral;
+      final String? displayValue = fromPending
           ? pending.value
           : formatCache.format(sourceIdx, column, original);
       final bool isNull = displayValue == null;
@@ -200,30 +201,39 @@ class GridRow extends StatelessWidget {
         );
         tooltipUseful = false;
         tooltipText = 'NULL';
-      } else if (!isEdited && (original is Map || original is List)) {
-        content = Text.rich(
-          TextSpan(children: formatCache.spans(sourceIdx, column, displayValue)),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        );
-        tooltipUseful = true;
-        tooltipText = displayValue;
       } else {
-        content = Text(
-          displayValue,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: gridCellStyle.copyWith(
-            color: isEdited
-                ? AppColors.textPrimary
-                : cellColor(
-                    original,
-                    dataType: columnMeta?[columns[column]]?.dataType,
-                  ),
-          ),
-        );
-        tooltipUseful = wantsTooltip(original, displayValue);
-        tooltipText = truncateForTooltip(displayValue);
+        // The cell paints one ellipsized line — render a length-capped
+        // string so the layout engine never shapes a multi-kilobyte value.
+        // Tooltips still receive the full [displayValue].
+        final String display = fromPending
+            ? truncateForCell(displayValue)
+            : formatCache.displayText(sourceIdx, column, original)!;
+
+        if (!isEdited && (original is Map || original is List)) {
+          content = Text.rich(
+            TextSpan(children: formatCache.spans(sourceIdx, column, display)),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          );
+          tooltipUseful = true;
+          tooltipText = displayValue;
+        } else {
+          content = Text(
+            display,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: gridCellStyle.copyWith(
+              color: isEdited
+                  ? AppColors.textPrimary
+                  : cellColor(
+                      original,
+                      dataType: columnMeta?[columns[column]]?.dataType,
+                    ),
+            ),
+          );
+          tooltipUseful = wantsTooltip(original, displayValue);
+          tooltipText = truncateForTooltip(displayValue);
+        }
       }
     }
 
