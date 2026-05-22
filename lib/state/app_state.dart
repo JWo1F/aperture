@@ -194,9 +194,8 @@ class AppState extends ChangeNotifier {
   /// Wipe a query tab's message log: the in-memory copy on the tab plus
   /// the persisted copy on the active connection.
   void clearQueryMessages(QueryTab tab) {
-    tab.messages.clear();
+    tab.clearMessages();
     perConnection.clearQueryMessages(tab.id);
-    tab.markChanged();
   }
 
   // --- Navigation history ---------------------------------------------

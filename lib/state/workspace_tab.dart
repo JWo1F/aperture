@@ -1,9 +1,13 @@
+import 'dart:async';
+import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/cell_edit.dart';
 import '../models/db_object.dart';
 import '../models/query_message.dart';
 import '../models/query_result.dart';
+import '../models/value_format.dart';
 
 export '../models/cell_edit.dart'
     show CellEdit, CellEditValue, CellLiteral, CellDefault, PendingInsert, EditBatch;
@@ -12,26 +16,39 @@ export '../models/query_message.dart';
 /// A tab in the centre workspace. Either a free-form SQL editor, a data
 /// view bound to one relation, or a schema viewer.
 ///
-/// Each tab is its own [ChangeNotifier] so a widget tree scoped to one
-/// tab can rebuild on its own data without dragging in unrelated state.
-/// Callers that mutate tab fields go through the setters below, which
-/// notify on change; mutations to internal collections (the cell-edit
-/// map, the column-widths map) are followed by an explicit
-/// [markChanged] call from the [TabsController] mutator.
+/// Each tab is its own [ChangeNotifier] and owns its mutable state behind
+/// methods that internally notify; collections expose unmodifiable views,
+/// so a caller can never desync the UI by reaching past a setter.
 sealed class WorkspaceTab extends ChangeNotifier {
   WorkspaceTab(this.id);
 
   final String id;
 
-  /// Per-tab column widths, keyed by column name. Persisted for the tab's
-  /// lifetime so resizes survive pagination, filters, sorts, and tab switches.
-  final Map<String, double> columnWidths = {};
+  final Map<String, double> _columnWidths = {};
+
+  /// Per-tab column widths, keyed by column name. Read-only view; mutate
+  /// through [setColumnWidth], [clearColumnWidths], or [mergeSavedWidths].
+  late final Map<String, double> columnWidths =
+      UnmodifiableMapView(_columnWidths);
 
   String get title;
 
-  /// Notify all listeners that something on this tab changed. Internal
-  /// to the state layer — UI code never calls this directly.
-  void markChanged() => notifyListeners();
+  void setColumnWidth(String column, double width) {
+    _columnWidths[column] = width;
+    notifyListeners();
+  }
+
+  void clearColumnWidths() {
+    if (_columnWidths.isEmpty) return;
+    _columnWidths.clear();
+    notifyListeners();
+  }
+
+  void mergeSavedWidths(Map<String, double> saved) {
+    if (saved.isEmpty) return;
+    _columnWidths.addAll(saved);
+    notifyListeners();
+  }
 }
 
 /// Which section of the query tab the user is currently viewing below
@@ -51,6 +68,7 @@ class QueryTab extends WorkspaceTab {
   DateTime? _lastRefreshedAt;
   String? _lastRunSql;
   Duration? _autoRefreshInterval;
+  Timer? _autoRefreshTimer;
   QueryResultsView _view = QueryResultsView.results;
 
   /// Plan-tab state. [planJson] is the top-level node of the parsed JSON
@@ -61,8 +79,10 @@ class QueryTab extends WorkspaceTab {
   bool _planLoading = false;
   String? _planSourceSql;
 
+  final List<QueryMessage> _messages = [];
+
   /// Per-tab message log — every SQL this tab issued, newest last.
-  final List<QueryMessage> messages = [];
+  late final List<QueryMessage> messages = UnmodifiableListView(_messages);
 
   /// Display name shown in the tab strip + sidebar. User-renamable via
   /// the sidebar context menu; auto-incremented as `Query 1`, `Query 2`,
@@ -165,14 +185,45 @@ class QueryTab extends WorkspaceTab {
     notifyListeners();
   }
 
-  /// Auto-refresh cadence for this query tab. The timer in [TabsController]
-  /// re-runs [lastRunSql] on every tick; `null` means manual.
+  /// Auto-refresh cadence. Pair with [setAutoRefresh] to wire the timer.
   Duration? get autoRefreshInterval => _autoRefreshInterval;
 
-  set autoRefreshInterval(Duration? value) {
-    if (_autoRefreshInterval == value) return;
-    _autoRefreshInterval = value;
+  /// Replace the auto-refresh schedule. `null` cancels. The timer lives on
+  /// the tab so it shuts down with [dispose]; [onTick] runs every tick
+  /// until cancelled.
+  void setAutoRefresh(Duration? interval, VoidCallback onTick) {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = null;
+    _autoRefreshInterval = interval;
+    if (interval != null) {
+      _autoRefreshTimer = Timer.periodic(interval, (_) => onTick());
+    }
     notifyListeners();
+  }
+
+  void hydrateMessages(Iterable<QueryMessage> persisted) {
+    _messages.addAll(persisted);
+    if (_messages.isNotEmpty) notifyListeners();
+  }
+
+  void appendQueryMessage(QueryMessage message, {required int maxMessages}) {
+    _messages.add(message);
+    if (_messages.length > maxMessages) {
+      _messages.removeRange(0, _messages.length - maxMessages);
+    }
+    notifyListeners();
+  }
+
+  void clearMessages() {
+    if (_messages.isEmpty) return;
+    _messages.clear();
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -230,19 +281,24 @@ class TableTab extends WorkspaceTab {
   String _filter = '';
   String _orderBy = '';
   Duration? _autoRefreshInterval;
+  Timer? _autoRefreshTimer;
   DateTime? _lastRefreshedAt;
+
+  final Map<CellEdit, CellEditValue> _edits = {};
+  final Set<int> _deletedRows = {};
+  final List<PendingInsert> _inserts = [];
 
   /// Pending, un-applied cell edits, keyed by (row, column). Only meaningful
   /// for persistent rows — pending inserts mutate [inserts] directly.
-  final Map<CellEdit, CellEditValue> edits = {};
+  late final Map<CellEdit, CellEditValue> edits = UnmodifiableMapView(_edits);
 
   /// Row indexes (into [result.rows]) marked for DELETE on Apply. Cell
   /// edits on a deleted row are dropped — DELETE supersedes UPDATE.
-  final Set<int> deletedRows = {};
+  late final Set<int> deletedRows = UnmodifiableSetView(_deletedRows);
 
   /// Synthetic rows queued for INSERT. The grid renders them after the
   /// persistent rows so the user can edit their cells inline before Apply.
-  final List<PendingInsert> inserts = [];
+  late final List<PendingInsert> inserts = UnmodifiableListView(_inserts);
 
   QueryResult? get result => _result;
 
@@ -318,13 +374,18 @@ class TableTab extends WorkspaceTab {
     notifyListeners();
   }
 
-  /// When set, [TabsController] periodically re-fetches the current page on
-  /// this interval. The Timer itself lives on the tab; [TabsController.dispose]
-  /// makes sure it shuts down when the connection drops.
+  /// Auto-refresh cadence. Pair with [setAutoRefresh] to wire the timer.
   Duration? get autoRefreshInterval => _autoRefreshInterval;
 
-  set autoRefreshInterval(Duration? value) {
-    _autoRefreshInterval = value;
+  /// Replace the auto-refresh schedule. `null` cancels. The timer lives on
+  /// the tab and is cancelled by [dispose].
+  void setAutoRefresh(Duration? interval, VoidCallback onTick) {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = null;
+    _autoRefreshInterval = interval;
+    if (interval != null) {
+      _autoRefreshTimer = Timer.periodic(interval, (_) => onTick());
+    }
     notifyListeners();
   }
 
@@ -339,17 +400,104 @@ class TableTab extends WorkspaceTab {
   }
 
   bool get hasEdits =>
-      edits.isNotEmpty || deletedRows.isNotEmpty || inserts.isNotEmpty;
+      _edits.isNotEmpty || _deletedRows.isNotEmpty || _inserts.isNotEmpty;
 
   /// Aggregate count of pending operations (cell edits + row deletes + row
   /// inserts) shown in the pending-edits chip.
   int get pendingOpCount =>
-      edits.length + deletedRows.length + inserts.length;
+      _edits.length + _deletedRows.length + _inserts.length;
 
   int get pageCount =>
       _totalRows == 0 ? 1 : ((_totalRows - 1) ~/ _pageSize) + 1;
 
   int get offset => _page * _pageSize;
+
+  /// Wipe pending cell edits without touching inserts/deletes. Used by
+  /// page loads — a fresh page invalidates row-indexed edits.
+  void clearEdits() {
+    if (_edits.isEmpty) return;
+    _edits.clear();
+    notifyListeners();
+  }
+
+  /// Wipe every pending mutation. Used after a successful Apply and by
+  /// the explicit "Reset edits" action.
+  void resetAllEdits() {
+    if (_edits.isEmpty && _deletedRows.isEmpty && _inserts.isEmpty) return;
+    _edits.clear();
+    _deletedRows.clear();
+    _inserts.clear();
+    notifyListeners();
+  }
+
+  /// Stage a cell edit on a persistent row. A value equal to the original
+  /// (via [formatCellValue]) reverts to "no edit"; otherwise the edit is
+  /// recorded under [CellEdit(row, column)].
+  void setCellEdit(int row, int column, CellEditValue value) {
+    final result = _result;
+    if (result == null) return;
+    final original = result.rows[row][column];
+    final originalText = formatCellValue(original);
+    final key = CellEdit(row, column);
+    final matchesOriginal = value is CellLiteral && value.value == originalText;
+    if (matchesOriginal) {
+      _edits.remove(key);
+    } else {
+      _edits[key] = value;
+    }
+    notifyListeners();
+  }
+
+  void revertCellEdit(int row, int column) {
+    if (_edits.remove(CellEdit(row, column)) != null) {
+      notifyListeners();
+    }
+  }
+
+  /// Update a single column value on a pending insert row identified by
+  /// its index into [inserts].
+  void setInsertCellValue(int insertIdx, String columnName, CellEditValue value) {
+    if (insertIdx < 0 || insertIdx >= _inserts.length) return;
+    _inserts[insertIdx].values[columnName] = value;
+    notifyListeners();
+  }
+
+  /// Mark a persistent row for DELETE. Cell edits on that row are dropped
+  /// — DELETE overrides UPDATE.
+  void deletePersistentRow(int row) {
+    final result = _result;
+    if (result == null) return;
+    if (row < 0 || row >= result.rows.length) return;
+    _deletedRows.add(row);
+    _edits.removeWhere((key, _) => key.row == row);
+    notifyListeners();
+  }
+
+  void restoreDeletedRow(int row) {
+    if (_deletedRows.remove(row)) notifyListeners();
+  }
+
+  void addInsert(PendingInsert insert) {
+    _inserts.add(insert);
+    notifyListeners();
+  }
+
+  void removeInsertAt(int insertIdx) {
+    if (insertIdx < 0 || insertIdx >= _inserts.length) return;
+    _inserts.removeAt(insertIdx);
+    notifyListeners();
+  }
+
+  /// Snapshot of pending inserts for batch construction. Copies the list
+  /// so the caller can hand it to [EditBatch] without aliasing the live
+  /// view.
+  List<PendingInsert> snapshotInserts() => List.of(_inserts);
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   String get title => table.name;

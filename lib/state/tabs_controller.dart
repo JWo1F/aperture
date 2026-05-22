@@ -19,9 +19,10 @@ import 'workspace_tab.dart';
 /// Owns the workspace tab list, the active index, and per-tab actions
 /// (open, close, load page, apply edits, run query, …).
 ///
-/// The per-tab state still lives on each [WorkspaceTab] for now; Phase 2.4
-/// promotes individual tabs to their own ChangeNotifiers so cell-edit
-/// changes only rebuild their tab.
+/// Per-tab mutable state lives on each [WorkspaceTab]; this controller
+/// orchestrates *which* tab a mutation lands on but never touches a tab's
+/// collections directly. That keeps notify-on-change inside the tab and
+/// removes the "forgot to repaint after mutating" footgun.
 class TabsController extends ChangeNotifier {
   TabsController({
     required this.session,
@@ -38,10 +39,6 @@ class TabsController extends ChangeNotifier {
   final List<WorkspaceTab> _tabs = [];
   int _activeIndex = 0;
   int _idCounter = 0;
-
-  // Auto-refresh timers, keyed by tab id. Will move onto each TableTab in
-  // Phase 2.4.
-  final Map<String, Timer> _autoRefreshTimers = {};
 
   List<WorkspaceTab> get tabs => List.unmodifiable(_tabs);
 
@@ -77,18 +74,12 @@ class TabsController extends ChangeNotifier {
 
   /// Reset everything when the connection changes (or disconnects).
   void clear() {
-    cancelAllAutoRefresh();
+    for (final t in _tabs) {
+      t.dispose();
+    }
     _tabs.clear();
     _activeIndex = 0;
     notifyListeners();
-  }
-
-  /// Cancel pending edits clearing across all tabs (e.g. on disconnect).
-  void cancelAllAutoRefresh() {
-    for (final t in _autoRefreshTimers.values) {
-      t.cancel();
-    }
-    _autoRefreshTimers.clear();
   }
 
   void _select(int index) {
@@ -157,8 +148,7 @@ class TabsController extends ChangeNotifier {
     final tab = QueryTab(q.id, name: q.name, sql: q.sql);
     // Rehydrate the per-tab message log from the connection store so the
     // Messages tab opens populated after a restart.
-    final persisted = perConnection.messagesFor(q.id);
-    if (persisted.isNotEmpty) tab.messages.addAll(persisted);
+    tab.hydrateMessages(perConnection.messagesFor(q.id));
     _tabs.add(tab);
     _select(_tabs.length - 1);
   }
@@ -166,8 +156,8 @@ class TabsController extends ChangeNotifier {
   void closeTab(String id) {
     final i = _tabs.indexWhere((t) => t.id == id);
     if (i == -1) return;
-    _autoRefreshTimers.remove(id)?.cancel();
-    _tabs.removeAt(i);
+    final removed = _tabs.removeAt(i);
+    removed.dispose();
     if (_activeIndex >= _tabs.length) {
       _activeIndex = _tabs.isEmpty ? 0 : _tabs.length - 1;
     }
@@ -181,7 +171,7 @@ class TabsController extends ChangeNotifier {
       orElse: () => throw StateError('Tab not found'),
     );
     for (final t in _tabs) {
-      if (t.id != keepId) _autoRefreshTimers.remove(t.id)?.cancel();
+      if (t.id != keepId) t.dispose();
     }
     _tabs
       ..clear()
@@ -195,7 +185,7 @@ class TabsController extends ChangeNotifier {
     final i = _tabs.indexWhere((t) => t.id == anchorId);
     if (i == -1 || i == _tabs.length - 1) return;
     for (final t in _tabs.sublist(i + 1)) {
-      _autoRefreshTimers.remove(t.id)?.cancel();
+      t.dispose();
     }
     _tabs.removeRange(i + 1, _tabs.length);
     if (_activeIndex >= _tabs.length) _activeIndex = _tabs.length - 1;
@@ -204,7 +194,9 @@ class TabsController extends ChangeNotifier {
   }
 
   void closeAllTabs() {
-    cancelAllAutoRefresh();
+    for (final t in _tabs) {
+      t.dispose();
+    }
     _tabs.clear();
     _activeIndex = 0;
     history.clear();
@@ -266,7 +258,7 @@ class TabsController extends ChangeNotifier {
     }
     final tab = TableTab(_nextId(), table);
     final savedWidths = perConnection.columnWidthsFor(table);
-    if (savedWidths != null) tab.columnWidths.addAll(savedWidths);
+    if (savedWidths != null) tab.mergeSavedWidths(savedWidths);
     _tabs.add(tab);
     _select(_tabs.length - 1);
     await loadTablePage(tab, 0);
@@ -278,8 +270,7 @@ class TabsController extends ChangeNotifier {
     if (service == null) return;
     tab.loading = true;
     tab.page = page;
-    tab.edits.clear();
-    tab.markChanged();
+    tab.clearEdits();
     notifyListeners();
 
     try {
@@ -339,8 +330,7 @@ class TabsController extends ChangeNotifier {
     final next = selectList.trim().isEmpty ? '*' : selectList.trim();
     if (next == tab.selectList) return;
     tab.selectList = next;
-    tab.columnWidths.clear();
-    tab.markChanged();
+    tab.clearColumnWidths();
     history.pushTab(tab);
     await loadTablePage(tab, 0);
   }
@@ -390,32 +380,21 @@ class TabsController extends ChangeNotifier {
   }
 
   void setQueryAutoRefresh(QueryTab tab, Duration? interval) {
-    _autoRefreshTimers.remove(tab.id)?.cancel();
-    tab.autoRefreshInterval = interval;
-    if (interval != null) {
-      _autoRefreshTimers[tab.id] = Timer.periodic(interval, (_) {
-        if (!_tabs.contains(tab)) return;
-        if (tab.running) return;
-        final sql = tab.lastRunSql;
-        if (sql == null) return;
-        unawaited(runQuery(tab, sqlOverride: sql));
-      });
-    }
-    notifyListeners();
+    tab.setAutoRefresh(interval, () {
+      if (!_tabs.contains(tab)) return;
+      if (tab.running) return;
+      final sql = tab.lastRunSql;
+      if (sql == null) return;
+      unawaited(runQuery(tab, sqlOverride: sql));
+    });
   }
 
   void setTableAutoRefresh(TableTab tab, Duration? interval) {
-    _autoRefreshTimers.remove(tab.id)?.cancel();
-    tab.autoRefreshInterval = interval;
-    if (interval != null) {
-      _autoRefreshTimers[tab.id] = Timer.periodic(interval, (_) {
-        // Bail if the tab was closed between scheduling and firing.
-        if (!_tabs.contains(tab)) return;
-        if (tab.loading || tab.applying || tab.hasEdits) return;
-        unawaited(loadTablePage(tab, tab.page));
-      });
-    }
-    notifyListeners();
+    tab.setAutoRefresh(interval, () {
+      if (!_tabs.contains(tab)) return;
+      if (tab.loading || tab.applying || tab.hasEdits) return;
+      unawaited(loadTablePage(tab, tab.page));
+    });
   }
 
   void setCellEdit(TableTab tab, int row, int column, CellEditValue value) {
@@ -423,24 +402,10 @@ class TabsController extends ChangeNotifier {
     if (result == null) return;
     final insertIdx = row - result.rows.length;
     if (insertIdx >= 0) {
-      if (insertIdx >= tab.inserts.length) return;
-      final columnName = result.columns[column];
-      tab.inserts[insertIdx].values[columnName] = value;
-      tab.markChanged();
-      notifyListeners();
+      tab.setInsertCellValue(insertIdx, result.columns[column], value);
       return;
     }
-    final original = result.rows[row][column];
-    final originalText = formatCellValue(original);
-    final key = CellEdit(row, column);
-    final matchesOriginal = value is CellLiteral && value.value == originalText;
-    if (matchesOriginal) {
-      tab.edits.remove(key);
-    } else {
-      tab.edits[key] = value;
-    }
-    tab.markChanged();
-    notifyListeners();
+    tab.setCellEdit(row, column, value);
   }
 
   void revertCellEdit(TableTab tab, int row, int column) {
@@ -452,17 +417,11 @@ class TabsController extends ChangeNotifier {
       // pending. Use deleteRow / Delete row to discard it.
       return;
     }
-    tab.edits.remove(CellEdit(row, column));
-    tab.markChanged();
-    notifyListeners();
+    tab.revertCellEdit(row, column);
   }
 
   void resetTableEdits(TableTab tab) {
-    tab.edits.clear();
-    tab.deletedRows.clear();
-    tab.inserts.clear();
-    tab.markChanged();
-    notifyListeners();
+    tab.resetAllEdits();
   }
 
   /// Mark a persistent row for DELETE, or discard a virtual insert row.
@@ -472,24 +431,14 @@ class TabsController extends ChangeNotifier {
     if (result == null) return;
     final insertIdx = row - result.rows.length;
     if (insertIdx >= 0) {
-      if (insertIdx >= tab.inserts.length) return;
-      tab.inserts.removeAt(insertIdx);
-      tab.markChanged();
-      notifyListeners();
+      tab.removeInsertAt(insertIdx);
       return;
     }
-    if (row < 0 || row >= result.rows.length) return;
-    tab.deletedRows.add(row);
-    tab.edits.removeWhere((key, _) => key.row == row);
-    tab.markChanged();
-    notifyListeners();
+    tab.deletePersistentRow(row);
   }
 
   void restoreDeletedRow(TableTab tab, int row) {
-    if (tab.deletedRows.remove(row)) {
-      tab.markChanged();
-      notifyListeners();
-    }
+    tab.restoreDeletedRow(row);
   }
 
   /// Queue a duplicate of [row] as a pending INSERT. Primary-key columns
@@ -539,9 +488,7 @@ class TabsController extends ChangeNotifier {
               : sourceValues[name]!,
     };
 
-    tab.inserts.add(PendingInsert(afterRow: anchor, values: values));
-    tab.markChanged();
-    notifyListeners();
+    tab.addInsert(PendingInsert(afterRow: anchor, values: values));
   }
 
   /// Queue a blank pending INSERT anchored below [row]. Every column is
@@ -565,9 +512,7 @@ class TabsController extends ChangeNotifier {
       for (final name in result.columns) name: const CellDefault(),
     };
 
-    tab.inserts.add(PendingInsert(afterRow: anchor, values: values));
-    tab.markChanged();
-    notifyListeners();
+    tab.addInsert(PendingInsert(afterRow: anchor, values: values));
   }
 
   EditBatch _buildBatch(TableTab tab) {
@@ -590,7 +535,7 @@ class TabsController extends ChangeNotifier {
     return EditBatch(
       updatesByCtid: updates,
       deleteCtids: deletes,
-      inserts: List.of(tab.inserts),
+      inserts: tab.snapshotInserts(),
     );
   }
 
@@ -628,9 +573,7 @@ class TabsController extends ChangeNotifier {
     tab.applying = false;
 
     if (error == null) {
-      tab.edits.clear();
-      tab.deletedRows.clear();
-      tab.inserts.clear();
+      tab.resetAllEdits();
       await loadTablePage(tab, tab.page);
     } else {
       notifyListeners();
@@ -661,13 +604,10 @@ class TabsController extends ChangeNotifier {
       affectedRows: result.affectedRows,
       error: result.isError ? result.error : null,
     );
-    tab.messages.add(message);
-    if (tab.messages.length > PerConnectionStore.maxMessagesPerQuery) {
-      tab.messages.removeRange(
-        0,
-        tab.messages.length - PerConnectionStore.maxMessagesPerQuery,
-      );
-    }
+    tab.appendQueryMessage(
+      message,
+      maxMessages: PerConnectionStore.maxMessagesPerQuery,
+    );
     perConnection.appendQueryMessage(tab.id, message);
     tab.running = false;
     notifyListeners();
