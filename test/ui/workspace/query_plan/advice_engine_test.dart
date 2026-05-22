@@ -14,8 +14,8 @@ Map<String, dynamic> plan({
 }) {
   return {
     'Node Type': kind,
-    if (children != null) 'Plans': children,
-    if (extra != null) ...extra,
+    'Plans': ?children,
+    ...?extra,
   };
 }
 
