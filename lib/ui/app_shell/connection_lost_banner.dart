@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
+import '../../state/session_controller.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
 
 /// Slim banner shown above the workspace while a live connection has
 /// dropped — surfaces the error and a Reconnect action.
 class ConnectionLostBanner extends StatefulWidget {
-  const ConnectionLostBanner({super.key, required this.state});
-
-  final AppState state;
+  const ConnectionLostBanner({super.key});
 
   @override
   State<ConnectionLostBanner> createState() => _ConnectionLostBannerState();
@@ -22,7 +22,7 @@ class _ConnectionLostBannerState extends State<ConnectionLostBanner> {
     if (_reconnecting) return;
     setState(() => _reconnecting = true);
     try {
-      await widget.state.reconnect();
+      await context.read<AppState>().reconnect();
     } finally {
       if (mounted) setState(() => _reconnecting = false);
     }
@@ -30,7 +30,7 @@ class _ConnectionLostBannerState extends State<ConnectionLostBanner> {
 
   @override
   Widget build(BuildContext context) {
-    final error = widget.state.connectionError;
+    final error = context.read<SessionController>().error;
     return Container(
       color: AppColors.accent.withValues(alpha: 0.10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

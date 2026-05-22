@@ -1,14 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/db_object.dart';
 import '../../state/app_state.dart';
+import '../../state/catalog_controller.dart';
+import '../../state/connection_registry.dart';
+import '../../state/event_log.dart';
+import '../../state/navigation_history.dart';
+import '../../state/per_connection_store.dart';
+import '../../state/preferences_controller.dart';
+import '../../state/session_controller.dart';
+import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../about/about_dialog.dart';
 
 /// Opens the global command palette (⌘K). Resolves when it closes.
-Future<void> showCommandPalette(BuildContext context, AppState state) {
+///
+/// Captures every controller the palette needs at the call site so the
+/// dialog's own [BuildContext] (which sits below an Overlay and therefore
+/// outside the provider scope of the caller) never has to look them up.
+Future<void> showCommandPalette(BuildContext context) {
+  final deps = _PaletteDeps(
+    appState: context.read<AppState>(),
+    preferences: context.read<PreferencesController>(),
+    session: context.read<SessionController>(),
+    registry: context.read<ConnectionRegistry>(),
+    catalog: context.read<CatalogController>(),
+    perConnection: context.read<PerConnectionStore>(),
+    tabs: context.read<TabsController>(),
+    history: context.read<NavigationHistory>(),
+    eventLog: context.read<EventLog>(),
+  );
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
@@ -24,7 +48,7 @@ Future<void> showCommandPalette(BuildContext context, AppState state) {
           offset: Offset(0, -10 * (1 - curved)),
           child: Transform.scale(
             scale: 0.985 + 0.015 * curved,
-            child: _PaletteScaffold(state: state),
+            child: _PaletteScaffold(deps: deps),
           ),
         ),
       );
@@ -32,10 +56,36 @@ Future<void> showCommandPalette(BuildContext context, AppState state) {
   );
 }
 
-class _PaletteScaffold extends StatelessWidget {
-  const _PaletteScaffold({required this.state});
+/// Bundle of controllers the palette pulls from. Each is read once at
+/// open-time so the palette's internal builders don't repeat lookups.
+class _PaletteDeps {
+  _PaletteDeps({
+    required this.appState,
+    required this.preferences,
+    required this.session,
+    required this.registry,
+    required this.catalog,
+    required this.perConnection,
+    required this.tabs,
+    required this.history,
+    required this.eventLog,
+  });
 
-  final AppState state;
+  final AppState appState;
+  final PreferencesController preferences;
+  final SessionController session;
+  final ConnectionRegistry registry;
+  final CatalogController catalog;
+  final PerConnectionStore perConnection;
+  final TabsController tabs;
+  final NavigationHistory history;
+  final EventLog eventLog;
+}
+
+class _PaletteScaffold extends StatelessWidget {
+  const _PaletteScaffold({required this.deps});
+
+  final _PaletteDeps deps;
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +93,7 @@ class _PaletteScaffold extends StatelessWidget {
       alignment: const Alignment(0, -0.5),
       child: Material(
         color: Colors.transparent,
-        child: _Palette(state: state),
+        child: _Palette(deps: deps),
       ),
     );
   }
@@ -263,9 +313,9 @@ class _ItemRow extends _Row {
 }
 
 class _Palette extends StatefulWidget {
-  const _Palette({required this.state});
+  const _Palette({required this.deps});
 
-  final AppState state;
+  final _PaletteDeps deps;
 
   @override
   State<_Palette> createState() => _PaletteState();
@@ -303,8 +353,8 @@ class _PaletteState extends State<_Palette> {
   // --- Item sources --------------------------------------------------------
 
   List<_Item> _commands() {
-    final state = widget.state;
-    final connected = state.status == ConnectionStatus.connected;
+    final deps = widget.deps;
+    final connected = deps.session.status == ConnectionStatus.connected;
     final out = <_Item>[];
 
     if (connected) {
@@ -314,9 +364,9 @@ class _PaletteState extends State<_Palette> {
         subtitle: 'Open a blank SQL editor tab',
         icon: Icons.terminal_rounded,
         tokens: 'sql editor scratch run',
-        run: state.newQueryTab,
+        run: deps.tabs.newQueryTab,
       ));
-      final active = state.activeTab;
+      final active = deps.tabs.activeTab;
       if (active is TableTab) {
         out.add(_Item(
           kind: _Kind.command,
@@ -324,7 +374,7 @@ class _PaletteState extends State<_Palette> {
           subtitle: 'Re-fetch the current page of ${active.table.name}',
           icon: Icons.sync_rounded,
           tokens: 'reload requery',
-          run: () => state.refreshTable(active),
+          run: () => deps.tabs.refreshTable(active),
         ));
       }
       out.add(_Item(
@@ -333,26 +383,26 @@ class _PaletteState extends State<_Palette> {
         subtitle: 'Re-introspect schemas, tables and types',
         icon: Icons.refresh_rounded,
         tokens: 'reload schema introspect',
-        run: state.refreshCatalog,
+        run: deps.appState.refreshCatalog,
       ));
-      if (state.canGoBack) {
+      if (deps.history.canGoBack) {
         out.add(_Item(
           kind: _Kind.command,
           title: 'Go back',
           subtitle: 'Step back through tab and filter history  ⌘[',
           icon: Icons.arrow_back_rounded,
           tokens: 'history previous navigate',
-          run: state.historyBack,
+          run: deps.appState.historyBack,
         ));
       }
-      if (state.canGoForward) {
+      if (deps.history.canGoForward) {
         out.add(_Item(
           kind: _Kind.command,
           title: 'Go forward',
           subtitle: 'Step forward through history  ⌘]',
           icon: Icons.arrow_forward_rounded,
           tokens: 'history next navigate',
-          run: state.historyForward,
+          run: deps.appState.historyForward,
         ));
       }
     }
@@ -363,7 +413,7 @@ class _PaletteState extends State<_Palette> {
       subtitle: 'Show or hide the schema browser',
       icon: Icons.view_sidebar_outlined,
       tokens: 'panel tree tables hide',
-      run: state.toggleSidebar,
+      run: deps.preferences.toggleSidebar,
     ));
     out.add(_Item(
       kind: _Kind.command,
@@ -371,26 +421,26 @@ class _PaletteState extends State<_Palette> {
       subtitle: 'Show or hide the SQL event log  ⌘L',
       icon: Icons.receipt_long_outlined,
       tokens: 'events console history queries',
-      run: state.eventLog.toggleVisible,
+      run: deps.eventLog.toggleVisible,
     ));
-    final dark = state.brightness == AppBrightness.dark;
+    final dark = deps.preferences.brightness == AppBrightness.dark;
     out.add(_Item(
       kind: _Kind.command,
       title: dark ? 'Switch to light theme' : 'Switch to dark theme',
       subtitle: 'Flip the workspace between Aperture dark and light',
       icon: dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
       tokens: 'appearance dark light mode color',
-      run: state.toggleBrightness,
+      run: deps.preferences.toggleBrightness,
     ));
 
     if (connected) {
       out.add(_Item(
         kind: _Kind.command,
         title: 'Disconnect',
-        subtitle: state.activeConnection?.summary ?? 'Close the session',
+        subtitle: deps.session.activeConnection?.summary ?? 'Close the session',
         icon: Icons.power_settings_new_rounded,
         tokens: 'close session logout end',
-        run: state.disconnect,
+        run: deps.appState.disconnect,
       ));
     }
     out.add(_Item(
@@ -405,11 +455,11 @@ class _PaletteState extends State<_Palette> {
   }
 
   List<_Item> _openTabs() {
-    final state = widget.state;
-    final activeId = state.activeTab?.id;
+    final tabs = widget.deps.tabs;
+    final activeId = tabs.activeTab?.id;
     final out = <_Item>[];
-    for (var i = 0; i < state.tabs.length; i++) {
-      final tab = state.tabs[i];
+    for (var i = 0; i < tabs.tabs.length; i++) {
+      final tab = tabs.tabs[i];
       final isActive = tab.id == activeId;
       final (label, icon) = switch (tab) {
         QueryTab() => ('SQL query', Icons.terminal_rounded),
@@ -422,32 +472,32 @@ class _PaletteState extends State<_Palette> {
         subtitle: isActive ? '$label · in view now' : label,
         icon: icon,
         accent: isActive,
-        run: () => state.selectTab(i),
+        run: () => tabs.selectTab(i),
       ));
     }
     return out;
   }
 
   List<_Item> _savedQueries() {
-    final state = widget.state;
+    final deps = widget.deps;
     return [
-      for (final q in state.savedQueries)
+      for (final q in deps.perConnection.savedQueries)
         _Item(
           kind: _Kind.savedQuery,
           title: q.name,
           subtitle: _sqlPreview(q.sql),
           icon: Icons.bookmark_outline_rounded,
           tokens: q.sql,
-          run: () => state.openSavedQuery(q),
+          run: () => deps.tabs.openSavedQuery(q),
         ),
     ];
   }
 
   List<_Item> _connections() {
-    final state = widget.state;
-    final activeId = state.activeConnection?.id;
+    final deps = widget.deps;
+    final activeId = deps.session.activeConnection?.id;
     return [
-      for (final c in state.connections)
+      for (final c in deps.registry.all)
         _Item(
           kind: _Kind.connection,
           title: c.name,
@@ -455,7 +505,7 @@ class _PaletteState extends State<_Palette> {
           icon: c.id == activeId ? Icons.lan_rounded : Icons.lan_outlined,
           accent: c.id == activeId,
           tokens: '${c.host} ${c.database} ${c.username}',
-          run: () => state.connect(c),
+          run: () => deps.appState.connect(c),
         ),
     ];
   }
@@ -467,13 +517,13 @@ class _PaletteState extends State<_Palette> {
       subtitle: subtitle,
       icon: t.isView ? Icons.visibility_outlined : Icons.table_rows_outlined,
       tokens: '${t.schema} ${t.qualifiedName}',
-      run: () => widget.state.openTable(t),
+      run: () => widget.deps.tabs.openTable(t),
     );
   }
 
   List<_Item> _allTables() {
     final out = <_Item>[];
-    for (final s in widget.state.schemas) {
+    for (final s in widget.deps.catalog.schemas) {
       for (final t in s.tables) {
         out.add(_tableItem(
           t,
@@ -505,20 +555,21 @@ class _PaletteState extends State<_Palette> {
     if (query.isEmpty) {
       // Idle view: a curated, grouped snapshot — not every table in the
       // database — so ⌘K is useful before the first keystroke.
-      final state = widget.state;
+      final deps = widget.deps;
       final groups = <_Kind, List<_Item>>{
         _Kind.openTab: _openTabs(),
         _Kind.recent: [
-          for (final t in state.recents.take(6))
+          for (final t in deps.perConnection.recents.take(6))
             _tableItem(t, _Kind.recent, 'in ${t.schema}'),
         ],
         _Kind.favorite: [
-          for (final t in state.favoriteTables.take(5))
+          for (final t in deps.perConnection.favoriteTables.take(5))
             _tableItem(t, _Kind.favorite, 'in ${t.schema}'),
         ],
         _Kind.savedQuery: _savedQueries().take(5).toList(),
-        _Kind.connection:
-            state.status == ConnectionStatus.connected ? const [] : _connections(),
+        _Kind.connection: deps.session.status == ConnectionStatus.connected
+            ? const []
+            : _connections(),
         _Kind.command: _commands(),
       };
       for (final entry in groups.entries) {

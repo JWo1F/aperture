@@ -194,16 +194,17 @@ class _ConnectionPickerPanel extends StatelessWidget {
 
   Future<void> _newConnection(BuildContext context) async {
     onClose();
-    final state = context.read<AppState>();
+    final appState = context.read<AppState>();
+    final registry = context.read<ConnectionRegistry>();
     final config = await showConnectionDialog(context);
     if (config == null) return;
-    state.addConnection(config);
-    await state.connect(config);
+    registry.add(config);
+    await appState.connect(config);
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = context.read<AppState>();
+    final appState = context.read<AppState>();
     final active = context.select<SessionController, String?>(
       (s) => s.activeConnection?.id,
     );
@@ -256,7 +257,7 @@ class _ConnectionPickerPanel extends StatelessWidget {
                         active: c.id == active,
                         onTap: () {
                           onClose();
-                          if (c.id != active) state.connect(c);
+                          if (c.id != active) appState.connect(c);
                         },
                       );
                     },

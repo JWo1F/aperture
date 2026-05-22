@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import '../../../models/connection_config.dart';
 import '../../../services/one_password_client.dart';
 import '../../../services/sqlite_service.dart';
-import '../../../state/app_state.dart';
 import '../../../state/master_passphrase.dart';
 import '../../../theme/app_theme.dart';
 import '../master_passphrase_setup.dart';
@@ -21,13 +20,13 @@ Future<ConnectionConfig?> showConnectionDialog(
   BuildContext context, {
   ConnectionConfig? existing,
 }) {
-  final state = context.read<AppState>();
+  final masterPassphrase = context.read<MasterPassphrase>();
   return showDialog<ConnectionConfig>(
     context: context,
     barrierColor: AppColors.scrim,
     builder: (_) => _ConnectionDialog(
       existing: existing,
-      masterPassphrase: state.masterPassphrase,
+      masterPassphrase: masterPassphrase,
     ),
   );
 }

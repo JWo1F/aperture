@@ -6,7 +6,10 @@ import '../../models/order_term.dart';
 import '../../models/value_format.dart';
 import '../../services/sql_complete.dart';
 import '../../state/app_state.dart';
+import '../../state/catalog_controller.dart';
+import '../../state/per_connection_store.dart';
 import '../../state/session_controller.dart';
+import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../edits/pending_edits_modal.dart';
@@ -24,24 +27,27 @@ class TableView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Read AppState non-reactively — the workspace already wraps this
+    // Read controllers non-reactively — the workspace already wraps this
     // widget in a ListenableBuilder(listenable: tab), so tab field changes
     // (result, loading, edits, page, …) drive rebuilds. The whole subtree
     // is then wrapped in a ListenableBuilder on CatalogController so
     // phase-1 column / FK arrivals refresh the toolbar's autocomplete and
     // the grid's typed-cell colouring + FK indicators — without dragging
-    // in the rest of AppState. readOnly is a connection-level slice
-    // selected narrowly.
-    final state = context.read<AppState>();
+    // in anything else. readOnly is a connection-level slice selected
+    // narrowly.
+    final appState = context.read<AppState>();
+    final catalog = context.read<CatalogController>();
+    final tabs = context.read<TabsController>();
+    final perConnection = context.read<PerConnectionStore>();
     final readOnly = context.select<SessionController, bool>(
       (s) => s.activeConnection?.readOnly ?? false,
     );
 
     return ListenableBuilder(
-      listenable: state.catalog,
+      listenable: catalog,
       builder: (_, _) => Column(
         children: [
-          _TableToolbar(tab: tab, state: state),
+          _TableToolbar(tab: tab, tabs: tabs, catalog: catalog),
           Expanded(
             // Body uses `var(--bg)` per the design's `.grid-wrap` rule — the
             // clause bar above is `var(--bg-deep)`, so the hairline between
@@ -78,32 +84,31 @@ class TableView extends StatelessWidget {
                           edits: tab.edits,
                           deletedRows: tab.deletedRows,
                           inserts: tab.inserts,
-                          onDeleteRow: (row) => state.deleteRow(tab, row),
+                          onDeleteRow: (row) => tabs.deleteRow(tab, row),
                           onRestoreDeletedRow: (row) =>
-                              state.restoreDeletedRow(tab, row),
-                          onDuplicateRow: (row) =>
-                              state.duplicateRow(tab, row),
-                          onAddRow: (row) => state.addRow(tab, row),
+                              tabs.restoreDeletedRow(tab, row),
+                          onDuplicateRow: (row) => tabs.duplicateRow(tab, row),
+                          onAddRow: (row) => tabs.addRow(tab, row),
                           widths: tab.columnWidths,
-                          onWidthChanged: (col, w) =>
-                              state.persistColumnWidth(tab.table, col, w),
+                          onWidthChanged: (col, w) => perConnection
+                              .persistColumnWidth(tab.table, col, w),
                           onEditCell: (row, col, value) =>
-                              state.setCellEdit(tab, row, col, value),
+                              tabs.setCellEdit(tab, row, col, value),
                           onRevertEdit: (row, col) =>
-                              state.revertCellEdit(tab, row, col),
+                              tabs.revertCellEdit(tab, row, col),
                           order: parseOrderBy(tab.orderBy),
                           onSortColumn: (column) =>
-                              state.cycleTableOrder(tab, column),
+                              tabs.cycleTableOrder(tab, column),
                           onSetSort: (column, desc) =>
-                              state.setColumnSort(tab, column, desc),
+                              tabs.setColumnSort(tab, column, desc),
                           onAddFilter: (column, value, not) =>
-                              _addFilter(state, column, value, not),
-                          foreignKeys: state.foreignKeysFor(tab.table),
+                              _addFilter(tabs, column, value, not),
+                          foreignKeys: catalog.foreignKeysFor(tab.table),
                           onFollowForeignKey: (fk, value) =>
-                              state.followForeignKey(fk, value),
-                          columnMeta: _columnMeta(state),
+                              appState.followForeignKey(fk, value),
+                          columnMeta: _columnMeta(catalog),
                           findRowOwner: (col) {
-                            final owner = state.findPrimaryKeyOwner(col);
+                            final owner = catalog.findPrimaryKeyOwner(col);
                             // Skip the redundant "Find row in {this table}"
                             // when the PK match is the table we're viewing.
                             if (owner == null ||
@@ -114,7 +119,7 @@ class TableView extends StatelessWidget {
                             return owner;
                           },
                           onFindRow: (table, col, value) =>
-                              state.findRowInTable(table, col, value),
+                              appState.findRowInTable(table, col, value),
                         ),
                         if (tab.loading)
                           const Positioned(
@@ -127,20 +132,25 @@ class TableView extends StatelessWidget {
                     ),
             ),
           ),
-          _PaginationBar(tab: tab, state: state),
+          _PaginationBar(tab: tab, tabs: tabs),
         ],
       ),
     );
   }
 
-  Map<String, DbColumn>? _columnMeta(AppState state) {
-    final cols = state.columnsFor(tab.table);
+  Map<String, DbColumn>? _columnMeta(CatalogController catalog) {
+    final cols = catalog.columnsFor(tab.table);
     if (cols == null) return null;
     return {for (final c in cols) c.name: c};
   }
 
-  void _addFilter(AppState state, String column, Object? value, bool not) {
-    state.appendTableFilter(tab, equalityFragment(column, value, not: not));
+  void _addFilter(
+    TabsController tabs,
+    String column,
+    Object? value,
+    bool not,
+  ) {
+    tabs.appendTableFilter(tab, equalityFragment(column, value, not: not));
   }
 }
 
@@ -164,10 +174,15 @@ class _RefreshBar extends StatelessWidget {
 }
 
 class _TableToolbar extends StatefulWidget {
-  const _TableToolbar({required this.tab, required this.state});
+  const _TableToolbar({
+    required this.tab,
+    required this.tabs,
+    required this.catalog,
+  });
 
   final TableTab tab;
-  final AppState state;
+  final TabsController tabs;
+  final CatalogController catalog;
 
   @override
   State<_TableToolbar> createState() => _TableToolbarState();
@@ -201,17 +216,17 @@ class _TableToolbarState extends State<_TableToolbar> {
   }
 
   void _applySelect() =>
-      widget.state.setTableSelect(widget.tab, _select.text.trim());
+      widget.tabs.setTableSelect(widget.tab, _select.text.trim());
 
   void _applyFilter() =>
-      widget.state.setTableFilter(widget.tab, _filter.text.trim());
+      widget.tabs.setTableFilter(widget.tab, _filter.text.trim());
 
   void _applyOrder() =>
-      widget.state.setTableOrder(widget.tab, _order.text.trim());
+      widget.tabs.setTableOrder(widget.tab, _order.text.trim());
 
   // ignore: unused_element
   void _previewEdits() {
-    final statements = widget.state.previewEditStatements(widget.tab);
+    final statements = widget.tabs.previewEditStatements(widget.tab);
     showPendingEditsModal(
       context,
       statements: statements,
@@ -220,7 +235,7 @@ class _TableToolbarState extends State<_TableToolbar> {
   }
 
   Future<void> _applyEdits() async {
-    final error = await widget.state.applyTableEdits(widget.tab);
+    final error = await widget.tabs.applyTableEdits(widget.tab);
     if (error != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -256,7 +271,7 @@ class _TableToolbarState extends State<_TableToolbar> {
     final whereActive = tab.filter.trim().isNotEmpty;
     final orderActive = tab.orderBy.trim().isNotEmpty;
 
-    final columns = widget.state.columnsFor(tab.table) ?? const [];
+    final columns = widget.catalog.columnsFor(tab.table) ?? const [];
     CodeSuggestProvider clauseSuggest(List<String> keywords) {
       return (req) =>
           completeClause(req: req, columns: columns, extraKeywords: keywords);
@@ -534,10 +549,10 @@ class _ClauseRowState extends State<_ClauseRow> {
 /// dropdown · prev/next on the right. Mono throughout, dot separators,
 /// bgDeep surface.
 class _PaginationBar extends StatelessWidget {
-  const _PaginationBar({required this.tab, required this.state});
+  const _PaginationBar({required this.tab, required this.tabs});
 
   final TableTab tab;
-  final AppState state;
+  final TabsController tabs;
 
   @override
   Widget build(BuildContext context) {
@@ -591,7 +606,7 @@ class _PaginationBar extends StatelessWidget {
             _PendingChip(
               count: pendingCount,
               onTap: () {
-                final statements = state.previewEditStatements(tab);
+                final statements = tabs.previewEditStatements(tab);
                 showPendingEditsModal(context, statements: statements);
               },
             ),
@@ -601,22 +616,22 @@ class _PaginationBar extends StatelessWidget {
             interval: tab.autoRefreshInterval,
             busy: tab.loading,
             canRefresh: !tab.loading,
-            onManualRefresh: () => state.refreshTable(tab),
-            onSetInterval: (d) => state.setTableAutoRefresh(tab, d),
+            onManualRefresh: () => tabs.refreshTable(tab),
+            onSetInterval: (d) => tabs.setTableAutoRefresh(tab, d),
           ),
           const PbDot(),
           PbChev(
             icon: Icons.chevron_left,
             tooltip: 'Previous page',
             onPressed: canPrev
-                ? () => state.loadTablePage(tab, tab.page - 1)
+                ? () => tabs.loadTablePage(tab, tab.page - 1)
                 : null,
           ),
           PbChev(
             icon: Icons.chevron_right,
             tooltip: 'Next page',
             onPressed: canNext
-                ? () => state.loadTablePage(tab, tab.page + 1)
+                ? () => tabs.loadTablePage(tab, tab.page + 1)
                 : null,
           ),
         ],

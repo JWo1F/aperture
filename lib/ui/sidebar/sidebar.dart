@@ -8,7 +8,14 @@ import '../../models/db_object.dart';
 import '../../models/saved_query.dart';
 import '../../models/time_ago.dart';
 import '../../state/app_state.dart';
+import '../../state/catalog_controller.dart';
+import '../../state/connection_registry.dart';
+import '../../state/per_connection_store.dart';
+import '../../state/preferences_controller.dart';
+import '../../state/session_controller.dart';
+import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
+import '../../state/workspace_ui.dart';
 import '../../theme/app_theme.dart';
 import '../connection/connection_dialog.dart';
 import '../widgets/common.dart';
@@ -30,27 +37,60 @@ class Sidebar extends StatefulWidget {
   State<Sidebar> createState() => _SidebarState();
 }
 
+/// Bundle of the controllers the sidebar widgets pull from. Captured once
+/// in [_SidebarState] so subwidgets don't repeat `context.read` lookups for
+/// the same handles, and so the field-threading reads naturally.
+class _SidebarDeps {
+  _SidebarDeps({
+    required this.appState,
+    required this.preferences,
+    required this.registry,
+    required this.session,
+    required this.catalog,
+    required this.perConnection,
+    required this.tabs,
+    required this.ui,
+  });
+
+  final AppState appState;
+  final PreferencesController preferences;
+  final ConnectionRegistry registry;
+  final SessionController session;
+  final CatalogController catalog;
+  final PerConnectionStore perConnection;
+  final TabsController tabs;
+  final WorkspaceUi ui;
+}
+
 class _SidebarState extends State<Sidebar> {
   final TextEditingController _searchCtrl = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   String _query = '';
 
-  late final AppState _state = context.read<AppState>();
+  late final _SidebarDeps _deps = _SidebarDeps(
+    appState: context.read<AppState>(),
+    preferences: context.read<PreferencesController>(),
+    registry: context.read<ConnectionRegistry>(),
+    session: context.read<SessionController>(),
+    catalog: context.read<CatalogController>(),
+    perConnection: context.read<PerConnectionStore>(),
+    tabs: context.read<TabsController>(),
+    ui: context.read<WorkspaceUi>(),
+  );
 
   /// The sidebar mirrors connections, the session, the catalog, the
   /// per-connection lists, the open tabs and preferences. Listening to just
-  /// those child controllers — rather than `context.watch<AppState>()`,
-  /// which fires for all ten — keeps a navigation-history push, an
-  /// event-log append, or a passphrase change from rebuilding the whole
-  /// schema list.
-  late final Listenable _sidebarDeps = Listenable.merge([
-    _state.preferences,
-    _state.registry,
-    _state.session,
-    _state.catalog,
-    _state.perConnection,
-    _state.tabsController,
-    _state.ui,
+  /// those controllers — rather than the full set — keeps a navigation-
+  /// history push, an event-log append, or a passphrase change from
+  /// rebuilding the whole schema list.
+  late final Listenable _sidebarListenable = Listenable.merge([
+    _deps.preferences,
+    _deps.registry,
+    _deps.session,
+    _deps.catalog,
+    _deps.perConnection,
+    _deps.tabs,
+    _deps.ui,
   ]);
 
   @override
@@ -75,13 +115,12 @@ class _SidebarState extends State<Sidebar> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: _sidebarDeps,
+      listenable: _sidebarListenable,
       builder: (context, _) {
-        final state = _state;
-        final connected = state.status == ConnectionStatus.connected;
+        final connected = _deps.session.status == ConnectionStatus.connected;
 
         return Container(
-          width: state.preferences.sidebarWidth,
+          width: _deps.preferences.sidebarWidth,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -94,18 +133,18 @@ class _SidebarState extends State<Sidebar> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _ConnHero(state: state),
+              _ConnHero(deps: _deps),
               if (connected) ...[
                 _SearchBar(controller: _searchCtrl, focusNode: _searchFocus),
                 Expanded(
                   child: _Body(
-                    state: state,
+                    deps: _deps,
                     query: _query.trim().toLowerCase(),
                   ),
                 ),
               ] else
-                Expanded(child: _AllConnectionsList(state: state)),
-              _FooterStatus(state: state),
+                Expanded(child: _AllConnectionsList(deps: _deps)),
+              _FooterStatus(deps: _deps),
             ],
           ),
         );
@@ -117,21 +156,22 @@ class _SidebarState extends State<Sidebar> {
 // --- connection hero ------------------------------------------------------
 
 class _ConnHero extends StatelessWidget {
-  const _ConnHero({required this.state});
+  const _ConnHero({required this.deps});
 
-  final AppState state;
+  final _SidebarDeps deps;
 
   @override
   Widget build(BuildContext context) {
-    final conn = state.activeConnection;
-    final connected = state.status == ConnectionStatus.connected;
-    final menuEnabled = connected || state.status == ConnectionStatus.lost;
+    final session = deps.session;
+    final conn = session.activeConnection;
+    final connected = session.status == ConnectionStatus.connected;
+    final menuEnabled = connected || session.status == ConnectionStatus.lost;
     final tint = AppColors.connectionTint(conn?.color);
     final engineIcon = conn?.engine == DbEngine.sqlite
         ? Icons.insert_drive_file_rounded
         : Icons.dns_rounded;
 
-    final title = switch (state.status) {
+    final title = switch (session.status) {
       ConnectionStatus.connected => conn?.database ?? 'connected',
       ConnectionStatus.connecting => 'connecting…',
       ConnectionStatus.lost => conn?.database ?? 'lost',
@@ -141,7 +181,7 @@ class _ConnHero extends StatelessWidget {
 
     final subtitleParts = <String>[
       if (conn?.name != null && conn!.name.isNotEmpty) conn.name,
-      if (state.serverVersion != null) state.serverVersion!,
+      if (session.serverVersion != null) session.serverVersion!,
     ];
     final subtitle = subtitleParts.isEmpty ? null : subtitleParts.join('  ·  ');
 
@@ -149,10 +189,10 @@ class _ConnHero extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
       child: Hoverable(
         onTap: menuEnabled
-            ? () => _openConnMenu(context, state, _anchorBelow(context))
+            ? () => _openConnMenu(context, deps, _anchorBelow(context))
             : null,
         onSecondaryTapDown: menuEnabled
-            ? (d) => _openConnMenu(context, state, d.globalPosition)
+            ? (d) => _openConnMenu(context, deps, d.globalPosition)
             : null,
         builder: (context, hovering) {
           final highlight = hovering && menuEnabled;
@@ -279,23 +319,28 @@ class _ConnHero extends StatelessWidget {
   }
 }
 
-void _openConnMenu(BuildContext context, AppState state, Offset position) {
+void _openConnMenu(
+  BuildContext context,
+  _SidebarDeps deps,
+  Offset position,
+) {
+  final loading = deps.catalog.isPhase1Loading;
   showContextMenu(
     context,
     globalPosition: position,
     entries: [
       CmItem(
         icon: Icons.refresh,
-        label: state.isCatalogLoading ? 'Refreshing schema…' : 'Refresh schema',
-        enabled: !state.isCatalogLoading,
-        onTap: state.refreshCatalog,
+        label: loading ? 'Refreshing schema…' : 'Refresh schema',
+        enabled: !loading,
+        onTap: deps.appState.refreshCatalog,
       ),
       const CmDivider(),
       CmItem(
         icon: Icons.power_settings_new,
         label: 'Disconnect',
         danger: true,
-        onTap: state.disconnect,
+        onTap: deps.appState.disconnect,
       ),
     ],
   );
@@ -388,16 +433,18 @@ class _SearchBar extends StatelessWidget {
 // --- body -----------------------------------------------------------------
 
 class _Body extends StatelessWidget {
-  const _Body({required this.state, required this.query});
+  const _Body({required this.deps, required this.query});
 
-  final AppState state;
+  final _SidebarDeps deps;
   final String query;
 
   @override
   Widget build(BuildContext context) {
-    final activeTableId = _activeTableQualifiedName(state);
-    final activeQueryId = _activeQueryId(state);
-    final favKeys = {for (final t in state.favoriteTables) t.qualifiedKey};
+    final activeTableId = _activeTableQualifiedName(deps.tabs);
+    final activeQueryId = _activeQueryId(deps.tabs);
+    final favKeys = {
+      for (final t in deps.perConnection.favoriteTables) t.qualifiedKey,
+    };
     final filtering = query.isNotEmpty;
 
     bool tableMatches(DbTable t) =>
@@ -405,28 +452,30 @@ class _Body extends StatelessWidget {
         t.name.toLowerCase().contains(query) ||
         t.schema.toLowerCase().contains(query);
 
-    final favList = state.favoriteTables.where(tableMatches).toList();
+    final favList = deps.perConnection.favoriteTables
+        .where(tableMatches)
+        .toList();
     final frequent = filtering
         ? <DbTable>[]
-        : state
+        : deps.perConnection
             .frequentTables(limit: 5 + favKeys.length)
             .where((t) => !favKeys.contains(t.qualifiedKey))
             .take(5)
             .toList();
     final saved = filtering
-        ? state.savedQueries
+        ? deps.perConnection.savedQueries
             .where((q) => q.name.toLowerCase().contains(query))
             .toList()
-        : state.savedQueries;
+        : deps.perConnection.savedQueries;
 
-    final visibleSchemas = state.schemas.map((s) {
+    final visibleSchemas = deps.catalog.schemas.map((s) {
       final tables = filtering
           ? s.tables.where(tableMatches).toList()
           : s.tables;
       return (schema: s, tables: tables);
     }).where((e) => !filtering || e.tables.isNotEmpty).toList();
 
-    final totalTables = state.schemas.fold<int>(
+    final totalTables = deps.catalog.schemas.fold<int>(
       0,
       (a, b) => a + b.tables.length,
     );
@@ -451,7 +500,7 @@ class _Body extends StatelessWidget {
               for (final t in favList)
                 _TableRow(
                   table: t,
-                  state: state,
+                  deps: deps,
                   active: t.qualifiedName == activeTableId,
                   isFav: true,
                   indent: 0,
@@ -468,7 +517,7 @@ class _Body extends StatelessWidget {
               for (final t in frequent)
                 _TableRow(
                   table: t,
-                  state: state,
+                  deps: deps,
                   active: t.qualifiedName == activeTableId,
                   isFav: favKeys.contains(t.qualifiedKey),
                   indent: 0,
@@ -486,7 +535,7 @@ class _Body extends StatelessWidget {
                 _SavedQueryRow(
                   query: q,
                   active: q.id == activeQueryId,
-                  state: state,
+                  deps: deps,
                   match: query,
                 ),
             ],
@@ -499,7 +548,7 @@ class _Body extends StatelessWidget {
               _SchemaBlock(
                 schema: entry.schema,
                 tables: entry.tables,
-                state: state,
+                deps: deps,
                 activeTableId: activeTableId,
                 favKeys: favKeys,
                 forceExpanded: filtering,
@@ -511,15 +560,15 @@ class _Body extends StatelessWidget {
     );
   }
 
-  String? _activeTableQualifiedName(AppState state) {
-    final tab = state.activeTab;
+  String? _activeTableQualifiedName(TabsController tabs) {
+    final tab = tabs.activeTab;
     if (tab is TableTab) return tab.table.qualifiedName;
     if (tab is SchemaTab) return tab.table.qualifiedName;
     return null;
   }
 
-  String? _activeQueryId(AppState state) {
-    final tab = state.activeTab;
+  String? _activeQueryId(TabsController tabs) {
+    final tab = tabs.activeTab;
     return tab is QueryTab ? tab.id : null;
   }
 }
@@ -637,7 +686,7 @@ class _SchemaBlock extends StatelessWidget {
   const _SchemaBlock({
     required this.schema,
     required this.tables,
-    required this.state,
+    required this.deps,
     required this.activeTableId,
     required this.favKeys,
     required this.forceExpanded,
@@ -646,7 +695,7 @@ class _SchemaBlock extends StatelessWidget {
 
   final DbSchema schema;
   final List<DbTable> tables;
-  final AppState state;
+  final _SidebarDeps deps;
   final String? activeTableId;
   final Set<String> favKeys;
   final bool forceExpanded;
@@ -654,13 +703,13 @@ class _SchemaBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final expanded = forceExpanded || state.isSchemaExpanded(schema.name);
-    final tint = AppColors.connectionTint(state.activeConnection?.color);
+    final expanded = forceExpanded || deps.ui.isSchemaExpanded(schema.name);
+    final tint = AppColors.connectionTint(deps.session.activeConnection?.color);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Hoverable(
-          onTap: () => state.toggleSchema(schema.name),
+          onTap: () => deps.ui.toggleSchema(schema.name),
           builder: (context, hovering) {
             return Container(
               height: 26,
@@ -743,7 +792,7 @@ class _SchemaBlock extends StatelessWidget {
           for (final t in tables)
             _TableRow(
               table: t,
-              state: state,
+              deps: deps,
               active: t.qualifiedName == activeTableId,
               isFav: favKeys.contains(t.qualifiedKey),
               indent: 1,
@@ -760,7 +809,7 @@ class _SchemaBlock extends StatelessWidget {
 class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.table,
-    required this.state,
+    required this.deps,
     required this.active,
     required this.isFav,
     required this.indent,
@@ -769,7 +818,7 @@ class _TableRow extends StatelessWidget {
   });
 
   final DbTable table;
-  final AppState state;
+  final _SidebarDeps deps;
   final bool active;
   final bool isFav;
   final int indent;
@@ -782,9 +831,9 @@ class _TableRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tint = AppColors.connectionTint(state.activeConnection?.color);
+    final tint = AppColors.connectionTint(deps.session.activeConnection?.color);
     final nodeId = '$scope/${table.qualifiedKey}';
-    final expanded = state.isNodeExpanded(nodeId);
+    final expanded = deps.ui.isNodeExpanded(nodeId);
     final row = _buildRow(context, tint, expanded, nodeId);
     if (!expanded) return row;
     return Column(
@@ -793,7 +842,7 @@ class _TableRow extends StatelessWidget {
         row,
         _TableDetail(
           table: table,
-          state: state,
+          deps: deps,
           indent: indent + 1,
           scope: scope,
         ),
@@ -809,9 +858,9 @@ class _TableRow extends StatelessWidget {
   ) {
     final leftBase = 14.0 + indent * 18.0;
     return Hoverable(
-      onTap: () => state.openTable(table),
+      onTap: () => deps.tabs.openTable(table),
       onSecondaryTapDown: (d) =>
-          _openTableMenu(context, state, table, d.globalPosition),
+          _openTableMenu(context, deps, table, d.globalPosition),
       builder: (context, hovering) {
         final showStar = hovering || isFav;
         final stat = _tableStat(table);
@@ -833,7 +882,7 @@ class _TableRow extends StatelessWidget {
                 children: [
                   _DetailChevron(
                     expanded: expanded,
-                    onTap: () => state.toggleNode(nodeId),
+                    onTap: () => deps.ui.toggleNode(nodeId),
                   ),
                   SizedBox(
                     width: 14,
@@ -869,7 +918,7 @@ class _TableRow extends StatelessWidget {
                   if (showStar)
                     _StarToggle(
                       filled: isFav,
-                      onTap: () => state.toggleFavorite(table),
+                      onTap: () => deps.perConnection.toggleFavorite(table),
                     ),
                 ],
               ),
@@ -970,24 +1019,24 @@ class _DetailChevron extends StatelessWidget {
 class _TableDetail extends StatelessWidget {
   const _TableDetail({
     required this.table,
-    required this.state,
+    required this.deps,
     required this.indent,
     required this.scope,
   });
 
   final DbTable table;
-  final AppState state;
+  final _SidebarDeps deps;
   final int indent;
   final String scope;
 
   @override
   Widget build(BuildContext context) {
-    final catalog = state.databaseCatalog;
+    final catalog = deps.catalog.catalog;
     if (!catalog.hasPhase(CatalogPhase.columns)) {
       return _DetailMessageRow(indent: indent, text: 'Loading details…');
     }
 
-    final tint = AppColors.connectionTint(state.activeConnection?.color);
+    final tint = AppColors.connectionTint(deps.session.activeConnection?.color);
     final columns = catalog.columnsFor(table);
     final keys = catalog.keysFor(table);
     final foreignKeys = catalog.foreignKeysFor(table);
@@ -1002,7 +1051,7 @@ class _TableDetail extends StatelessWidget {
         if (columns.isNotEmpty)
           _DetailFolder(
             table: table,
-            state: state,
+            deps: deps,
             scope: scope,
             indent: indent,
             folder: 'columns',
@@ -1034,7 +1083,7 @@ class _TableDetail extends StatelessWidget {
         if (keys.isNotEmpty)
           _DetailFolder(
             table: table,
-            state: state,
+            deps: deps,
             scope: scope,
             indent: indent,
             folder: 'keys',
@@ -1058,7 +1107,7 @@ class _TableDetail extends StatelessWidget {
         if (foreignKeys.isNotEmpty)
           _DetailFolder(
             table: table,
-            state: state,
+            deps: deps,
             scope: scope,
             indent: indent,
             folder: 'foreign keys',
@@ -1077,7 +1126,7 @@ class _TableDetail extends StatelessWidget {
                       '(${fk.localColumns.join(', ')}) → ${fk.refTable}',
                   onTap: () {
                     final ref = catalog.relation(fk.refTableOid);
-                    if (ref != null) state.openTable(ref);
+                    if (ref != null) deps.tabs.openTable(ref);
                   },
                 ),
             ],
@@ -1085,7 +1134,7 @@ class _TableDetail extends StatelessWidget {
         if (indexes.isNotEmpty)
           _DetailFolder(
             table: table,
-            state: state,
+            deps: deps,
             scope: scope,
             indent: indent,
             folder: 'indexes',
@@ -1115,7 +1164,7 @@ class _TableDetail extends StatelessWidget {
 class _DetailFolder extends StatelessWidget {
   const _DetailFolder({
     required this.table,
-    required this.state,
+    required this.deps,
     required this.scope,
     required this.indent,
     required this.folder,
@@ -1124,7 +1173,7 @@ class _DetailFolder extends StatelessWidget {
   });
 
   final DbTable table;
-  final AppState state;
+  final _SidebarDeps deps;
   final String scope;
   final int indent;
   final String folder;
@@ -1134,13 +1183,13 @@ class _DetailFolder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final id = '$scope/${table.qualifiedKey}/$folder';
-    final expanded = state.isNodeExpanded(id);
+    final expanded = deps.ui.isNodeExpanded(id);
     final leftBase = 14.0 + indent * 18.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Hoverable(
-          onTap: () => state.toggleNode(id),
+          onTap: () => deps.ui.toggleNode(id),
           builder: (context, hovering) {
             return Container(
               height: 24,
@@ -1434,13 +1483,13 @@ class _SavedQueryRow extends StatefulWidget {
   const _SavedQueryRow({
     required this.query,
     required this.active,
-    required this.state,
+    required this.deps,
     required this.match,
   });
 
   final SavedQuery query;
   final bool active;
-  final AppState state;
+  final _SidebarDeps deps;
   final String match;
 
   @override
@@ -1450,6 +1499,7 @@ class _SavedQueryRow extends StatefulWidget {
 class _SavedQueryRowState extends State<_SavedQueryRow> {
   void _openMenu(Offset position) {
     final query = widget.query;
+    final tabs = widget.deps.tabs;
     void copy(String text) => Clipboard.setData(ClipboardData(text: text));
 
     showContextMenu(
@@ -1459,7 +1509,7 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
         CmItem(
           icon: Icons.north_east,
           label: 'Open',
-          onTap: () => widget.state.openSavedQuery(query),
+          onTap: () => tabs.openSavedQuery(query),
         ),
         CmItem(
           icon: Icons.edit_outlined,
@@ -1469,7 +1519,7 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
         CmItem(
           icon: Icons.content_copy,
           label: 'Duplicate',
-          onTap: () => widget.state.duplicateSavedQuery(query.id),
+          onTap: () => tabs.duplicateSavedQuery(query.id),
         ),
         const CmDivider(),
         CmItem(
@@ -1482,7 +1532,7 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
           icon: Icons.delete_outline,
           label: 'Delete',
           danger: true,
-          onTap: () => widget.state.deleteSavedQuery(query.id),
+          onTap: () => tabs.deleteSavedQuery(query.id),
         ),
       ],
     );
@@ -1494,7 +1544,7 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
       builder: (ctx) => _RenameQueryDialog(initial: widget.query.name),
     );
     if (next != null && next.trim().isNotEmpty) {
-      widget.state.renameQuery(widget.query.id, next);
+      widget.deps.tabs.renameQuery(widget.query.id, next);
     }
   }
 
@@ -1502,10 +1552,10 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
   Widget build(BuildContext context) {
     final ts = widget.query.updatedAt;
     final tint = AppColors.connectionTint(
-      widget.state.activeConnection?.color,
+      widget.deps.session.activeConnection?.color,
     );
     return Hoverable(
-      onTap: () => widget.state.openSavedQuery(widget.query),
+      onTap: () => widget.deps.tabs.openSavedQuery(widget.query),
       onSecondaryTapDown: (d) => _openMenu(d.globalPosition),
       builder: (context, hovering) {
         final bg = widget.active
@@ -1591,21 +1641,22 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
 // --- footer status --------------------------------------------------------
 
 class _FooterStatus extends StatelessWidget {
-  const _FooterStatus({required this.state});
+  const _FooterStatus({required this.deps});
 
-  final AppState state;
+  final _SidebarDeps deps;
 
   @override
   Widget build(BuildContext context) {
-    final connected = state.status == ConnectionStatus.connected;
-    final color = switch (state.status) {
+    final status = deps.session.status;
+    final connected = status == ConnectionStatus.connected;
+    final color = switch (status) {
       ConnectionStatus.connected => AppColors.success,
       ConnectionStatus.connecting => AppColors.warn,
       ConnectionStatus.lost => AppColors.warn,
       ConnectionStatus.error => AppColors.error,
       ConnectionStatus.disconnected => AppColors.textMuted,
     };
-    final label = switch (state.status) {
+    final label = switch (status) {
       ConnectionStatus.connected => 'live',
       ConnectionStatus.connecting => 'connecting…',
       ConnectionStatus.lost => 'connection lost',
@@ -1613,7 +1664,7 @@ class _FooterStatus extends StatelessWidget {
       ConnectionStatus.disconnected => 'offline',
     };
 
-    final tableCount = state.schemas.fold<int>(
+    final tableCount = deps.catalog.schemas.fold<int>(
       0,
       (a, b) => a + b.tables.length,
     );
@@ -1692,12 +1743,12 @@ class _LiveDot extends StatelessWidget {
 
 void _openTableMenu(
   BuildContext context,
-  AppState state,
+  _SidebarDeps deps,
   DbTable table,
   Offset position,
 ) {
   final qualified = '"${table.schema}"."${table.name}"';
-  final isFav = state.isFavorite(table);
+  final isFav = deps.perConnection.isFavorite(table);
 
   void copy(String value) => Clipboard.setData(ClipboardData(text: value));
 
@@ -1708,18 +1759,18 @@ void _openTableMenu(
       CmItem(
         icon: Icons.north_east,
         label: 'Open data',
-        onTap: () => state.openTable(table),
+        onTap: () => deps.tabs.openTable(table),
       ),
       CmItem(
         icon: Icons.data_object,
         label: 'Show schema (CREATE TABLE)',
-        onTap: () => state.openSchema(table),
+        onTap: () => deps.tabs.openSchema(table),
       ),
       const CmDivider(),
       CmItem(
         icon: isFav ? Icons.star : Icons.star_outline,
         label: isFav ? 'Remove from favourites' : 'Add to favourites',
-        onTap: () => state.toggleFavorite(table),
+        onTap: () => deps.perConnection.toggleFavorite(table),
       ),
       const CmDivider(),
       CmItem(
@@ -1741,7 +1792,7 @@ void _openTableMenu(
       CmItem(
         icon: Icons.refresh,
         label: 'Refresh catalog',
-        onTap: state.refreshCatalog,
+        onTap: deps.appState.refreshCatalog,
       ),
     ],
   );
@@ -1750,20 +1801,20 @@ void _openTableMenu(
 // --- disconnected: saved connections list --------------------------------
 
 class _AllConnectionsList extends StatelessWidget {
-  const _AllConnectionsList({required this.state});
+  const _AllConnectionsList({required this.deps});
 
-  final AppState state;
+  final _SidebarDeps deps;
 
   Future<void> _newConnection(BuildContext context) async {
     final config = await showConnectionDialog(context);
     if (config == null) return;
-    state.addConnection(config);
-    await state.connect(config);
+    deps.registry.add(config);
+    await deps.appState.connect(config);
   }
 
   @override
   Widget build(BuildContext context) {
-    final list = state.connections;
+    final list = deps.registry.all;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1846,7 +1897,7 @@ class _AllConnectionsList extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 8),
                   itemCount: list.length,
                   itemBuilder: (_, i) =>
-                      _SavedConnectionRow(config: list[i], state: state),
+                      _SavedConnectionRow(config: list[i], deps: deps),
                 ),
         ),
         Divider(height: 1, color: AppColors.hairline),
@@ -1879,24 +1930,24 @@ class _AllConnectionsList extends StatelessWidget {
 }
 
 class _SavedConnectionRow extends StatelessWidget {
-  const _SavedConnectionRow({required this.config, required this.state});
+  const _SavedConnectionRow({required this.config, required this.deps});
 
   final ConnectionConfig config;
-  final AppState state;
+  final _SidebarDeps deps;
 
   Future<void> _edit(BuildContext context) async {
     final updated = await showConnectionDialog(context, existing: config);
-    if (updated != null) state.updateConnection(updated);
+    if (updated != null) deps.appState.updateConnection(updated);
   }
 
-  void _delete() => state.removeConnection(config.id);
+  void _delete() => deps.registry.remove(config.id);
 
   @override
   Widget build(BuildContext context) {
     final ts = config.lastConnectedAt;
     final tint = AppColors.connectionTint(config.color);
     return Hoverable(
-      onTap: () => state.connect(config),
+      onTap: () => deps.appState.connect(config),
       builder: (context, hovering) => Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

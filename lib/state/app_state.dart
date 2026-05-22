@@ -3,12 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/connection_config.dart';
-import '../models/db_catalog.dart';
 import '../models/db_object.dart';
-import '../models/query_result.dart';
-import '../models/saved_query.dart';
 import '../models/value_format.dart';
-import '../theme/app_theme.dart';
 import 'catalog_controller.dart';
 import 'connection_registry.dart';
 import 'event_log.dart';
@@ -84,40 +80,23 @@ class AppState extends ChangeNotifier {
     await registry.hydrate();
   }
 
-  // --- Preferences ------------------------------------------------------
+  // --- Orchestration ---------------------------------------------------
+  //
+  // AppState's public surface is just the cross-controller flows below.
+  // Per-controller getters / setters / methods live on the individual
+  // controllers; widgets read those directly via the providers wired up
+  // in main.dart.
 
-  AppBrightness get brightness => preferences.brightness;
-
-  void toggleBrightness() => preferences.toggleBrightness();
-
-  void toggleSidebar() => preferences.toggleSidebar();
-
-  // --- Connection registry ---------------------------------------------
-
-  List<ConnectionConfig> get connections => registry.all;
-
-  List<ConnectionConfig> get recentConnections => registry.recent;
-
-  void addConnection(ConnectionConfig config) => registry.add(config);
-
+  /// Update a saved connection in the registry. If the change targets the
+  /// connection currently in session, the session's snapshot is refreshed
+  /// in place so anything reading [SessionController.activeConnection]
+  /// sees the new values without a reconnect.
   void updateConnection(ConnectionConfig config) {
     registry.update(config);
     if (session.activeConnection?.id == config.id) {
       session.setActiveConnection(config);
     }
   }
-
-  void removeConnection(String id) => registry.remove(id);
-
-  // --- Session ---------------------------------------------------------
-
-  ConnectionConfig? get activeConnection => session.activeConnection;
-
-  ConnectionStatus get status => session.status;
-
-  String? get connectionError => session.error;
-
-  String? get serverVersion => session.serverVersion;
 
   Future<void> connect(ConnectionConfig config) async {
     final gen = catalog.beginGeneration();
@@ -225,167 +204,26 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // --- Catalog ---------------------------------------------------------
+  // --- Query messages --------------------------------------------------
 
-  List<DbSchema> get schemas => catalog.schemas;
-
-  bool get isCatalogLoading => catalog.isPhase1Loading;
-
-  /// The introspected catalog snapshot — columns, keys, FKs, indexes — that
-  /// the sidebar's table tree renders its detail rows from.
-  DatabaseCatalog get databaseCatalog => catalog.catalog;
-
-  bool isSchemaExpanded(String name) => ui.isSchemaExpanded(name);
-
-  List<DbColumn>? columnsFor(DbTable table) => catalog.columnsFor(table);
-
-  Map<String, DbForeignKey>? foreignKeysFor(DbTable table) =>
-      catalog.foreignKeysFor(table);
-
-  Map<String, DbForeignKey> get aggregatedForeignKeys =>
-      catalog.aggregatedForeignKeys;
-
-  DbForeignKey? findForeignKey(int? sourceRelOid, String columnName) =>
-      catalog.findForeignKey(sourceRelOid, columnName);
-
-  DbTable? findPrimaryKeyOwner(String columnName) =>
-      catalog.findPrimaryKeyOwner(columnName);
-
-  DbTable? findPrimaryKeyOwnerByOid(int? sourceRelOid, String columnName) =>
-      catalog.findPrimaryKeyOwnerByOid(sourceRelOid, columnName);
-
-  // --- Schema tree -----------------------------------------------------
-
-  void toggleSchema(String name) => ui.toggleSchema(name);
-
-  bool isNodeExpanded(String id) => ui.isNodeExpanded(id);
-
-  void toggleNode(String id) => ui.toggleNode(id);
-
-  // --- Tabs ------------------------------------------------------------
-
-  List<WorkspaceTab> get tabs => tabsController.tabs;
-
-  WorkspaceTab? get activeTab => tabsController.activeTab;
-
-  int get unappliedEditCount => tabsController.unappliedEditCount;
-
-  void newQueryTab() => tabsController.newQueryTab();
-
-  void selectTab(int index) => tabsController.selectTab(index);
-
-  Future<void> openSchema(DbTable table) => tabsController.openSchema(table);
-
-  Future<void> reloadSchema(SchemaTab tab) => tabsController.reloadSchema(tab);
-
-  Future<TableTab> openTable(DbTable table) => tabsController.openTable(table);
-
-  void openSavedQuery(SavedQuery q) => tabsController.openSavedQuery(q);
-
-  Future<void> loadTablePage(TableTab tab, int page) =>
-      tabsController.loadTablePage(tab, page);
-
-  Future<QueryResult> fetchAllForExport(TableTab tab) =>
-      tabsController.fetchAllForExport(tab);
-
-  Future<void> refreshTable(TableTab tab) => tabsController.refreshTable(tab);
-
-  Future<void> setTableSelect(TableTab tab, String selectList) =>
-      tabsController.setTableSelect(tab, selectList);
-
-  Future<void> setTableFilter(TableTab tab, String filter) =>
-      tabsController.setTableFilter(tab, filter);
-
-  Future<void> setTableOrder(TableTab tab, String orderBy) =>
-      tabsController.setTableOrder(tab, orderBy);
-
-  Future<void> cycleTableOrder(TableTab tab, String column) =>
-      tabsController.cycleTableOrder(tab, column);
-
-  Future<void> setColumnSort(TableTab tab, String column, bool descending) =>
-      tabsController.setColumnSort(tab, column, descending);
-
-  Future<void> appendTableFilter(TableTab tab, String fragment) =>
-      tabsController.appendTableFilter(tab, fragment);
-
-  void setTableAutoRefresh(TableTab tab, Duration? interval) =>
-      tabsController.setTableAutoRefresh(tab, interval);
-
-  void setQueryAutoRefresh(QueryTab tab, Duration? interval) =>
-      tabsController.setQueryAutoRefresh(tab, interval);
-
-  void setCellEdit(TableTab tab, int row, int column, CellEditValue value) =>
-      tabsController.setCellEdit(tab, row, column, value);
-
-  void revertCellEdit(TableTab tab, int row, int column) =>
-      tabsController.revertCellEdit(tab, row, column);
-
-  void deleteRow(TableTab tab, int row) =>
-      tabsController.deleteRow(tab, row);
-
-  void restoreDeletedRow(TableTab tab, int row) =>
-      tabsController.restoreDeletedRow(tab, row);
-
-  void duplicateRow(TableTab tab, int row) =>
-      tabsController.duplicateRow(tab, row);
-
-  void addRow(TableTab tab, int row) => tabsController.addRow(tab, row);
-
-  void resetTableEdits(TableTab tab) => tabsController.resetTableEdits(tab);
-
-  List<String> previewEditStatements(TableTab tab) =>
-      tabsController.previewEditStatements(tab);
-
-  Future<String?> applyTableEdits(TableTab tab) =>
-      tabsController.applyTableEdits(tab);
-
-  Future<void> runQuery(QueryTab tab, {String? sqlOverride}) =>
-      tabsController.runQuery(tab, sqlOverride: sqlOverride);
-
-  Future<void> loadQueryPlan(QueryTab tab) => tabsController.loadQueryPlan(tab);
-
+  /// Wipe a query tab's message log: the in-memory copy on the tab plus
+  /// the persisted copy on the active connection.
   void clearQueryMessages(QueryTab tab) {
     tab.messages.clear();
     perConnection.clearQueryMessages(tab.id);
     tab.markChanged();
   }
 
-  void updateQuerySql(QueryTab tab, String sql) =>
-      tabsController.updateQuerySql(tab, sql);
-
-  void renameQuery(String id, String name) =>
-      tabsController.renameQuery(id, name);
-
-  void deleteSavedQuery(String id) => tabsController.deleteSavedQuery(id);
-
-  void duplicateSavedQuery(String id) => tabsController.duplicateSavedQuery(id);
-
-  // --- Per-connection bags --------------------------------------------
-
-  List<SavedQuery> get savedQueries => perConnection.savedQueries;
-
-  bool isFavorite(DbTable table) => perConnection.isFavorite(table);
-
-  void toggleFavorite(DbTable table) => perConnection.toggleFavorite(table);
-
-  List<DbTable> get favoriteTables => perConnection.favoriteTables;
-
-  List<DbTable> get recents => perConnection.recents;
-
-  List<DbTable> frequentTables({int limit = 5}) =>
-      perConnection.frequentTables(limit: limit);
-
-  void persistColumnWidth(DbTable table, String column, double width) =>
-      perConnection.persistColumnWidth(table, column, width);
-
   // --- Navigation history ---------------------------------------------
 
-  bool get canGoBack => history.canGoBack;
-
-  bool get canGoForward => history.canGoForward;
-
+  /// Walk one step back through the navigation history, applying the
+  /// recorded tab/filter/sort snapshot. Implemented here rather than on
+  /// [NavigationHistory] because the apply step has to coordinate with
+  /// [TabsController].
   void historyBack() => history.back(_applySnapshot);
 
+  /// Walk one step forward through the navigation history. See
+  /// [historyBack].
   void historyForward() => history.forward(_applySnapshot);
 
   bool _applySnapshot(NavSnapshot snap) {
@@ -453,7 +291,3 @@ class AppState extends ChangeNotifier {
     super.dispose();
   }
 }
-
-/// Re-export of the [WorkspaceTab] symbol so legacy `state/app_state.dart`
-/// importers keep compiling without touching every file.
-typedef WorkspaceTabExport = WorkspaceTab;

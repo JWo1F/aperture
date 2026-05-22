@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import '../../models/connection_config.dart';
 import '../../models/time_ago.dart';
 import '../../state/app_state.dart';
+import '../../state/connection_registry.dart';
+import '../../state/session_controller.dart';
 import '../../theme/app_theme.dart';
 import '../about/about_dialog.dart';
 import '../connection/connection_dialog.dart';
@@ -14,22 +16,25 @@ import '../widgets/common.dart';
 /// Shown in place of the workspace until a live connection exists. Surfaces
 /// the most recently used connections as quick-launch cards.
 class WelcomePanel extends StatelessWidget {
-  const WelcomePanel({super.key, required this.state});
-
-  final AppState state;
+  const WelcomePanel({super.key});
 
   Future<void> _newConnection(BuildContext context) async {
+    final appState = context.read<AppState>();
+    final registry = context.read<ConnectionRegistry>();
     final config = await showConnectionDialog(context);
     if (config == null) return;
-    state.addConnection(config);
-    await state.connect(config);
+    registry.add(config);
+    await appState.connect(config);
   }
 
   @override
   Widget build(BuildContext context) {
-    final connecting = state.status == ConnectionStatus.connecting;
-    final recents = state.recentConnections;
-    final hasAny = state.connections.isNotEmpty;
+    final appState = context.read<AppState>();
+    final session = context.read<SessionController>();
+    final registry = context.read<ConnectionRegistry>();
+    final connecting = session.status == ConnectionStatus.connecting;
+    final recents = registry.recent;
+    final hasAny = registry.all.isNotEmpty;
 
     return Container(
       color: AppColors.bg,
@@ -56,7 +61,7 @@ class WelcomePanel extends StatelessWidget {
                 else if (recents.isNotEmpty)
                   _RecentsBlock(
                     recents: recents,
-                    onConnect: state.connect,
+                    onConnect: appState.connect,
                     onNew: () => _newConnection(context),
                   )
                 else
@@ -64,10 +69,10 @@ class WelcomePanel extends StatelessWidget {
                     hasAny: hasAny,
                     onNew: () => _newConnection(context),
                   ),
-                if (state.status == ConnectionStatus.error &&
-                    state.connectionError != null) ...[
+                if (session.status == ConnectionStatus.error &&
+                    session.error != null) ...[
                   const SizedBox(height: Insets.xl),
-                  _ErrorBox(message: state.connectionError!),
+                  _ErrorBox(message: session.error!),
                 ],
                 const SizedBox(height: Insets.xl),
                 Hoverable(
@@ -153,9 +158,9 @@ class _RecentsBlock extends StatelessWidget {
     BuildContext context,
     ConnectionConfig config,
   ) async {
-    final state = context.read<AppState>();
+    final appState = context.read<AppState>();
     final updated = await showConnectionDialog(context, existing: config);
-    if (updated != null) state.updateConnection(updated);
+    if (updated != null) appState.updateConnection(updated);
   }
 
   @override

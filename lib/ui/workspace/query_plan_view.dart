@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
+import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
@@ -25,7 +25,7 @@ class QueryPlanView extends StatelessWidget {
 
   void _runExplain(BuildContext context) {
     if ((tab.lastRunSql ?? '').trim().isEmpty) return;
-    context.read<AppState>().loadQueryPlan(tab);
+    context.read<TabsController>().loadQueryPlan(tab);
   }
 
   @override

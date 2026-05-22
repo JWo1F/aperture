@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:highlight/highlight.dart' show highlight;
 import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
+import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
@@ -19,15 +19,14 @@ class SchemaView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // SchemaView only needs AppState for dispatching reload to the
-    // toolbar's icon button. The tab's own listener (driven by the
-    // workspace's per-tab ListenableBuilder) handles ddl/error/loading
-    // updates, so no AppState subscription is required here.
-    final state = context.read<AppState>();
+    // Reload dispatches through TabsController. The tab's own listener,
+    // driven by the workspace's per-tab ListenableBuilder, handles
+    // ddl/error/loading updates — no controller subscription is needed here.
+    final tabs = context.read<TabsController>();
 
     return Column(
       children: [
-        _Toolbar(tab: tab, state: state),
+        _Toolbar(tab: tab, tabs: tabs),
         Expanded(child: _Body(tab: tab)),
       ],
     );
@@ -35,10 +34,10 @@ class SchemaView extends StatelessWidget {
 }
 
 class _Toolbar extends StatelessWidget {
-  const _Toolbar({required this.tab, required this.state});
+  const _Toolbar({required this.tab, required this.tabs});
 
   final SchemaTab tab;
-  final AppState state;
+  final TabsController tabs;
 
   void _copy(BuildContext context) {
     final ddl = tab.ddl;
@@ -104,7 +103,7 @@ class _Toolbar extends StatelessWidget {
           IconAction(
             icon: Icons.refresh,
             tooltip: 'Reload',
-            onPressed: tab.loading ? null : () => state.reloadSchema(tab),
+            onPressed: tab.loading ? null : () => tabs.reloadSchema(tab),
             busy: tab.loading,
           ),
           IconAction(

@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../models/query_result.dart';
 import '../../models/time_ago.dart';
-import '../../state/app_state.dart';
+import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../edits/pending_edits_modal.dart';
@@ -30,7 +30,7 @@ QueryResult? exportableResult(WorkspaceTab? tab) {
 
 void openExportForActiveTab(
   BuildContext context,
-  AppState state,
+  TabsController tabs,
   WorkspaceTab? tab,
 ) {
   final timestamp = filenameTimestamp();
@@ -42,7 +42,7 @@ void openExportForActiveTab(
       target: ExportTarget(
         suggestedFilename: '${tab.table.name}_$timestamp.csv',
         currentResult: result,
-        fetchAll: () => state.fetchAllForExport(tab),
+        fetchAll: () => tabs.fetchAllForExport(tab),
         totalRowsForAll: tab.totalRows,
       ),
     );
@@ -61,30 +61,30 @@ void openExportForActiveTab(
   }
 }
 
-void openPendingForActiveTab(BuildContext context, AppState state) {
-  final tab = state.activeTab;
+void openPendingForActiveTab(BuildContext context, TabsController tabs) {
+  final tab = tabs.activeTab;
   if (tab is TableTab && tab.hasEdits) {
-    _showPending(context, state, tab);
+    _showPending(context, tabs, tab);
     return;
   }
   // Active tab has no edits; surface the first tab that does.
-  for (final t in state.tabs) {
+  for (final t in tabs.tabs) {
     if (t is TableTab && t.hasEdits) {
-      state.selectTab(state.tabs.indexOf(t));
-      _showPending(context, state, t);
+      tabs.selectTab(tabs.tabs.indexOf(t));
+      _showPending(context, tabs, t);
       return;
     }
   }
 }
 
-void _showPending(BuildContext context, AppState state, TableTab tab) {
-  final statements = state.previewEditStatements(tab);
+void _showPending(BuildContext context, TabsController tabs, TableTab tab) {
+  final statements = tabs.previewEditStatements(tab);
   final messenger = ScaffoldMessenger.maybeOf(context);
   showPendingEditsModal(
     context,
     statements: statements,
     onApply: () async {
-      final error = await state.applyTableEdits(tab);
+      final error = await tabs.applyTableEdits(tab);
       if (error != null && messenger != null) {
         messenger.showSnackBar(
           SnackBar(
@@ -97,6 +97,6 @@ void _showPending(BuildContext context, AppState state, TableTab tab) {
         );
       }
     },
-    onRevert: () => state.resetTableEdits(tab),
+    onRevert: () => tabs.resetTableEdits(tab),
   );
 }

@@ -6,8 +6,10 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../state/event_log.dart';
+import '../../state/master_passphrase.dart';
 import '../../state/preferences_controller.dart';
 import '../../state/session_controller.dart';
+import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../command_palette/command_palette.dart';
@@ -43,9 +45,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // when a connect attempt needs decryption.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final state = context.read<AppState>();
-      state.onPassphraseNeeded = () =>
-          showMasterPassphraseUnlock(context, state.masterPassphrase);
+      final appState = context.read<AppState>();
+      final masterPassphrase = context.read<MasterPassphrase>();
+      appState.onPassphraseNeeded = () =>
+          showMasterPassphraseUnlock(context, masterPassphrase);
     });
   }
 
@@ -53,16 +56,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void didChangeMetrics() {
     // Native window size / position changed — debounce-save the current
     // frame so reopening lands at roughly the same place.
-    final state = Provider.of<AppState>(context, listen: false);
-    state.preferences.captureWindowFrame();
+    context.read<PreferencesController>().captureWindowFrame();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
     if (lifecycleState == AppLifecycleState.inactive ||
         lifecycleState == AppLifecycleState.detached) {
-      final state = Provider.of<AppState>(context, listen: false);
-      state.preferences.captureWindowFrame();
+      context.read<PreferencesController>().captureWindowFrame();
     }
   }
 
@@ -76,19 +77,20 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   bool _onKey(KeyEvent event) {
     if (event is! KeyDownEvent) return false;
     if (!HardwareKeyboard.instance.isMetaPressed) return false;
-    final state = context.read<AppState>();
+    final appState = context.read<AppState>();
     if (event.logicalKey == LogicalKeyboardKey.bracketLeft) {
-      state.historyBack();
+      appState.historyBack();
       return true;
     }
     if (event.logicalKey == LogicalKeyboardKey.bracketRight) {
-      state.historyForward();
+      appState.historyForward();
       return true;
     }
     if (event.logicalKey == LogicalKeyboardKey.keyQ) {
       // Only intercept when we'd actually warn the user.
-      if (state.unappliedEditCount > 0) {
-        unawaited(_confirmQuit(state.unappliedEditCount));
+      final pending = context.read<TabsController>().unappliedEditCount;
+      if (pending > 0) {
+        unawaited(_confirmQuit(pending));
         return true;
       }
     }
@@ -138,7 +140,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // log-panel resize, preference changes, tab mutations etc. all stay
     // out of this widget's rebuild path. The sidebar / log-panel /
     // workspace subtrees subscribe to their own state independently.
-    final state = context.read<AppState>();
+    final preferences = context.read<PreferencesController>();
+    final eventLog = context.read<EventLog>();
+    final tabs = context.read<TabsController>();
     final status = context.select<SessionController, ConnectionStatus>(
       (s) => s.status,
     );
@@ -155,13 +159,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       body: CallbackShortcuts(
         bindings: {
           const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
-              showCommandPalette(context, state),
-          const SingleActivator(LogicalKeyboardKey.keyL, meta: true): () =>
-              state.eventLog.toggleVisible(),
+              showCommandPalette(context),
+          const SingleActivator(LogicalKeyboardKey.keyL, meta: true):
+              eventLog.toggleVisible,
           if (connected)
             const SingleActivator(LogicalKeyboardKey.keyR, meta: true): () {
-              final tab = state.activeTab;
-              if (tab is TableTab) state.refreshTable(tab);
+              final tab = tabs.activeTab;
+              if (tab is TableTab) tabs.refreshTable(tab);
             },
         },
         child: FocusScope(
@@ -185,7 +189,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             child: Column(
               children: [
                 const RepaintBoundary(child: Toolbar()),
-                if (lost) ConnectionLostBanner(state: state),
+                if (lost) const ConnectionLostBanner(),
                 Expanded(
                   child: Row(
                     children: [
@@ -196,7 +200,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                       // versa.
                       if (sidebarVisible) ...[
                         const RepaintBoundary(child: Sidebar()),
-                        SidebarResizeHandle(state: state),
+                        SidebarResizeHandle(preferences: preferences),
                       ],
                       Expanded(
                         child: RepaintBoundary(
@@ -204,11 +208,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                             color: AppColors.bg,
                             child: showWorkspace
                                 ? const Workspace()
-                                : WelcomePanel(state: state),
+                                : const WelcomePanel(),
                           ),
                         ),
                       ),
-                      if (logVisible) LogResizeHandle(state: state),
+                      if (logVisible) LogResizeHandle(preferences: preferences),
                       const RepaintBoundary(child: LogPanel()),
                     ],
                   ),

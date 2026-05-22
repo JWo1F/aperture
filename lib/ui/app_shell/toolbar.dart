@@ -88,7 +88,9 @@ class _ToolbarState extends State<Toolbar> {
     // rebuilds when one of these actually changes. Brightness, history,
     // pending-edit count and the active tab's exportable result are the
     // only fields driving any visible change in here.
-    final state = context.read<AppState>();
+    final appState = context.read<AppState>();
+    final preferences = context.read<PreferencesController>();
+    final tabs = context.read<TabsController>();
     final pending = context.select<TabsController, int>(
       (t) => t.unappliedEditCount,
     );
@@ -150,18 +152,18 @@ class _ToolbarState extends State<Toolbar> {
                 TbIcon(
                   icon: Icons.view_sidebar_outlined,
                   tooltip: 'Toggle sidebar',
-                  onPressed: state.toggleSidebar,
+                  onPressed: preferences.toggleSidebar,
                 ),
                 const TbRail(),
                 TbIcon(
                   icon: Icons.arrow_back,
                   tooltip: 'Back  ⌘[',
-                  onPressed: canGoBack ? state.historyBack : null,
+                  onPressed: canGoBack ? appState.historyBack : null,
                 ),
                 TbIcon(
                   icon: Icons.arrow_forward,
                   tooltip: 'Forward  ⌘]',
-                  onPressed: canGoForward ? state.historyForward : null,
+                  onPressed: canGoForward ? appState.historyForward : null,
                 ),
                 const SizedBox(width: 8),
                 const TbGroupRail(),
@@ -176,8 +178,8 @@ class _ToolbarState extends State<Toolbar> {
                   onPressed: canExport
                       ? () => openExportForActiveTab(
                           context,
-                          state,
-                          state.activeTab,
+                          tabs,
+                          tabs.activeTab,
                         )
                       : null,
                 ),
@@ -185,7 +187,7 @@ class _ToolbarState extends State<Toolbar> {
                 if (pending > 0) ...[
                   PendingPill(
                     count: pending,
-                    onTap: () => openPendingForActiveTab(context, state),
+                    onTap: () => openPendingForActiveTab(context, tabs),
                   ),
                   const TbRail(),
                 ],
@@ -196,7 +198,7 @@ class _ToolbarState extends State<Toolbar> {
                 SizedBox(
                   width: 220,
                   child: TbSearch(
-                    onTap: () => showCommandPalette(context, state),
+                    onTap: () => showCommandPalette(context),
                   ),
                 ),
                 const TbRail(),
@@ -205,7 +207,7 @@ class _ToolbarState extends State<Toolbar> {
                       ? Icons.dark_mode_outlined
                       : Icons.light_mode_outlined,
                   tooltip: 'Toggle theme',
-                  onPressed: state.toggleBrightness,
+                  onPressed: preferences.toggleBrightness,
                 ),
                 TbIcon(
                   icon: Icons.folder_outlined,

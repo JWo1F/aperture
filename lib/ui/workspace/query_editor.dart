@@ -9,7 +9,9 @@ import '../../models/query_result.dart';
 import '../../services/sql_complete.dart';
 import '../../services/sql_statements.dart';
 import '../../state/app_state.dart';
+import '../../state/catalog_controller.dart';
 import '../../state/preferences_controller.dart';
+import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/code_editor.dart';
@@ -74,7 +76,9 @@ class _QueryEditorState extends State<QueryEditor> {
       _saveTimer?.cancel();
       _saveTimer = Timer(const Duration(milliseconds: 400), () {
         if (!mounted) return;
-        context.read<AppState>().updateQuerySql(widget.tab, _controller.text);
+        context
+            .read<TabsController>()
+            .updateQuerySql(widget.tab, _controller.text);
       });
     }
 
@@ -108,13 +112,13 @@ class _QueryEditorState extends State<QueryEditor> {
   Future<void> _runAll() async {
     widget.tab.sql = _controller.text;
     widget.tab.view = QueryResultsView.results;
-    final state = context.read<AppState>();
+    final tabs = context.read<TabsController>();
     final stmts = _statements.isNotEmpty
         ? _statements
         : parseSqlStatements(_controller.text);
 
     if (stmts.length <= 1) {
-      await state.runQuery(widget.tab);
+      await tabs.runQuery(widget.tab);
       return;
     }
 
@@ -122,14 +126,14 @@ class _QueryEditorState extends State<QueryEditor> {
     // one prepared statement. Send each statement separately and surface the
     // last result; stop on the first failure so the user sees the error.
     for (final s in stmts) {
-      await state.runQuery(widget.tab, sqlOverride: s.text);
+      await tabs.runQuery(widget.tab, sqlOverride: s.text);
       if (widget.tab.result?.isError ?? false) break;
     }
   }
 
   void _runStatement(SqlStatement stmt) {
     widget.tab.view = QueryResultsView.results;
-    context.read<AppState>().runQuery(widget.tab, sqlOverride: stmt.text);
+    context.read<TabsController>().runQuery(widget.tab, sqlOverride: stmt.text);
   }
 
   void _runAtCursor() {
@@ -144,7 +148,11 @@ class _QueryEditorState extends State<QueryEditor> {
   /// Picks the content widget for the current [QueryTab.view] selection.
   /// Each section is responsible for its own empty-state copy so the
   /// switch reads as a flat dispatch table.
-  Widget _buildContent(AppState state, QueryTab tab) {
+  Widget _buildContent(
+    AppState appState,
+    CatalogController catalog,
+    QueryTab tab,
+  ) {
     switch (tab.view) {
       case QueryResultsView.results:
         if (tab.result == null) {
@@ -159,11 +167,12 @@ class _QueryEditorState extends State<QueryEditor> {
         return ResultsGrid(
           result: tab.result!,
           widths: tab.columnWidths,
-          foreignKeys: _resolveFks(state, tab.result!),
-          onFollowForeignKey: (fk, value) => state.followForeignKey(fk, value),
-          findRowOwner: (col) => _findRowOwner(state, tab.result!, col),
+          foreignKeys: _resolveFks(catalog, tab.result!),
+          onFollowForeignKey: (fk, value) =>
+              appState.followForeignKey(fk, value),
+          findRowOwner: (col) => _findRowOwner(catalog, tab.result!, col),
           onFindRow: (table, col, value) =>
-              state.findRowInTable(table, col, value),
+              appState.findRowInTable(table, col, value),
         );
       case QueryResultsView.plan:
         return QueryPlanView(tab: tab);
@@ -184,13 +193,15 @@ class _QueryEditorState extends State<QueryEditor> {
 
   @override
   Widget build(BuildContext context) {
-    // Read AppState non-reactively. The State already listens to the tab
+    // Read controllers non-reactively. The State already listens to the tab
     // directly (see initState → addListener(_onTabChange)) which triggers
     // setState, so tab field updates rebuild this widget without going
-    // through AppState's bubbled notifications. The one slice of app-wide
+    // through any controller's notifications. The one slice of app-wide
     // state we still need to react to is the editor/results split — pulled
     // narrowly so a sidebar drag doesn't reach this widget.
-    final state = context.read<AppState>();
+    final appState = context.read<AppState>();
+    final catalog = context.read<CatalogController>();
+    final preferences = context.read<PreferencesController>();
     final fraction = context.select<PreferencesController, double>(
       (p) => p.queryResultsFraction,
     );
@@ -255,10 +266,10 @@ class _QueryEditorState extends State<QueryEditor> {
           final stmtText = stmt?.text ?? req.text;
           // Resolve catalog at invocation time — the editor isn't rebuilt
           // on catalog phase-1 completion, so reading through the freshest
-          // AppState avoids serving stale suggestions.
+          // controller avoids serving stale suggestions.
           return completeQueryEditor(
             req: req,
-            catalog: state.catalog.catalog,
+            catalog: catalog.catalog,
             stmtText: stmtText,
             stmtStart: stmt?.startOffset ?? 0,
           );
@@ -309,7 +320,7 @@ class _QueryEditorState extends State<QueryEditor> {
                     child: ClipRect(child: editor),
                   ),
                   _QuerySplitHandle(
-                    state: state,
+                    preferences: preferences,
                     available: available,
                     handleHeight: handleHeight,
                   ),
@@ -319,7 +330,7 @@ class _QueryEditorState extends State<QueryEditor> {
                     child: ClipRect(
                       child: Container(
                         color: AppColors.bg,
-                        child: _buildContent(state, tab),
+                        child: _buildContent(appState, catalog, tab),
                       ),
                     ),
                   ),
@@ -341,12 +352,12 @@ class _QueryEditorState extends State<QueryEditor> {
 /// and the pane jumps back on direction reversal.
 class _QuerySplitHandle extends StatefulWidget {
   const _QuerySplitHandle({
-    required this.state,
+    required this.preferences,
     required this.available,
     required this.handleHeight,
   });
 
-  final AppState state;
+  final PreferencesController preferences;
   final double available;
   final double handleHeight;
 
@@ -364,12 +375,12 @@ class _QuerySplitHandleState extends State<_QuerySplitHandle> {
       axis: Axis.horizontal,
       thickness: widget.handleHeight,
       onDragStart: () {
-        _startFraction = widget.state.preferences.queryResultsFraction;
+        _startFraction = widget.preferences.queryResultsFraction;
         _startAvailable = widget.available;
       },
       onDragUpdate: (dy) {
         if (_startAvailable <= 0) return;
-        widget.state.preferences.setQueryResultsFraction(
+        widget.preferences.setQueryResultsFraction(
           _startFraction - dy / _startAvailable,
         );
       },
@@ -699,16 +710,19 @@ class _RdTab extends StatelessWidget {
 /// source-relation OID exposed by the wire protocol so the FK action targets
 /// the *actual* table the column came from; falls back to the catalog-wide
 /// aggregation when the column is an expression (no source relation).
-Map<String, DbForeignKey> _resolveFks(AppState state, QueryResult result) {
+Map<String, DbForeignKey> _resolveFks(
+  CatalogController catalog,
+  QueryResult result,
+) {
   final schemas = result.columnSchemas;
-  if (schemas == null) return state.aggregatedForeignKeys;
+  if (schemas == null) return catalog.aggregatedForeignKeys;
   final out = <String, DbForeignKey>{};
   for (final schema in schemas) {
-    final precise = state.findForeignKey(schema.tableOid, schema.name);
+    final precise = catalog.findForeignKey(schema.tableOid, schema.name);
     if (precise != null) {
       out[schema.name] = precise;
     } else if (!schema.hasSourceRelation) {
-      final guess = state.aggregatedForeignKeys[schema.name];
+      final guess = catalog.aggregatedForeignKeys[schema.name];
       if (guess != null) out[schema.name] = guess;
     }
   }
@@ -718,14 +732,18 @@ Map<String, DbForeignKey> _resolveFks(AppState state, QueryResult result) {
 /// Returns the relation whose PK is [columnName], preferring the source
 /// relation OID from the wire protocol when present. Falls back to the
 /// ambiguity-safe catalog lookup otherwise.
-DbTable? _findRowOwner(AppState state, QueryResult result, String columnName) {
+DbTable? _findRowOwner(
+  CatalogController catalog,
+  QueryResult result,
+  String columnName,
+) {
   final schemas = result.columnSchemas;
-  if (schemas == null) return state.findPrimaryKeyOwner(columnName);
+  if (schemas == null) return catalog.findPrimaryKeyOwner(columnName);
   for (final schema in schemas) {
     if (schema.name != columnName) continue;
-    return state.findPrimaryKeyOwnerByOid(schema.tableOid, columnName);
+    return catalog.findPrimaryKeyOwnerByOid(schema.tableOid, columnName);
   }
-  return state.findPrimaryKeyOwner(columnName);
+  return catalog.findPrimaryKeyOwner(columnName);
 }
 
 /// Bottom status strip for a query tab — mirrors the table view's pagebar
@@ -740,10 +758,10 @@ class _QueryPagebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // _QueryPagebar reads only from `tab` and dispatches to AppState
-    // methods; it lives inside a per-tab ListenableBuilder, so a plain
-    // context.read is enough — no need to subscribe to the root.
-    final state = context.read<AppState>();
+    // _QueryPagebar reads only from `tab` and dispatches to TabsController;
+    // it lives inside a per-tab ListenableBuilder, so a plain context.read
+    // is enough — no need to subscribe to the controller.
+    final tabs = context.read<TabsController>();
     final result = tab.result;
     final refreshedAt = tab.lastRefreshedAt;
     final lastRunSql = tab.lastRunSql;
@@ -818,8 +836,8 @@ class _QueryPagebar extends StatelessWidget {
             interval: tab.autoRefreshInterval,
             busy: tab.running,
             canRefresh: canRefresh,
-            onManualRefresh: () => state.runQuery(tab, sqlOverride: lastRunSql),
-            onSetInterval: (d) => state.setQueryAutoRefresh(tab, d),
+            onManualRefresh: () => tabs.runQuery(tab, sqlOverride: lastRunSql),
+            onSetInterval: (d) => tabs.setQueryAutoRefresh(tab, d),
           ),
         ],
       ),

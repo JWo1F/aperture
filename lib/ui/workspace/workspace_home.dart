@@ -7,7 +7,6 @@ import '../../models/connection_config.dart';
 import '../../models/db_object.dart';
 import '../../models/saved_query.dart';
 import '../../models/time_ago.dart';
-import '../../state/app_state.dart';
 import '../../state/catalog_controller.dart';
 import '../../state/per_connection_store.dart';
 import '../../state/session_controller.dart';
@@ -27,7 +26,6 @@ class WorkspaceHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.read<AppState>();
     final session = context.watch<SessionController>();
     final catalog = context.watch<CatalogController>();
     final perConnection = context.watch<PerConnectionStore>();
@@ -93,7 +91,7 @@ class WorkspaceHome extends StatelessWidget {
                           tint: tint,
                           narrow: narrow,
                           onNewQuery: tabs.newQueryTab,
-                          onSearch: () => showCommandPalette(context, state),
+                          onSearch: () => showCommandPalette(context),
                         ),
                         const SizedBox(height: 28),
                         _JumpAndQueries(
