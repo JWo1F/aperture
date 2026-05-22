@@ -45,6 +45,7 @@ class PostgresTableRepository implements TableRepository {
       final estimate = await _estimatedRowCount(table);
       if (estimate != null) return estimate;
     }
+    validateClauseSnippet(filter, kind: ClauseKind.filter);
     final result = await _db.execute(
       'SELECT count(*) FROM ${table.qualifiedName}${whereClause(filter)}',
       timeout: _pageQueryTimeout,
@@ -85,6 +86,9 @@ class PostgresTableRepository implements TableRepository {
     String selectList = '*',
   }) async {
     final watch = Stopwatch()..start();
+    validateClauseSnippet(filter, kind: ClauseKind.filter);
+    validateClauseSnippet(orderBy, kind: ClauseKind.orderBy);
+    validateClauseSnippet(selectList, kind: ClauseKind.selectList);
     final order = orderClause(orderBy);
     final withCtid = table.kind == DbRelationKind.table;
     final projection = _projection(selectList, aliased: withCtid);
@@ -154,6 +158,9 @@ class PostgresTableRepository implements TableRepository {
     String orderBy = '',
     String selectList = '*',
   }) async {
+    validateClauseSnippet(filter, kind: ClauseKind.filter);
+    validateClauseSnippet(orderBy, kind: ClauseKind.orderBy);
+    validateClauseSnippet(selectList, kind: ClauseKind.selectList);
     final order = orderClause(orderBy);
     final watch = Stopwatch()..start();
     final projection = _projection(selectList, aliased: false);

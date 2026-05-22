@@ -25,6 +25,7 @@ class SqliteTableRepository implements TableRepository {
 
   @override
   Future<int> countRows(DbTable table, {String filter = ''}) async {
+    validateClauseSnippet(filter, kind: ClauseKind.filter);
     final rs = _db.select(
       'SELECT count(*) FROM ${table.qualifiedName}${whereClause(filter)}',
     );
@@ -46,6 +47,9 @@ class SqliteTableRepository implements TableRepository {
     String orderBy = '',
     String selectList = '*',
   }) async {
+    validateClauseSnippet(filter, kind: ClauseKind.filter);
+    validateClauseSnippet(orderBy, kind: ClauseKind.orderBy);
+    validateClauseSnippet(selectList, kind: ClauseKind.selectList);
     final tail =
         '${whereClause(filter)}${orderClause(orderBy)} '
         'LIMIT $limit OFFSET $offset';
@@ -118,6 +122,9 @@ class SqliteTableRepository implements TableRepository {
     String orderBy = '',
     String selectList = '*',
   }) async {
+    validateClauseSnippet(filter, kind: ClauseKind.filter);
+    validateClauseSnippet(orderBy, kind: ClauseKind.orderBy);
+    validateClauseSnippet(selectList, kind: ClauseKind.selectList);
     final watch = Stopwatch()..start();
     final rs = _db.select(
       'SELECT ${_projection(selectList)} FROM ${table.qualifiedName}'
