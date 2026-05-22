@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:macos_window_utils/macos/ns_window_delegate.dart';
 import 'package:macos_window_utils/macos_window_utils.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../models/connection_config.dart';
@@ -513,6 +515,11 @@ class _ToolbarState extends State<_Toolbar> {
                   tooltip: 'Toggle theme',
                   onPressed: state.toggleBrightness,
                 ),
+                _TbIcon(
+                  icon: Icons.folder_outlined,
+                  tooltip: 'Reveal config folder in Finder',
+                  onPressed: _revealConfigFolder,
+                ),
               ],
             ),
           ],
@@ -520,6 +527,14 @@ class _ToolbarState extends State<_Toolbar> {
       ),
     );
   }
+}
+
+/// Reveals the app's Application Support directory — home of
+/// connections.json and the rest of the persisted config — in Finder. The
+/// app is unsandboxed, so a plain `open` needs no security-scoped bookmark.
+Future<void> _revealConfigFolder() async {
+  final dir = await getApplicationSupportDirectory();
+  await Process.run('open', [dir.path]);
 }
 
 /// Returns the [QueryResult] the toolbar's Export action would feed to the

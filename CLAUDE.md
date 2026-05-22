@@ -26,6 +26,10 @@ doesn't.
 - Imperative subject line under ~70 chars; body explains *why*.
 - One feature per commit. Commit after every completed feature without
   being asked.
+- **Bump the version before every commit.** Increment `version:` in
+  `pubspec.yaml` (raise the build number after `+`, and the version name
+  per change size) and keep `_version` in `lib/ui/about/about_dialog.dart`
+  in sync. Stage both with the commit.
 - See `~/.claude/projects/-Users-jwo1f-work-jwo1f-dbv-dbv/memory/feedback_commits.md`
   and `feedback_commit_discipline.md` for the user's exact preferences.
 
