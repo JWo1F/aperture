@@ -592,4 +592,89 @@ void main() {
       expect(out, isEmpty);
     });
   });
+
+  group('DDL completion', () {
+    final cat = _catalog(
+      [_t(1, 'public', 'users'), _t(2, 'public', 'orders')],
+      columns: {
+        1: [_c('id', 'int', pk: true), _c('email', 'text')],
+        2: [_c('id', 'int', pk: true), _c('user_id', 'int')],
+      },
+    );
+
+    List<CodeSuggestion> run(String text) => completeQueryEditor(
+      req: _req(text, manualTrigger: true),
+      catalog: cat,
+      stmtText: text,
+    );
+
+    test('CREATE offers object kinds', () {
+      final out = run('CREATE ');
+      expect(out.map((s) => s.label), containsAll(['TABLE', 'INDEX', 'VIEW']));
+    });
+
+    test('CREATE TABLE column slot offers data types', () {
+      final out = run('CREATE TABLE widgets (id ');
+      expect(out.map((s) => s.label), containsAll(['integer', 'text']));
+    });
+
+    test('CREATE TABLE after a type offers column constraints', () {
+      final out = run('CREATE TABLE widgets (id integer ');
+      expect(
+        out.map((s) => s.label),
+        containsAll(['PRIMARY KEY', 'NOT NULL']),
+      );
+    });
+
+    test('ALTER TABLE offers table actions', () {
+      final out = run('ALTER TABLE users ');
+      expect(
+        out.map((s) => s.label),
+        containsAll(['ADD COLUMN', 'DROP COLUMN']),
+      );
+    });
+
+    test('ALTER TABLE DROP COLUMN offers the target table columns', () {
+      final out = run('ALTER TABLE users DROP COLUMN ');
+      expect(out.map((s) => s.label).toSet(), {'id', 'email'});
+    });
+
+    test('ALTER TABLE ALTER COLUMN offers column actions', () {
+      final out = run('ALTER TABLE users ALTER COLUMN email ');
+      expect(
+        out.map((s) => s.label),
+        containsAll(['SET DEFAULT', 'SET NOT NULL']),
+      );
+    });
+
+    test('ALTER TABLE ADD COLUMN offers data types after the name', () {
+      final out = run('ALTER TABLE users ADD COLUMN flag ');
+      expect(out.map((s) => s.label), containsAll(['boolean', 'integer']));
+    });
+
+    test('ALTER TABLE ALTER COLUMN TYPE offers data types', () {
+      final out = run('ALTER TABLE users ALTER COLUMN email TYPE var');
+      expect(out.first.label, 'varchar');
+    });
+
+    test('DROP TABLE offers table names', () {
+      final out = run('DROP TABLE ');
+      expect(out.map((s) => s.label), containsAll(['users', 'orders']));
+    });
+
+    test('TRUNCATE offers TABLE and table names', () {
+      final out = run('TRUNCATE ');
+      expect(out.map((s) => s.label), containsAll(['TABLE', 'users']));
+    });
+
+    test('CREATE INDEX column list offers the target table columns', () {
+      final out = run('CREATE INDEX idx ON users (');
+      expect(out.map((s) => s.label), containsAll(['id', 'email']));
+    });
+
+    test('CREATE VIEW … AS SELECT delegates to the SELECT completer', () {
+      final out = run('CREATE VIEW v AS SELECT ');
+      expect(out.first.label, '*');
+    });
+  });
 }
