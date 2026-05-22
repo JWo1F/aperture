@@ -283,7 +283,6 @@ class TabsController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      tab.totalRows = await service.countRows(tab.table, filter: tab.filter);
       tab.result = await service.fetchTablePage(
         tab.table,
         limit: tab.pageSize,
@@ -301,6 +300,24 @@ class TabsController extends ChangeNotifier {
     }
     tab.loading = false;
     notifyListeners();
+
+    // The row count can be a full-table scan on large relations; keep it off
+    // the critical path so the grid renders as soon as the page arrives.
+    unawaited(_refreshRowCount(tab));
+  }
+
+  Future<void> _refreshRowCount(TableTab tab) async {
+    final service = session.service;
+    if (service == null) return;
+    final filterAtRequest = tab.filter;
+    try {
+      final count = await service.countRows(tab.table, filter: filterAtRequest);
+      // A slow count can outlive the filter that triggered it; only apply
+      // the result if the tab is still showing that same filter.
+      if (tab.filter == filterAtRequest) tab.totalRows = count;
+    } catch (_) {
+      // A failed or timed-out count leaves the previous total in place.
+    }
   }
 
   Future<QueryResult> fetchAllForExport(TableTab tab) {

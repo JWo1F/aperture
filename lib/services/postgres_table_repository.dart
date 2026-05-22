@@ -40,13 +40,42 @@ class PostgresTableRepository implements TableRepository {
   static const _ddlQueryTimeout = Duration(seconds: 30);
 
   /// Total row count for a relation under the active filter.
+  ///
+  /// `count(*)` is a full scan — seconds to minutes on a relation of tens of
+  /// millions of rows. For the unfiltered case we instead read the planner's
+  /// `reltuples` estimate from `pg_class`, an O(1) catalog lookup. The
+  /// estimate is only trusted when positive: `reltuples` is -1 before a
+  /// relation has ever been analyzed and 0 for views and empty tables, and
+  /// for all of those an exact `count(*)` is cheap anyway.
   @override
   Future<int> countRows(DbTable table, {String filter = ''}) async {
+    if (filter.trim().isEmpty) {
+      final estimate = await _estimatedRowCount(table);
+      if (estimate != null) return estimate;
+    }
     final result = await _db.execute(
       'SELECT count(*) FROM ${table.qualifiedName}${_whereClause(filter)}',
       timeout: _pageQueryTimeout,
     );
     return (result.first.first as int?) ?? 0;
+  }
+
+  /// Planner row estimate for [table], or null when no trustworthy estimate
+  /// exists (relation never analyzed, a view, or genuinely empty) — callers
+  /// fall back to an exact `count(*)`.
+  Future<int?> _estimatedRowCount(DbTable table) async {
+    final literal = table.qualifiedName.replaceAll("'", "''");
+    try {
+      final result = await _db.execute(
+        "SELECT reltuples::bigint FROM pg_class "
+        "WHERE oid = '$literal'::regclass",
+        timeout: _ddlQueryTimeout,
+      );
+      final estimate = result.first.first as int?;
+      return (estimate != null && estimate > 0) ? estimate : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// One page of rows from a relation. For regular tables each row carries
