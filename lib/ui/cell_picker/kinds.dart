@@ -90,13 +90,13 @@ final _kTime = Kind(
   id: KindId.time,
   label: 'time',
   color: AppColors.tDate,
-  size: const Size(296, 200),
+  size: const Size(296, 140),
 );
 final _kTimeTz = Kind(
   id: KindId.time,
   label: 'timetz',
   color: AppColors.tDate,
-  size: const Size(320, 240),
+  size: const Size(320, 190),
   withTimezone: true,
 );
 final _kDatetime = Kind(

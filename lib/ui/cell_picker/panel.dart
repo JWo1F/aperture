@@ -11,13 +11,13 @@ import 'bodies/calendar_body.dart';
 import 'bodies/datetime_body.dart';
 import 'bodies/number_body.dart';
 import 'bodies/text_body.dart';
-import 'bodies/time_body.dart';
 import 'chrome.dart';
 import 'editor_state.dart';
 import 'formatters.dart';
 import 'kinds.dart';
 import 'quick_actions.dart';
 import 'target.dart';
+import 'tz_input.dart';
 import 'value_line.dart';
 
 /// The picker's core widget: hosts the kind-specific [EditorState], dispatches
@@ -336,15 +336,16 @@ class _PanelState extends State<Panel> {
         () => s.value = DateTime(d.year, d.month, d.day),
       ),
     ),
-    KindId.time => TimeBody(
-      initial: s.value,
-      withTz: s.withTz,
-      tz: s.tz,
-      resetTick: _resetTick,
-      onChange: (h, m, sec, ms) =>
-          setState(() => s.value = DateTime(1970, 1, 1, h, m, sec, ms)),
-      onTzChange: (tz) => setState(() => s.tz = tz),
-    ),
+    KindId.time => s.withTz
+        ? Container(
+            color: AppColors.bg,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: TzInput(
+              value: s.tz,
+              onChange: (tz) => setState(() => s.tz = tz),
+            ),
+          )
+        : const SizedBox.shrink(),
     KindId.datetime => DateTimeBody(
       initial: s.value,
       withTz: s.withTz,
