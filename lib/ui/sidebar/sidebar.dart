@@ -1000,7 +1000,7 @@ class _TableDetail extends StatelessWidget {
                       ? Icons.key_rounded
                       : (fkColumns.contains(c.name)
                             ? Icons.link_rounded
-                            : Icons.view_column_rounded),
+                            : Icons.crop_landscape),
                   iconColor: c.isPrimaryKey
                       ? tint
                       : (fkColumns.contains(c.name)
@@ -1135,7 +1135,7 @@ class _DetailFolder extends StatelessWidget {
                       style: AppTheme.ui(
                         size: 11.5,
                         color: AppColors.textMuted,
-                        weight: FontWeight.w600,
+                        weight: FontWeight.w400,
                         letterSpacing: 0,
                       ),
                     ),
@@ -1193,9 +1193,7 @@ class _DetailLeaf extends StatelessWidget {
           margin: const EdgeInsets.symmetric(horizontal: 6),
           padding: EdgeInsets.only(left: leftBase, right: 6),
           decoration: BoxDecoration(
-            color: hovering && onTap != null
-                ? AppColors.sidebarRowHover
-                : Colors.transparent,
+            color: hovering ? AppColors.sidebarRowHover : Colors.transparent,
             borderRadius: Radii.brSm,
           ),
           child: Row(
