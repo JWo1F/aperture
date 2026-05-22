@@ -492,7 +492,7 @@ class _ClauseRowState extends State<_ClauseRow> {
                 hintStyle: AppTheme.mono(
                   size: 11.5,
                   color: AppColors.text4,
-                ).copyWith(fontStyle: FontStyle.italic),
+                ),
                 onSubmit: widget.onApply,
                 suggest: widget.suggest,
               ),
