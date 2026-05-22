@@ -813,10 +813,14 @@ class _TbKbd extends StatelessWidget {
       children: [
         for (var i = 0; i < parts.length; i++) ...[
           if (i > 0) const SizedBox(width: 2),
+          // No `alignment` here: a Container with an alignment expands to
+          // fill bounded parent constraints — the 24px search field — so the
+          // chip would balloon to the full field height. Without it the
+          // Container hugs the glyph; horizontal centring for the narrow `K`
+          // comes from the Text's own textAlign inside minWidth.
           Container(
-            constraints: const BoxConstraints(minWidth: 13, minHeight: 13),
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            alignment: Alignment.center,
+            constraints: const BoxConstraints(minWidth: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 3),
             decoration: BoxDecoration(
               color: AppColors.surface2,
               borderRadius: BorderRadius.circular(3),
@@ -824,8 +828,9 @@ class _TbKbd extends StatelessWidget {
             ),
             child: Text(
               parts[i],
+              textAlign: TextAlign.center,
               // height: 1.0 — AppTheme.ui's 1.35 line box would inflate the
-              // chip well past its 13px minHeight.
+              // chip past the glyph.
               style: AppTheme.ui(
                 size: 9,
                 color: AppColors.textSecondary,

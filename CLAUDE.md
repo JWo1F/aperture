@@ -20,6 +20,12 @@ After every meaningful change run **analyze → test → build** before
 committing. Build catches Swift / entitlements issues the analyzer
 doesn't.
 
+**Never launch or quit the app yourself.** Don't `open` the `.app`,
+`osascript -e 'quit …'`, or `pkill` Aperture — and don't kill an
+instance the user already has running. Your loop stops at
+`flutter build`; the user runs and relaunches the app and checks the
+result.
+
 ## Commit style
 
 - **No AI / Claude attribution** in commit messages (no `Co-Authored-By`).
