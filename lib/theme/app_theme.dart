@@ -218,6 +218,21 @@ const Palette lightPalette = Palette(
   sqlOperator: Color(0xFF4F4A40),
 );
 
+/// Identity colors a user can assign to a saved connection. The first entry
+/// is the app accent (the unmarked default); the rest span the wheel so two
+/// open databases never read as the same. Tasteful, slightly desaturated —
+/// they tint chrome, not data.
+const List<Color> kConnectionColors = [
+  Color(0xFF5B7CFA), // indigo — accent / default
+  Color(0xFF3FB6A8), // teal
+  Color(0xFF57B07A), // green
+  Color(0xFFC9A23C), // gold
+  Color(0xFFE07A4B), // ember
+  Color(0xFFE05570), // rose
+  Color(0xFFB57BD8), // violet
+  Color(0xFF6FA8DC), // sky
+];
+
 /// Runtime-mutable palette pointer. Call [setPalette] before the root
 /// `MaterialApp` rebuilds; descendants will pick up the new colors as they
 /// re-paint.
@@ -269,6 +284,12 @@ class AppColors {
   static Color get text4 => _palette.text4;
 
   static Color get accent => _palette.accent;
+
+  /// Resolves a connection's stored [ConnectionConfig.color] int to a live
+  /// [Color], falling back to the app accent when the connection has no
+  /// identity color set.
+  static Color connectionTint(int? raw) =>
+      raw != null ? Color(raw) : _palette.accent;
 
   static Color get accentHover => _palette.accentHover;
 

@@ -47,6 +47,7 @@ class ConnectionConfig {
     this.filePath = '',
     this.useSsl = false,
     this.readOnly = false,
+    this.color,
     this.credentialSource = CredentialSource.plain,
     this.passwordCipher,
     this.opSecretRef,
@@ -101,6 +102,12 @@ class ConnectionConfig {
   /// session role at the Postgres end.
   final bool readOnly;
 
+  /// User-chosen identity color, stored as a 0xAARRGGBB int. Tints the
+  /// sidebar header, active-row markers, and connection chips so multiple
+  /// open databases stay visually distinct. Null falls back to the app
+  /// accent.
+  final int? color;
+
   final DateTime? lastConnectedAt;
 
   /// Per-connection favourite tables, stored as unquoted `schema.table` keys.
@@ -145,6 +152,7 @@ class ConnectionConfig {
     if (filePath.isNotEmpty) 'filePath': filePath,
     if (credentialSource == CredentialSource.plain) 'password': password,
     'useSsl': useSsl,
+    if (color != null) 'color': color,
     if (credentialSource != CredentialSource.plain)
       'credentialSource': credentialSource.name,
     if (credentialSource == CredentialSource.encrypted &&
@@ -194,6 +202,7 @@ class ConnectionConfig {
           : '',
       useSsl: j['useSsl'] as bool? ?? false,
       readOnly: j['readOnly'] as bool? ?? false,
+      color: (j['color'] as num?)?.toInt(),
       credentialSource: source,
       passwordCipher: source == CredentialSource.encrypted
           ? j['passwordCipher'] as String?
@@ -254,6 +263,7 @@ class ConnectionConfig {
     String? filePath,
     bool? useSsl,
     bool? readOnly,
+    Object? color = _unset,
     CredentialSource? credentialSource,
     Object? passwordCipher = _unset,
     Object? opSecretRef = _unset,
@@ -277,6 +287,7 @@ class ConnectionConfig {
       filePath: filePath ?? this.filePath,
       useSsl: useSsl ?? this.useSsl,
       readOnly: readOnly ?? this.readOnly,
+      color: identical(color, _unset) ? this.color : color as int?,
       credentialSource: credentialSource ?? this.credentialSource,
       passwordCipher: identical(passwordCipher, _unset)
           ? this.passwordCipher

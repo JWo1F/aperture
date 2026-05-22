@@ -39,17 +39,6 @@ const List<String> _sslModes = [
   'verify-full',
 ];
 
-/// Indigo first (default), then a muted Aperture-palette set. The accent
-/// stays in the position the screenshot uses.
-const List<Color> _tagColors = [
-  Color(0xFF5B7CFA),
-  Color(0xFF7AAC8F),
-  Color(0xFFC28A5C),
-  Color(0xFFB59BD8),
-  Color(0xFFC9B86E),
-  Color(0xFFCB6F6F),
-];
-
 enum _TestStatus { idle, busy, ok, fail }
 
 class _ConnectionDialog extends StatefulWidget {
@@ -77,11 +66,10 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
 
   late DbEngine _engine;
   late String _sslMode;
-  late Color _tagColor;
+  late Color _color;
   late bool _readOnly;
   bool _showPassword = false;
   late CredentialSource _credentialSource;
-  int _activeTab = 0; // 0 = manual, 1 = connection string
 
   _TestStatus _testStatus = _TestStatus.idle;
   String? _testMessage;
@@ -104,7 +92,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     _filePath = TextEditingController(text: e?.filePath ?? '');
     _engine = e?.engine ?? DbEngine.postgres;
     _sslMode = (e?.useSsl ?? false) ? 'require' : 'disable';
-    _tagColor = _tagColors.first;
+    _color = e?.color != null ? Color(e!.color!) : kConnectionColors.first;
     _readOnly = e?.readOnly ?? false;
     _credentialSource = e?.credentialSource ?? CredentialSource.plain;
 
@@ -174,6 +162,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
         filePath: path,
         // Surfaced as the connection's display label in the sidebar header.
         database: base,
+        color: _color.toARGB32(),
         readOnly: _readOnly,
       );
     }
@@ -198,6 +187,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
           ? _password.text
           : '',
       useSsl: _sslMode != 'disable',
+      color: _color.toARGB32(),
       readOnly: _readOnly,
       credentialSource: _credentialSource,
       passwordCipher: isEncrypted
@@ -307,9 +297,9 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 920),
+        constraints: const BoxConstraints(maxWidth: 460),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: AppColors.surface,
@@ -319,7 +309,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
               BoxShadow(
                 color: Color(0xAA000000),
                 blurRadius: 48,
-                offset: Offset(0, 16),
+                offset: Offset(0, 18),
               ),
             ],
           ),
@@ -328,39 +318,18 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildHeader(),
-                _buildTabStrip(),
-                _buildEngineRow(),
-                _buildRow(
-                  label: 'NAME',
-                  child: _PlainInput(
-                    controller: _name,
-                    hint: 'connection name',
-                  ),
-                  trailing: const _Chip(text: 'display'),
+                _Header(
+                  isEdit: widget.existing != null,
+                  engine: _engine,
+                  tint: _color,
+                  onClose: () => Navigator.of(context).pop(),
                 ),
-                if (_engine == DbEngine.sqlite)
-                  _buildFileRow()
-                else ...[
-                  _buildHostPortRow(),
-                  _buildRow(
-                    label: 'DATABASE',
-                    child: _PlainInput(
-                      controller: _database,
-                      hint: 'postgres',
-                    ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
+                    child: _buildBody(),
                   ),
-                  _buildRow(
-                    label: 'USER',
-                    child: _PlainInput(controller: _username),
-                  ),
-                  _buildCredentialSourceRow(),
-                  _buildPasswordRow(),
-                  _buildSslRow(),
-                ],
-                _buildTagColorRow(),
-                _buildOptionsRow(),
-                if (_engine == DbEngine.postgres) _buildJdbcPreview(),
+                ),
                 _buildFooter(),
               ],
             ),
@@ -370,221 +339,107 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     );
   }
 
-  // ---------- header --------------------------------------------------
+  // ---------- body ----------------------------------------------------
 
-  Widget _buildHeader() {
-    final isEdit = widget.existing != null;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: AppColors.accentSoft,
-              borderRadius: BorderRadius.circular(7),
-              border: Border.all(color: AppColors.accentRing),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              Icons.storage_rounded,
-              size: 16,
-              color: AppColors.accent,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            isEdit ? 'Edit connection' : 'New connection',
-            style: AppTheme.ui(
-              size: 16,
-              weight: FontWeight.w600,
-              letterSpacing: -0.2,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            _engine == DbEngine.sqlite
-                ? 'sqlite · local file'
-                : 'postgres · v9 — v16',
-            style: AppTheme.mono(size: 11.5, color: AppColors.textMuted),
-          ),
-          const Spacer(),
-          IconAction(
-            icon: Icons.close,
-            tooltip: 'Close',
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------- tab strip -----------------------------------------------
-
-  Widget _buildTabStrip() {
-    return Container(
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          if (_engine == DbEngine.sqlite)
-            _TabLabel(text: 'FILE', active: true, onTap: () {})
-          else ...[
-            _TabLabel(
-              text: 'MANUAL',
-              active: _activeTab == 0,
-              onTap: () => setState(() => _activeTab = 0),
-            ),
-            const SizedBox(width: 18),
-            _TabLabel(
-              text: 'CONNECTION STRING',
-              active: _activeTab == 1,
-              onTap: () => setState(() => _activeTab = 1),
-            ),
-          ],
-          const Spacer(),
-          Text(
-            _engine == DbEngine.sqlite ? 'SQLITE' : 'POSTGRES',
-            style: GoogleMonoEyebrow.style(color: AppColors.textMuted),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------- generic row ---------------------------------------------
-
-  Widget _buildRow({
-    required String label,
-    required Widget child,
-    Widget? trailing,
-    Widget? labelOverride,
-    EdgeInsets padding = const EdgeInsets.symmetric(
-      horizontal: 20,
-      vertical: 12,
-    ),
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Padding(
-        padding: padding,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 96,
-              child:
-                  labelOverride ??
-                  Text(
-                    label,
-                    style: GoogleMonoEyebrow.style(color: AppColors.textMuted),
-                  ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: child),
-            if (trailing != null) ...[const SizedBox(width: 12), trailing],
-          ],
+  Widget _buildBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _EngineToggle(
+          value: _engine,
+          onChanged: (v) => setState(() => _engine = v),
         ),
-      ),
+        const SizedBox(height: 18),
+        _Field(
+          label: 'Display name',
+          child: _TextInput(
+            controller: _name,
+            hint: _engine == DbEngine.sqlite
+                ? 'My local database'
+                : 'Production · users',
+            autofocus: true,
+          ),
+        ),
+        const SizedBox(height: 14),
+        if (_engine == DbEngine.sqlite)
+          _buildFileField()
+        else ...[
+          _buildHostPort(),
+          const SizedBox(height: 14),
+          _Field(
+            label: 'Database',
+            child: _TextInput(controller: _database, hint: 'postgres'),
+          ),
+          const SizedBox(height: 14),
+          _Field(
+            label: 'User',
+            child: _TextInput(controller: _username, hint: 'postgres'),
+          ),
+          const SizedBox(height: 14),
+          _buildPasswordField(),
+          const SizedBox(height: 14),
+          _buildSslField(),
+        ],
+        const SizedBox(height: 18),
+        _DividerLabel(label: 'Appearance & access'),
+        const SizedBox(height: 14),
+        _buildColorField(),
+        const SizedBox(height: 16),
+        _buildReadOnlyRow(),
+      ],
     );
   }
 
   // ---------- host + port ---------------------------------------------
 
-  Widget _buildHostPortRow() {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 96,
-            child: Text(
-              'HOST',
-              style: GoogleMonoEyebrow.style(color: AppColors.textMuted),
-            ),
+  Widget _buildHostPort() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 5,
+          child: _Field(
+            label: 'Host',
+            child: _TextInput(controller: _host, hint: 'localhost'),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 5,
-            child: _PlainInput(controller: _host, hint: 'localhost'),
-          ),
-          const SizedBox(width: 16),
-          Container(width: 1, height: 22, color: AppColors.border),
-          const SizedBox(width: 16),
-          SizedBox(
-            width: 56,
-            child: Text(
-              'PORT',
-              style: GoogleMonoEyebrow.style(color: AppColors.textMuted),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: _PlainInput(
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: _Field(
+            label: 'Port',
+            child: _TextInput(
               controller: _port,
               hint: '5432',
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  // ---------- engine selector -----------------------------------------
+  // ---------- sqlite file ---------------------------------------------
 
-  Widget _buildEngineRow() {
-    return _buildRow(
-      label: 'ENGINE',
-      child: _EngineSegmented(
-        value: _engine,
-        onChanged: (v) => setState(() => _engine = v),
-      ),
-      trailing: _Chip(
-        text: _engine == DbEngine.sqlite ? 'local file' : 'networked',
-        tone: _ChipTone.mono,
-      ),
-    );
-  }
-
-  // ---------- sqlite file row -----------------------------------------
-
-  Widget _buildFileRow() {
-    return _buildRow(
-      label: 'FILE',
-      child: _PlainInput(
+  Widget _buildFileField() {
+    return _Field(
+      label: 'Database file',
+      hint: 'SQLite file opened directly — no server needed.',
+      child: _TextInput(
         controller: _filePath,
         hint: '/path/to/database.sqlite',
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _InlineAction(
-            icon: Icons.add,
-            label: 'New',
-            onTap: _createFile,
-          ),
-          const SizedBox(width: 14),
-          _InlineAction(
-            icon: Icons.folder_open_outlined,
-            label: 'Browse',
-            onTap: _pickFile,
-          ),
-        ],
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _InlineAction(icon: Icons.add_rounded, label: 'New', onTap: _createFile),
+            const SizedBox(width: 4),
+            _InlineAction(
+              icon: Icons.folder_open_rounded,
+              label: 'Browse',
+              onTap: _pickFile,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -622,117 +477,76 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     _filePath.text = location.path;
   }
 
-  // ---------- credential source row -----------------------------------
+  // ---------- password / secret ---------------------------------------
 
-  Widget _buildCredentialSourceRow() {
-    final tone = switch (_credentialSource) {
-      CredentialSource.plain => 'plaintext in config.json',
-      CredentialSource.encrypted => 'AES-GCM, master passphrase',
-      CredentialSource.onePassword => 'op CLI',
+  Widget _buildPasswordField() {
+    final isOnePassword = _credentialSource == CredentialSource.onePassword;
+    final helper = switch (_credentialSource) {
+      CredentialSource.plain => 'Saved as plain text in connections.json.',
+      CredentialSource.encrypted =>
+        'Encrypted with your master passphrase (AES-GCM).',
+      CredentialSource.onePassword =>
+        'Resolved from the 1Password CLI each time you connect.',
     };
-    return _buildRow(
-      label: 'STORE AS',
-      child: _SourceSegmented(
-        value: _credentialSource,
-        onChanged: (v) => setState(() => _credentialSource = v),
-      ),
-      trailing: _Chip(
-        text: tone,
-        tone: _credentialSource == CredentialSource.plain
-            ? _ChipTone.mono
-            : _ChipTone.accent,
-      ),
-    );
-  }
-
-  // ---------- password / secret row -----------------------------------
-
-  Widget _buildPasswordRow() {
-    if (_credentialSource == CredentialSource.onePassword) {
-      return _buildRow(
-        label: 'SECRET',
-        child: _PlainInput(
-          controller: _opSecretRef,
-          hint: 'op://Vault/Item/password',
-        ),
-        trailing: Text(
-          'resolved at connect',
-          style: AppTheme.mono(size: 11, color: AppColors.textMuted),
-        ),
-      );
-    }
     final keepHint = _credentialSource == CredentialSource.encrypted &&
         widget.existing != null &&
         (widget.existing!.passwordCipher?.isNotEmpty ?? false);
-    return _buildRow(
-      label: 'PASSWORD',
-      child: _PlainInput(
+
+    final Widget input;
+    if (isOnePassword) {
+      input = _TextInput(
+        controller: _opSecretRef,
+        hint: 'op://Vault/Item/password',
+      );
+    } else {
+      input = _TextInput(
         controller: _password,
         obscure: !_showPassword,
-        hint: keepHint ? 'leave blank to keep existing' : '••••••',
-      ),
-      trailing: Hoverable(
-        onTap: () => setState(() => _showPassword = !_showPassword),
-        builder: (_, hovering) => Row(
-          mainAxisSize: MainAxisSize.min,
+        hint: keepHint ? 'Leave blank to keep current' : 'Password',
+        trailing: _GhostIcon(
+          icon: _showPassword
+              ? Icons.visibility_off_rounded
+              : Icons.visibility_rounded,
+          onTap: () => setState(() => _showPassword = !_showPassword),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Icon(
-              _showPassword
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              size: 14,
-              color: hovering ? AppColors.textPrimary : AppColors.textMuted,
-            ),
-            const SizedBox(width: 6),
             Text(
-              _showPassword ? 'hide' : 'show',
-              style: AppTheme.ui(
-                size: 12,
-                weight: FontWeight.w500,
-                color: hovering ? AppColors.textPrimary : AppColors.textMuted,
-              ),
+              isOnePassword ? '1Password secret' : 'Password',
+              style: _labelStyle,
+            ),
+            const Spacer(),
+            _SourceSegmented(
+              value: _credentialSource,
+              onChanged: (v) => setState(() => _credentialSource = v),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 7),
+        input,
+        const SizedBox(height: 6),
+        Text(helper, style: _hintStyle),
+      ],
     );
   }
 
-  // ---------- ssl row -------------------------------------------------
+  // ---------- ssl -----------------------------------------------------
 
-  Widget _buildSslRow() {
-    return _buildRow(
-      label: 'SSL MODE',
-      child: Hoverable(
+  Widget _buildSslField() {
+    final secure = _sslMode != 'disable';
+    return _Field(
+      label: 'SSL mode',
+      child: _SelectInput(
+        icon: secure ? Icons.lock_rounded : Icons.lock_open_rounded,
+        iconColor: secure ? AppColors.accent : AppColors.textMuted,
+        label: _sslMode,
         onTap: _openSslMenu,
-        builder: (context, hovering) {
-          return Row(
-            children: [
-              Icon(
-                _sslMode == 'disable' ? Icons.lock_open : Icons.lock_outline,
-                size: 14,
-                color: _sslMode == 'disable'
-                    ? AppColors.textMuted
-                    : AppColors.accent,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _sslMode,
-                style: AppTheme.mono(size: 12.5, color: AppColors.textPrimary),
-              ),
-              const Spacer(),
-              Icon(
-                Icons.expand_more,
-                size: 16,
-                color: hovering ? AppColors.textPrimary : AppColors.textMuted,
-              ),
-            ],
-          );
-        },
-      ),
-      trailing: _Chip(
-        text: _sslMode == 'disable' ? 'plain' : 'tls 1.3',
-        tone: _sslMode == 'disable' ? _ChipTone.muted : _ChipTone.accent,
       ),
     );
   }
@@ -758,21 +572,22 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
         for (final m in _sslModes)
           PopupMenuItem<String>(
             value: m,
-            height: 30,
+            height: 32,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
               children: [
                 Icon(
-                  m == _sslMode ? Icons.check : Icons.circle,
+                  m == _sslMode ? Icons.check_rounded : Icons.circle,
                   size: m == _sslMode ? 14 : 4,
                   color: m == _sslMode ? AppColors.accent : AppColors.textMuted,
                 ),
                 const SizedBox(width: 8),
                 Text(
                   m,
-                  style: AppTheme.mono(
+                  style: AppTheme.ui(
                     size: 12.5,
                     color: AppColors.textPrimary,
+                    weight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -783,202 +598,118 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     if (picked != null && mounted) setState(() => _sslMode = picked);
   }
 
-  // ---------- tag color row -------------------------------------------
+  // ---------- color ---------------------------------------------------
 
-  Widget _buildTagColorRow() {
-    final hex =
-        '#${_tagColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
-    return _buildRow(
-      label: 'TAG COLOR',
-      child: Row(
-        children: [
-          for (final c in _tagColors) ...[
-            _ColorDot(
-              color: c,
-              selected: c == _tagColor,
-              onTap: () => setState(() => _tagColor = c),
+  Widget _buildColorField() {
+    return _Field(
+      label: 'Connection color',
+      hint: 'Tints the sidebar and chips so this database is easy to spot.',
+      child: Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Wrap(
+          spacing: 11,
+          runSpacing: 10,
+          children: [
+            for (final c in kConnectionColors)
+              _ColorSwatch(
+                color: c,
+                selected: c.toARGB32() == _color.toARGB32(),
+                onTap: () => setState(() => _color = c),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------- read-only ------------------------------------------------
+
+  Widget _buildReadOnlyRow() {
+    return Hoverable(
+      onTap: () => setState(() => _readOnly = !_readOnly),
+      builder: (_, hovering) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        decoration: BoxDecoration(
+          color: hovering ? AppColors.surfaceAlt : AppColors.bg,
+          borderRadius: Radii.brSm,
+          border: Border.all(
+            color: _readOnly ? AppColors.accentRing : AppColors.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              _readOnly
+                  ? Icons.shield_rounded
+                  : Icons.shield_outlined,
+              size: 16,
+              color: _readOnly ? AppColors.accent : AppColors.textMuted,
             ),
             const SizedBox(width: 10),
-          ],
-        ],
-      ),
-      trailing: _Chip(text: hex, tone: _ChipTone.mono),
-    );
-  }
-
-  // ---------- options row ---------------------------------------------
-
-  Widget _buildOptionsRow() {
-    return _buildRow(
-      label: 'OPTIONS',
-      child: Row(
-        children: [
-          _Toggle(
-            value: _readOnly,
-            onChanged: (v) => setState(() => _readOnly = v),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            'Read-only mode',
-            style: AppTheme.ui(size: 12.5, color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-      trailing: _readOnly
-          ? Text(
-              'blocks UPDATE / DELETE',
-              style: AppTheme.mono(size: 11, color: AppColors.textMuted),
-            )
-          : Text(
-              'blocks UPDATE / DELETE',
-              style: AppTheme.mono(size: 11, color: AppColors.text4),
-            ),
-    );
-  }
-
-  // ---------- jdbc preview --------------------------------------------
-
-  Widget _buildJdbcPreview() {
-    final host = _host.text.trim().isEmpty ? 'localhost' : _host.text.trim();
-    final port = _port.text.trim().isEmpty ? '5432' : _port.text.trim();
-    final db = _database.text.trim().isEmpty
-        ? 'postgres'
-        : _database.text.trim();
-    final user = _username.text.trim().isEmpty
-        ? 'postgres'
-        : _username.text.trim();
-
-    final pwd = _password.text.isEmpty
-        ? ''
-        : (_showPassword ? _password.text : '••••');
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.bgDeep,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 14, 16, 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 96,
-            child: Text(
-              'JDBC',
-              style: GoogleMonoEyebrow.style(color: AppColors.textMuted),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SelectableText.rich(
-              TextSpan(
-                style: AppTheme.mono(size: 12.5, color: AppColors.textPrimary),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextSpan(
-                    text: 'postgres://',
-                    style: TextStyle(color: AppColors.sqlKeyword),
-                  ),
-                  TextSpan(text: user),
-                  if (pwd.isNotEmpty) ...[
-                    TextSpan(
-                      text: ':',
-                      style: TextStyle(color: AppColors.textMuted),
+                  Text(
+                    'Read-only mode',
+                    style: AppTheme.ui(
+                      size: 12.5,
+                      weight: FontWeight.w600,
+                      color: AppColors.textPrimary,
                     ),
-                    TextSpan(
-                      text: pwd,
-                      style: TextStyle(color: AppColors.textMuted),
-                    ),
-                  ],
-                  TextSpan(
-                    text: '@',
-                    style: TextStyle(color: AppColors.textMuted),
                   ),
-                  TextSpan(text: host),
-                  TextSpan(
-                    text: ':',
-                    style: TextStyle(color: AppColors.textMuted),
-                  ),
-                  TextSpan(
-                    text: port,
-                    style: TextStyle(color: AppColors.sqlNumber),
-                  ),
-                  TextSpan(
-                    text: '/',
-                    style: TextStyle(color: AppColors.textMuted),
-                  ),
-                  TextSpan(
-                    text: db,
-                    style: TextStyle(color: AppColors.sqlString),
-                  ),
-                  TextSpan(
-                    text: '?sslmode=',
-                    style: TextStyle(color: AppColors.textMuted),
-                  ),
-                  TextSpan(
-                    text: _sslMode,
-                    style: TextStyle(color: AppColors.sqlString),
-                  ),
-                  TextSpan(
-                    text: ' &application_name=',
-                    style: TextStyle(color: AppColors.textMuted),
-                  ),
-                  TextSpan(
-                    text: 'aperture',
-                    style: TextStyle(color: AppColors.sqlString),
+                  const SizedBox(height: 1),
+                  Text(
+                    'Blocks UPDATE, DELETE and cell edits.',
+                    style: _hintStyle,
                   ),
                 ],
               ),
-              style: AppTheme.mono(size: 12.5, color: AppColors.textPrimary),
             ),
-          ),
-          const SizedBox(width: 12),
-          IconAction(
-            icon: Icons.copy_outlined,
-            tooltip: 'Copy connection string',
-            onPressed: () => _copyJdbc(host, port, db, user),
-          ),
-        ],
+            const SizedBox(width: 10),
+            _Toggle(
+              value: _readOnly,
+              onChanged: (v) => setState(() => _readOnly = v),
+            ),
+          ],
+        ),
       ),
     );
-  }
-
-  void _copyJdbc(String host, String port, String db, String user) {
-    final url = 'postgres://$user@$host:$port/$db?sslmode=$_sslMode';
-    Clipboard.setData(ClipboardData(text: url));
   }
 
   // ---------- footer --------------------------------------------------
 
   Widget _buildFooter() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 14, 16, 14),
+      padding: const EdgeInsets.fromLTRB(18, 13, 14, 13),
+      decoration: BoxDecoration(
+        color: AppColors.bgDeep,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
       child: Row(
         children: [
-          _StatusPill(
-            status: _testStatus,
-            message: _testMessage,
-            elapsed: _testElapsed,
-            version: _serverVersion,
+          Expanded(
+            child: _StatusPill(
+              status: _testStatus,
+              message: _testMessage,
+              elapsed: _testElapsed,
+              version: _serverVersion,
+            ),
           ),
-          const Spacer(),
+          const SizedBox(width: 10),
           AppButton(
-            label: 'Test connection',
-            icon: Icons.bolt_outlined,
+            label: _testStatus == _TestStatus.busy ? 'Testing…' : 'Test',
+            icon: Icons.bolt_rounded,
             onPressed: _valid && _testStatus != _TestStatus.busy
                 ? _testConnection
                 : null,
           ),
           const SizedBox(width: 8),
           AppButton(
-            label: 'Cancel',
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          const SizedBox(width: 8),
-          AppButton(
-            label: widget.existing == null
-                ? 'Create connection'
-                : 'Save changes',
-            icon: Icons.add,
+            label: widget.existing == null ? 'Create' : 'Save',
+            icon: widget.existing == null
+                ? Icons.add_rounded
+                : Icons.check_rounded,
             primary: true,
             onPressed: _valid ? _submit : null,
           ),
@@ -989,59 +720,361 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
 }
 
 // ====================================================================
-// Helper widgets
+// Shared text styles
 // ====================================================================
 
-/// Tiny mono uppercase label, used for row labels and section eyebrows. We
-/// can't lean on [AppTheme.eyebrow] directly because that one is Inter — the
-/// screenshot uses JetBrains Mono so labels visually align with values.
-class GoogleMonoEyebrow {
-  static TextStyle style({Color? color}) => AppTheme.mono(
-    size: 10.5,
-    color: color,
-    weight: FontWeight.w500,
-  ).copyWith(letterSpacing: 1.1);
+TextStyle get _labelStyle => AppTheme.ui(
+  size: 11,
+  weight: FontWeight.w600,
+  color: AppColors.textSecondary,
+  letterSpacing: 0,
+);
+
+TextStyle get _hintStyle => AppTheme.ui(
+  size: 10.5,
+  weight: FontWeight.w400,
+  color: AppColors.textMuted,
+  letterSpacing: 0,
+);
+
+// ====================================================================
+// Header
+// ====================================================================
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.isEdit,
+    required this.engine,
+    required this.tint,
+    required this.onClose,
+  });
+
+  final bool isEdit;
+  final DbEngine engine;
+  final Color tint;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 16, 14, 16),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            tint.withValues(alpha: 0.10),
+            AppColors.surface,
+          ],
+          stops: const [0.0, 0.7],
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: tint.withValues(alpha: 0.16),
+              borderRadius: Radii.brSm,
+              border: Border.all(color: tint.withValues(alpha: 0.55)),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              engine == DbEngine.sqlite
+                  ? Icons.insert_drive_file_rounded
+                  : Icons.dns_rounded,
+              size: 17,
+              color: tint,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isEdit ? 'Edit connection' : 'New connection',
+                style: AppTheme.ui(
+                  size: 15,
+                  weight: FontWeight.w600,
+                  letterSpacing: -0.2,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                engine == DbEngine.sqlite
+                    ? 'Local SQLite file'
+                    : 'PostgreSQL server',
+                style: AppTheme.ui(
+                  size: 11,
+                  weight: FontWeight.w400,
+                  color: AppColors.textMuted,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          IconAction(
+            icon: Icons.close_rounded,
+            tooltip: 'Close',
+            onPressed: onClose,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _PlainInput extends StatelessWidget {
-  const _PlainInput({
+// ====================================================================
+// Field scaffolding
+// ====================================================================
+
+/// Label above, control below, optional helper line — the standard form
+/// row used throughout the dialog.
+class _Field extends StatelessWidget {
+  const _Field({required this.label, required this.child, this.hint});
+
+  final String label;
+  final Widget child;
+  final String? hint;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: _labelStyle),
+        const SizedBox(height: 7),
+        child,
+        if (hint != null) ...[
+          const SizedBox(height: 6),
+          Text(hint!, style: _hintStyle),
+        ],
+      ],
+    );
+  }
+}
+
+/// Faint hairline with a centered caption — separates the connection's
+/// network details from its presentation settings.
+class _DividerLabel extends StatelessWidget {
+  const _DividerLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          label,
+          style: AppTheme.ui(
+            size: 10,
+            weight: FontWeight.w700,
+            color: AppColors.textMuted,
+            letterSpacing: 0.7,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Container(height: 1, color: AppColors.hairline)),
+      ],
+    );
+  }
+}
+
+/// Boxed text input with an Inter typeface and an accent focus ring. The
+/// optional [trailing] sits inside the box (used for the show-password
+/// toggle and the SQLite browse actions).
+class _TextInput extends StatefulWidget {
+  const _TextInput({
     required this.controller,
     this.hint,
     this.obscure = false,
     this.inputFormatters,
+    this.autofocus = false,
+    this.trailing,
   });
 
   final TextEditingController controller;
   final String? hint;
   final bool obscure;
   final List<TextInputFormatter>? inputFormatters;
+  final bool autofocus;
+  final Widget? trailing;
+
+  @override
+  State<_TextInput> createState() => _TextInputState();
+}
+
+class _TextInputState extends State<_TextInput> {
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_onFocus);
+  }
+
+  void _onFocus() => setState(() {});
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocus);
+    _focus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      obscureText: obscure,
-      obscuringCharacter: '•',
-      inputFormatters: inputFormatters,
-      style: AppTheme.mono(size: 13, color: AppColors.textPrimary),
-      cursorColor: AppColors.accent,
-      cursorWidth: 1.5,
-      decoration: InputDecoration(
-        isDense: true,
-        hintText: hint,
-        hintStyle: AppTheme.mono(size: 13, color: AppColors.text4),
-        filled: false,
-        contentPadding: EdgeInsets.zero,
-        border: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        focusedBorder: InputBorder.none,
+    final focused = _focus.hasFocus;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      height: 36,
+      padding: const EdgeInsets.only(left: 11, right: 6),
+      decoration: BoxDecoration(
+        color: AppColors.bg,
+        borderRadius: Radii.brSm,
+        border: Border.all(
+          color: focused ? AppColors.accent : AppColors.border,
+        ),
+        boxShadow: focused
+            ? [
+                BoxShadow(
+                  color: AppColors.accentSoft,
+                  blurRadius: 0,
+                  spreadRadius: 2,
+                ),
+              ]
+            : null,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: widget.controller,
+              focusNode: _focus,
+              autofocus: widget.autofocus,
+              obscureText: widget.obscure,
+              obscuringCharacter: '•',
+              inputFormatters: widget.inputFormatters,
+              cursorColor: AppColors.accent,
+              cursorWidth: 1.5,
+              cursorHeight: 14,
+              style: AppTheme.ui(
+                size: 12.5,
+                weight: FontWeight.w500,
+                color: AppColors.textPrimary,
+                letterSpacing: 0,
+              ),
+              decoration: InputDecoration(
+                isCollapsed: true,
+                border: InputBorder.none,
+                hintText: widget.hint,
+                hintStyle: AppTheme.ui(
+                  size: 12.5,
+                  weight: FontWeight.w400,
+                  color: AppColors.text4,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+          ),
+          if (widget.trailing != null) widget.trailing!,
+        ],
       ),
     );
   }
 }
 
-/// Compact icon + label action used in the SQLite file row ("New" /
-/// "Browse"); brightens on hover.
+/// Read-only boxed control that opens a menu on tap — visually matches
+/// [_TextInput] so the SSL row sits flush with the text fields.
+class _SelectInput extends StatelessWidget {
+  const _SelectInput({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Hoverable(
+      onTap: onTap,
+      builder: (_, hovering) => Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 11),
+        decoration: BoxDecoration(
+          color: AppColors.bg,
+          borderRadius: Radii.brSm,
+          border: Border.all(
+            color: hovering ? AppColors.borderStrong : AppColors.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 14, color: iconColor),
+            const SizedBox(width: 9),
+            Text(
+              label,
+              style: AppTheme.ui(
+                size: 12.5,
+                weight: FontWeight.w500,
+                color: AppColors.textPrimary,
+                letterSpacing: 0,
+              ),
+            ),
+            const Spacer(),
+            Icon(
+              Icons.unfold_more_rounded,
+              size: 15,
+              color: hovering ? AppColors.textSecondary : AppColors.textMuted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Small icon-only affordance that lives inside a [_TextInput] (the
+/// show/hide-password eye).
+class _GhostIcon extends StatelessWidget {
+  const _GhostIcon({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Hoverable(
+      onTap: onTap,
+      builder: (_, hovering) => Container(
+        width: 26,
+        height: 26,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: hovering ? AppColors.surfaceHover : Colors.transparent,
+          borderRadius: Radii.brSm,
+        ),
+        child: Icon(
+          icon,
+          size: 14,
+          color: hovering ? AppColors.textPrimary : AppColors.textMuted,
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact icon + label action used inside the SQLite file input.
 class _InlineAction extends StatelessWidget {
   const _InlineAction({
     required this.icon,
@@ -1057,122 +1090,196 @@ class _InlineAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return Hoverable(
       onTap: onTap,
-      builder: (_, hovering) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 14,
-            color: hovering ? AppColors.textPrimary : AppColors.textMuted,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: AppTheme.ui(
-              size: 12,
-              weight: FontWeight.w500,
+      builder: (_, hovering) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+        decoration: BoxDecoration(
+          color: hovering ? AppColors.surfaceHover : Colors.transparent,
+          borderRadius: Radii.brSm,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 13,
               color: hovering ? AppColors.textPrimary : AppColors.textMuted,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: AppTheme.ui(
+                size: 11.5,
+                weight: FontWeight.w500,
+                color: hovering ? AppColors.textPrimary : AppColors.textMuted,
+                letterSpacing: 0,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ====================================================================
+// Engine toggle
+// ====================================================================
+
+class _EngineToggle extends StatelessWidget {
+  const _EngineToggle({required this.value, required this.onChanged});
+
+  final DbEngine value;
+  final ValueChanged<DbEngine> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: AppColors.bg,
+        borderRadius: Radii.brMd,
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _segment(
+              DbEngine.postgres,
+              Icons.dns_rounded,
+              'PostgreSQL',
+            ),
+          ),
+          const SizedBox(width: 3),
+          Expanded(
+            child: _segment(
+              DbEngine.sqlite,
+              Icons.insert_drive_file_rounded,
+              'SQLite',
             ),
           ),
         ],
       ),
     );
   }
-}
 
-class _TabLabel extends StatelessWidget {
-  const _TabLabel({
-    required this.text,
-    required this.active,
-    required this.onTap,
-  });
-
-  final String text;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _segment(DbEngine engine, IconData icon, String label) {
+    final selected = engine == value;
     return Hoverable(
-      onTap: onTap,
-      builder: (_, hovering) {
-        final color = active
-            ? AppColors.textPrimary
-            : (hovering ? AppColors.textSecondary : AppColors.textMuted);
-        return SizedBox(
-          height: 38,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Spacer(),
-              Text(
-                text,
-                style: GoogleMonoEyebrow.style(
-                  color: color,
-                ).copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                height: 2,
-                width: text.length * 7.0,
-                decoration: BoxDecoration(
-                  color: active ? AppColors.accent : Colors.transparent,
-                  borderRadius: BorderRadius.circular(1),
-                ),
-              ),
-            ],
+      onTap: () => onChanged(engine),
+      builder: (_, hovering) => AnimatedContainer(
+        duration: const Duration(milliseconds: 130),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.accentSoft
+              : (hovering ? AppColors.surfaceHover : Colors.transparent),
+          borderRadius: Radii.brSm,
+          border: Border.all(
+            color: selected ? AppColors.accentRing : Colors.transparent,
           ),
-        );
-      },
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: selected
+                  ? AppColors.accent
+                  : (hovering
+                        ? AppColors.textSecondary
+                        : AppColors.textMuted),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: AppTheme.ui(
+                size: 12.5,
+                weight: FontWeight.w600,
+                letterSpacing: -0.1,
+                color: selected
+                    ? AppColors.accent
+                    : (hovering
+                          ? AppColors.textPrimary
+                          : AppColors.textSecondary),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-enum _ChipTone { muted, accent, mono }
+// ====================================================================
+// Credential source segmented
+// ====================================================================
 
-class _Chip extends StatelessWidget {
-  const _Chip({required this.text, this.tone = _ChipTone.muted});
+class _SourceSegmented extends StatelessWidget {
+  const _SourceSegmented({required this.value, required this.onChanged});
 
-  final String text;
-  final _ChipTone tone;
+  final CredentialSource value;
+  final ValueChanged<CredentialSource> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    Color fg;
-    Color bg;
-    Color border;
-    switch (tone) {
-      case _ChipTone.accent:
-        fg = AppColors.accent;
-        bg = AppColors.accentSoft;
-        border = AppColors.accentRing;
-        break;
-      case _ChipTone.mono:
-        fg = AppColors.textSecondary;
-        bg = AppColors.surfaceAlt;
-        border = AppColors.border;
-        break;
-      case _ChipTone.muted:
-        fg = AppColors.textMuted;
-        bg = AppColors.surfaceAlt;
-        border = AppColors.border;
-        break;
-    }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      height: 24,
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: border),
+        color: AppColors.bg,
+        borderRadius: Radii.brSm,
+        border: Border.all(color: AppColors.border),
       ),
-      child: Text(text, style: AppTheme.mono(size: 10.5, color: fg)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _segment(CredentialSource.plain, 'Plain'),
+          _segment(CredentialSource.encrypted, 'Encrypted'),
+          _segment(CredentialSource.onePassword, '1Password'),
+        ],
+      ),
+    );
+  }
+
+  Widget _segment(CredentialSource source, String label) {
+    final selected = source == value;
+    return Hoverable(
+      onTap: () => onChanged(source),
+      builder: (_, hovering) => AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(horizontal: 9),
+        height: 20,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.accent : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          label,
+          style: AppTheme.ui(
+            size: 10.5,
+            weight: FontWeight.w600,
+            letterSpacing: 0,
+            color: selected
+                ? Colors.white
+                : (hovering
+                      ? AppColors.textPrimary
+                      : AppColors.textMuted),
+          ),
+        ),
+      ),
     );
   }
 }
 
-class _ColorDot extends StatelessWidget {
-  const _ColorDot({
+// ====================================================================
+// Color swatch
+// ====================================================================
+
+class _ColorSwatch extends StatelessWidget {
+  const _ColorSwatch({
     required this.color,
     required this.selected,
     required this.onTap,
@@ -1186,26 +1293,40 @@ class _ColorDot extends StatelessWidget {
   Widget build(BuildContext context) {
     return Hoverable(
       onTap: onTap,
-      builder: (_, hovering) => Container(
-        width: 22,
-        height: 22,
+      builder: (_, hovering) => AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        width: 26,
+        height: 26,
         decoration: BoxDecoration(
+          color: color.withValues(alpha: selected ? 1 : (hovering ? 0.9 : 0.8)),
           shape: BoxShape.circle,
           border: Border.all(
             color: selected
                 ? AppColors.textPrimary
-                : (hovering ? AppColors.borderStrong : Colors.transparent),
-            width: selected ? 2 : 1,
+                : color.withValues(alpha: 0.0),
+            width: 2,
           ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.45),
+                    blurRadius: 9,
+                    spreadRadius: -1,
+                  ),
+                ]
+              : null,
         ),
-        child: Container(
-          margin: EdgeInsets.all(selected ? 2.5 : 1),
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
+        child: selected
+            ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+            : null,
       ),
     );
   }
 }
+
+// ====================================================================
+// Read-only toggle
+// ====================================================================
 
 class _Toggle extends StatelessWidget {
   const _Toggle({required this.value, required this.onChanged});
@@ -1221,8 +1342,8 @@ class _Toggle extends StatelessWidget {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOut,
-          width: 30,
-          height: 17,
+          width: 32,
+          height: 18,
           padding: const EdgeInsets.all(1.5),
           decoration: BoxDecoration(
             color: value
@@ -1233,11 +1354,13 @@ class _Toggle extends StatelessWidget {
               color: value ? AppColors.accent : AppColors.borderStrong,
             ),
           ),
-          child: Align(
+          child: AnimatedAlign(
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOut,
             alignment: value ? Alignment.centerRight : Alignment.centerLeft,
             child: Container(
-              width: 12,
-              height: 12,
+              width: 13,
+              height: 13,
               decoration: BoxDecoration(
                 color: value ? Colors.white : AppColors.textMuted,
                 shape: BoxShape.circle,
@@ -1250,115 +1373,9 @@ class _Toggle extends StatelessWidget {
   }
 }
 
-class _EngineSegmented extends StatelessWidget {
-  const _EngineSegmented({required this.value, required this.onChanged});
-
-  final DbEngine value;
-  final ValueChanged<DbEngine> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 26,
-      decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _segment(DbEngine.postgres, 'PostgreSQL'),
-          Container(width: 1, color: AppColors.border),
-          _segment(DbEngine.sqlite, 'SQLite'),
-        ],
-      ),
-    );
-  }
-
-  Widget _segment(DbEngine engine, String label) {
-    final selected = engine == value;
-    return Hoverable(
-      onTap: () => onChanged(engine),
-      builder: (_, hovering) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.accentSoft
-              : (hovering ? AppColors.surfaceHover : Colors.transparent),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: AppTheme.ui(
-            size: 11.5,
-            weight: FontWeight.w500,
-            color: selected
-                ? AppColors.accent
-                : (hovering ? AppColors.textPrimary : AppColors.textSecondary),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SourceSegmented extends StatelessWidget {
-  const _SourceSegmented({required this.value, required this.onChanged});
-
-  final CredentialSource value;
-  final ValueChanged<CredentialSource> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 26,
-      decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _segment(CredentialSource.plain, 'Plain'),
-          _divider(),
-          _segment(CredentialSource.encrypted, 'Encrypted'),
-          _divider(),
-          _segment(CredentialSource.onePassword, '1Password'),
-        ],
-      ),
-    );
-  }
-
-  Widget _divider() => Container(width: 1, color: AppColors.border);
-
-  Widget _segment(CredentialSource source, String label) {
-    final selected = source == value;
-    return Hoverable(
-      onTap: () => onChanged(source),
-      builder: (_, hovering) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.accentSoft
-              : (hovering ? AppColors.surfaceHover : Colors.transparent),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: AppTheme.ui(
-            size: 11.5,
-            weight: FontWeight.w500,
-            color: selected
-                ? AppColors.accent
-                : (hovering ? AppColors.textPrimary : AppColors.textSecondary),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// ====================================================================
+// Test status pill
+// ====================================================================
 
 class _StatusPill extends StatelessWidget {
   const _StatusPill({
@@ -1381,26 +1398,25 @@ class _StatusPill extends StatelessWidget {
     switch (status) {
       case _TestStatus.idle:
         dot = AppColors.textMuted;
-        text = 'Not tested';
+        text = 'Not tested yet';
         textColor = AppColors.textMuted;
         break;
       case _TestStatus.busy:
         dot = AppColors.warning;
-        text = 'Testing…';
+        text = 'Testing connection…';
         textColor = AppColors.textSecondary;
         break;
       case _TestStatus.ok:
         dot = AppColors.success;
         final ms = elapsed?.inMilliseconds ?? 0;
         final v = version ?? '';
-        text = 'Connection ok · ${ms}ms${v.isEmpty ? '' : ' · $v'}';
+        text = 'Connected · ${ms}ms${v.isEmpty ? '' : ' · $v'}';
         textColor = AppColors.textSecondary;
         break;
       case _TestStatus.fail:
         dot = AppColors.error;
-        final m = message ?? 'connection failed';
-        final trimmed = m.length > 70 ? '${m.substring(0, 70)}…' : m;
-        text = trimmed;
+        final m = message ?? 'Connection failed';
+        text = m.length > 90 ? '${m.substring(0, 90)}…' : m;
         textColor = AppColors.error;
         break;
     }
@@ -1419,12 +1435,16 @@ class _StatusPill extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
+        Flexible(
           child: Text(
             text,
             overflow: TextOverflow.ellipsis,
-            style: AppTheme.mono(size: 12, color: textColor),
+            style: AppTheme.ui(
+              size: 11.5,
+              weight: FontWeight.w500,
+              color: textColor,
+              letterSpacing: 0,
+            ),
           ),
         ),
       ],
