@@ -128,19 +128,20 @@ void main() {
     });
   });
 
-  group('shiftLines — boundary (selection ending at a newline)', () {
-    // These pin the current trailing-newline semantics. shiftLines walks
-    // scanEnd back by one when it lands directly on a '\n' — so a
-    // selection that ends *exactly at* a newline character (just past it)
-    // does NOT pull the next line into the shift. The visual caret sits
-    // at the start of the next line, which many editors interpret as
-    // "include that next line too" — this implementation does not. If
-    // the policy ever changes, these tests should fail loudly so the
-    // change is deliberate.
+  group('shiftLines — newline boundary inclusion', () {
+    // Modern editors (VSCode, Sublime, JetBrains) treat the offset
+    // immediately after a '\n' as "the caret is at the start of the next
+    // line but hasn't entered it yet" — so a selection ending exactly
+    // there shifts only the line(s) above. A selection that reaches
+    // strictly past that boundary (at least one character of the next
+    // line is selected) does pull the next line in. shiftLines walks
+    // scanEnd back by one when it sits directly on a '\n' to implement
+    // exactly that rule.
 
-    test('selection ending exactly at the newline only shifts the first line', () {
-      // 'one\ntwo' is indexed 0..6; index 3 is '\n', selecting (0, 4)
-      // means the visual caret is at the start of line 2.
+    test('selection ending at the start of the next line shifts only the line above', () {
+      // 'one\ntwo' is indexed 0..6; index 3 is '\n'. selEnd=4 is the
+      // offset of the first character of line two — the boundary, not
+      // yet inside line two.
       final r = shiftLines(
         text: 'one\ntwo',
         selStart: 0,
@@ -150,7 +151,7 @@ void main() {
       expect(r.text, '  one\ntwo');
     });
 
-    test('selection ending one char into the next line shifts both lines', () {
+    test('selection reaching one char into the next line shifts both lines', () {
       final r = shiftLines(
         text: 'one\ntwo',
         selStart: 0,
@@ -160,7 +161,9 @@ void main() {
       expect(r.text, '  one\n  two');
     });
 
-    test('selection ending right before the newline shifts only line one', () {
+    test('selection ending at the newline itself stays on the line above', () {
+      // selEnd=3 sits on the '\n' — the caret is visually at end-of-line
+      // one with no part of line two selected.
       final r = shiftLines(
         text: 'one\ntwo',
         selStart: 0,

@@ -59,8 +59,12 @@ EditResult shiftLines({
 }) {
   final firstLineStart =
       selStart == 0 ? 0 : text.lastIndexOf('\n', selStart - 1) + 1;
-  // A selection that ends exactly at a line start shouldn't drag the
-  // next line into the shift.
+  // Modern-editor convention: a selection that ends *at* the offset
+  // immediately after a '\n' is treated as "the caret sits at the start
+  // of the next line but hasn't entered it" — so the next line is NOT
+  // pulled into the shift. Only a selection that reaches strictly past
+  // that boundary (≥ 1 char into the next line) includes it. Walking
+  // scanEnd back by one when it lands on '\n' implements both cases.
   var scanEnd = selEnd;
   if (scanEnd > selStart && text.codeUnitAt(scanEnd - 1) == 0x0A) {
     scanEnd -= 1;
