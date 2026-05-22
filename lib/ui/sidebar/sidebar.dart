@@ -1127,19 +1127,20 @@ class _DetailFolder extends StatelessWidget {
                     color: AppColors.textMuted,
                   ),
                   const SizedBox(width: 8),
-                  Expanded(
+                  Flexible(
                     child: Text(
                       folder,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTheme.ui(
                         size: 11.5,
-                        color: AppColors.textMuted,
+                        color: AppColors.textSecondary,
                         weight: FontWeight.w400,
                         letterSpacing: 0,
                       ),
                     ),
                   ),
+                  const SizedBox(width: 6),
                   Text(
                     '$count',
                     style: AppTheme.ui(
