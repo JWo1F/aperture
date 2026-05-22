@@ -9,6 +9,7 @@ import '../widgets/context_menu.dart';
 import 'query_editor.dart';
 import 'schema_view.dart';
 import 'table_view.dart';
+import 'workspace_home.dart';
 
 class Workspace extends StatelessWidget {
   const Workspace({super.key});
@@ -21,20 +22,7 @@ class Workspace extends StatelessWidget {
     final activeIndex = context.select<AppState, int>((s) => s.activeTabIndex);
 
     if (tabsKey.isEmpty) {
-      return Container(
-        color: AppColors.bg,
-        child: EmptyState(
-          icon: Icons.dataset_outlined,
-          title: 'Nothing open',
-          message: 'Press ⌘K to jump, or start a new SQL query.',
-          action: AppButton(
-            label: 'New Query',
-            icon: Icons.add,
-            primary: true,
-            onPressed: context.read<AppState>().newQueryTab,
-          ),
-        ),
-      );
+      return const WorkspaceHome();
     }
 
     final tabs = context.read<AppState>().tabs;
