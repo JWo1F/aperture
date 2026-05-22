@@ -57,7 +57,6 @@ class _SidebarState extends State<Sidebar> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final connected = state.status == ConnectionStatus.connected;
-    final tint = AppColors.connectionTint(state.activeConnection?.color);
 
     return Container(
       width: state.preferences.sidebarWidth,
@@ -73,7 +72,6 @@ class _SidebarState extends State<Sidebar> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (connected) _ConnColorBand(tint: tint),
           _ConnHero(state: state),
           if (connected) ...[
             _SearchBar(controller: _searchCtrl, focusNode: _searchFocus),
@@ -87,28 +85,6 @@ class _SidebarState extends State<Sidebar> {
             Expanded(child: _AllConnectionsList(state: state)),
           _FooterStatus(state: state),
         ],
-      ),
-    );
-  }
-}
-
-// --- connection color band ------------------------------------------------
-
-/// Hairline strip at the very top of the sidebar painted in the active
-/// connection's identity color — the at-a-glance "which database am I in".
-class _ConnColorBand extends StatelessWidget {
-  const _ConnColorBand({required this.tint});
-
-  final Color tint;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 3,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [tint, tint.withValues(alpha: 0.32)],
-        ),
       ),
     );
   }
