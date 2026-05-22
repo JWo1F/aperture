@@ -216,7 +216,7 @@ class GridRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           );
           tooltipUseful = true;
-          tooltipText = displayValue;
+          tooltipText = truncateForTooltip(displayValue);
         } else {
           content = Text(
             display,

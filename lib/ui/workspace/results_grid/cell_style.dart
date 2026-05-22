@@ -27,7 +27,7 @@ bool wantsTooltip(Object? original, String text) {
   return text.length > 36;
 }
 
-const int _tooltipMaxChars = 400;
+const int _tooltipMaxChars = 512;
 const int _cellMaxChars = 256;
 
 /// Cuts [text] to a single line capped at [cap] characters, appending an
