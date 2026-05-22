@@ -1,3 +1,4 @@
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -71,7 +72,9 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
   late final TextEditingController _username;
   late final TextEditingController _password;
   late final TextEditingController _opSecretRef;
+  late final TextEditingController _filePath;
 
+  late DbEngine _engine;
   late String _sslMode;
   late Color _tagColor;
   late bool _readOnly;
@@ -97,6 +100,8 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     _username = TextEditingController(text: e?.username ?? 'postgres');
     _password = TextEditingController(text: e?.password ?? '');
     _opSecretRef = TextEditingController(text: e?.opSecretRef ?? '');
+    _filePath = TextEditingController(text: e?.filePath ?? '');
+    _engine = e?.engine ?? DbEngine.postgres;
     _sslMode = (e?.useSsl ?? false) ? 'require' : 'disable';
     _tagColor = _tagColors.first;
     _readOnly = e?.readOnly ?? false;
@@ -110,6 +115,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
       _username,
       _password,
       _opSecretRef,
+      _filePath,
     ]) {
       c.addListener(_onAnyFieldChanged);
     }
@@ -129,6 +135,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
       _username,
       _password,
       _opSecretRef,
+      _filePath,
     ]) {
       c.removeListener(_onAnyFieldChanged);
       c.dispose();
@@ -137,6 +144,9 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
   }
 
   bool get _valid {
+    if (_engine == DbEngine.sqlite) {
+      return _filePath.text.trim().isNotEmpty;
+    }
     final base =
         _host.text.trim().isNotEmpty &&
         _database.text.trim().isNotEmpty &&
@@ -150,6 +160,22 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
   }
 
   ConnectionConfig _buildConfig({String? overrideCipher}) {
+    if (_engine == DbEngine.sqlite) {
+      final path = _filePath.text.trim();
+      final base = path.isEmpty ? 'database' : path.split('/').last;
+      final name = _name.text.trim().isEmpty ? base : _name.text.trim();
+      return ConnectionConfig(
+        id:
+            widget.existing?.id ??
+            DateTime.now().microsecondsSinceEpoch.toString(),
+        name: name,
+        engine: DbEngine.sqlite,
+        filePath: path,
+        // Surfaced as the connection's display label in the sidebar header.
+        database: base,
+        readOnly: _readOnly,
+      );
+    }
     final host = _host.text.trim();
     final db = _database.text.trim();
     final name = _name.text.trim().isEmpty ? '$db @ $host' : _name.text.trim();
@@ -250,7 +276,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
       await svc.connect();
       final tag = await svc.fetchVersionTag();
       watch.stop();
-      final v = (tag ?? '').replaceFirst(RegExp(r'^v'), '');
+      final v = tag ?? '';
       if (!mounted) return;
       setState(() {
         _testStatus = _TestStatus.ok;
@@ -303,6 +329,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
               children: [
                 _buildHeader(),
                 _buildTabStrip(),
+                _buildEngineRow(),
                 _buildRow(
                   label: 'NAME',
                   child: _PlainInput(
@@ -311,21 +338,28 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
                   ),
                   trailing: const _Chip(text: 'display'),
                 ),
-                _buildHostPortRow(),
-                _buildRow(
-                  label: 'DATABASE',
-                  child: _PlainInput(controller: _database, hint: 'postgres'),
-                ),
-                _buildRow(
-                  label: 'USER',
-                  child: _PlainInput(controller: _username),
-                ),
-                _buildCredentialSourceRow(),
-                _buildPasswordRow(),
-                _buildSslRow(),
+                if (_engine == DbEngine.sqlite)
+                  _buildFileRow()
+                else ...[
+                  _buildHostPortRow(),
+                  _buildRow(
+                    label: 'DATABASE',
+                    child: _PlainInput(
+                      controller: _database,
+                      hint: 'postgres',
+                    ),
+                  ),
+                  _buildRow(
+                    label: 'USER',
+                    child: _PlainInput(controller: _username),
+                  ),
+                  _buildCredentialSourceRow(),
+                  _buildPasswordRow(),
+                  _buildSslRow(),
+                ],
                 _buildTagColorRow(),
                 _buildOptionsRow(),
-                _buildJdbcPreview(),
+                if (_engine == DbEngine.postgres) _buildJdbcPreview(),
                 _buildFooter(),
               ],
             ),
@@ -373,7 +407,9 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
           ),
           const SizedBox(width: 12),
           Text(
-            'postgres · v9 — v16',
+            _engine == DbEngine.sqlite
+                ? 'sqlite · local file'
+                : 'postgres · v9 — v16',
             style: AppTheme.mono(size: 11.5, color: AppColors.textMuted),
           ),
           const Spacer(),
@@ -398,20 +434,24 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
       ),
       child: Row(
         children: [
-          _TabLabel(
-            text: 'MANUAL',
-            active: _activeTab == 0,
-            onTap: () => setState(() => _activeTab = 0),
-          ),
-          const SizedBox(width: 18),
-          _TabLabel(
-            text: 'CONNECTION STRING',
-            active: _activeTab == 1,
-            onTap: () => setState(() => _activeTab = 1),
-          ),
+          if (_engine == DbEngine.sqlite)
+            _TabLabel(text: 'FILE', active: true, onTap: () {})
+          else ...[
+            _TabLabel(
+              text: 'MANUAL',
+              active: _activeTab == 0,
+              onTap: () => setState(() => _activeTab = 0),
+            ),
+            const SizedBox(width: 18),
+            _TabLabel(
+              text: 'CONNECTION STRING',
+              active: _activeTab == 1,
+              onTap: () => setState(() => _activeTab = 1),
+            ),
+          ],
           const Spacer(),
           Text(
-            'POSTGRES',
+            _engine == DbEngine.sqlite ? 'SQLITE' : 'POSTGRES',
             style: GoogleMonoEyebrow.style(color: AppColors.textMuted),
           ),
         ],
@@ -502,6 +542,67 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
         ],
       ),
     );
+  }
+
+  // ---------- engine selector -----------------------------------------
+
+  Widget _buildEngineRow() {
+    return _buildRow(
+      label: 'ENGINE',
+      child: _EngineSegmented(
+        value: _engine,
+        onChanged: (v) => setState(() => _engine = v),
+      ),
+      trailing: _Chip(
+        text: _engine == DbEngine.sqlite ? 'local file' : 'networked',
+        tone: _ChipTone.mono,
+      ),
+    );
+  }
+
+  // ---------- sqlite file row -----------------------------------------
+
+  Widget _buildFileRow() {
+    return _buildRow(
+      label: 'FILE',
+      child: _PlainInput(
+        controller: _filePath,
+        hint: '/path/to/database.sqlite',
+      ),
+      trailing: Hoverable(
+        onTap: _pickFile,
+        builder: (_, hovering) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.folder_open_outlined,
+              size: 14,
+              color: hovering ? AppColors.textPrimary : AppColors.textMuted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Browse',
+              style: AppTheme.ui(
+                size: 12,
+                weight: FontWeight.w500,
+                color: hovering ? AppColors.textPrimary : AppColors.textMuted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickFile() async {
+    const group = XTypeGroup(
+      label: 'SQLite database',
+      extensions: ['db', 'sqlite', 'sqlite3', 'db3'],
+    );
+    final file = await openFile(acceptedTypeGroups: const [group]);
+    if (file != null && mounted) {
+      _filePath.text = file.path;
+    }
   }
 
   // ---------- credential source row -----------------------------------
@@ -1092,6 +1193,59 @@ class _Toggle extends StatelessWidget {
   }
 }
 
+class _EngineSegmented extends StatelessWidget {
+  const _EngineSegmented({required this.value, required this.onChanged});
+
+  final DbEngine value;
+  final ValueChanged<DbEngine> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 26,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _segment(DbEngine.postgres, 'PostgreSQL'),
+          Container(width: 1, color: AppColors.border),
+          _segment(DbEngine.sqlite, 'SQLite'),
+        ],
+      ),
+    );
+  }
+
+  Widget _segment(DbEngine engine, String label) {
+    final selected = engine == value;
+    return Hoverable(
+      onTap: () => onChanged(engine),
+      builder: (_, hovering) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.accentSoft
+              : (hovering ? AppColors.surfaceHover : Colors.transparent),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: AppTheme.ui(
+            size: 11.5,
+            weight: FontWeight.w500,
+            color: selected
+                ? AppColors.accent
+                : (hovering ? AppColors.textPrimary : AppColors.textSecondary),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SourceSegmented extends StatelessWidget {
   const _SourceSegmented({required this.value, required this.onChanged});
 
@@ -1182,7 +1336,7 @@ class _StatusPill extends StatelessWidget {
         dot = AppColors.success;
         final ms = elapsed?.inMilliseconds ?? 0;
         final v = version ?? '';
-        text = 'Connection ok · ${ms}ms${v.isEmpty ? '' : ' · pg $v'}';
+        text = 'Connection ok · ${ms}ms${v.isEmpty ? '' : ' · $v'}';
         textColor = AppColors.textSecondary;
         break;
       case _TestStatus.fail:
