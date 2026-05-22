@@ -957,9 +957,13 @@ class _ConnectionPillState extends State<ConnectionPill> {
     final connName = context.select<AppState, String?>(
       (s) => s.activeConnection?.name,
     );
+    final connColor = context.select<AppState, int?>(
+      (s) => s.activeConnection?.color,
+    );
     final schema = context.select<AppState, String>(
       (s) => _activeSchema(s) ?? 'public',
     );
+    final tint = AppColors.connectionTint(connColor);
     final (Color dot, String connLabel) = switch (status) {
       ConnectionStatus.connected => (
         AppColors.success,
@@ -1007,7 +1011,7 @@ class _ConnectionPillState extends State<ConnectionPill> {
               Icon(
                 Icons.storage_rounded,
                 size: 11,
-                color: AppColors.textSecondary,
+                color: connName != null ? tint : AppColors.textSecondary,
               ),
               const SizedBox(width: 6),
               ConstrainedBox(
@@ -1186,6 +1190,7 @@ class _ConnPickerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tint = AppColors.connectionTint(config.color);
     return Hoverable(
       onTap: onTap,
       builder: (context, hovering) => Container(
@@ -1202,8 +1207,16 @@ class _ConnPickerRow extends StatelessWidget {
               width: 8,
               height: 8,
               decoration: BoxDecoration(
-                color: active ? AppColors.success : AppColors.borderStrong,
+                color: active ? tint : tint.withValues(alpha: 0.5),
                 shape: BoxShape.circle,
+                boxShadow: active
+                    ? [
+                        BoxShadow(
+                          color: tint.withValues(alpha: 0.5),
+                          blurRadius: 5,
+                        ),
+                      ]
+                    : null,
               ),
             ),
             const SizedBox(width: 10),
@@ -1448,6 +1461,7 @@ class _RecentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ts = config.lastConnectedAt;
+    final tint = AppColors.connectionTint(config.color);
     return Hoverable(
       onTap: onTap,
       builder: (context, hovering) => AnimatedContainer(
@@ -1458,14 +1472,14 @@ class _RecentCard extends StatelessWidget {
           color: hovering ? AppColors.surfaceHover : AppColors.surface,
           borderRadius: Radii.brMd,
           border: Border.all(
-            color: hovering ? AppColors.accent : AppColors.border,
+            color: hovering ? tint.withValues(alpha: 0.7) : AppColors.border,
           ),
           boxShadow: hovering
-              ? const [
+              ? [
                   BoxShadow(
-                    color: Color(0x335B7CFA),
+                    color: tint.withValues(alpha: 0.22),
                     blurRadius: 16,
-                    offset: Offset(0, 4),
+                    offset: const Offset(0, 4),
                   ),
                 ]
               : null,
@@ -1479,7 +1493,7 @@ class _RecentCard extends StatelessWidget {
                   width: 7,
                   height: 7,
                   decoration: BoxDecoration(
-                    color: AppColors.accent,
+                    color: tint,
                     shape: BoxShape.circle,
                   ),
                 ),

@@ -57,6 +57,7 @@ class _SidebarState extends State<Sidebar> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final connected = state.status == ConnectionStatus.connected;
+    final tint = AppColors.connectionTint(state.activeConnection?.color);
 
     return Container(
       width: state.preferences.sidebarWidth,
@@ -72,6 +73,7 @@ class _SidebarState extends State<Sidebar> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (connected) _ConnColorBand(tint: tint),
           _ConnHero(state: state),
           if (connected) ...[
             _SearchBar(controller: _searchCtrl, focusNode: _searchFocus),
@@ -90,6 +92,28 @@ class _SidebarState extends State<Sidebar> {
   }
 }
 
+// --- connection color band ------------------------------------------------
+
+/// Hairline strip at the very top of the sidebar painted in the active
+/// connection's identity color — the at-a-glance "which database am I in".
+class _ConnColorBand extends StatelessWidget {
+  const _ConnColorBand({required this.tint});
+
+  final Color tint;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 3,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [tint, tint.withValues(alpha: 0.32)],
+        ),
+      ),
+    );
+  }
+}
+
 // --- connection hero ------------------------------------------------------
 
 class _ConnHero extends StatelessWidget {
@@ -102,6 +126,10 @@ class _ConnHero extends StatelessWidget {
     final conn = state.activeConnection;
     final connected = state.status == ConnectionStatus.connected;
     final menuEnabled = connected || state.status == ConnectionStatus.lost;
+    final tint = AppColors.connectionTint(conn?.color);
+    final engineIcon = conn?.engine == DbEngine.sqlite
+        ? Icons.insert_drive_file_rounded
+        : Icons.dns_rounded;
 
     final title = switch (state.status) {
       ConnectionStatus.connected => conn?.database ?? 'connected',
@@ -139,7 +167,7 @@ class _ConnHero extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: highlight
                     ? [
-                        AppColors.accentSoft,
+                        tint.withValues(alpha: 0.14),
                         AppColors.surface,
                       ]
                     : [
@@ -149,14 +177,14 @@ class _ConnHero extends StatelessWidget {
               ),
               border: Border.all(
                 color: highlight
-                    ? AppColors.accentRing
+                    ? tint.withValues(alpha: 0.5)
                     : AppColors.borderSoft,
                 width: 1,
               ),
               boxShadow: highlight
                   ? [
                       BoxShadow(
-                        color: AppColors.accentSoft,
+                        color: tint.withValues(alpha: 0.2),
                         blurRadius: 12,
                         spreadRadius: -2,
                       ),
@@ -166,30 +194,30 @@ class _ConnHero extends StatelessWidget {
             child: Row(
               children: [
                 Container(
-                  width: 28,
-                  height: 28,
+                  width: 30,
+                  height: 30,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        AppColors.accent,
-                        AppColors.accentHover,
+                        tint,
+                        Color.lerp(tint, Colors.black, 0.3)!,
                       ],
                     ),
                     borderRadius: Radii.brSm,
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.accentSoft,
-                        blurRadius: 6,
+                        color: tint.withValues(alpha: 0.42),
+                        blurRadius: 8,
                         offset: const Offset(0, 1),
                       ),
                     ],
                   ),
                   alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.bolt_rounded,
-                    size: 16,
+                  child: Icon(
+                    engineIcon,
+                    size: 15,
                     color: Colors.white,
                   ),
                 ),
@@ -625,6 +653,7 @@ class _SchemaBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final expanded = forceExpanded || state.isSchemaExpanded(schema.name);
+    final tint = AppColors.connectionTint(state.activeConnection?.color);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -659,12 +688,12 @@ class _SchemaBlock extends StatelessWidget {
                     height: 14,
                     decoration: BoxDecoration(
                       color: expanded
-                          ? AppColors.accentSoft
+                          ? tint.withValues(alpha: 0.16)
                           : AppColors.surface,
                       borderRadius: const BorderRadius.all(Radii.xs),
                       border: Border.all(
                         color: expanded
-                            ? AppColors.accentRing
+                            ? tint.withValues(alpha: 0.5)
                             : AppColors.borderSoft,
                       ),
                     ),
@@ -675,9 +704,7 @@ class _SchemaBlock extends StatelessWidget {
                           : schema.name.substring(0, 1).toUpperCase(),
                       style: AppTheme.ui(
                         size: 8.5,
-                        color: expanded
-                            ? AppColors.accent
-                            : AppColors.textMuted,
+                        color: expanded ? tint : AppColors.textMuted,
                         weight: FontWeight.w700,
                         letterSpacing: 0,
                       ),
@@ -747,6 +774,7 @@ class _TableRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final leftBase = 14.0 + indent * 18.0;
+    final tint = AppColors.connectionTint(state.activeConnection?.color);
     return Hoverable(
       onTap: () => state.openTable(table),
       onSecondaryTapDown: (d) =>
@@ -754,7 +782,7 @@ class _TableRow extends StatelessWidget {
       builder: (context, hovering) {
         final showStar = hovering || isFav;
         final rowBg = active
-            ? AppColors.sidebarRowActive
+            ? tint.withValues(alpha: 0.13)
             : (hovering ? AppColors.sidebarRowHover : Colors.transparent);
         return Stack(
           clipBehavior: Clip.none,
@@ -772,7 +800,7 @@ class _TableRow extends StatelessWidget {
                   SizedBox(
                     width: 14,
                     height: 14,
-                    child: Center(child: _kindIcon(table.kind, active)),
+                    child: Center(child: _kindIcon(table.kind, active, tint)),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -805,14 +833,14 @@ class _TableRow extends StatelessWidget {
                 child: Container(
                   width: 2.5,
                   decoration: BoxDecoration(
-                    color: AppColors.accent,
+                    color: tint,
                     borderRadius: const BorderRadius.only(
                       topRight: Radius.circular(2),
                       bottomRight: Radius.circular(2),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.accentSoft,
+                        color: tint.withValues(alpha: 0.45),
                         blurRadius: 6,
                         spreadRadius: 0,
                       ),
@@ -826,24 +854,24 @@ class _TableRow extends StatelessWidget {
     );
   }
 
-  Widget _kindIcon(DbRelationKind kind, bool active) {
+  Widget _kindIcon(DbRelationKind kind, bool active, Color tint) {
     switch (kind) {
       case DbRelationKind.table:
         return TableGlyph(
           size: 12,
-          color: active ? AppColors.accent : AppColors.textMuted,
+          color: active ? tint : AppColors.textMuted,
         );
       case DbRelationKind.view:
         return Icon(
           Icons.visibility_outlined,
           size: 12,
-          color: active ? AppColors.accent : AppColors.info,
+          color: active ? tint : AppColors.info,
         );
       case DbRelationKind.materializedView:
         return Icon(
           Icons.layers_outlined,
           size: 12,
-          color: active ? AppColors.accent : AppColors.info,
+          color: active ? tint : AppColors.info,
         );
     }
   }
@@ -1003,12 +1031,15 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
   @override
   Widget build(BuildContext context) {
     final ts = widget.query.updatedAt;
+    final tint = AppColors.connectionTint(
+      widget.state.activeConnection?.color,
+    );
     return Hoverable(
       onTap: () => widget.state.openSavedQuery(widget.query),
       onSecondaryTapDown: (d) => _openMenu(d.globalPosition),
       builder: (context, hovering) {
         final bg = widget.active
-            ? AppColors.sidebarRowActive
+            ? tint.withValues(alpha: 0.13)
             : (hovering ? AppColors.sidebarRowHover : Colors.transparent);
         return Stack(
           clipBehavior: Clip.none,
@@ -1026,9 +1057,7 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
                   Icon(
                     Icons.code_rounded,
                     size: 12,
-                    color: widget.active
-                        ? AppColors.accent
-                        : AppColors.textMuted,
+                    color: widget.active ? tint : AppColors.textMuted,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -1068,11 +1097,17 @@ class _SavedQueryRowState extends State<_SavedQueryRow> {
                 child: Container(
                   width: 2.5,
                   decoration: BoxDecoration(
-                    color: AppColors.accent,
+                    color: tint,
                     borderRadius: const BorderRadius.only(
                       topRight: Radius.circular(2),
                       bottomRight: Radius.circular(2),
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: tint.withValues(alpha: 0.45),
+                        blurRadius: 6,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1446,6 +1481,7 @@ class _SavedConnectionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ts = config.lastConnectedAt;
+    final tint = AppColors.connectionTint(config.color);
     return Hoverable(
       onTap: () => state.connect(config),
       builder: (context, hovering) => Container(
@@ -1464,9 +1500,9 @@ class _SavedConnectionRow extends StatelessWidget {
               width: 24,
               height: 24,
               decoration: BoxDecoration(
-                color: AppColors.surfaceAlt,
+                color: tint.withValues(alpha: 0.16),
                 borderRadius: const BorderRadius.all(Radii.xs),
-                border: Border.all(color: AppColors.borderSoft),
+                border: Border.all(color: tint.withValues(alpha: 0.5)),
               ),
               alignment: Alignment.center,
               child: Text(
@@ -1475,7 +1511,7 @@ class _SavedConnectionRow extends StatelessWidget {
                     : config.name.substring(0, 1).toUpperCase(),
                 style: AppTheme.ui(
                   size: 10.5,
-                  color: AppColors.textSecondary,
+                  color: tint,
                   weight: FontWeight.w700,
                   letterSpacing: 0,
                 ),
