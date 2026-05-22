@@ -259,6 +259,7 @@ class _QueryEditorState extends State<QueryEditor> {
             req: req,
             catalog: state.catalog.catalog,
             stmtText: stmtText,
+            stmtStart: stmt?.startOffset ?? 0,
           );
         },
       ),
