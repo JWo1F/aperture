@@ -131,8 +131,10 @@ class DbColumn {
   final String? comment;
 }
 
-/// A non-PK / non-UNIQUE-constraint index. The `def` is the verbatim
-/// `CREATE INDEX` statement from `pg_indexes.indexdef`.
+/// An index on a relation, including the ones implicitly created to back a
+/// primary-key or UNIQUE constraint. The `def` is the verbatim index
+/// definition (`pg_get_indexdef` / `sqlite_master.sql`), empty for engine-
+/// generated constraint indexes that carry no DDL text.
 class DbIndex {
   DbIndex({
     required this.name,
@@ -145,6 +147,21 @@ class DbIndex {
   final List<String> columns;
   final bool unique;
   final String def;
+}
+
+enum DbKeyKind { primary, unique }
+
+/// A primary-key or UNIQUE constraint. `columns` are in constraint order.
+/// Distinct from [DbIndex] — the same constraint is also backed by an index,
+/// which the catalog tracks separately so both can be surfaced in the tree.
+class DbKey {
+  DbKey({required this.name, required this.kind, required this.columns});
+
+  final String name;
+  final DbKeyKind kind;
+  final List<String> columns;
+
+  bool get isPrimary => kind == DbKeyKind.primary;
 }
 
 /// A user-defined enum type with its ordered labels.

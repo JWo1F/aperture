@@ -8,9 +8,22 @@ import 'package:flutter/foundation.dart';
 /// can rebuild without dragging in unrelated catalog or tab work.
 class WorkspaceUi extends ChangeNotifier {
   final Set<String> _expandedSchemas = {};
+
+  /// Expanded nodes inside the table tree — table rows and their detail
+  /// folders (columns / keys / foreign keys / indexes). Keyed by an opaque id
+  /// the sidebar builds; this notifier never interprets it.
+  final Set<String> _expandedNodes = {};
+
   String _sidebarSearch = '';
 
   bool isSchemaExpanded(String name) => _expandedSchemas.contains(name);
+
+  bool isNodeExpanded(String id) => _expandedNodes.contains(id);
+
+  void toggleNode(String id) {
+    if (!_expandedNodes.remove(id)) _expandedNodes.add(id);
+    notifyListeners();
+  }
 
   String get sidebarSearch => _sidebarSearch;
 
@@ -33,8 +46,11 @@ class WorkspaceUi extends ChangeNotifier {
 
   /// Reset to defaults on disconnect.
   void reset() {
-    final wasDirty = _expandedSchemas.isNotEmpty || _sidebarSearch.isNotEmpty;
+    final wasDirty = _expandedSchemas.isNotEmpty ||
+        _expandedNodes.isNotEmpty ||
+        _sidebarSearch.isNotEmpty;
     _expandedSchemas.clear();
+    _expandedNodes.clear();
     _sidebarSearch = '';
     if (wasDirty) notifyListeners();
   }

@@ -120,9 +120,67 @@ class SqliteIntrospector implements Introspector {
   }
 
   @override
+  Future<Map<int, List<DbKey>>> loadAllKeys() async {
+    final out = <int, List<DbKey>>{};
+    for (final table in _relations()) {
+      final keys = <DbKey>[];
+      // Columns: seq, name, unique, origin, partial. `origin` is 'pk' for the
+      // primary key, 'u' for a UNIQUE constraint, 'c' for an explicit index.
+      final list = _db
+          .select('PRAGMA index_list(${quoteIdent(table.name)})', log: false)
+          .rows;
+      for (final row in list) {
+        final origin = row[3];
+        if (origin != 'pk' && origin != 'u') continue;
+        final name = row[1] as String;
+        final cols = [
+          for (final ir in _db
+              .select('PRAGMA index_info(${quoteIdent(name)})', log: false)
+              .rows)
+            if (ir[2] != null) ir[2] as String,
+        ];
+        if (cols.isEmpty) continue;
+        keys.add(
+          DbKey(
+            name: name,
+            kind: origin == 'pk' ? DbKeyKind.primary : DbKeyKind.unique,
+            columns: cols,
+          ),
+        );
+      }
+      // A single-column INTEGER PRIMARY KEY is a rowid alias with no backing
+      // index, so it never shows up in `index_list` — recover it from
+      // `table_info` (column 5 is the 1-based position within the PK).
+      if (!keys.any((k) => k.isPrimary)) {
+        final pkRows = [
+          for (final r in _db
+              .select(
+                'PRAGMA table_info(${quoteIdent(table.name)})',
+                log: false,
+              )
+              .rows)
+            if ((r[5] as int) != 0) r,
+        ]..sort((a, b) => (a[5] as int).compareTo(b[5] as int));
+        if (pkRows.isNotEmpty) {
+          keys.insert(
+            0,
+            DbKey(
+              name: '${table.name}_pk',
+              kind: DbKeyKind.primary,
+              columns: [for (final r in pkRows) r[1] as String],
+            ),
+          );
+        }
+      }
+      if (keys.isNotEmpty) out[table.oid] = keys;
+    }
+    return out;
+  }
+
+  @override
   Future<Map<int, List<DbIndex>>> loadAllIndexes() async {
     // Verbatim `CREATE INDEX` text, keyed by index name. Auto-indexes
-    // (PK/UNIQUE-backed) carry a null `sql` and are absent here.
+    // (PK/UNIQUE-backed) carry a null `sql` and so come back with empty def.
     final defByName = <String, String>{
       for (final row in _db
           .select(
@@ -138,12 +196,10 @@ class SqliteIntrospector implements Introspector {
       final list = _db
           .select('PRAGMA index_list(${quoteIdent(table.name)})', log: false)
           .rows;
-      // Columns: seq, name, unique, origin, partial. `origin == 'c'` keeps
-      // only indexes created by an explicit CREATE INDEX, matching the
-      // "extra index" semantics of the Postgres path.
+      // Columns: seq, name, unique, origin, partial. Every index is kept,
+      // including the auto-indexes backing PK / UNIQUE constraints.
       final indexes = <DbIndex>[];
       for (final row in list) {
-        if (row[3] != 'c') continue;
         final name = row[1] as String;
         final info = _db
             .select('PRAGMA index_info(${quoteIdent(name)})', log: false)

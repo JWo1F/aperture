@@ -196,11 +196,20 @@ void main() {
       expect(bookFks.single.refColumn, 'id');
     });
 
-    test('introspects the explicit index, skipping auto-indexes', () async {
+    test('introspects the explicit index on a relation', () async {
       final schemas = await svc.introspector.loadSchemas();
       final books = schemas.single.tables.firstWhere((t) => t.name == 'books');
       final indexes = await svc.introspector.loadAllIndexes();
       expect(indexes[books.oid]!.map((i) => i.name), ['idx_books_title']);
+    });
+
+    test('introspects the primary key of a rowid-alias relation', () async {
+      final schemas = await svc.introspector.loadSchemas();
+      final books = schemas.single.tables.firstWhere((t) => t.name == 'books');
+      final keys = await svc.introspector.loadAllKeys();
+      final pk = keys[books.oid]!.single;
+      expect(pk.kind, DbKeyKind.primary);
+      expect(pk.columns, ['id']);
     });
 
     test('fetchTablePage returns rowids for an editable table', () async {

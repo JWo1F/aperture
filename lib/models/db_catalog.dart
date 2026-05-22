@@ -12,6 +12,7 @@ class DatabaseCatalog {
     required this.relationsByOid,
     required this.columnsByOid,
     required this.foreignKeysByOid,
+    required this.keysByOid,
     required this.indexesByOid,
     required this.enums,
     required this.domains,
@@ -25,6 +26,7 @@ class DatabaseCatalog {
     relationsByOid: const {},
     columnsByOid: const {},
     foreignKeysByOid: const {},
+    keysByOid: const {},
     indexesByOid: const {},
     enums: const [],
     domains: const [],
@@ -35,6 +37,7 @@ class DatabaseCatalog {
   final Map<int, DbTable> relationsByOid;
   final Map<int, List<DbColumn>> columnsByOid;
   final Map<int, List<DbForeignKey>> foreignKeysByOid;
+  final Map<int, List<DbKey>> keysByOid;
   final Map<int, List<DbIndex>> indexesByOid;
   final List<DbEnum> enums;
   final List<DbDomain> domains;
@@ -57,6 +60,10 @@ class DatabaseCatalog {
   List<DbColumn> columnsFor(DbTable table) =>
       columnsByOid[table.oid] ?? const [];
 
+  /// Every foreign key of [table], including multi-column constraints.
+  List<DbForeignKey> foreignKeysFor(DbTable table) =>
+      foreignKeysByOid[table.oid] ?? const [];
+
   /// Single-column FKs of [table] keyed by their local column name. Multi-
   /// column FKs are dropped here — callers that need the wider shape should
   /// read [foreignKeysByOid] directly.
@@ -68,6 +75,9 @@ class DatabaseCatalog {
     }
     return out;
   }
+
+  /// Primary-key and UNIQUE constraints of [table], primary key first.
+  List<DbKey> keysFor(DbTable table) => keysByOid[table.oid] ?? const [];
 
   List<DbIndex> indexesFor(DbTable table) =>
       indexesByOid[table.oid] ?? const [];
@@ -121,6 +131,7 @@ class DatabaseCatalog {
     relationsByOid: relationsByOid,
     columnsByOid: columnsByOid,
     foreignKeysByOid: foreignKeysByOid,
+    keysByOid: keysByOid,
     indexesByOid: indexesByOid,
     enums: enums,
     domains: domains,
@@ -132,6 +143,7 @@ class DatabaseCatalog {
     Map<int, DbTable>? relationsByOid,
     Map<int, List<DbColumn>>? columnsByOid,
     Map<int, List<DbForeignKey>>? foreignKeysByOid,
+    Map<int, List<DbKey>>? keysByOid,
     Map<int, List<DbIndex>>? indexesByOid,
     List<DbEnum>? enums,
     List<DbDomain>? domains,
@@ -141,6 +153,7 @@ class DatabaseCatalog {
     relationsByOid: relationsByOid ?? this.relationsByOid,
     columnsByOid: columnsByOid ?? this.columnsByOid,
     foreignKeysByOid: foreignKeysByOid ?? this.foreignKeysByOid,
+    keysByOid: keysByOid ?? this.keysByOid,
     indexesByOid: indexesByOid ?? this.indexesByOid,
     enums: enums ?? this.enums,
     domains: domains ?? this.domains,
@@ -160,7 +173,10 @@ enum CatalogPhase {
   /// All foreign keys across all relations.
   foreignKeys,
 
-  /// Non-constraint indexes for every relation.
+  /// Primary-key and UNIQUE constraints for every relation.
+  keys,
+
+  /// Indexes for every relation, including constraint-backed ones.
   indexes,
 
   /// User-defined enum types + their labels.

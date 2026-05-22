@@ -190,10 +190,52 @@ class PostgresIntrospector implements Introspector {
     return out;
   }
 
-  /// Non-constraint indexes for every relation, keyed by relation oid. PK
-  /// and UNIQUE-constraint-backed indexes are filtered out (we already model
-  /// those via columns / future unique constraints), leaving the "extra"
-  /// indexes that are meaningful in DDL view.
+  /// Primary-key and UNIQUE constraints for every relation, keyed by relation
+  /// oid. `conkey` is expanded into an ordered column-name array the same way
+  /// the FK sweep does it.
+  @override
+  Future<Map<int, List<DbKey>>> loadAllKeys() async {
+    final result = await _db.execute(
+      'SELECT c.conrelid::bigint AS rel_oid, '
+      '       c.conname::text AS name, '
+      '       c.contype::text AS kind, '
+      '       ('
+      '         SELECT array_agg(att.attname::text ORDER BY u.ord) '
+      '         FROM unnest(c.conkey) WITH ORDINALITY AS u(att_num, ord) '
+      '         JOIN pg_attribute att '
+      '           ON att.attrelid = c.conrelid '
+      '          AND att.attnum = u.att_num'
+      '       ) AS cols '
+      'FROM pg_constraint c '
+      'JOIN pg_class cls ON cls.oid = c.conrelid '
+      'JOIN pg_namespace n ON n.oid = cls.relnamespace '
+      "WHERE c.contype IN ('p', 'u') "
+      '  AND $_systemSchemaFilter '
+      'ORDER BY c.conrelid, c.contype, c.conname',
+    );
+
+    final out = <int, List<DbKey>>{};
+    for (final row in result) {
+      final relOid = row[0] as int;
+      final cols = _stringList(row[3]);
+      if (cols.isEmpty) continue;
+      out
+          .putIfAbsent(relOid, () => [])
+          .add(
+            DbKey(
+              name: row[1] as String,
+              kind: (row[2] as String) == 'p'
+                  ? DbKeyKind.primary
+                  : DbKeyKind.unique,
+              columns: cols,
+            ),
+          );
+    }
+    return out;
+  }
+
+  /// Every index for every relation, keyed by relation oid — including the
+  /// indexes that back primary-key / UNIQUE constraints.
   @override
   Future<Map<int, List<DbIndex>>> loadAllIndexes() async {
     final result = await _db.execute(
@@ -214,11 +256,6 @@ class PostgresIntrospector implements Introspector {
       'JOIN pg_class i ON i.oid = ix.indexrelid '
       'JOIN pg_namespace n ON n.oid = c.relnamespace '
       'WHERE $_systemSchemaFilter '
-      '  AND NOT EXISTS ('
-      '    SELECT 1 FROM pg_constraint cn '
-      '    WHERE cn.conindid = ix.indexrelid '
-      "      AND cn.contype IN ('p', 'u', 'x')"
-      '  ) '
       'ORDER BY c.oid, i.relname',
     );
 

@@ -21,7 +21,12 @@ abstract interface class Introspector {
   /// Foreign keys across all relations, grouped by source relation id.
   Future<Map<int, List<DbForeignKey>>> loadAllForeignKeys();
 
-  /// Non-constraint indexes for every relation, keyed by relation id.
+  /// Primary-key and UNIQUE constraints for every relation, keyed by
+  /// relation id.
+  Future<Map<int, List<DbKey>>> loadAllKeys();
+
+  /// Indexes for every relation, keyed by relation id. Includes the indexes
+  /// implicitly created to back primary-key / UNIQUE constraints.
   Future<Map<int, List<DbIndex>>> loadAllIndexes();
 
   /// User-defined enum types. Empty for engines without enum types.

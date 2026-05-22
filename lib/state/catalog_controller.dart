@@ -72,6 +72,7 @@ class CatalogController extends ChangeNotifier {
       final results = await Future.wait([
         introspector.loadAllColumns(),
         introspector.loadAllForeignKeys(),
+        introspector.loadAllKeys(),
         introspector.loadAllIndexes(),
         introspector.loadAllEnums(),
         introspector.loadAllDomains(),
@@ -80,13 +81,15 @@ class CatalogController extends ChangeNotifier {
       _catalog = _catalog.copyWith(
         columnsByOid: results[0] as Map<int, List<DbColumn>>,
         foreignKeysByOid: results[1] as Map<int, List<DbForeignKey>>,
-        indexesByOid: results[2] as Map<int, List<DbIndex>>,
-        enums: results[3] as List<DbEnum>,
-        domains: results[4] as List<DbDomain>,
+        keysByOid: results[2] as Map<int, List<DbKey>>,
+        indexesByOid: results[3] as Map<int, List<DbIndex>>,
+        enums: results[4] as List<DbEnum>,
+        domains: results[5] as List<DbDomain>,
         phases: {
           ..._catalog.phases,
           CatalogPhase.columns,
           CatalogPhase.foreignKeys,
+          CatalogPhase.keys,
           CatalogPhase.indexes,
           CatalogPhase.enums,
           CatalogPhase.domains,

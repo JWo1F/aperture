@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/connection_config.dart';
+import '../../models/db_catalog.dart';
 import '../../models/db_object.dart';
 import '../../models/saved_query.dart';
 import '../../models/time_ago.dart';
@@ -745,6 +746,7 @@ class _SchemaBlock extends StatelessWidget {
               isFav: favKeys.contains(t.qualifiedKey),
               indent: 1,
               query: query,
+              expandable: true,
             ),
       ],
     );
@@ -761,6 +763,7 @@ class _TableRow extends StatelessWidget {
     required this.isFav,
     required this.indent,
     required this.query,
+    this.expandable = false,
   });
 
   final DbTable table;
@@ -770,10 +773,28 @@ class _TableRow extends StatelessWidget {
   final int indent;
   final String query;
 
+  /// Schema-tree rows carry a disclosure chevron and expand into a
+  /// columns / keys / foreign keys / indexes subtree. Pinned and Frequent
+  /// rows are flat shortcuts and stay collapsed.
+  final bool expandable;
+
   @override
   Widget build(BuildContext context) {
-    final leftBase = 14.0 + indent * 18.0;
     final tint = AppColors.connectionTint(state.activeConnection?.color);
+    final expanded = expandable && state.isNodeExpanded(table.qualifiedKey);
+    final row = _buildRow(context, tint, expanded);
+    if (!expanded) return row;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        row,
+        _TableDetail(table: table, state: state, indent: indent + 1),
+      ],
+    );
+  }
+
+  Widget _buildRow(BuildContext context, Color tint, bool expanded) {
+    final leftBase = 14.0 + indent * 18.0;
     return Hoverable(
       onTap: () => state.openTable(table),
       onSecondaryTapDown: (d) =>
@@ -797,6 +818,11 @@ class _TableRow extends StatelessWidget {
               ),
               child: Row(
                 children: [
+                  if (expandable)
+                    _DetailChevron(
+                      expanded: expanded,
+                      onTap: () => state.toggleNode(table.qualifiedKey),
+                    ),
                   SizedBox(
                     width: 14,
                     height: 14,
@@ -885,6 +911,364 @@ class _TableRow extends StatelessWidget {
           color: active ? tint : AppColors.info,
         );
     }
+  }
+}
+
+// --- table detail tree ----------------------------------------------------
+
+/// A right-pointing chevron that rotates to point down when [expanded].
+/// When [onTap] is set it claims taps itself (so a chevron inside a row
+/// whose body has its own gesture can toggle without triggering it);
+/// otherwise it is purely decorative and the enclosing row handles the tap.
+class _DetailChevron extends StatelessWidget {
+  const _DetailChevron({required this.expanded, this.onTap});
+
+  final bool expanded;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final box = SizedBox(
+      width: 18,
+      height: 20,
+      child: Center(
+        child: AnimatedRotation(
+          turns: expanded ? 0.25 : 0,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: Icon(
+            Icons.chevron_right_rounded,
+            size: 14,
+            color: AppColors.textMuted,
+          ),
+        ),
+      ),
+    );
+    if (onTap == null) return box;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: box,
+    );
+  }
+}
+
+/// The expanded body of a table row: a `columns / keys / foreign keys /
+/// indexes` set of collapsible folders, populated from the live catalog.
+class _TableDetail extends StatelessWidget {
+  const _TableDetail({
+    required this.table,
+    required this.state,
+    required this.indent,
+  });
+
+  final DbTable table;
+  final AppState state;
+  final int indent;
+
+  @override
+  Widget build(BuildContext context) {
+    final catalog = state.databaseCatalog;
+    if (!catalog.hasPhase(CatalogPhase.columns)) {
+      return _DetailMessageRow(indent: indent, text: 'Loading details…');
+    }
+
+    final tint = AppColors.connectionTint(state.activeConnection?.color);
+    final columns = catalog.columnsFor(table);
+    final keys = catalog.keysFor(table);
+    final foreignKeys = catalog.foreignKeysFor(table);
+    final indexes = catalog.indexesFor(table);
+    final fkColumns = <String>{
+      for (final fk in foreignKeys) ...fk.localColumns,
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (columns.isNotEmpty)
+          _DetailFolder(
+            table: table,
+            state: state,
+            indent: indent,
+            folder: 'columns',
+            count: columns.length,
+            children: [
+              for (final c in columns)
+                _DetailLeaf(
+                  indent: indent + 1,
+                  icon: c.isPrimaryKey
+                      ? Icons.key_rounded
+                      : (fkColumns.contains(c.name)
+                            ? Icons.link_rounded
+                            : Icons.view_column_rounded),
+                  iconColor: c.isPrimaryKey
+                      ? tint
+                      : (fkColumns.contains(c.name)
+                            ? AppColors.info
+                            : AppColors.text4),
+                  name: c.name,
+                  detail: c.dataType,
+                ),
+            ],
+          ),
+        if (keys.isNotEmpty)
+          _DetailFolder(
+            table: table,
+            state: state,
+            indent: indent,
+            folder: 'keys',
+            count: keys.length,
+            children: [
+              for (final k in keys)
+                _DetailLeaf(
+                  indent: indent + 1,
+                  icon: Icons.key_rounded,
+                  iconColor: k.isPrimary ? tint : AppColors.textMuted,
+                  name: k.name,
+                  detail:
+                      '(${k.columns.join(', ')})'
+                      '${k.isPrimary ? '' : '  ·  UNIQUE'}',
+                ),
+            ],
+          ),
+        if (foreignKeys.isNotEmpty)
+          _DetailFolder(
+            table: table,
+            state: state,
+            indent: indent,
+            folder: 'foreign keys',
+            count: foreignKeys.length,
+            children: [
+              for (final fk in foreignKeys)
+                _DetailLeaf(
+                  indent: indent + 1,
+                  icon: Icons.link_rounded,
+                  iconColor: AppColors.info,
+                  name: fk.constraintName,
+                  detail:
+                      '(${fk.localColumns.join(', ')}) → ${fk.refTable}',
+                  onTap: () {
+                    final ref = catalog.relation(fk.refTableOid);
+                    if (ref != null) state.openTable(ref);
+                  },
+                ),
+            ],
+          ),
+        if (indexes.isNotEmpty)
+          _DetailFolder(
+            table: table,
+            state: state,
+            indent: indent,
+            folder: 'indexes',
+            count: indexes.length,
+            children: [
+              for (final ix in indexes)
+                _DetailLeaf(
+                  indent: indent + 1,
+                  icon: Icons.bolt_rounded,
+                  iconColor: AppColors.textMuted,
+                  name: ix.name,
+                  detail:
+                      '(${ix.columns.join(', ')})'
+                      '${ix.unique ? '  ·  UNIQUE' : ''}',
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+/// One collapsible folder ("columns", "indexes", …) under a table.
+class _DetailFolder extends StatelessWidget {
+  const _DetailFolder({
+    required this.table,
+    required this.state,
+    required this.indent,
+    required this.folder,
+    required this.count,
+    required this.children,
+  });
+
+  final DbTable table;
+  final AppState state;
+  final int indent;
+  final String folder;
+  final int count;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final id = '${table.qualifiedKey} $folder';
+    final expanded = state.isNodeExpanded(id);
+    final leftBase = 14.0 + indent * 18.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Hoverable(
+          onTap: () => state.toggleNode(id),
+          builder: (context, hovering) {
+            return Container(
+              height: 24,
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+              padding: EdgeInsets.only(left: leftBase, right: 6),
+              decoration: BoxDecoration(
+                color: hovering
+                    ? AppColors.sidebarRowHover
+                    : Colors.transparent,
+                borderRadius: Radii.brSm,
+              ),
+              child: Row(
+                children: [
+                  _DetailChevron(expanded: expanded),
+                  Icon(
+                    Icons.folder_outlined,
+                    size: 13,
+                    color: AppColors.textMuted,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      folder,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.ui(
+                        size: 11.5,
+                        color: AppColors.textMuted,
+                        weight: FontWeight.w600,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '$count',
+                    style: AppTheme.ui(
+                      size: 10,
+                      color: AppColors.text4,
+                      weight: FontWeight.w500,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        if (expanded) ...children,
+      ],
+    );
+  }
+}
+
+/// A leaf in the table tree: one column, key, foreign key or index. Carries
+/// an [onTap] only for foreign keys, which navigate to the referenced table.
+class _DetailLeaf extends StatelessWidget {
+  const _DetailLeaf({
+    required this.indent,
+    required this.icon,
+    required this.iconColor,
+    required this.name,
+    this.detail,
+    this.onTap,
+  });
+
+  final int indent;
+  final IconData icon;
+  final Color iconColor;
+  final String name;
+  final String? detail;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final leftBase = 14.0 + indent * 18.0;
+    return Hoverable(
+      onTap: onTap,
+      cursor: onTap != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
+      builder: (context, hovering) {
+        return Container(
+          height: 22,
+          margin: const EdgeInsets.symmetric(horizontal: 6),
+          padding: EdgeInsets.only(left: leftBase, right: 6),
+          decoration: BoxDecoration(
+            color: hovering && onTap != null
+                ? AppColors.sidebarRowHover
+                : Colors.transparent,
+            borderRadius: Radii.brSm,
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 12, color: iconColor),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTheme.ui(
+                          size: 11.5,
+                          color: AppColors.textSecondary,
+                          weight: FontWeight.w400,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ),
+                    if (detail != null) ...[
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          detail!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTheme.mono(
+                            size: 9.5,
+                            color: AppColors.textMuted,
+                            weight: FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Placeholder row shown while phase-1 introspection is still in flight.
+class _DetailMessageRow extends StatelessWidget {
+  const _DetailMessageRow({required this.indent, required this.text});
+
+  final int indent;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final leftBase = 14.0 + indent * 18.0 + 18.0;
+    return Container(
+      height: 22,
+      margin: const EdgeInsets.symmetric(horizontal: 6),
+      padding: EdgeInsets.only(left: leftBase, right: 6),
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        style: AppTheme.ui(
+          size: 11,
+          color: AppColors.textMuted,
+          weight: FontWeight.w400,
+          letterSpacing: 0,
+        ),
+      ),
+    );
   }
 }
 

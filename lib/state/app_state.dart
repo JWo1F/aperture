@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/connection_config.dart';
+import '../models/db_catalog.dart';
 import '../models/db_object.dart';
 import '../models/query_result.dart';
 import '../models/saved_query.dart';
@@ -248,6 +249,10 @@ class AppState extends ChangeNotifier {
 
   bool get isCatalogLoading => catalog.isPhase1Loading;
 
+  /// The introspected catalog snapshot — columns, keys, FKs, indexes — that
+  /// the sidebar's table tree renders its detail rows from.
+  DatabaseCatalog get databaseCatalog => catalog.catalog;
+
   bool isSchemaExpanded(String name) => ui.isSchemaExpanded(name);
 
   List<DbColumn>? columnsFor(DbTable table) => catalog.columnsFor(table);
@@ -278,6 +283,10 @@ class AppState extends ChangeNotifier {
   void setSidebarSearch(String value) => ui.setSidebarSearch(value);
 
   void toggleSchema(String name) => ui.toggleSchema(name);
+
+  bool isNodeExpanded(String id) => ui.isNodeExpanded(id);
+
+  void toggleNode(String id) => ui.toggleNode(id);
 
   // --- Tabs ------------------------------------------------------------
 
