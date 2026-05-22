@@ -1,9 +1,9 @@
 # dbv — Project guide for Claude
 
-A macOS Flutter desktop app: a personal PostgreSQL viewer.
-Built for **one user** (jwo1f), so prefer power-user
-density over consumer polish and skip backward-compatibility shims when
-refactoring.
+A macOS Flutter desktop app: a personal database viewer for PostgreSQL
+and SQLite. Built for **one user** (jwo1f),
+so prefer power-user density over consumer polish and skip
+backward-compatibility shims when refactoring.
 
 ## Build / test loop
 
@@ -116,9 +116,12 @@ surprises we handle:
 
 ## macOS specifics
 
-- Sandboxed. Entitlements live in `macos/Runner/{Debug,Release}.entitlements`:
-  - `com.apple.security.network.client` — needed to reach Postgres
-  - `com.apple.security.files.user-selected.read-write` — needed for export
+- **Not sandboxed.** The app opens SQLite files at arbitrary user paths and
+  must reconnect to a saved file connection after relaunch without
+  security-scoped bookmarks, so the sandbox is off. Entitlements live in
+  `macos/Runner/{DebugProfile,Release}.entitlements`: `DebugProfile` keeps
+  `com.apple.security.cs.allow-jit` for the debug Dart VM; `Release` is an
+  empty entitlements dict.
 - `MainFlutterWindow.swift` registers a `dbv/window` method channel for
   `startDrag` (used by the toolbar's pan handler) and `toggleZoom`
   (double-click handler).
