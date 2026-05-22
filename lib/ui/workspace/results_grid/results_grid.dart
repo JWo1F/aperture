@@ -480,16 +480,15 @@ class _ResultsGridState extends State<ResultsGrid> {
     // Background — mirrors GridRow: an insert/delete base, the hover tint
     // (the cell is hovered, by definition), and the row-wide selection tint
     // when any cell in the row is selected. Blended onto an opaque grid bg.
-    const transparent = Color(0x00000000);
     final baseBg = isInsert
         ? AppColors.gridRowInsert
         : isDeleted
         ? AppColors.gridRowDelete
-        : transparent;
+        : Colors.transparent;
     final rowBg = Color.alphaBlend(
       sel.rowSegments(row).isNotEmpty
           ? AppColors.gridRowSelection
-          : transparent,
+          : Colors.transparent,
       Color.alphaBlend(AppColors.gridRowHover, baseBg),
     );
     var fill = Color.alphaBlend(rowBg, AppColors.bg);

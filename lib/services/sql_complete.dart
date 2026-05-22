@@ -22,4 +22,8 @@ export 'sql_complete/query_completer.dart'
     show completeClause, completeQueryEditor;
 export 'sql_complete/scope.dart' show SqlScope, parseScope;
 export 'sql_complete/text_scan.dart'
-    show isInsideStringOrComment, previousWord, qualifierBefore;
+    show
+        isInsideStringOrComment,
+        previousWord,
+        qualifierBefore,
+        qualifierChainBefore;

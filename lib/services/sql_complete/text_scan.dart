@@ -168,30 +168,42 @@ String? qualifierBefore(String text, int tokenStart) {
 }
 
 /// Walks `.identifier.identifier.…` backwards from [tokenStart],
-/// returning the dot-separated chain as a list of bare names in the
-/// order they appear in the source.
+/// returning the dot-separated chain as a list of names in the order
+/// they appear in the source. Bare identifiers come back unquoted;
+/// `"quoted identifiers"` come back with their surrounding quotes
+/// intact so the caller can tell them apart and match the same shapes
+/// that `parseScope` accepts in FROM / JOIN / UPDATE / INTO clauses.
 ///
-/// `public.users.id|`  → `['public', 'users']`
-/// `u.|`               → `['u']`
-/// `id|`               → `[]`
-///
-/// Quoted identifiers (`"Some.Name"`) are intentionally not handled —
-/// our user types snake_case unquoted names; quoted-identifier support
-/// would require a separate path that respects the quotes verbatim.
+/// `public.users.id|`       → `['public', 'users']`
+/// `u.|`                    → `['u']`
+/// `"My Table".|`           → `['"My Table"']`
+/// `schema."My Table".|`    → `['schema', '"My Table"']`
+/// `id|`                    → `[]`
 List<String> qualifierChainBefore(String text, int tokenStart) {
   if (tokenStart <= 0 || tokenStart > text.length) return const [];
   if (text.codeUnitAt(tokenStart - 1) != 0x2E /* . */ ) return const [];
   final parts = <String>[];
   var i = tokenStart - 1;
   while (i > 0 && text.codeUnitAt(i) == 0x2E) {
-    var j = i;
-    while (j > 0 && isWordCode(text.codeUnitAt(j - 1))) {
-      j--;
+    final int segStart;
+    if (text.codeUnitAt(i - 1) == 0x22 /* " */ ) {
+      var q = i - 2;
+      while (q >= 0 && text.codeUnitAt(q) != 0x22) {
+        q--;
+      }
+      if (q < 0) break;
+      segStart = q;
+    } else {
+      var j = i;
+      while (j > 0 && isWordCode(text.codeUnitAt(j - 1))) {
+        j--;
+      }
+      if (j == i) break;
+      segStart = j;
     }
-    if (j == i) break;
-    parts.insert(0, text.substring(j, i));
-    if (j == 0 || text.codeUnitAt(j - 1) != 0x2E) break;
-    i = j - 1;
+    parts.insert(0, text.substring(segStart, i));
+    if (segStart == 0 || text.codeUnitAt(segStart - 1) != 0x2E) break;
+    i = segStart - 1;
   }
   return parts;
 }

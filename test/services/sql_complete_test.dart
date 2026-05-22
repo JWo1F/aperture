@@ -163,6 +163,26 @@ void main() {
     });
   });
 
+  group('qualifierChainBefore', () {
+    test('returns the bare qualifier before a dot', () {
+      const text = 'SELECT * FROM foo.';
+      expect(qualifierChainBefore(text, text.length), ['foo']);
+    });
+
+    test('returns a quoted identifier with its quotes intact', () {
+      const text = 'SELECT * FROM "My Table".';
+      expect(qualifierChainBefore(text, text.length), ['"My Table"']);
+    });
+
+    test('mixes a bare schema with a quoted relation', () {
+      const text = 'SELECT * FROM schema."My Table".';
+      expect(
+        qualifierChainBefore(text, text.length),
+        ['schema', '"My Table"'],
+      );
+    });
+  });
+
   group('isInsideStringOrComment', () {
     test('false outside quotes', () {
       expect(isInsideStringOrComment("SELECT 'x' FROM t", 12), isFalse);
