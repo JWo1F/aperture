@@ -74,6 +74,12 @@ class _TabStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<AppState>();
+    // Depend on the tab set itself, not just the active index — closing a
+    // non-active tab leaves activeTabIndex unchanged, and without this the
+    // strip would keep rendering the already-closed tab.
+    context.select<AppState, String>(
+      (s) => s.tabs.map((t) => t.id).join('|'),
+    );
     final tabs = state.tabs;
     final activeIndex = context.select<AppState, int>((s) => s.activeTabIndex);
 
