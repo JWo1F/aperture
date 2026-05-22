@@ -273,7 +273,7 @@ class _Tab extends StatelessWidget {
         final showClose = hovering || active;
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 220, minWidth: 0),
             child: AnimatedContainer(
@@ -284,7 +284,7 @@ class _Tab extends StatelessWidget {
                 borderRadius: BorderRadius.circular(7),
                 border: Border.all(color: borderColor, width: 0.5),
               ),
-              padding: const EdgeInsets.only(left: 10, right: 4),
+              padding: const EdgeInsets.fromLTRB(10, 3, 4, 3),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
