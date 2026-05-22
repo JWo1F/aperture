@@ -111,7 +111,7 @@ class PostgresService implements DbService {
       settings: ConnectionSettings(
         sslMode: config.useSsl ? SslMode.require : SslMode.disable,
         connectTimeout: const Duration(seconds: 10),
-        applicationName: 'dbv',
+        applicationName: 'aperture',
       ),
     );
     _repository = PostgresTableRepository(this);

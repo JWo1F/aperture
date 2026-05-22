@@ -6,9 +6,9 @@ import '../widgets/common.dart';
 /// Build/version is wired in here rather than read from pubspec at runtime
 /// so the About dialog stays a zero-dependency widget. Bump on release.
 const _version = '1.0.0';
-const _tagline = 'A personal PostgreSQL viewer for macOS.';
+const _tagline = 'A native macOS client for PostgreSQL and SQLite.';
 
-Future<void> showAboutDbv(BuildContext context) {
+Future<void> showAboutAperture(BuildContext context) {
   return showDialog<void>(
     context: context,
     builder: (_) => Dialog(
@@ -47,7 +47,7 @@ Future<void> showAboutDbv(BuildContext context) {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'dbv',
+                        'Aperture',
                         style: AppTheme.mono(
                           size: 16,
                           weight: FontWeight.w700,
@@ -71,11 +71,11 @@ Future<void> showAboutDbv(BuildContext context) {
                 style: AppTheme.ui(size: 12.5, color: AppColors.textSecondary),
               ),
               const SizedBox(height: Insets.md),
-              _bullet('Crash-safe atomic writes for connection state'),
-              _bullet('Keychain-backed passwords'),
-              _bullet('Browser-style ⌘[ / ⌘] history'),
-              _bullet('Activity log: ⌘L'),
-              _bullet('Search & jump: ⌘K'),
+              _bullet('Connect to PostgreSQL or open SQLite databases'),
+              _bullet('Browse schemas, edit rows inline, run SQL'),
+              _bullet('Keychain-backed credentials, crash-safe storage'),
+              _bullet('Browser-style history — ⌘[ / ⌘]'),
+              _bullet('Command palette — ⌘K'),
               const SizedBox(height: Insets.xl),
               Align(
                 alignment: Alignment.centerRight,

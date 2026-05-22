@@ -395,11 +395,11 @@ class _PaletteState extends State<_Palette> {
     }
     out.add(_Item(
       kind: _Kind.command,
-      title: 'About dbv',
+      title: 'About Aperture',
       subtitle: 'Version, keyboard shortcuts and credits',
       icon: Icons.info_outline_rounded,
       tokens: 'help shortcuts version',
-      run: () => showAboutDbv(context),
+      run: () => showAboutAperture(context),
     ));
     return out;
   }

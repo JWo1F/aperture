@@ -109,7 +109,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: Text(
-          'Quit dbv?',
+          'Quit Aperture?',
           style: AppTheme.ui(
             size: 14,
             weight: FontWeight.w600,
@@ -1239,9 +1239,9 @@ class _WelcomePanel extends StatelessWidget {
                 ],
                 const SizedBox(height: Insets.xl),
                 Hoverable(
-                  onTap: () => showAboutDbv(context),
+                  onTap: () => showAboutAperture(context),
                   builder: (context, hovering) => Text(
-                    'About dbv',
+                    'About Aperture',
                     style: AppTheme.mono(
                       size: 10.5,
                       color: hovering
@@ -1284,12 +1284,12 @@ class _BrandHero extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         Text(
-          'DBV',
+          'Aperture',
           style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 22,
             fontWeight: FontWeight.w700,
-            letterSpacing: 2,
+            letterSpacing: 1,
           ),
         ),
         const SizedBox(height: 4),

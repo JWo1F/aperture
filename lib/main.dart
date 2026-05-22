@@ -12,11 +12,11 @@ Future<void> main() async {
   await WindowManipulator.makeTitlebarTransparent();
   await WindowManipulator.enableFullSizeContentView();
   await WindowManipulator.hideTitle();
-  runApp(const DbvApp());
+  runApp(const ApertureApp());
 }
 
-class DbvApp extends StatelessWidget {
-  const DbvApp({super.key});
+class ApertureApp extends StatelessWidget {
+  const ApertureApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +33,7 @@ class DbvApp extends StatelessWidget {
             (s) => s.brightness,
           );
           return MaterialApp(
-            title: 'DBV',
+            title: 'Aperture',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.build(brightness),
             home: const AppShell(),

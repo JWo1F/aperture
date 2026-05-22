@@ -1,11 +1,11 @@
-# dbv
+# Aperture
 
-A macOS PostgreSQL viewer for power users — a personal, opinionated
-client built in Flutter.
+A native macOS database client for PostgreSQL and SQLite — dense and
+keyboard-driven, built in Flutter.
 
-Built for one person. Dense, keyboard-driven, deliberate; not a
-consumer product. Source open for anyone who wants to fork it and run
-their own.
+Power-user density over consumer polish: a translucent schema sidebar,
+an editable data grid, a multi-statement SQL editor, and a ⌘K command
+palette. Source is open — fork it and run your own.
 
 ## What it does
 
@@ -124,10 +124,8 @@ To build a release `.app`:
 flutter build macos --release
 ```
 
-Connection details (host / port / database / user / password) are
-stored in `~/Library/Containers/com.example.dbv/Data/Library/Application
-Support/com.example.dbv/connections.json` — per-user, sandboxed,
-plaintext (this is a personal tool, not multi-user software).
+Connection details are stored as JSON under `~/Library/Application
+Support/com.example.dbv/`; passwords are kept in the macOS Keychain.
 
 ## Project conventions
 
@@ -141,5 +139,5 @@ plaintext (this is a personal tool, not multi-user software).
 
 ## License
 
-Personal project — no license. If you want to fork it, go ahead, but
-nothing here is a finished product.
+No license — all rights reserved. Fork it if you like, but nothing
+here ships as a finished product.

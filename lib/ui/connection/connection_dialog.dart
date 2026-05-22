@@ -906,7 +906,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
                     style: TextStyle(color: AppColors.textMuted),
                   ),
                   TextSpan(
-                    text: 'dbv',
+                    text: 'aperture',
                     style: TextStyle(color: AppColors.sqlString),
                   ),
                 ],
