@@ -33,7 +33,9 @@ class PostgresIntrospector implements Introspector {
       '       c.oid::bigint AS oid, '
       '       c.relname::text AS name, '
       '       c.relkind::text AS kind, '
-      "       obj_description(c.oid, 'pg_class') AS comment "
+      "       obj_description(c.oid, 'pg_class') AS comment, "
+      '       c.reltuples::bigint AS row_est, '
+      '       pg_total_relation_size(c.oid) AS size_bytes '
       'FROM pg_class c '
       'JOIN pg_namespace n ON n.oid = c.relnamespace '
       "WHERE c.relkind IN ('r', 'v', 'm', 'p') "
@@ -48,6 +50,11 @@ class PostgresIntrospector implements Introspector {
       final name = row[2] as String;
       final kind = row[3] as String;
       final comment = row[4] as String?;
+      // `reltuples` is -1 for never-analyzed relations and a meaningless 0 for
+      // plain views (no storage) — normalize both to null.
+      final rowEst = row[5] as int?;
+      final sizeBytes = row[6] as int?;
+      final hasRowEstimate = kind != 'v' && rowEst != null && rowEst >= 0;
       grouped
           .putIfAbsent(schema, () => [])
           .add(
@@ -57,6 +64,8 @@ class PostgresIntrospector implements Introspector {
               name: name,
               kind: _kindFromRelkind(kind),
               comment: comment,
+              rowEstimate: hasRowEstimate ? rowEst : null,
+              sizeBytes: sizeBytes != null && sizeBytes > 0 ? sizeBytes : null,
             ),
           );
     }

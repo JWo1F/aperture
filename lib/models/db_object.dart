@@ -22,6 +22,8 @@ class DbTable {
     required this.name,
     required this.kind,
     this.comment,
+    this.rowEstimate,
+    this.sizeBytes,
   });
 
   /// Sentinel oid used when a [DbTable] is constructed without going through
@@ -34,6 +36,15 @@ class DbTable {
   final String name;
   final DbRelationKind kind;
   final String? comment;
+
+  /// Planner row estimate (`pg_class.reltuples`). Null when the engine
+  /// exposes no estimate or the relation has never been analyzed — never
+  /// negative, unlike the raw catalog value.
+  final int? rowEstimate;
+
+  /// Total on-disk footprint in bytes, including indexes and TOAST. Null when
+  /// the engine doesn't report it (SQLite) or the relation has no storage.
+  final int? sizeBytes;
 
   String get qualifiedName => qualify(schema, name);
 
