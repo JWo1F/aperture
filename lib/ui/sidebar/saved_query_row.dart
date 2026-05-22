@@ -4,11 +4,11 @@ import 'package:flutter/services.dart';
 import '../../models/saved_query.dart';
 import '../../models/time_ago.dart';
 import '../../theme/app_theme.dart';
-import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
 import '../widgets/text_prompt_dialog.dart';
 import 'highlighted_text.dart';
 import 'sidebar_deps.dart';
+import 'tree_row.dart';
 
 class SavedQueryRow extends StatefulWidget {
   const SavedQueryRow({
@@ -88,86 +88,46 @@ class _SavedQueryRowState extends State<SavedQueryRow> {
     final tint = AppColors.connectionTint(
       widget.deps.session.activeConnection?.color,
     );
-    return Hoverable(
+    return TreeRow(
+      indent: 0,
+      height: 24,
+      active: widget.active,
+      tint: tint,
+      padding: const EdgeInsets.only(left: 14, right: 6),
       onTap: () => widget.deps.tabs.openSavedQuery(widget.query),
       onSecondaryTapDown: (d) => _openMenu(d.globalPosition),
-      builder: (context, hovering) {
-        final bg = widget.active
-            ? tint.withValues(alpha: 0.13)
-            : (hovering ? AppColors.sidebarRowHover : Colors.transparent);
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              height: 24,
-              margin: const EdgeInsets.symmetric(horizontal: 6),
-              padding: const EdgeInsets.only(left: 14, right: 6),
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: Radii.brSm,
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.code_rounded,
-                    size: 12,
-                    color: widget.active ? tint : AppColors.textMuted,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: SidebarHighlightedText(
-                      text: widget.query.name,
-                      match: widget.match,
-                      style: AppTheme.ui(
-                        size: 12,
-                        color: widget.active
-                            ? AppColors.textPrimary
-                            : AppColors.textSecondary,
-                        weight: widget.active
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ),
-                  if (ts != null)
-                    Text(
-                      timeAgo(ts),
-                      style: AppTheme.ui(
-                        size: 10,
-                        color: AppColors.text4,
-                        weight: FontWeight.w400,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                ],
-              ),
+      children: [
+        Icon(
+          Icons.code_rounded,
+          size: 12,
+          color: widget.active ? tint : AppColors.textMuted,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SidebarHighlightedText(
+            text: widget.query.name,
+            match: widget.match,
+            style: AppTheme.ui(
+              size: 12,
+              color: widget.active
+                  ? AppColors.textPrimary
+                  : AppColors.textSecondary,
+              weight: widget.active ? FontWeight.w600 : FontWeight.w400,
+              letterSpacing: 0,
             ),
-            if (widget.active)
-              Positioned(
-                left: 0,
-                top: 5,
-                bottom: 5,
-                child: Container(
-                  width: 2.5,
-                  decoration: BoxDecoration(
-                    color: tint,
-                    borderRadius: const BorderRadius.only(
-                      topRight: Radius.circular(2),
-                      bottomRight: Radius.circular(2),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: tint.withValues(alpha: 0.45),
-                        blurRadius: 6,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
+          ),
+        ),
+        if (ts != null)
+          Text(
+            timeAgo(ts),
+            style: AppTheme.ui(
+              size: 10,
+              color: AppColors.text4,
+              weight: FontWeight.w400,
+              letterSpacing: 0,
+            ),
+          ),
+      ],
     );
   }
 }
