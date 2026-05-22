@@ -527,6 +527,32 @@ class TabsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Queue a blank pending INSERT anchored below [row]. Every column is
+  /// stamped DEFAULT, so the database fills the whole row from its column
+  /// defaults. Positions like [duplicateRow] but copies no source values.
+  void addRow(TableTab tab, int row) {
+    final result = tab.result;
+    if (result == null) return;
+
+    int? anchor;
+    final insertIdx = row - result.rows.length;
+    if (insertIdx >= 0) {
+      if (insertIdx >= tab.inserts.length) return;
+      anchor = tab.inserts[insertIdx].afterRow;
+    } else {
+      if (row < 0 || row >= result.rows.length) return;
+      anchor = row;
+    }
+
+    final values = <String, CellEditValue>{
+      for (final name in result.columns) name: const CellDefault(),
+    };
+
+    tab.inserts.add(PendingInsert(afterRow: anchor, values: values));
+    tab.markChanged();
+    notifyListeners();
+  }
+
   EditBatch _buildBatch(TableTab tab) {
     final result = tab.result;
     if (result == null || result.rowIds == null) return EditBatch();

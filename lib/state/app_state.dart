@@ -357,6 +357,8 @@ class AppState extends ChangeNotifier {
   void duplicateRow(TableTab tab, int row) =>
       tabsController.duplicateRow(tab, row);
 
+  void addRow(TableTab tab, int row) => tabsController.addRow(tab, row);
+
   void resetTableEdits(TableTab tab) => tabsController.resetTableEdits(tab);
 
   List<String> previewEditStatements(TableTab tab) =>

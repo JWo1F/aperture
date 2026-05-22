@@ -44,6 +44,7 @@ class CellMenuActions {
     this.onDeleteRow,
     this.onRestoreRow,
     this.onDuplicateRow,
+    this.onAddRow,
     this.onFollowForeignKey,
     this.onFindRow,
     this.onAddFilter,
@@ -60,6 +61,9 @@ class CellMenuActions {
   final VoidCallback? onDeleteRow;
   final VoidCallback? onRestoreRow;
   final VoidCallback? onDuplicateRow;
+
+  /// Queues a blank pending insert (all columns DEFAULT) below the row.
+  final VoidCallback? onAddRow;
   final VoidCallback? onFollowForeignKey;
   final VoidCallback? onFindRow;
   final void Function(bool not)? onAddFilter;
@@ -191,6 +195,12 @@ void showCellContextMenu(
         label: 'Duplicate row',
         enabled: actions.onDuplicateRow != null && !target.isDeleted,
         onTap: () => actions.onDuplicateRow?.call(),
+      ),
+      CmItem(
+        icon: Icons.add_box_outlined,
+        label: 'Add new row',
+        enabled: actions.onAddRow != null && !target.isDeleted,
+        onTap: () => actions.onAddRow?.call(),
       ),
       const CmDivider(),
     ],

@@ -42,6 +42,7 @@ class ResultsGrid extends StatefulWidget {
     this.onDeleteRow,
     this.onRestoreDeletedRow,
     this.onDuplicateRow,
+    this.onAddRow,
     this.order,
     this.onSortColumn,
     this.onSetSort,
@@ -77,6 +78,9 @@ class ResultsGrid extends StatefulWidget {
   /// Queue a duplicate of [row] as a pending insert. PK columns are
   /// stamped DEFAULT by the state layer.
   final void Function(int row)? onDuplicateRow;
+
+  /// Queue a blank pending insert below [row] — every column DEFAULT.
+  final void Function(int row)? onAddRow;
   final List<OrderTerm>? order;
   final void Function(String column)? onSortColumn;
   final void Function(String column, bool descending)? onSetSort;
@@ -472,6 +476,9 @@ class _ResultsGridState extends State<ResultsGrid> {
             : null,
         onDuplicateRow: widget.onDuplicateRow != null
             ? () => widget.onDuplicateRow!(stateRow)
+            : null,
+        onAddRow: widget.onAddRow != null
+            ? () => widget.onAddRow!(stateRow)
             : null,
         onFollowForeignKey: (fk != null && widget.onFollowForeignKey != null)
             ? () => widget.onFollowForeignKey!(fk, original)

@@ -82,6 +82,7 @@ class TableView extends StatelessWidget {
                               state.restoreDeletedRow(tab, row),
                           onDuplicateRow: (row) =>
                               state.duplicateRow(tab, row),
+                          onAddRow: (row) => state.addRow(tab, row),
                           widths: tab.columnWidths,
                           onWidthChanged: (col, w) =>
                               state.persistColumnWidth(tab.table, col, w),
