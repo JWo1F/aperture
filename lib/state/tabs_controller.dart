@@ -688,7 +688,6 @@ class TabsController extends ChangeNotifier {
     final sql = sqlOverride ?? tab.lastRunSql;
     if (service == null || sql == null || sql.trim().isEmpty) return;
     if (tab.planLoading) return;
-    if (tab.planSourceSql == sql && tab.planJson != null) return;
 
     // The visual plan reads Postgres' `EXPLAIN (FORMAT JSON)`; SQLite's
     // `EXPLAIN QUERY PLAN` is a different shape entirely.

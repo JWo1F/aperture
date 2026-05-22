@@ -13,41 +13,17 @@ import '../widgets/common.dart';
 /// describing what the operation does, the heaviest node in the tree is
 /// surfaced in the summary header, and unexpected row counts trigger a
 /// "estimate is off" chip so the planner's bad guesses don't go quiet.
-class QueryPlanView extends StatefulWidget {
+///
+/// EXPLAIN is never issued automatically. For read queries the plan uses
+/// EXPLAIN ANALYZE, which executes the statement for real, so every
+/// round-trip is gated behind an explicit button press — selecting the
+/// Plan tab only shows the prompt.
+class QueryPlanView extends StatelessWidget {
   const QueryPlanView({super.key, required this.tab});
 
   final QueryTab tab;
 
-  @override
-  State<QueryPlanView> createState() => _QueryPlanViewState();
-}
-
-class _QueryPlanViewState extends State<QueryPlanView> {
-  @override
-  void initState() {
-    super.initState();
-    _maybeLoad();
-  }
-
-  @override
-  void didUpdateWidget(covariant QueryPlanView old) {
-    super.didUpdateWidget(old);
-    _maybeLoad();
-  }
-
-  void _maybeLoad() {
-    final tab = widget.tab;
-    if (tab.lastRunSql == null) return;
-    if (tab.planLoading) return;
-    if (tab.planSourceSql == tab.lastRunSql && tab.planJson != null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<AppState>().loadQueryPlan(tab);
-    });
-  }
-
-  void _runAsExplain() {
-    final tab = widget.tab;
+  void _runExplain(BuildContext context) {
     final sql = tab.sql.trim();
     if (sql.isEmpty) return;
     context.read<AppState>().loadQueryPlan(tab, sqlOverride: sql);
@@ -55,18 +31,26 @@ class _QueryPlanViewState extends State<QueryPlanView> {
 
   @override
   Widget build(BuildContext context) {
-    final tab = widget.tab;
     if (tab.planLoading) return const _Spinner();
-    if (tab.planError != null) return _PlanError(message: tab.planError!);
+    if (tab.planError != null) {
+      return _PlanError(
+        message: tab.planError!,
+        onRetry: tab.sql.trim().isNotEmpty ? () => _runExplain(context) : null,
+      );
+    }
     final json = tab.planJson;
     if (json == null) {
       return _PlanSuggestion(
         enabled: tab.sql.trim().isNotEmpty,
-        onRun: tab.sql.trim().isNotEmpty ? _runAsExplain : null,
+        onRun: tab.sql.trim().isNotEmpty ? () => _runExplain(context) : null,
       );
     }
     final stale = tab.lastRunSql != null && tab.planSourceSql != tab.lastRunSql;
-    return _PlanTree(planJson: json, stale: stale);
+    return _PlanTree(
+      planJson: json,
+      stale: stale,
+      onRerun: () => _runExplain(context),
+    );
   }
 }
 
@@ -143,9 +127,10 @@ class _PlanSuggestion extends StatelessWidget {
 }
 
 class _PlanError extends StatelessWidget {
-  const _PlanError({required this.message});
+  const _PlanError({required this.message, required this.onRetry});
 
   final String message;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -173,6 +158,14 @@ class _PlanError extends StatelessWidget {
             message,
             style: AppTheme.mono(size: 11.5, color: AppColors.textSecondary),
           ),
+          if (onRetry != null) ...[
+            const SizedBox(height: 12),
+            AppButton(
+              label: 'Run again',
+              icon: Icons.refresh,
+              onPressed: onRetry,
+            ),
+          ],
         ],
       ),
     );
@@ -237,10 +230,15 @@ String _describeNode(String type) {
 // --- main tree ------------------------------------------------------------
 
 class _PlanTree extends StatelessWidget {
-  const _PlanTree({required this.planJson, required this.stale});
+  const _PlanTree({
+    required this.planJson,
+    required this.stale,
+    required this.onRerun,
+  });
 
   final Map<String, dynamic> planJson;
   final bool stale;
+  final VoidCallback onRerun;
 
   @override
   Widget build(BuildContext context) {
@@ -279,7 +277,7 @@ class _PlanTree extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (stale) const _StaleBanner(),
+          if (stale) _StaleBanner(onRerun: onRerun),
           _SummaryHeader(
             planningMs: planningMs,
             executionMs: executionMs,
@@ -1221,12 +1219,14 @@ class _TimeBar extends StatelessWidget {
 }
 
 class _StaleBanner extends StatelessWidget {
-  const _StaleBanner();
+  const _StaleBanner({required this.onRerun});
+
+  final VoidCallback onRerun;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: AppColors.warning.withValues(alpha: 0.12),
@@ -1241,9 +1241,16 @@ class _StaleBanner extends StatelessWidget {
             color: AppColors.warning,
           ),
           const SizedBox(width: 6),
-          Text(
-            'Plan is for an earlier run — re-fetching.',
-            style: AppTheme.mono(size: 11, color: AppColors.warning),
+          Expanded(
+            child: Text(
+              'Plan is for an earlier run.',
+              style: AppTheme.mono(size: 11, color: AppColors.warning),
+            ),
+          ),
+          AppButton(
+            label: 'Re-run EXPLAIN',
+            icon: Icons.refresh,
+            onPressed: onRerun,
           ),
         ],
       ),
