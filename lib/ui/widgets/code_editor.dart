@@ -311,6 +311,10 @@ class _CodeEditorState extends State<CodeEditor> {
         !hk.isMetaPressed &&
         !hk.isAltPressed &&
         !hk.isControlPressed;
+    final isEnter =
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter;
+    final isTab = key == LogicalKeyboardKey.tab;
 
     if (_popupOpen) {
       if (key == LogicalKeyboardKey.arrowDown) {
@@ -325,13 +329,16 @@ class _CodeEditorState extends State<CodeEditor> {
         _dismissPopup(suppressNext: true);
         return KeyEventResult.handled;
       }
-      if (noModifier &&
-          (key == LogicalKeyboardKey.tab ||
-              key == LogicalKeyboardKey.enter ||
-              key == LogicalKeyboardKey.numpadEnter)) {
+      // Tab accepts the highlighted suggestion. Enter no longer accepts —
+      // it dismisses the popup and falls through to the newline / submit
+      // handlers so pressing Return always inserts a line.
+      if (noModifier && isTab) {
         final s = _popup.value;
         _acceptSuggestion(s.items[s.selected]);
         return KeyEventResult.handled;
+      }
+      if (noModifier && isEnter) {
+        _dismissPopup();
       }
     }
 
@@ -346,12 +353,30 @@ class _CodeEditorState extends State<CodeEditor> {
       return KeyEventResult.handled;
     }
 
+    // Tab indents a soft tab / the selected lines; Shift-Tab dedents.
+    // Single-line inputs keep Tab for focus traversal. The popup-accept
+    // case above already returned, so reaching here means no popup.
+    if (!widget.singleLine &&
+        isTab &&
+        !hk.isMetaPressed &&
+        !hk.isAltPressed &&
+        !hk.isControlPressed) {
+      _handleTab(dedent: hk.isShiftPressed);
+      return KeyEventResult.handled;
+    }
+
     if (widget.singleLine &&
         widget.onSubmit != null &&
         noModifier &&
-        (key == LogicalKeyboardKey.enter ||
-            key == LogicalKeyboardKey.numpadEnter)) {
+        isEnter) {
       widget.onSubmit!();
+      return KeyEventResult.handled;
+    }
+
+    // Multi-line Enter inserts a newline that copies the current line's
+    // leading whitespace, so indentation carries down as you type.
+    if (!widget.singleLine && noModifier && isEnter) {
+      _handleNewline();
       return KeyEventResult.handled;
     }
 
@@ -568,6 +593,127 @@ class _CodeEditorState extends State<CodeEditor> {
 
   bool get _popupOpen =>
       !_popup.value.isHidden && _popup.value.items.isNotEmpty;
+
+  // --- Indentation & newlines --------------------------------------------
+
+  /// Soft-tab width — Tab inserts this, Enter copies it, Shift-Tab strips it.
+  static const String _indentUnit = '  ';
+
+  /// Writes [text] + [selection] back to the controller in one edit.
+  void _writeValue(String text, TextSelection selection) {
+    widget.controller.value = TextEditingValue(
+      text: text,
+      selection: selection,
+    );
+  }
+
+  /// Tab / Shift-Tab. A plain caret or single-line selection gets a soft
+  /// tab dropped in; a selection spanning lines (or any Shift-Tab) shifts
+  /// every touched line by one [_indentUnit].
+  void _handleTab({required bool dedent}) {
+    final value = widget.controller.value;
+    final text = value.text;
+    final sel = value.selection;
+    if (!sel.isValid) return;
+    final start = sel.start;
+    final end = sel.end;
+
+    if (!dedent && !text.substring(start, end).contains('\n')) {
+      _suppressNextAutoTrigger = true;
+      _writeValue(
+        text.replaceRange(start, end, _indentUnit),
+        TextSelection.collapsed(offset: start + _indentUnit.length),
+      );
+      return;
+    }
+    _shiftLines(text, start, end, dedent: dedent);
+  }
+
+  /// Indents or dedents every line touched by [selStart]..[selEnd],
+  /// keeping the selection over the same span of lines.
+  void _shiftLines(
+    String text,
+    int selStart,
+    int selEnd, {
+    required bool dedent,
+  }) {
+    final firstLineStart =
+        selStart == 0 ? 0 : text.lastIndexOf('\n', selStart - 1) + 1;
+    // A selection that ends exactly at a line start shouldn't drag the
+    // next line into the shift.
+    var scanEnd = selEnd;
+    if (scanEnd > selStart && text.codeUnitAt(scanEnd - 1) == 0x0A) {
+      scanEnd -= 1;
+    }
+    var lastLineEnd = text.indexOf('\n', scanEnd);
+    if (lastLineEnd < 0) lastLineEnd = text.length;
+
+    final lines = text.substring(firstLineStart, lastLineEnd).split('\n');
+    final out = <String>[];
+    var firstDelta = 0;
+    var totalDelta = 0;
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      if (dedent) {
+        var remove = 0;
+        while (remove < _indentUnit.length &&
+            remove < line.length &&
+            line.codeUnitAt(remove) == 0x20) {
+          remove++;
+        }
+        if (remove == 0 && line.isNotEmpty && line.codeUnitAt(0) == 0x09) {
+          remove = 1; // strip a hard tab if that's the leading char
+        }
+        out.add(line.substring(remove));
+        if (i == 0) firstDelta = -remove;
+        totalDelta -= remove;
+      } else {
+        out.add('$_indentUnit$line');
+        if (i == 0) firstDelta = _indentUnit.length;
+        totalDelta += _indentUnit.length;
+      }
+    }
+
+    final newText =
+        text.substring(0, firstLineStart) +
+        out.join('\n') +
+        text.substring(lastLineEnd);
+    if (newText == text) return; // dedent with nothing to strip
+
+    final newStart = (selStart + firstDelta).clamp(
+      firstLineStart,
+      newText.length,
+    );
+    final newEnd = (selEnd + totalDelta).clamp(newStart, newText.length);
+    _suppressNextAutoTrigger = true;
+    _writeValue(
+      newText,
+      TextSelection(baseOffset: newStart, extentOffset: newEnd),
+    );
+  }
+
+  /// Enter in the multi-line editor — inserts a newline followed by the
+  /// current line's leading whitespace so indentation carries down.
+  void _handleNewline() {
+    final value = widget.controller.value;
+    final text = value.text;
+    final sel = value.selection;
+    if (!sel.isValid) return;
+    final start = sel.start;
+    final lineStart =
+        start == 0 ? 0 : text.lastIndexOf('\n', start - 1) + 1;
+    var i = lineStart;
+    while (i < start) {
+      final c = text.codeUnitAt(i);
+      if (c != 0x20 && c != 0x09) break;
+      i++;
+    }
+    final insert = '\n${text.substring(lineStart, i)}';
+    _writeValue(
+      text.replaceRange(start, sel.end, insert),
+      TextSelection.collapsed(offset: start + insert.length),
+    );
+  }
 
   // --- Layout helpers -----------------------------------------------------
 
