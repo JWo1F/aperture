@@ -4,8 +4,11 @@ import 'package:macos_window_utils/macos/ns_window_delegate.dart';
 import 'package:macos_window_utils/macos_window_utils.dart';
 
 import '../../state/app_globals.dart';
+import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../command_palette/command_palette.dart';
+import '../widgets/common.dart';
+import '../widgets/pagebar.dart';
 import '../widgets/value_selector.dart';
 import 'connection_pill.dart';
 import 'toolbar_actions.dart';
@@ -190,6 +193,10 @@ class _ToolbarState extends State<Toolbar> {
                       : null,
                 ),
                 const Spacer(),
+                const _ToolbarTabActions(),
+                const SizedBox(width: 6),
+                const TbGroupRail(),
+                const SizedBox(width: 6),
                 // Fixed-width search pill — making it Flexible would force it
                 // to compete with the Spacer above for leftover space, so on a
                 // wide window the spacer would collapse to half its slack and
@@ -217,6 +224,242 @@ class _ToolbarState extends State<Toolbar> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Tab-specific actions in the toolbar: pending-edit chip (TableTab only)
+/// plus the manual + auto refresh controls (TableTab and QueryTab).
+///
+/// Reads through a dedicated Selector so a cell-edit on the active tab
+/// repaints this cluster (pending count) without re-running the rest of
+/// the toolbar selector, and a tab switch swaps the wired callbacks.
+class _ToolbarTabActions extends StatelessWidget {
+  const _ToolbarTabActions();
+
+  @override
+  Widget build(BuildContext context) {
+    final tabs = appState.tabsController;
+    return Selector<(String?, Type?, int, bool, int?, bool, bool)>(
+      listenable: tabs,
+      selector: () {
+        final tab = tabs.activeTab;
+        if (tab is TableTab) {
+          return (
+            tab.id,
+            TableTab,
+            tab.pendingOpCount,
+            tab.applying,
+            tab.autoRefreshInterval?.inMilliseconds,
+            tab.loading,
+            true,
+          );
+        }
+        if (tab is QueryTab) {
+          return (
+            tab.id,
+            QueryTab,
+            0,
+            false,
+            tab.autoRefreshInterval?.inMilliseconds,
+            tab.running,
+            tab.lastRunSql != null,
+          );
+        }
+        return (tab?.id, tab?.runtimeType, 0, false, null, false, false);
+      },
+      builder: (context, _) {
+        final tab = tabs.activeTab;
+        if (tab is TableTab) {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _TbPendingChip(tab: tab),
+              const SizedBox(width: 6),
+              RefreshDropdown(
+                interval: tab.autoRefreshInterval,
+                busy: tab.loading,
+                canRefresh: !tab.loading,
+                onManualRefresh: () => tabs.refreshTable(tab),
+                onSetInterval: (d) => tabs.setTableAutoRefresh(tab, d),
+              ),
+            ],
+          );
+        }
+        if (tab is QueryTab) {
+          final lastRunSql = tab.lastRunSql;
+          return RefreshDropdown(
+            interval: tab.autoRefreshInterval,
+            busy: tab.running,
+            canRefresh: !tab.running && lastRunSql != null,
+            onManualRefresh: lastRunSql == null
+                ? () {}
+                : () => tabs.runQuery(tab, sqlOverride: lastRunSql),
+            onSetInterval: (d) => tabs.setQueryAutoRefresh(tab, d),
+          );
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
+}
+
+/// Pending-edit cluster: a count badge, then independent apply / discard
+/// icons. No outer chip — each piece is a discrete toolbar-style button
+/// in the same chrome family as [TbIcon] so it blends into the right
+/// cluster. The count badge stays visible even at zero, switching to a
+/// muted disabled appearance, so a save/edit cycle doesn't reflow the
+/// toolbar around it.
+class _TbPendingChip extends StatelessWidget {
+  const _TbPendingChip({required this.tab});
+
+  final TableTab tab;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = tab.pendingOpCount;
+    final busy = tab.applying;
+    final hasPending = count > 0;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _PendingBadge(
+          count: count,
+          onTap: hasPending ? () => showPendingForTab(context, tab) : null,
+        ),
+        const SizedBox(width: 2),
+        _PendingAction(
+          icon: Icons.check,
+          tooltip: 'Apply pending edits',
+          busy: busy,
+          onTap: hasPending && !busy
+              ? () => applyEditsForTab(context, tab)
+              : null,
+        ),
+        _PendingAction(
+          icon: Icons.close,
+          tooltip: 'Discard pending edits',
+          onTap: hasPending && !busy
+              ? () => appState.tabsController.resetTableEdits(tab)
+              : null,
+        ),
+      ],
+    );
+  }
+}
+
+/// Subtle count pill: surface fill, hairline border, mono digits centred.
+/// Active state uses [AppColors.textPrimary]; disabled (no pending) dims
+/// to a faded textMuted so the badge reads as "nothing to apply" without
+/// vanishing.
+class _PendingBadge extends StatelessWidget {
+  const _PendingBadge({required this.count, required this.onTap});
+
+  final int count;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Tooltip(
+      message: enabled ? 'Review pending edits' : 'No pending edits',
+      waitDuration: const Duration(milliseconds: 350),
+      child: Hoverable(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onTap: onTap,
+        builder: (context, hovering) {
+          final Color bg;
+          if (enabled && hovering) {
+            bg = AppColors.surfaceHover;
+          } else if (enabled) {
+            bg = AppColors.surface;
+          } else {
+            bg = AppColors.surface.withValues(alpha: 0.5);
+          }
+          final Color borderColor = enabled && hovering
+              ? AppColors.borderStrong
+              : AppColors.border;
+          final Color fg = enabled
+              ? AppColors.textPrimary
+              : AppColors.textMuted.withValues(alpha: 0.45);
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            height: 22,
+            constraints: const BoxConstraints(minWidth: 26),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: Radii.brSm,
+              border: Border.all(color: borderColor),
+            ),
+            child: Text(
+              '$count',
+              style: AppTheme.mono(
+                size: 11,
+                color: fg,
+                weight: FontWeight.w600,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Lightweight icon button in the same chrome as [TbIcon] but at 22×22
+/// to match the badge height.
+class _PendingAction extends StatelessWidget {
+  const _PendingAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.busy = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 350),
+      child: Hoverable(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onTap: onTap,
+        builder: (context, hovering) {
+          final Color fg = enabled
+              ? (hovering ? AppColors.textPrimary : AppColors.textMuted)
+              : AppColors.textMuted.withValues(alpha: 0.4);
+          // Lerp the hover background through a zero-alpha *surfaceHover*
+          // instead of Colors.transparent — see CLAUDE.md > Lessons.
+          final Color bg = hovering && enabled
+              ? AppColors.surfaceHover
+              : AppColors.surfaceHover.withValues(alpha: 0);
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            width: 22,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: bg, borderRadius: Radii.brSm),
+            child: busy
+                ? SizedBox(
+                    width: 11,
+                    height: 11,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.4,
+                      color: AppColors.textSecondary,
+                    ),
+                  )
+                : Icon(icon, size: 13, color: fg),
+          );
+        },
       ),
     );
   }

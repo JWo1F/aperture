@@ -761,10 +761,10 @@ DbTable? _findRowOwner(
 }
 
 /// Bottom status strip for a query tab — mirrors the table view's pagebar
-/// shape (28px, hairline top, bgDeep) but trades pagination chevrons and
-/// auto-refresh for the static run-summary a query produces: rows or
-/// affected count, elapsed ms, truncation flag, "refreshed HH:MM:SS", and
-/// a success/error indicator on the right.
+/// shape (28px, hairline top, bgDeep) but reports a static run-summary:
+/// rows or affected count, elapsed ms, truncation flag, "refreshed
+/// HH:MM:SS", and a success/error indicator on the right. Refresh and
+/// auto-refresh live in the top toolbar.
 class _QueryPagebar extends StatelessWidget {
   const _QueryPagebar({required this.tab});
 
@@ -772,18 +772,12 @@ class _QueryPagebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // _QueryPagebar reads only from `tab` and dispatches to TabsController;
-    // it lives inside a per-tab ListenableBuilder, so a non-reactive global
-    // handle is enough — no need to subscribe to the controller.
-    final tabs = appState.tabsController;
     final result = tab.result;
     final refreshedAt = tab.lastRefreshedAt;
-    final lastRunSql = tab.lastRunSql;
-    final canRefresh = !tab.running && lastRunSql != null;
 
     return Container(
       height: pagebarHeight,
-      padding: const EdgeInsets.only(left: 12, right: 6),
+      padding: const EdgeInsets.only(left: 12, right: 12),
       decoration: BoxDecoration(
         color: AppColors.bgDeep,
         border: Border(top: BorderSide(color: AppColors.border)),
@@ -822,7 +816,7 @@ class _QueryPagebar extends StatelessWidget {
             PbStat(head: 'refreshed ', mid: formatPagebarClock(refreshedAt)),
           ],
           const Spacer(),
-          if (result != null) ...[
+          if (result != null)
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -844,15 +838,6 @@ class _QueryPagebar extends StatelessWidget {
                 ),
               ],
             ),
-            const PbDot(),
-          ],
-          RefreshDropdown(
-            interval: tab.autoRefreshInterval,
-            busy: tab.running,
-            canRefresh: canRefresh,
-            onManualRefresh: () => tabs.runQuery(tab, sqlOverride: lastRunSql),
-            onSetInterval: (d) => tabs.setQueryAutoRefresh(tab, d),
-          ),
         ],
       ),
     );

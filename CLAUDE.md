@@ -391,6 +391,12 @@ doesn't reallocate items.
   `pubspec.yaml`. Do them sequentially.
 - **`flutter analyze` info-level lints block a commit** for this
   project. Treat them as errors.
+- **`AnimatedContainer` cross-fades color through pure black when one
+  end is `Colors.transparent`.** `Color.lerp(transparent, X, t)` walks
+  through `Color(00, 00, 00, t·alpha)` — visible as a dark flash on a
+  fading-in hover background. Use `<target>.withValues(alpha: 0)` as
+  the off state so the lerp stays inside the target hue. `TbIcon` and
+  the toolbar pending actions both follow this rule.
 
 ## Memory pointers
 

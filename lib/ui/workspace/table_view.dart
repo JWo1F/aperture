@@ -9,7 +9,6 @@ import '../../state/app_globals.dart';
 import '../../state/catalog_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
-import '../app_shell/toolbar_actions.dart';
 import '../widgets/code_editor.dart';
 import '../widgets/common.dart';
 import '../widgets/pagebar.dart';
@@ -542,10 +541,11 @@ class _ClauseRowState extends State<_ClauseRow> {
   }
 }
 
-/// Bottom rail in the design layout — `X rows · page X/Y · N,NNN total ·
-/// Xms · refreshed HH:MM:SS` on the left, then pending · refresh + auto
-/// dropdown · prev/next on the right. Mono throughout, dot separators,
-/// bgDeep surface.
+/// Bottom rail in the design layout — `X rows · N,NNN total · Xms ·
+/// refreshed HH:MM:SS` on the left, then the page paginator on the right
+/// (prev chevron · 1 2 … 7 [8] 9 … 99 100 · next chevron). Refresh /
+/// auto-refresh / pending-edits live in the top toolbar, so the footer
+/// is purely about row navigation now.
 class _PaginationBar extends StatelessWidget {
   const _PaginationBar({required this.tab});
 
@@ -553,13 +553,8 @@ class _PaginationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tabs = appState.tabsController;
-    final canPrev = tab.page > 0 && !tab.loading;
-    final canNext = tab.page < tab.pageCount - 1 && !tab.loading;
     final result = tab.result;
     final rowCount = result?.rows.length ?? 0;
-    final pageCount = tab.pageCount;
-    final pendingCount = tab.pendingOpCount;
     final refreshedAt = tab.lastRefreshedAt;
 
     return Container(
@@ -575,12 +570,6 @@ class _PaginationBar extends StatelessWidget {
             head: withCommas(rowCount),
             tail: ' rows',
             headHighlight: true,
-          ),
-          const PbDot(),
-          PbStat(
-            head: 'page ',
-            mid: '${tab.page + 1}',
-            tail: ' / ${withCommas(pageCount)}',
           ),
           const PbDot(),
           PbStat(
@@ -600,185 +589,156 @@ class _PaginationBar extends StatelessWidget {
             PbStat(head: 'refreshed ', mid: formatPagebarClock(refreshedAt)),
           ],
           const Spacer(),
-          if (pendingCount > 0) ...[
-            _PendingActions(tab: tab, count: pendingCount),
-            const PbDot(),
-          ],
-          RefreshDropdown(
-            interval: tab.autoRefreshInterval,
-            busy: tab.loading,
-            canRefresh: !tab.loading,
-            onManualRefresh: () => tabs.refreshTable(tab),
-            onSetInterval: (d) => tabs.setTableAutoRefresh(tab, d),
-          ),
-          const PbDot(),
-          PbChev(
-            icon: Icons.chevron_left,
-            tooltip: 'Previous page',
-            onPressed: canPrev
-                ? () => tabs.loadTablePage(tab, tab.page - 1)
-                : null,
-          ),
-          PbChev(
-            icon: Icons.chevron_right,
-            tooltip: 'Next page',
-            onPressed: canNext
-                ? () => tabs.loadTablePage(tab, tab.page + 1)
-                : null,
-          ),
+          _PageNumbers(tab: tab),
         ],
       ),
     );
   }
 }
 
-/// One bordered cluster surfacing the cross-tab pending edit count along
-/// with direct Apply and Revert affordances. The count text opens the
-/// statement-preview modal; the two icons act without confirmation.
-class _PendingActions extends StatelessWidget {
-  const _PendingActions({required this.tab, required this.count});
+/// Page-number paginator: `‹` chevron, condensed page numbers with `…`
+/// gaps around the current page, `›` chevron. Reads as a typeset
+/// breadcrumb rather than a button group — current page is bold + accent
+/// text only, siblings are plain muted clickable numbers; no filled
+/// chips, no per-number borders.
+class _PageNumbers extends StatelessWidget {
+  const _PageNumbers({required this.tab});
 
   final TableTab tab;
-  final int count;
 
   @override
   Widget build(BuildContext context) {
-    final busy = tab.applying;
-    return Container(
-      height: 22,
-      decoration: BoxDecoration(
-        color: AppColors.accentSoft,
-        borderRadius: Radii.brSm,
-        border: Border.all(color: AppColors.accentSoft),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Hoverable(
-            cursor: SystemMouseCursors.click,
-            onTap: () => showPendingForTab(context, tab),
-            builder: (context, hovering) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: hovering
-                    ? AppColors.accent.withValues(alpha: 0.18)
-                    : Colors.transparent,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(4),
-                  bottomLeft: Radius.circular(4),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 5,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: AppColors.accent,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '$count pending edit${count == 1 ? '' : 's'}',
-                    style: AppTheme.mono(
-                      size: 11,
-                      color: AppColors.accent,
-                      weight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
+    final tabs = appState.tabsController;
+    final pageCount = tab.pageCount;
+    final current = tab.page + 1;
+    final canPrev = tab.page > 0 && !tab.loading;
+    final canNext = tab.page < pageCount - 1 && !tab.loading;
+    final pages = _pageList(current, pageCount);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PbChev(
+          icon: Icons.chevron_left,
+          tooltip: 'Previous page',
+          onPressed: canPrev
+              ? () => tabs.loadTablePage(tab, tab.page - 1)
+              : null,
+        ),
+        for (final p in pages)
+          if (p == null)
+            const _PageEllipsis()
+          else
+            _PageItem(
+              page: p,
+              active: p == current,
+              onTap: (p == current || tab.loading)
+                  ? null
+                  : () => tabs.loadTablePage(tab, p - 1),
             ),
-          ),
-          Container(
-            width: 1,
-            height: 22,
-            color: AppColors.accent.withValues(alpha: 0.25),
-          ),
-          _PendingIcon(
-            icon: busy ? null : Icons.arrow_upward,
-            tooltip: 'Apply pending edits',
-            busy: busy,
-            onTap: busy
-                ? null
-                : () => applyEditsForTab(context, tab),
-          ),
-          Container(
-            width: 1,
-            height: 22,
-            color: AppColors.accent.withValues(alpha: 0.25),
-          ),
-          _PendingIcon(
-            icon: Icons.close,
-            tooltip: 'Discard pending edits',
-            trailing: true,
-            onTap: busy
-                ? null
-                : () => appState.tabsController.resetTableEdits(tab),
-          ),
-        ],
-      ),
+        PbChev(
+          icon: Icons.chevron_right,
+          tooltip: 'Next page',
+          onPressed: canNext
+              ? () => tabs.loadTablePage(tab, tab.page + 1)
+              : null,
+        ),
+      ],
     );
   }
 }
 
-class _PendingIcon extends StatelessWidget {
-  const _PendingIcon({
-    required this.icon,
-    required this.tooltip,
+/// Compact page list with ellipsis markers. Pins first and last pages,
+/// renders a sibling window around [current] (±3 by default), and uses
+/// `null` placeholders for any gap wider than one number. Near the
+/// edges the window is shifted away from the boundary so the visible
+/// count stays close to [maxVisible] regardless of where [current] sits.
+List<int?> _pageList(int current, int total, {int maxVisible = 11}) {
+  if (total <= 1) return const [1];
+  if (total <= maxVisible) return [for (var i = 1; i <= total; i++) i];
+
+  // Inner window: leave room for first, last, and two ellipsis slots.
+  final inner = maxVisible - 4;
+  final half = inner ~/ 2;
+  var start = current - half;
+  var end = current + half;
+  if (start < 2) {
+    end += 2 - start;
+    start = 2;
+  }
+  if (end > total - 1) {
+    start -= end - (total - 1);
+    end = total - 1;
+    if (start < 2) start = 2;
+  }
+
+  final pages = <int?>[1];
+  if (start > 2) pages.add(null);
+  for (var i = start; i <= end; i++) {
+    pages.add(i);
+  }
+  if (end < total - 1) pages.add(null);
+  pages.add(total);
+  return pages;
+}
+
+class _PageItem extends StatelessWidget {
+  const _PageItem({
+    required this.page,
+    required this.active,
     required this.onTap,
-    this.busy = false,
-    this.trailing = false,
   });
 
-  final IconData? icon;
-  final String tooltip;
+  final int page;
+  final bool active;
   final VoidCallback? onTap;
-  final bool busy;
-  final bool trailing;
 
   @override
   Widget build(BuildContext context) {
     final enabled = onTap != null;
-    return Tooltip(
-      message: tooltip,
-      child: Hoverable(
-        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-        onTap: onTap,
-        builder: (context, hovering) => Container(
-          width: 24,
+    return Hoverable(
+      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onTap: onTap,
+      builder: (context, hovering) {
+        final Color fg;
+        if (active) {
+          fg = AppColors.accent;
+        } else if (hovering && enabled) {
+          fg = AppColors.textPrimary;
+        } else {
+          fg = AppColors.textMuted;
+        }
+        return Container(
+          constraints: const BoxConstraints(minWidth: 16),
           height: 22,
+          padding: const EdgeInsets.symmetric(horizontal: 5),
           alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: hovering && enabled
-                ? AppColors.accent.withValues(alpha: 0.18)
-                : Colors.transparent,
-            borderRadius: trailing
-                ? const BorderRadius.only(
-                    topRight: Radius.circular(4),
-                    bottomRight: Radius.circular(4),
-                  )
-                : BorderRadius.zero,
+          child: Text(
+            '$page',
+            style: AppTheme.mono(
+              size: 10.5,
+              color: fg,
+              weight: active ? FontWeight.w700 : FontWeight.w500,
+            ),
           ),
-          child: busy
-              ? SizedBox(
-                  width: 10,
-                  height: 10,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 1.4,
-                    color: AppColors.accent,
-                  ),
-                )
-              : Icon(
-                  icon,
-                  size: 12,
-                  color: enabled
-                      ? AppColors.accent
-                      : AppColors.accent.withValues(alpha: 0.4),
-                ),
+        );
+      },
+    );
+  }
+}
+
+class _PageEllipsis extends StatelessWidget {
+  const _PageEllipsis();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 14,
+      height: 22,
+      child: Center(
+        child: Text(
+          '…',
+          style: AppTheme.mono(size: 10.5, color: AppColors.text4),
         ),
       ),
     );
