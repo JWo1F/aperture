@@ -245,6 +245,24 @@ class PostgresService implements DbService {
   /// to bare SELECTs and shaping the driver result into a [QueryResult].
   /// Logging happens in [execute] so this method just translates the
   /// outcome — no separate log entry is emitted here.
+  /// Sends the wire-protocol cancel handshake to the backend running this
+  /// connection's current statement. The handshake is `cancelPendingStatement`
+  /// on the concrete `PgConnectionImplementation` — the package's public
+  /// `Connection` interface omits it, so a `dynamic` dispatch is the only
+  /// way to reach it without depending on `src/`. The method is what the
+  /// package's own timeout helper uses; same mechanism, user-initiated.
+  /// Swallows errors: cancelling a dead/already-finished statement isn't a
+  /// failure the caller can act on.
+  @override
+  Future<void> cancelCurrent() async {
+    final conn = _connection;
+    if (conn == null || !conn.isOpen) return;
+    try {
+      final dynamic c = conn;
+      await c.cancelPendingStatement();
+    } catch (_) {}
+  }
+
   @override
   Future<QueryResult> runQuery(String sql) async {
     final safe = applyDefaultLimit(sql, limit: defaultSelectLimit);

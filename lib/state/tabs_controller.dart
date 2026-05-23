@@ -652,7 +652,7 @@ class TabsController extends ChangeNotifier {
     final service = session.service;
     final sql = sqlOverride ?? tab.sql;
     if (service == null || sql.trim().isEmpty || tab.running) return;
-    tab.beginRun();
+    tab.beginRun(sql: sql);
     final result = await service.runQuery(sql);
     final message = QueryMessage(
       timestamp: DateTime.now(),

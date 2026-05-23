@@ -53,6 +53,14 @@ abstract interface class DbService {
   /// [QueryResult]. Bare `SELECT`s without a `LIMIT` are capped.
   Future<QueryResult> runQuery(String sql);
 
+  /// Best-effort cancel of the statement currently in flight.
+  ///
+  /// Postgres uses the wire-protocol cancel handshake (`pg_cancel_backend`
+  /// under the hood). SQLite's Dart driver doesn't expose `sqlite3_interrupt`,
+  /// so the in-flight statement runs to completion — the run-all loop still
+  /// breaks at the next iteration via the tab's cancel flag.
+  Future<void> cancelCurrent();
+
   /// Total row count for a relation under the active filter.
   Future<int> countRows(DbTable table, {String filter = ''});
 

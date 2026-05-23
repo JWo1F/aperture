@@ -39,6 +39,14 @@ class LineBand {
 /// One widget powers the multi-line SQL editor, the single-line clause-bar
 /// inputs, and the JSON cell editor — all three share metrics so the same
 /// font, padding, and caret rules apply everywhere.
+///
+/// Multi-line layout: a single outer [SingleChildScrollView] is the only
+/// scroll source. The `TextField` itself sits inside a [SizedBox] sized to
+/// `metrics.totalHeightPx + padding` with `NeverScrollableScrollPhysics`,
+/// so it never owns the scroll — gutter, bands, and field all share one
+/// coordinate space inside the scroll content. Caret-follow on keyboard
+/// input is wired manually via [_ensureCaretVisible] because the field's
+/// own `_showCaretOnScreen` no-ops with frozen physics.
 class CodeEditor extends StatefulWidget {
   const CodeEditor({
     super.key,
@@ -70,12 +78,16 @@ class CodeEditor extends StatefulWidget {
   /// want highlight tinting via the `highlight` package grammar.
   final TextEditingController controller;
   final FocusNode? focusNode;
+
+  /// Drives the outer [SingleChildScrollView] in multi-line mode. The
+  /// field itself never scrolls, so passing a controller here is the
+  /// canonical way to observe or drive the editor's scroll position.
   final ScrollController? scrollController;
 
   final bool showLineNumbers;
 
   /// Single-line mode disables expanding height, multi-line editing, and the
-  /// scroll controller hook. Bare Enter falls through to [onSubmit].
+  /// scroll wrapping. Bare Enter falls through to [onSubmit].
   final bool singleLine;
 
   /// Multi-line only — when true the TextField expands to fill its parent.
@@ -109,20 +121,9 @@ class _CodeEditorState extends State<CodeEditor> {
   bool _ownsScroll = false;
   final LayerLink _link = LayerLink();
 
-  /// Drives only the gutter / line-icon / band overlay rebuilds; the
-  /// field itself doesn't depend on scroll offset.
-  final ValueNotifier<double> _scrollOffset = ValueNotifier<double>(0);
-
   final LineMetrics _metrics = LineMetrics();
 
   late final PopupOverlay _popup;
-
-  /// Merged listenable for the decoration subtree: gutter line numbers,
-  /// line icons, bands, and the empty-text hint all repaint when the
-  /// controller's text changes or the scroll offset shifts. The field
-  /// itself sits outside this listener — TextField runs its own listener
-  /// against the controller, so it doesn't need an outer rebuild.
-  late Listenable _decorationsListenable;
 
   TextStyle get _bodyStyle => GoogleFonts.jetBrainsMono(
     fontSize: widget.fontSize,
@@ -159,11 +160,6 @@ class _CodeEditorState extends State<CodeEditor> {
       fontSize: () => widget.fontSize,
       suggest: widget.suggest,
     );
-
-    _decorationsListenable = Listenable.merge([
-      widget.controller,
-      _scrollOffset,
-    ]);
   }
 
   @override
@@ -172,10 +168,6 @@ class _CodeEditorState extends State<CodeEditor> {
     if (old.controller != widget.controller) {
       old.controller.removeListener(_onControllerChange);
       widget.controller.addListener(_onControllerChange);
-      _decorationsListenable = Listenable.merge([
-        widget.controller,
-        _scrollOffset,
-      ]);
     }
     if (old.focusNode != widget.focusNode) {
       _focus.removeListener(_onFocusChange);
@@ -207,7 +199,6 @@ class _CodeEditorState extends State<CodeEditor> {
     if (_ownsFocus) _focus.dispose();
     _scroll.removeListener(_onScroll);
     if (_ownsScroll) _scroll.dispose();
-    _scrollOffset.dispose();
     super.dispose();
   }
 
@@ -320,11 +311,7 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _onScroll() {
-    final next = _scroll.hasClients ? _scroll.offset : 0.0;
-    if ((next - _scrollOffset.value).abs() > 0.5) {
-      _scrollOffset.value = next;
-      _popup.controller.refreshAnchor();
-    }
+    _popup.controller.refreshAnchor();
   }
 
   void _onFocusChange() {
@@ -334,13 +321,61 @@ class _CodeEditorState extends State<CodeEditor> {
   void _onControllerChange() {
     widget.onChanged?.call(widget.controller.text);
     _popup.controller.onEditingChanged();
+    if (!widget.singleLine) {
+      // Defer until the field has laid out its new content so caret
+      // metrics reflect the post-edit state, then bring the caret back
+      // into view if the edit pushed it past the viewport edge.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _ensureCaretVisible();
+      });
+    }
+  }
+
+  /// The field has frozen scroll physics, so Flutter's built-in
+  /// `RenderEditable._showCaretOnScreen` no-ops. This manual follow runs
+  /// after every controller change and scrolls the outer view just
+  /// enough to keep the caret inside the viewport with a small margin.
+  void _ensureCaretVisible() {
+    if (!_scroll.hasClients || !_focus.hasFocus) return;
+    final position = _scroll.position;
+    final viewportH = position.viewportDimension;
+    if (viewportH <= 0) return;
+    final cursor = widget.controller.selection.extentOffset;
+    if (cursor < 0) return;
+    final span = widget.controller.buildTextSpan(
+      context: context,
+      style: _bodyStyle,
+      withComposing: false,
+    );
+    final caret = _metrics.caretOffset(
+      context: context,
+      span: span,
+      cursor: cursor,
+      textLength: widget.controller.text.length,
+    );
+    final caretTop = widget.padding.top + caret.dy;
+    final caretBottom = caretTop + _rowH;
+    const margin = 12.0;
+    final viewTop = position.pixels;
+    final viewBottom = viewTop + viewportH;
+    if (caretTop < viewTop + margin) {
+      final target = (caretTop - margin).clamp(0.0, position.maxScrollExtent);
+      _scroll.jumpTo(target);
+    } else if (caretBottom > viewBottom - margin) {
+      final target = (caretBottom + margin - viewportH).clamp(
+        0.0,
+        position.maxScrollExtent,
+      );
+      _scroll.jumpTo(target);
+    }
   }
 
   // --- Layout helpers -----------------------------------------------------
 
-  /// Pixel offset just below the caret, relative to the editor box. Uses the
-  /// same styled span the field paints to honour wrap differences caused by
-  /// bold keywords.
+  /// Pixel offset just below the caret, in the editor's *viewport* frame
+  /// (the link target's coordinate space). Subtracts the outer scroll
+  /// offset because the popup overlay is anchored to the viewport box,
+  /// not the scrolled content.
   Offset _caretAnchor(int cursor) {
     final span = widget.controller.buildTextSpan(
       context: context,
@@ -354,8 +389,9 @@ class _CodeEditorState extends State<CodeEditor> {
       textLength: widget.controller.text.length,
     );
     if (caret == Offset.zero && _metrics.width <= 0) return Offset.zero;
+    final scrollOffset = _scroll.hasClients ? _scroll.offset : 0.0;
     final x = _effectiveGutterWidth + widget.padding.left + caret.dx;
-    final y = widget.padding.top + caret.dy - _scrollOffset.value;
+    final y = widget.padding.top + caret.dy - scrollOffset;
     return Offset(x, y + _rowH + 4);
   }
 
@@ -377,12 +413,36 @@ class _CodeEditorState extends State<CodeEditor> {
     );
   }
 
+  double _topPx(int logical) => _metrics.topPx(logical);
+
+  double _heightPx(int logical) => _metrics.heightPx(logical);
+
+  /// Pixel row height for one visual line — falls back to the static
+  /// (fontSize * lineHeight) before the painter has been measured.
+  double get _rowH => _metrics.rowHeight > 0 ? _metrics.rowHeight : _lineBox;
+
   // --- Build --------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     final bg = widget.background ?? AppColors.bg;
     _popup.attach(context);
+
+    // Single-line mode is a plain padded TextField — no scroll wrap, no
+    // gutter, no bands. The field handles its own horizontal scroll for
+    // long inputs.
+    if (widget.singleLine) {
+      return ClipRect(
+        child: CompositedTransformTarget(
+          link: _link,
+          child: Container(
+            color: bg,
+            padding: widget.padding,
+            child: _buildField(),
+          ),
+        ),
+      );
+    }
 
     return ClipRect(
       child: CompositedTransformTarget(
@@ -394,58 +454,53 @@ class _CodeEditorState extends State<CodeEditor> {
                 _effectiveGutterWidth -
                 widget.padding.left -
                 widget.padding.right;
-
-            // Built once per layout pass — both the gutter-and-field row
-            // and the bare-padded variant share the same Widget instance,
-            // so Element reuse keeps the TextField from rebuilding on
-            // scroll / text-driven decoration repaints.
-            final padded = Container(
-              color: bg,
-              padding: widget.padding,
-              child: _buildField(),
-            );
-            final fieldRow = _hasGutter
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Container(
-                        width: _effectiveGutterWidth,
-                        decoration: BoxDecoration(
-                          color: bg,
-                          border: Border(
-                            right: BorderSide(
-                              color: AppColors.hairline,
-                              width: 1,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Expanded(child: padded),
-                    ],
-                  )
-                : padded;
-
             return ListenableBuilder(
-              listenable: _decorationsListenable,
+              listenable: widget.controller,
               builder: (context, _) {
                 _ensureMetrics(context, bodyWidth);
+                final viewportH = constraints.hasBoundedHeight
+                    ? constraints.maxHeight
+                    : 0.0;
+                final naturalH =
+                    widget.padding.top +
+                    widget.padding.bottom +
+                    (_metrics.totalHeightPx > 0
+                        ? _metrics.totalHeightPx
+                        : _rowH);
+                // The scroll content always fills the viewport so the
+                // gutter's hairline border extends past the last line
+                // when the document is short.
+                final scrollContentH = naturalH > viewportH
+                    ? naturalH
+                    : viewportH;
                 final lines = _logicalLineCount;
-                return Stack(
-                  clipBehavior: Clip.hardEdge,
+                final body = Stack(
                   children: [
-                    fieldRow,
-                    // Bands paint on top of the body so the near-transparent
-                    // accent tint shows through; IgnorePointer keeps caret
-                    // hits flowing to the field.
+                    Positioned.fill(
+                      child: Container(
+                        color: bg,
+                        padding: widget.padding,
+                        child: _buildField(),
+                      ),
+                    ),
                     for (final band in widget.lineBands) _buildBand(band),
-                    if (widget.showLineNumbers)
-                      for (var i = 0; i < lines; i++) _buildLineNumber(i),
-                    if (widget.lineIcon != null)
-                      for (var i = 0; i < lines; i++) ..._buildLineIcon(i),
                     if (widget.controller.text.isEmpty &&
                         widget.hintText != null)
                       _buildHint(),
                   ],
+                );
+                final Widget content = _hasGutter
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildGutter(lines, bg),
+                          Expanded(child: body),
+                        ],
+                      )
+                    : body;
+                return SingleChildScrollView(
+                  controller: _scroll,
+                  child: SizedBox(height: scrollContentH, child: content),
                 );
               },
             );
@@ -455,19 +510,15 @@ class _CodeEditorState extends State<CodeEditor> {
     );
   }
 
-  double _topPx(int logical) => _metrics.topPx(logical);
-
-  double _heightPx(int logical) => _metrics.heightPx(logical);
-
-  /// Pixel row height for one visual line — falls back to the static
-  /// (fontSize * lineHeight) before the painter has been measured.
-  double get _rowH => _metrics.rowHeight > 0 ? _metrics.rowHeight : _lineBox;
-
   Widget _buildField() {
     return TextField(
       controller: widget.controller,
       focusNode: _focus,
-      scrollController: widget.singleLine ? null : _scroll,
+      // Freeze the field's own scroll in multi-line mode — the outer
+      // SingleChildScrollView is the only scroll source.
+      scrollPhysics: widget.singleLine
+          ? null
+          : const NeverScrollableScrollPhysics(),
       maxLines: widget.singleLine ? 1 : null,
       minLines: null,
       expands: widget.singleLine ? false : widget.expands,
@@ -485,14 +536,10 @@ class _CodeEditorState extends State<CodeEditor> {
         ? band.startLine
         : band.endLine;
     final end = band.startLine <= band.endLine ? band.endLine : band.startLine;
-    final top = widget.padding.top + _topPx(start) - _scrollOffset.value;
-    final bottom =
-        widget.padding.top +
-        _topPx(end) +
-        _heightPx(end) -
-        _scrollOffset.value;
+    final top = widget.padding.top + _topPx(start);
+    final bottom = widget.padding.top + _topPx(end) + _heightPx(end);
     return Positioned(
-      left: _effectiveGutterWidth,
+      left: 0,
       right: 0,
       top: top,
       height: (bottom - top).clamp(0, double.infinity),
@@ -511,60 +558,78 @@ class _CodeEditorState extends State<CodeEditor> {
     );
   }
 
-  Widget _buildLineNumber(int i) {
-    final digitsWidth = _effectiveGutterWidth - widget.iconColumnWidth - 8;
-    return Positioned(
-      left: 0,
-      top: widget.padding.top + _topPx(i) - _scrollOffset.value,
-      width: digitsWidth,
-      height: _rowH,
-      child: Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: Text(
-          '${i + 1}',
-          textAlign: TextAlign.right,
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: widget.fontSize,
-            height: widget.lineHeight,
-            color: AppColors.text4,
+  Widget _buildGutter(int lines, Color bg) {
+    return SizedBox(
+      width: _effectiveGutterWidth,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: bg,
+          border: Border(
+            right: BorderSide(color: AppColors.hairline, width: 1),
           ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(height: widget.padding.top),
+            for (var i = 0; i < lines; i++) _buildGutterRow(i),
+          ],
         ),
       ),
     );
   }
 
-  Iterable<Widget> _buildLineIcon(int i) sync* {
-    final icon = widget.lineIcon!(i);
-    if (icon == null) return;
-    yield Positioned(
-      left: _effectiveGutterWidth - widget.iconColumnWidth - 2,
-      top: widget.padding.top + _topPx(i) - _scrollOffset.value,
-      width: widget.iconColumnWidth,
-      height: _rowH,
-      child: MouseRegion(
-        cursor: icon.onTap == null
-            ? SystemMouseCursors.basic
-            : SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: icon.onTap,
-          child: Tooltip(
-            message: icon.tooltip ?? '',
-            waitDuration: const Duration(milliseconds: 400),
-            child: Text.rich(
-              TextSpan(
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: widget.fontSize,
-                  height: widget.lineHeight,
-                ),
-                children: [
-                  WidgetSpan(
-                    alignment: PlaceholderAlignment.middle,
-                    child: icon.icon,
+  /// One gutter cell. Its outer height matches `metrics.heightPx(i)`, so
+  /// a wrapped logical line gets the full multi-row span — but the icon
+  /// and the number themselves sit in row-height boxes pinned to the top
+  /// of that span (matching the first visual row of the line).
+  Widget _buildGutterRow(int i) {
+    final lineIcon = widget.lineIcon?.call(i);
+    final h = _metrics.heightPx(i) > 0 ? _metrics.heightPx(i) : _rowH;
+    final digitsWidth = _effectiveGutterWidth - widget.iconColumnWidth - 8;
+    return SizedBox(
+      height: h,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.showLineNumbers)
+            SizedBox(
+              width: digitsWidth,
+              height: _rowH,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: Text(
+                  '${i + 1}',
+                  textAlign: TextAlign.right,
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: widget.fontSize,
+                    height: widget.lineHeight,
+                    color: AppColors.text4,
                   ),
-                ],
+                ),
               ),
             ),
+          SizedBox(
+            width: widget.iconColumnWidth,
+            height: _rowH,
+            child: lineIcon == null ? null : _buildLineIcon(lineIcon),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLineIcon(LineIcon icon) {
+    return MouseRegion(
+      cursor: icon.onTap == null
+          ? SystemMouseCursors.basic
+          : SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: icon.onTap,
+        child: Tooltip(
+          message: icon.tooltip ?? '',
+          waitDuration: const Duration(milliseconds: 400),
+          child: Center(child: icon.icon),
         ),
       ),
     );
@@ -578,7 +643,7 @@ class _CodeEditorState extends State<CodeEditor> {
           fontStyle: FontStyle.italic,
         );
     return Positioned(
-      left: _effectiveGutterWidth + widget.padding.left,
+      left: widget.padding.left,
       top: widget.padding.top,
       child: IgnorePointer(child: Text(widget.hintText!, style: style)),
     );

@@ -81,6 +81,8 @@ class QueryTab extends WorkspaceTab {
   String _sql;
   QueryResult? _result;
   bool _running = false;
+  String? _runningSql;
+  bool _cancelRequested = false;
   DateTime? _lastRefreshedAt;
   String? _lastRunSql;
   Duration? _autoRefreshInterval;
@@ -132,6 +134,16 @@ class QueryTab extends WorkspaceTab {
 
   bool get running => _running;
 
+  /// Exact SQL currently in flight, or null when idle. The query editor
+  /// reads this to decide which gutter row shows the stop square — a
+  /// run-all loop updates it before each statement so the indicator
+  /// hops down through the script as the loop advances.
+  String? get runningSql => _runningSql;
+
+  /// True after [requestCancel]; the run-all loop reads it between
+  /// statements to break early. Cleared on the next [beginRun].
+  bool get cancelRequested => _cancelRequested;
+
   /// Active section below the editor.
   QueryResultsView get view => _view;
 
@@ -141,10 +153,23 @@ class QueryTab extends WorkspaceTab {
     notifyListeners();
   }
 
-  /// Mark a query as in-flight. Pairs with [completeRun].
-  void beginRun() {
+  /// Mark a query as in-flight. Pairs with [completeRun]. [sql] records
+  /// the exact statement being sent so the editor's gutter can swap the
+  /// matching line's play icon for a stop square.
+  void beginRun({String? sql}) {
     if (_running) return;
     _running = true;
+    _runningSql = sql;
+    _cancelRequested = false;
+    notifyListeners();
+  }
+
+  /// Flip the cancel flag. The runner reads it between statements and
+  /// the editor uses it to render the stop square in a pressed state.
+  /// Actual in-flight cancellation (Postgres only) is the caller's job.
+  void requestCancel() {
+    if (!_running || _cancelRequested) return;
+    _cancelRequested = true;
     notifyListeners();
   }
 
@@ -171,6 +196,7 @@ class QueryTab extends WorkspaceTab {
       _messages.removeRange(0, _messages.length - maxMessages);
     }
     _running = false;
+    _runningSql = null;
     notifyListeners();
   }
 

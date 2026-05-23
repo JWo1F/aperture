@@ -16,9 +16,14 @@ class LineMetrics {
   List<double> _tops = const [0];
   List<double> _heights = const [0];
   double _rowHeight = 0;
+  double _totalHeight = 0;
 
   double get width => _width;
   double get rowHeight => _rowHeight;
+
+  /// Total painted text height at the cached [width] — the sum of every
+  /// logical line's visual rows. Zero before the first [ensure].
+  double get totalHeightPx => _totalHeight;
 
   /// Lays out [span] at [bodyWidth] and records each logical line's top
   /// + height. Caller is responsible for passing the same styled span
@@ -66,6 +71,7 @@ class LineMetrics {
     _width = bodyWidth;
     _tops = topsPx;
     _heights = heightsPx;
+    _totalHeight = totalHeight;
   }
 
   double topPx(int logical) {

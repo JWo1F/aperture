@@ -122,16 +122,23 @@ class _QueryEditorState extends State<QueryEditor> {
 
     // The postgres extended query protocol doesn't allow multiple commands in
     // one prepared statement. Send each statement separately and surface the
-    // last result; stop on the first failure so the user sees the error.
+    // last result; stop on the first failure (or a user-requested cancel) so
+    // the user sees the error or stops the chain.
     for (final s in stmts) {
       await tabs.runQuery(widget.tab, sqlOverride: s.text);
       if (widget.tab.result?.isError ?? false) break;
+      if (widget.tab.cancelRequested) break;
     }
   }
 
   void _runStatement(SqlStatement stmt) {
     widget.tab.setView(QueryResultsView.results);
     appState.tabsController.runQuery(widget.tab, sqlOverride: stmt.text);
+  }
+
+  void _cancelRunning() {
+    widget.tab.requestCancel();
+    appState.session.service?.cancelCurrent();
   }
 
   void _runAtCursor() {
@@ -244,6 +251,18 @@ class _QueryEditorState extends State<QueryEditor> {
         lineIcon: (line) {
           final stmt = stmtByLine[line];
           if (stmt == null) return null;
+          final isRunning = tab.running && tab.runningSql == stmt.text;
+          if (isRunning) {
+            return LineIcon(
+              icon: Icon(
+                Icons.stop_rounded,
+                size: 14,
+                color: AppColors.error,
+              ),
+              tooltip: 'Cancel running statement',
+              onTap: tab.cancelRequested ? null : _cancelRunning,
+            );
+          }
           return LineIcon(
             icon: Icon(
               Icons.play_arrow_rounded,
