@@ -49,7 +49,7 @@ class TabsController extends ChangeNotifier {
   /// number, …) lives on each [WorkspaceTab]'s own [ChangeNotifier]. Toolbar
   /// surfaces that derive from aggregate-across-tabs state — the pending-edit
   /// pill (`unappliedEditCount`) and the export-availability key
-  /// (`activeTab.result`) — read through `context.select<TabsController, …>`,
+  /// (`activeTab.result`) — read through a `Selector` on this controller,
   /// which only re-runs when the controller itself notifies. Forwarding every
   /// open tab's notifications back through this controller is what makes
   /// those selectors live: without it, a cell edit on the active tab repaints

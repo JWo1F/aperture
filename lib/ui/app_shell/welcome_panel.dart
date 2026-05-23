@@ -1,12 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../models/connection_config.dart';
 import '../../models/time_ago.dart';
-import '../../state/app_state.dart';
-import '../../state/app_store.dart';
+import '../../state/app_globals.dart';
 import '../../state/session_controller.dart';
 import '../../theme/app_theme.dart';
 import '../about/about_dialog.dart';
@@ -23,9 +21,15 @@ class WelcomePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.read<AppState>();
-    final session = context.read<SessionController>();
-    final store = context.watch<AppStore>();
+    return ListenableBuilder(
+      listenable: appState.store,
+      builder: (context, _) => _build(context),
+    );
+  }
+
+  Widget _build(BuildContext context) {
+    final session = appState.session;
+    final store = appState.store;
     final connecting = session.status == ConnectionStatus.connecting;
     final recents = store.recentConnections;
     final hasAny = store.connections.isNotEmpty;

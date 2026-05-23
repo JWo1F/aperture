@@ -1,24 +1,28 @@
 import 'package:flutter/material.dart';
 
 import '../../models/db_object.dart';
+import '../../state/app_globals.dart';
 import '../../state/session_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../about/about_dialog.dart';
 import 'item_model.dart';
-import 'palette_deps.dart';
 
-/// Builds the palette's pool of searchable items from the captured controllers.
+/// Builds the palette's pool of searchable items from the live controllers.
 /// The palette's [BuildContext] is needed by a single command (About) which
 /// opens a modal anchored on the live overlay.
 class PaletteItemSource {
-  PaletteItemSource({required this.deps, required this.context});
+  PaletteItemSource({required this.context});
 
-  final PaletteDeps deps;
   final BuildContext context;
 
   List<PaletteItem> commands() {
-    final connected = deps.session.status == ConnectionStatus.connected;
+    final session = appState.session;
+    final tabs = appState.tabsController;
+    final history = appState.history;
+    final store = appState.store;
+    final eventLog = appState.eventLog;
+    final connected = session.status == ConnectionStatus.connected;
     final out = <PaletteItem>[];
 
     if (connected) {
@@ -28,9 +32,9 @@ class PaletteItemSource {
         subtitle: 'Open a blank SQL editor tab',
         icon: Icons.terminal_rounded,
         tokens: 'sql editor scratch run',
-        run: deps.tabs.newQueryTab,
+        run: tabs.newQueryTab,
       ));
-      final active = deps.tabs.activeTab;
+      final active = tabs.activeTab;
       if (active is TableTab) {
         out.add(PaletteItem(
           kind: PaletteKind.command,
@@ -38,7 +42,7 @@ class PaletteItemSource {
           subtitle: 'Re-fetch the current page of ${active.table.name}',
           icon: Icons.sync_rounded,
           tokens: 'reload requery',
-          run: () => deps.tabs.refreshTable(active),
+          run: () => tabs.refreshTable(active),
         ));
       }
       out.add(PaletteItem(
@@ -47,26 +51,26 @@ class PaletteItemSource {
         subtitle: 'Re-introspect schemas, tables and types',
         icon: Icons.refresh_rounded,
         tokens: 'reload schema introspect',
-        run: deps.appState.refreshCatalog,
+        run: appState.refreshCatalog,
       ));
-      if (deps.history.canGoBack) {
+      if (history.canGoBack) {
         out.add(PaletteItem(
           kind: PaletteKind.command,
           title: 'Go back',
           subtitle: 'Step back through tab and filter history  ⌘[',
           icon: Icons.arrow_back_rounded,
           tokens: 'history previous navigate',
-          run: deps.appState.historyBack,
+          run: appState.historyBack,
         ));
       }
-      if (deps.history.canGoForward) {
+      if (history.canGoForward) {
         out.add(PaletteItem(
           kind: PaletteKind.command,
           title: 'Go forward',
           subtitle: 'Step forward through history  ⌘]',
           icon: Icons.arrow_forward_rounded,
           tokens: 'history next navigate',
-          run: deps.appState.historyForward,
+          run: appState.historyForward,
         ));
       }
     }
@@ -77,7 +81,7 @@ class PaletteItemSource {
       subtitle: 'Show or hide the schema browser',
       icon: Icons.view_sidebar_outlined,
       tokens: 'panel tree tables hide',
-      run: deps.store.toggleSidebar,
+      run: store.toggleSidebar,
     ));
     out.add(PaletteItem(
       kind: PaletteKind.command,
@@ -85,26 +89,26 @@ class PaletteItemSource {
       subtitle: 'Show or hide the SQL event log  ⌘L',
       icon: Icons.receipt_long_outlined,
       tokens: 'events console history queries',
-      run: deps.eventLog.toggleVisible,
+      run: eventLog.toggleVisible,
     ));
-    final dark = deps.store.brightness == AppBrightness.dark;
+    final dark = store.brightness == AppBrightness.dark;
     out.add(PaletteItem(
       kind: PaletteKind.command,
       title: dark ? 'Switch to light theme' : 'Switch to dark theme',
       subtitle: 'Flip the workspace between Aperture dark and light',
       icon: dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
       tokens: 'appearance dark light mode color',
-      run: deps.store.toggleBrightness,
+      run: store.toggleBrightness,
     ));
 
     if (connected) {
       out.add(PaletteItem(
         kind: PaletteKind.command,
         title: 'Disconnect',
-        subtitle: deps.session.activeConnection?.summary ?? 'Close the session',
+        subtitle: session.activeConnection?.summary ?? 'Close the session',
         icon: Icons.power_settings_new_rounded,
         tokens: 'close session logout end',
-        run: deps.appState.disconnect,
+        run: appState.disconnect,
       ));
     }
     out.add(PaletteItem(
@@ -119,7 +123,7 @@ class PaletteItemSource {
   }
 
   List<PaletteItem> openTabs() {
-    final tabs = deps.tabs;
+    final tabs = appState.tabsController;
     final activeId = tabs.activeTab?.id;
     final out = <PaletteItem>[];
     for (var i = 0; i < tabs.tabs.length; i++) {
@@ -143,7 +147,9 @@ class PaletteItemSource {
   }
 
   List<PaletteItem> savedQueries() {
-    final saved = deps.session.activeConnection?.savedQueries ?? const [];
+    final tabs = appState.tabsController;
+    final saved =
+        appState.session.activeConnection?.savedQueries ?? const [];
     return [
       for (final q in saved)
         PaletteItem(
@@ -152,15 +158,15 @@ class PaletteItemSource {
           subtitle: sqlPreview(q.sql),
           icon: Icons.bookmark_outline_rounded,
           tokens: q.sql,
-          run: () => deps.tabs.openSavedQuery(q),
+          run: () => tabs.openSavedQuery(q),
         ),
     ];
   }
 
   List<PaletteItem> connections() {
-    final activeId = deps.session.activeConnection?.id;
+    final activeId = appState.session.activeConnection?.id;
     return [
-      for (final c in deps.store.connections)
+      for (final c in appState.store.connections)
         PaletteItem(
           kind: PaletteKind.connection,
           title: c.name,
@@ -168,7 +174,7 @@ class PaletteItemSource {
           icon: c.id == activeId ? Icons.lan_rounded : Icons.lan_outlined,
           accent: c.id == activeId,
           tokens: '${c.host} ${c.database} ${c.username}',
-          run: () => deps.appState.connect(c),
+          run: () => appState.connect(c),
         ),
     ];
   }
@@ -180,13 +186,13 @@ class PaletteItemSource {
       subtitle: subtitle,
       icon: t.isView ? Icons.visibility_outlined : Icons.table_rows_outlined,
       tokens: '${t.schema} ${t.qualifiedName}',
-      run: () => deps.tabs.openTable(t),
+      run: () => appState.tabsController.openTable(t),
     );
   }
 
   List<PaletteItem> allTables() {
     final out = <PaletteItem>[];
-    for (final s in deps.catalog.schemas) {
+    for (final s in appState.catalog.schemas) {
       for (final t in s.tables) {
         out.add(tableItem(
           t,

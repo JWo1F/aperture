@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../../../../state/tabs_controller.dart';
+import '../../../../state/app_globals.dart';
 import '../../../../state/workspace_tab.dart';
 import 'plan_states.dart';
 import 'plan_tree_view.dart';
@@ -23,9 +22,9 @@ class QueryPlanView extends StatelessWidget {
 
   final QueryTab tab;
 
-  void _runExplain(BuildContext context) {
+  void _runExplain() {
     if ((tab.lastRunSql ?? '').trim().isEmpty) return;
-    context.read<TabsController>().loadQueryPlan(tab);
+    appState.tabsController.loadQueryPlan(tab);
   }
 
   @override
@@ -37,21 +36,21 @@ class QueryPlanView extends StatelessWidget {
     if (tab.planError != null) {
       return PlanError(
         message: tab.planError!,
-        onRetry: canExplain ? () => _runExplain(context) : null,
+        onRetry: canExplain ? _runExplain : null,
       );
     }
     final json = tab.planJson;
     if (json == null) {
       return PlanSuggestion(
         enabled: canExplain,
-        onRun: canExplain ? () => _runExplain(context) : null,
+        onRun: canExplain ? _runExplain : null,
       );
     }
     final stale = tab.lastRunSql != null && tab.planSourceSql != tab.lastRunSql;
     return PlanTreeView(
       planJson: json,
       stale: stale,
-      onRerun: () => _runExplain(context),
+      onRerun: _runExplain,
     );
   }
 }

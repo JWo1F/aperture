@@ -2,14 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:macos_window_utils/macos/ns_window_delegate.dart';
 import 'package:macos_window_utils/macos_window_utils.dart';
-import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
-import '../../state/app_store.dart';
-import '../../state/navigation_history.dart';
-import '../../state/tabs_controller.dart';
+import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
 import '../command_palette/command_palette.dart';
+import '../widgets/value_selector.dart';
 import 'connection_pill.dart';
 import 'toolbar_actions.dart';
 import 'toolbar_widgets.dart';
@@ -84,35 +81,48 @@ class _ToolbarState extends State<Toolbar> {
 
   @override
   Widget build(BuildContext context) {
-    // Each reactive bit is a separate selector so the toolbar only
-    // rebuilds when one of these actually changes. Brightness, history,
-    // pending-edit count and the active tab's exportable result are the
-    // only fields driving any visible change in here.
-    final appState = context.read<AppState>();
-    final store = context.read<AppStore>();
-    final tabs = context.read<TabsController>();
-    final pending = context.select<TabsController, int>(
-      (t) => t.unappliedEditCount,
+    // One Selector tuples every reactive bit the toolbar actually paints
+    // (brightness, history flags, export-availability for the active tab).
+    // The Selector gates rebuilds on `==` of the tuple, so a width drag
+    // (different AppStore field) or a cell edit (TabsController forwards
+    // every tab-tick) doesn't repaint the toolbar.
+    final store = appState.store;
+    final tabs = appState.tabsController;
+    final history = appState.history;
+    return Selector<(bool, bool, AppBrightness, String?, bool)>(
+      listenable: Listenable.merge([tabs, history, store]),
+      selector: () {
+        final tab = tabs.activeTab;
+        return (
+          history.canGoBack,
+          history.canGoForward,
+          store.brightness,
+          tab?.id,
+          exportableResult(tab) != null,
+        );
+      },
+      builder: (context, value) {
+        final (canGoBack, canGoForward, brightness, _, canExport) = value;
+        return _buildToolbar(
+          context: context,
+          canGoBack: canGoBack,
+          canGoForward: canGoForward,
+          brightness: brightness,
+          canExport: canExport,
+        );
+      },
     );
-    final canGoBack = context.select<NavigationHistory, bool>(
-      (h) => h.canGoBack,
-    );
-    final canGoForward = context.select<NavigationHistory, bool>(
-      (h) => h.canGoForward,
-    );
-    final brightness = context.select<AppStore, AppBrightness>(
-      (s) => s.brightness,
-    );
-    // Export availability tracks the active tab's id + its result
-    // existence. Selecting both as a record means switching tabs or
-    // running a query updates this; mere width drags don't.
-    final exportKey = context.select<TabsController, (String?, bool)>((t) {
-      final tab = t.activeTab;
-      final result = exportableResult(tab);
-      return (tab?.id, result != null);
-    });
-    final canExport = exportKey.$2;
+  }
 
+  Widget _buildToolbar({
+    required BuildContext context,
+    required bool canGoBack,
+    required bool canGoForward,
+    required AppBrightness brightness,
+    required bool canExport,
+  }) {
+    final store = appState.store;
+    final tabs = appState.tabsController;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanStart: (_) => _windowChannel.invokeMethod('startDrag'),
@@ -176,21 +186,10 @@ class _ToolbarState extends State<Toolbar> {
                   icon: Icons.ios_share,
                   tooltip: 'Export…',
                   onPressed: canExport
-                      ? () => openExportForActiveTab(
-                          context,
-                          tabs,
-                          tabs.activeTab,
-                        )
+                      ? () => openExportForActiveTab(context, tabs.activeTab)
                       : null,
                 ),
                 const Spacer(),
-                if (pending > 0) ...[
-                  PendingPill(
-                    count: pending,
-                    onTap: () => openPendingForActiveTab(context, tabs),
-                  ),
-                  const TbRail(),
-                ],
                 // Fixed-width search pill — making it Flexible would force it
                 // to compete with the Spacer above for leftover space, so on a
                 // wide window the spacer would collapse to half its slack and

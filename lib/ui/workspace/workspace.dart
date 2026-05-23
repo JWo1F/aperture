@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../../state/tabs_controller.dart';
+import '../../state/app_globals.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
+import '../widgets/value_selector.dart';
 import 'query_editor.dart';
 import 'schema_view.dart';
 import 'table_view.dart';
@@ -16,32 +16,33 @@ class Workspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tabsKey = context.select<TabsController, String>(
-      (t) => t.tabs.map((tab) => tab.id).join('|'),
-    );
-    final activeIndex = context.select<TabsController, int>(
-      (t) => t.activeIndex,
-    );
-
-    if (tabsKey.isEmpty) {
-      return const WorkspaceHome();
-    }
-
-    final tabs = context.read<TabsController>().tabs;
-    return Container(
-      color: AppColors.bg,
-      child: Column(
-        children: [
-          const RepaintBoundary(child: _TabStrip()),
-          Expanded(
-            child: IndexedStack(
-              index: activeIndex.clamp(0, tabs.length - 1),
-              sizing: StackFit.expand,
-              children: [for (final t in tabs) _content(t)],
-            ),
-          ),
-        ],
+    final controller = appState.tabsController;
+    return Selector<(String, int)>(
+      listenable: controller,
+      selector: () => (
+        controller.tabs.map((tab) => tab.id).join('|'),
+        controller.activeIndex,
       ),
+      builder: (_, value) {
+        final (tabsKey, activeIndex) = value;
+        if (tabsKey.isEmpty) return const WorkspaceHome();
+        final tabs = controller.tabs;
+        return Container(
+          color: AppColors.bg,
+          child: Column(
+            children: [
+              const RepaintBoundary(child: _TabStrip()),
+              Expanded(
+                child: IndexedStack(
+                  index: activeIndex.clamp(0, tabs.length - 1),
+                  sizing: StackFit.expand,
+                  children: [for (final t in tabs) _content(t)],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -63,64 +64,66 @@ class _TabStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tabsController = context.read<TabsController>();
+    final tabsController = appState.tabsController;
     // Depend on the tab set itself, not just the active index — closing a
     // non-active tab leaves activeIndex unchanged, and without this the
     // strip would keep rendering the already-closed tab.
-    context.select<TabsController, String>(
-      (t) => t.tabs.map((tab) => tab.id).join('|'),
-    );
-    final tabs = tabsController.tabs;
-    final activeIndex = context.select<TabsController, int>(
-      (t) => t.activeIndex,
-    );
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.bgDeep,
-        border: Border(
-          bottom: BorderSide(color: AppColors.border, width: 1),
-        ),
+    return Selector<(String, int)>(
+      listenable: tabsController,
+      selector: () => (
+        tabsController.tabs.map((tab) => tab.id).join('|'),
+        tabsController.activeIndex,
       ),
-      child: SizedBox(
-        height: AppLayout.tabHeight,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: Row(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (var i = 0; i < tabs.length; i++)
-                        ListenableBuilder(
-                          listenable: tabs[i],
-                          builder: (_, _) => _Tab(
-                            tab: tabs[i],
-                            active: i == activeIndex,
-                            onTap: () => tabsController.selectTab(i),
-                            onClose: () =>
-                                tabsController.closeTab(tabs[i].id),
-                            onContextMenu: (pos) => _showTabMenu(
-                              context,
-                              tabsController: tabsController,
-                              tab: tabs[i],
-                              position: pos,
-                              canCloseRight: i < tabs.length - 1,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              _NewTabButton(onTap: tabsController.newQueryTab),
-            ],
+      builder: (_, value) {
+        final activeIndex = value.$2;
+        final tabs = tabsController.tabs;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.bgDeep,
+            border: Border(
+              bottom: BorderSide(color: AppColors.border, width: 1),
+            ),
           ),
-        ),
-      ),
+          child: SizedBox(
+            height: AppLayout.tabHeight,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (var i = 0; i < tabs.length; i++)
+                            ListenableBuilder(
+                              listenable: tabs[i],
+                              builder: (_, _) => _Tab(
+                                tab: tabs[i],
+                                active: i == activeIndex,
+                                onTap: () => tabsController.selectTab(i),
+                                onClose: () =>
+                                    tabsController.closeTab(tabs[i].id),
+                                onContextMenu: (pos) => _showTabMenu(
+                                  context,
+                                  tab: tabs[i],
+                                  position: pos,
+                                  canCloseRight: i < tabs.length - 1,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  _NewTabButton(onTap: tabsController.newQueryTab),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -171,11 +174,11 @@ class _NewTabButton extends StatelessWidget {
 
 void _showTabMenu(
   BuildContext context, {
-  required TabsController tabsController,
   required WorkspaceTab tab,
   required Offset position,
   required bool canCloseRight,
 }) {
+  final tabsController = appState.tabsController;
   showContextMenu(
     context,
     globalPosition: position,

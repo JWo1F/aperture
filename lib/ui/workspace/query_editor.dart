@@ -2,23 +2,22 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 
 import '../../models/count_format.dart';
 import '../../models/db_object.dart';
 import '../../models/query_result.dart';
 import '../../services/sql_complete.dart';
 import '../../services/sql_statements.dart';
+import '../../state/app_globals.dart';
 import '../../state/app_state.dart';
-import '../../state/app_store.dart';
 import '../../state/catalog_controller.dart';
-import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/code_editor.dart';
 import '../widgets/common.dart';
 import '../widgets/pagebar.dart';
 import '../widgets/resize_handle.dart';
+import '../widgets/value_selector.dart';
 import 'query_messages_view.dart';
 import 'query_plan/view/query_plan_view.dart';
 import 'results_grid/results_grid.dart';
@@ -77,9 +76,7 @@ class _QueryEditorState extends State<QueryEditor> {
       _saveTimer?.cancel();
       _saveTimer = Timer(const Duration(milliseconds: 400), () {
         if (!mounted) return;
-        context
-            .read<TabsController>()
-            .updateQuerySql(widget.tab, _controller.text);
+        appState.tabsController.updateQuerySql(widget.tab, _controller.text);
       });
     }
 
@@ -113,7 +110,7 @@ class _QueryEditorState extends State<QueryEditor> {
   Future<void> _runAll() async {
     widget.tab.sql = _controller.text;
     widget.tab.setView(QueryResultsView.results);
-    final tabs = context.read<TabsController>();
+    final tabs = appState.tabsController;
     final stmts = _statements.isNotEmpty
         ? _statements
         : parseSqlStatements(_controller.text);
@@ -134,7 +131,7 @@ class _QueryEditorState extends State<QueryEditor> {
 
   void _runStatement(SqlStatement stmt) {
     widget.tab.setView(QueryResultsView.results);
-    context.read<TabsController>().runQuery(widget.tab, sqlOverride: stmt.text);
+    appState.tabsController.runQuery(widget.tab, sqlOverride: stmt.text);
   }
 
   void _runAtCursor() {
@@ -199,13 +196,10 @@ class _QueryEditorState extends State<QueryEditor> {
     // setState, so tab field updates rebuild this widget without going
     // through any controller's notifications. The one slice of app-wide
     // state we still need to react to is the editor/results split — pulled
-    // narrowly so a sidebar drag doesn't reach this widget.
-    final appState = context.read<AppState>();
-    final catalog = context.read<CatalogController>();
-    final store = context.read<AppStore>();
-    final fraction = context.select<AppStore, double>(
-      (s) => s.queryResultsFraction,
-    );
+    // narrowly (via Selector around the LayoutBuilder) so a sidebar drag
+    // doesn't reach this widget.
+    final catalog = appState.catalog;
+    final store = appState.store;
     final tab = widget.tab;
 
     final activeStmt =
@@ -288,56 +282,57 @@ class _QueryEditorState extends State<QueryEditor> {
           onRunAll: tab.running ? null : _runAll,
         ),
         Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // Reserve space for the fixed-height tab strip + the drag
-              // handle above it; the fraction governs the *split-able*
-              // remainder so neither chrome row steals height from either
-              // side.
-              const dividerHeight = 24.0;
-              const handleHeight = 6.0;
-              const minSide = 80.0;
-              final available =
-                  (constraints.maxHeight - dividerHeight - handleHeight).clamp(
-                    0.0,
-                    double.infinity,
+          child: Selector<double>(
+            listenable: store,
+            selector: () => store.queryResultsFraction,
+            builder: (_, fraction) => LayoutBuilder(
+              builder: (context, constraints) {
+                // Reserve space for the fixed-height tab strip + the drag
+                // handle above it; the fraction governs the *split-able*
+                // remainder so neither chrome row steals height from either
+                // side.
+                const dividerHeight = 24.0;
+                const handleHeight = 6.0;
+                const minSide = 80.0;
+                final available =
+                    (constraints.maxHeight - dividerHeight - handleHeight)
+                        .clamp(0.0, double.infinity);
+                double resultsHeight = available * fraction;
+                // Enforce a per-side pixel minimum on top of the fraction
+                // clamp; widgets like the empty-state card have an intrinsic
+                // height that paints an overflow stripe if the pane shrinks
+                // below it, and ClipRect below hides what's left over.
+                if (available >= minSide * 2) {
+                  resultsHeight = resultsHeight.clamp(
+                    minSide,
+                    available - minSide,
                   );
-              double resultsHeight = available * fraction;
-              // Enforce a per-side pixel minimum on top of the fraction
-              // clamp; widgets like the empty-state card have an intrinsic
-              // height that paints an overflow stripe if the pane shrinks
-              // below it, and ClipRect below hides what's left over.
-              if (available >= minSide * 2) {
-                resultsHeight = resultsHeight.clamp(
-                  minSide,
-                  available - minSide,
-                );
-              }
-              final editorHeight = available - resultsHeight;
-              return Column(
-                children: [
-                  SizedBox(
-                    height: editorHeight,
-                    child: ClipRect(child: editor),
-                  ),
-                  _QuerySplitHandle(
-                    store: store,
-                    available: available,
-                    handleHeight: handleHeight,
-                  ),
-                  _ResultsDivider(tab: tab),
-                  SizedBox(
-                    height: resultsHeight,
-                    child: ClipRect(
-                      child: Container(
-                        color: AppColors.bg,
-                        child: _buildContent(appState, catalog, tab),
+                }
+                final editorHeight = available - resultsHeight;
+                return Column(
+                  children: [
+                    SizedBox(
+                      height: editorHeight,
+                      child: ClipRect(child: editor),
+                    ),
+                    _QuerySplitHandle(
+                      available: available,
+                      handleHeight: handleHeight,
+                    ),
+                    _ResultsDivider(tab: tab),
+                    SizedBox(
+                      height: resultsHeight,
+                      child: ClipRect(
+                        child: Container(
+                          color: AppColors.bg,
+                          child: _buildContent(appState, catalog, tab),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
         ),
         _QueryPagebar(tab: tab),
@@ -353,12 +348,10 @@ class _QueryEditorState extends State<QueryEditor> {
 /// and the pane jumps back on direction reversal.
 class _QuerySplitHandle extends StatefulWidget {
   const _QuerySplitHandle({
-    required this.store,
     required this.available,
     required this.handleHeight,
   });
 
-  final AppStore store;
   final double available;
   final double handleHeight;
 
@@ -372,16 +365,17 @@ class _QuerySplitHandleState extends State<_QuerySplitHandle> {
 
   @override
   Widget build(BuildContext context) {
+    final store = appState.store;
     return ResizeHandle(
       axis: Axis.horizontal,
       thickness: widget.handleHeight,
       onDragStart: () {
-        _startFraction = widget.store.queryResultsFraction;
+        _startFraction = store.queryResultsFraction;
         _startAvailable = widget.available;
       },
       onDragUpdate: (dy) {
         if (_startAvailable <= 0) return;
-        widget.store.setQueryResultsFraction(
+        store.setQueryResultsFraction(
           _startFraction - dy / _startAvailable,
         );
       },
@@ -760,9 +754,9 @@ class _QueryPagebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // _QueryPagebar reads only from `tab` and dispatches to TabsController;
-    // it lives inside a per-tab ListenableBuilder, so a plain context.read
-    // is enough — no need to subscribe to the controller.
-    final tabs = context.read<TabsController>();
+    // it lives inside a per-tab ListenableBuilder, so a non-reactive global
+    // handle is enough — no need to subscribe to the controller.
+    final tabs = appState.tabsController;
     final result = tab.result;
     final refreshedAt = tab.lastRefreshedAt;
     final lastRunSql = tab.lastRunSql;

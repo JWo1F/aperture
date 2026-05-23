@@ -3,13 +3,13 @@ import 'package:flutter/services.dart';
 
 import '../../models/count_format.dart';
 import '../../models/db_object.dart';
+import '../../state/app_globals.dart';
 import '../../state/connection_views.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
 import '../widgets/table_glyph.dart';
 import 'highlighted_text.dart';
-import 'sidebar_deps.dart';
 import 'table_detail.dart';
 import 'tree_row.dart';
 
@@ -17,7 +17,6 @@ class SchemaTableRow extends StatelessWidget {
   const SchemaTableRow({
     super.key,
     required this.table,
-    required this.deps,
     required this.active,
     required this.isFav,
     required this.indent,
@@ -26,7 +25,6 @@ class SchemaTableRow extends StatelessWidget {
   });
 
   final DbTable table;
-  final SidebarDeps deps;
   final bool active;
   final bool isFav;
   final int indent;
@@ -39,9 +37,10 @@ class SchemaTableRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tint = AppColors.connectionTint(deps.session.activeConnection?.color);
+    final tint =
+        AppColors.connectionTint(appState.session.activeConnection?.color);
     final nodeId = '$scope/${table.qualifiedKey}';
-    final expanded = deps.ui.isNodeExpanded(nodeId);
+    final expanded = appState.ui.isNodeExpanded(nodeId);
     final row = _buildRow(context, tint, expanded, nodeId);
     if (!expanded) return row;
     return Column(
@@ -50,7 +49,6 @@ class SchemaTableRow extends StatelessWidget {
         row,
         TableDetail(
           table: table,
-          deps: deps,
           indent: indent + 1,
           scope: scope,
         ),
@@ -70,15 +68,15 @@ class SchemaTableRow extends StatelessWidget {
       height: 24,
       active: active,
       tint: tint,
-      onTap: () => deps.tabs.openTable(table),
+      onTap: () => appState.tabsController.openTable(table),
       onSecondaryTapDown: (d) =>
-          openTableMenu(context, deps, table, d.globalPosition),
+          openTableMenu(context, table, d.globalPosition),
       childrenBuilder: (hovering) {
         final showStar = hovering || isFav;
         return [
           DetailChevron(
             expanded: expanded,
-            onTap: () => deps.ui.toggleNode(nodeId),
+            onTap: () => appState.ui.toggleNode(nodeId),
           ),
           SizedBox(
             width: 14,
@@ -115,8 +113,8 @@ class SchemaTableRow extends StatelessWidget {
             StarToggle(
               filled: isFav,
               onTap: () {
-                final id = deps.session.activeConnection?.id;
-                if (id != null) deps.store.toggleFavorite(id, table);
+                final id = appState.session.activeConnection?.id;
+                if (id != null) appState.store.toggleFavorite(id, table);
               },
             ),
         ];
@@ -174,14 +172,9 @@ class StarToggle extends StatelessWidget {
   }
 }
 
-void openTableMenu(
-  BuildContext context,
-  SidebarDeps deps,
-  DbTable table,
-  Offset position,
-) {
+void openTableMenu(BuildContext context, DbTable table, Offset position) {
   final qualified = '"${table.schema}"."${table.name}"';
-  final activeConn = deps.session.activeConnection;
+  final activeConn = appState.session.activeConnection;
   final isFav = isFavoriteTable(activeConn, table);
 
   void copy(String value) => Clipboard.setData(ClipboardData(text: value));
@@ -193,12 +186,12 @@ void openTableMenu(
       CmItem(
         icon: Icons.north_east,
         label: 'Open data',
-        onTap: () => deps.tabs.openTable(table),
+        onTap: () => appState.tabsController.openTable(table),
       ),
       CmItem(
         icon: Icons.data_object,
         label: 'Show schema (CREATE TABLE)',
-        onTap: () => deps.tabs.openSchema(table),
+        onTap: () => appState.tabsController.openSchema(table),
       ),
       const CmDivider(),
       CmItem(
@@ -206,7 +199,7 @@ void openTableMenu(
         label: isFav ? 'Remove from favourites' : 'Add to favourites',
         onTap: () {
           if (activeConn != null) {
-            deps.store.toggleFavorite(activeConn.id, table);
+            appState.store.toggleFavorite(activeConn.id, table);
           }
         },
       ),
@@ -230,7 +223,7 @@ void openTableMenu(
       CmItem(
         icon: Icons.refresh,
         label: 'Refresh catalog',
-        onTap: deps.appState.refreshCatalog,
+        onTap: appState.refreshCatalog,
       ),
     ],
   );

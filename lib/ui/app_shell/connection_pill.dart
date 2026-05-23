@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../models/connection_config.dart';
-import '../../state/app_state.dart';
-import '../../state/app_store.dart';
+import '../../state/app_globals.dart';
 import '../../state/session_controller.dart';
-import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../connection/connection_dialog.dart';
 import '../widgets/common.dart';
+import '../widgets/value_selector.dart';
 
 /// Toolbar identity pill: dot · db icon · conn name · `/` · schema · chev.
 /// Tap opens the connection switcher overlay.
@@ -67,21 +65,33 @@ class _ConnectionPillState extends State<ConnectionPill> {
   @override
   Widget build(BuildContext context) {
     // ConnectionPill reflects connection liveness, the active connection's
-    // name, and the schema of the current tab. Subscribe to each slice
-    // narrowly so widget-resize ticks and other unrelated notifications
+    // name, and the schema of the current tab. Tuple them through one
+    // Selector so widget-resize ticks and other unrelated notifications
     // don't repaint the pill.
-    final status = context.select<SessionController, ConnectionStatus>(
-      (s) => s.status,
+    final session = appState.session;
+    final tabs = appState.tabsController;
+    return Selector<(ConnectionStatus, String?, int?, String)>(
+      listenable: Listenable.merge([session, tabs]),
+      selector: () => (
+        session.status,
+        session.activeConnection?.name,
+        session.activeConnection?.color,
+        _activeSchema(tabs.activeTab) ?? 'public',
+      ),
+      builder: (context, value) {
+        final (status, connName, connColor, schema) = value;
+        return _buildPill(context, status, connName, connColor, schema);
+      },
     );
-    final connName = context.select<SessionController, String?>(
-      (s) => s.activeConnection?.name,
-    );
-    final connColor = context.select<SessionController, int?>(
-      (s) => s.activeConnection?.color,
-    );
-    final schema = context.select<TabsController, String>(
-      (t) => _activeSchema(t.activeTab) ?? 'public',
-    );
+  }
+
+  Widget _buildPill(
+    BuildContext context,
+    ConnectionStatus status,
+    String? connName,
+    int? connColor,
+    String schema,
+  ) {
     final tint = AppColors.connectionTint(connColor);
     final (Color dot, String connLabel) = switch (status) {
       ConnectionStatus.connected => (
@@ -199,11 +209,15 @@ class _ConnectionPickerPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.read<AppState>();
-    final active = context.select<SessionController, String?>(
-      (s) => s.activeConnection?.id,
+    return ListenableBuilder(
+      listenable: Listenable.merge([appState.session, appState.store]),
+      builder: (context, _) => _build(context),
     );
-    final connections = context.watch<AppStore>().connections;
+  }
+
+  Widget _build(BuildContext context) {
+    final active = appState.session.activeConnection?.id;
+    final connections = appState.store.connections;
 
     return Material(
       color: Colors.transparent,

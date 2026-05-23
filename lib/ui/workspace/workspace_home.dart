@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../../state/catalog_controller.dart';
+import '../../state/app_globals.dart';
 import '../../state/connection_views.dart';
-import '../../state/session_controller.dart';
-import '../../state/tabs_controller.dart';
 import '../../theme/app_theme.dart';
 import '../command_palette/command_palette.dart';
 import 'workspace_home/hero.dart';
@@ -23,9 +20,16 @@ class WorkspaceHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final session = context.watch<SessionController>();
-    final catalog = context.watch<CatalogController>();
-    final tabs = context.read<TabsController>();
+    return ListenableBuilder(
+      listenable: Listenable.merge([appState.session, appState.catalog]),
+      builder: (context, _) => _build(context),
+    );
+  }
+
+  Widget _build(BuildContext context) {
+    final session = appState.session;
+    final catalog = appState.catalog;
+    final tabs = appState.tabsController;
     final conn = session.activeConnection;
     final tint = AppColors.connectionTint(conn?.color);
 

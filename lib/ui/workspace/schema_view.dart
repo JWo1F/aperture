@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:highlight/highlight.dart' show highlight;
-import 'package:provider/provider.dart';
 
-import '../../state/tabs_controller.dart';
+import '../../state/app_globals.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
@@ -19,14 +18,9 @@ class SchemaView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Reload dispatches through TabsController. The tab's own listener,
-    // driven by the workspace's per-tab ListenableBuilder, handles
-    // ddl/error/loading updates — no controller subscription is needed here.
-    final tabs = context.read<TabsController>();
-
     return Column(
       children: [
-        _Toolbar(tab: tab, tabs: tabs),
+        _Toolbar(tab: tab),
         Expanded(child: _Body(tab: tab)),
       ],
     );
@@ -34,24 +28,15 @@ class SchemaView extends StatelessWidget {
 }
 
 class _Toolbar extends StatelessWidget {
-  const _Toolbar({required this.tab, required this.tabs});
+  const _Toolbar({required this.tab});
 
   final SchemaTab tab;
-  final TabsController tabs;
 
-  void _copy(BuildContext context) {
+  void _copy() {
     final ddl = tab.ddl;
     if (ddl == null) return;
     Clipboard.setData(ClipboardData(text: ddl));
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        backgroundColor: AppColors.surfaceAlt,
-        content: Text(
-          'Copied DDL',
-          style: AppTheme.mono(size: 11.5, color: AppColors.textPrimary),
-        ),
-      ),
-    );
+    appState.toasts.success('Copied DDL to clipboard');
   }
 
   @override
@@ -103,13 +88,15 @@ class _Toolbar extends StatelessWidget {
           IconAction(
             icon: Icons.refresh,
             tooltip: 'Reload',
-            onPressed: tab.loading ? null : () => tabs.reloadSchema(tab),
+            onPressed: tab.loading
+                ? null
+                : () => appState.tabsController.reloadSchema(tab),
             busy: tab.loading,
           ),
           IconAction(
             icon: Icons.copy,
             tooltip: 'Copy DDL',
-            onPressed: tab.ddl == null ? null : () => _copy(context),
+            onPressed: tab.ddl == null ? null : _copy,
           ),
         ],
       ),

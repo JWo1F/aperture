@@ -3,11 +3,11 @@ import 'package:flutter/services.dart';
 
 import '../../models/saved_query.dart';
 import '../../models/time_ago.dart';
+import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/context_menu.dart';
 import '../widgets/text_prompt_dialog.dart';
 import 'highlighted_text.dart';
-import 'sidebar_deps.dart';
 import 'tree_row.dart';
 
 class SavedQueryRow extends StatefulWidget {
@@ -15,13 +15,11 @@ class SavedQueryRow extends StatefulWidget {
     super.key,
     required this.query,
     required this.active,
-    required this.deps,
     required this.match,
   });
 
   final SavedQuery query;
   final bool active;
-  final SidebarDeps deps;
   final String match;
 
   @override
@@ -31,7 +29,7 @@ class SavedQueryRow extends StatefulWidget {
 class _SavedQueryRowState extends State<SavedQueryRow> {
   void _openMenu(Offset position) {
     final query = widget.query;
-    final tabs = widget.deps.tabs;
+    final tabs = appState.tabsController;
     void copy(String text) => Clipboard.setData(ClipboardData(text: text));
 
     showContextMenu(
@@ -78,7 +76,7 @@ class _SavedQueryRowState extends State<SavedQueryRow> {
       actionLabel: 'Rename',
     );
     if (next != null && next.trim().isNotEmpty) {
-      widget.deps.tabs.renameQuery(widget.query.id, next);
+      appState.tabsController.renameQuery(widget.query.id, next);
     }
   }
 
@@ -86,7 +84,7 @@ class _SavedQueryRowState extends State<SavedQueryRow> {
   Widget build(BuildContext context) {
     final ts = widget.query.updatedAt;
     final tint = AppColors.connectionTint(
-      widget.deps.session.activeConnection?.color,
+      appState.session.activeConnection?.color,
     );
     return TreeRow(
       indent: 0,
@@ -94,7 +92,7 @@ class _SavedQueryRowState extends State<SavedQueryRow> {
       active: widget.active,
       tint: tint,
       padding: const EdgeInsets.only(left: 14, right: 6),
-      onTap: () => widget.deps.tabs.openSavedQuery(widget.query),
+      onTap: () => appState.tabsController.openSavedQuery(widget.query),
       onSecondaryTapDown: (d) => _openMenu(d.globalPosition),
       children: [
         Icon(

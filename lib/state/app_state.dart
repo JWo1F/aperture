@@ -9,6 +9,7 @@ import 'event_log.dart';
 import 'navigation_history.dart';
 import 'session_controller.dart';
 import 'tabs_controller.dart';
+import 'toast_controller.dart';
 import 'workspace_tab.dart';
 import 'workspace_ui.dart';
 
@@ -42,6 +43,7 @@ class AppState {
   final CatalogController catalog = CatalogController();
   final NavigationHistory history = NavigationHistory();
   final WorkspaceUi ui = WorkspaceUi();
+  final ToastController toasts = ToastController();
 
   /// Set by the UI at startup. AppState calls this when a connect
   /// attempt needs the master passphrase but the session is locked.
@@ -240,6 +242,7 @@ class AppState {
     session.dispose();
     ui.dispose();
     eventLog.dispose();
+    toasts.dispose();
     store.dispose();
   }
 }

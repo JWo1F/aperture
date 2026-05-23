@@ -2,25 +2,23 @@ import 'package:flutter/material.dart';
 
 import '../../models/connection_config.dart';
 import '../../models/time_ago.dart';
+import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
 import '../connection/connection_dialog.dart';
 import '../widgets/common.dart';
-import 'sidebar_deps.dart';
 
 /// The body shown when no connection is active — header, list of saved
 /// configs, and a "New connection" call to action that opens the
 /// connection dialog.
 class AllConnectionsList extends StatelessWidget {
-  const AllConnectionsList({super.key, required this.deps});
-
-  final SidebarDeps deps;
+  const AllConnectionsList({super.key});
 
   Future<void> _newConnection(BuildContext context) =>
       createConnectionFlow(context);
 
   @override
   Widget build(BuildContext context) {
-    final list = deps.store.connections;
+    final list = appState.store.connections;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -103,7 +101,7 @@ class AllConnectionsList extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 8),
                   itemCount: list.length,
                   itemBuilder: (_, i) =>
-                      _SavedConnectionRow(config: list[i], deps: deps),
+                      _SavedConnectionRow(config: list[i]),
                 ),
         ),
         Divider(height: 1, color: AppColors.hairline),
@@ -136,22 +134,21 @@ class AllConnectionsList extends StatelessWidget {
 }
 
 class _SavedConnectionRow extends StatelessWidget {
-  const _SavedConnectionRow({required this.config, required this.deps});
+  const _SavedConnectionRow({required this.config});
 
   final ConnectionConfig config;
-  final SidebarDeps deps;
 
   Future<void> _edit(BuildContext context) =>
       editConnectionFlow(context, config);
 
-  void _delete() => deps.store.removeConnection(config.id);
+  void _delete() => appState.store.removeConnection(config.id);
 
   @override
   Widget build(BuildContext context) {
     final ts = config.lastConnectedAt;
     final tint = AppColors.connectionTint(config.color);
     return Hoverable(
-      onTap: () => deps.appState.connect(config),
+      onTap: () => appState.connect(config),
       builder: (context, hovering) => Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

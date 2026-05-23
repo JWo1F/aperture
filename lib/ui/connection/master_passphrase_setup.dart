@@ -1,39 +1,27 @@
 import 'package:flutter/material.dart';
 
-import '../../state/app_store.dart';
+import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
 
 /// Opens the master-passphrase setup modal. Returns true if the user
 /// set a passphrase, false if they cancelled.
-Future<bool> showMasterPassphraseSetup(
-  BuildContext context,
-  AppStore store,
-) async {
+Future<bool> showMasterPassphraseSetup(BuildContext context) async {
   final ok = await showDialog<bool>(
     context: context,
     barrierColor: AppColors.scrim,
-    builder: (_) => _PassphrasePanel(
-      mode: _Mode.setup,
-      store: store,
-    ),
+    builder: (_) => const _PassphrasePanel(mode: _Mode.setup),
   );
   return ok ?? false;
 }
 
 /// Opens the master-passphrase unlock modal. Returns true if the
 /// session is now unlocked, false if the user cancelled.
-Future<bool> showMasterPassphraseUnlock(
-  BuildContext context,
-  AppStore store,
-) async {
+Future<bool> showMasterPassphraseUnlock(BuildContext context) async {
   final ok = await showDialog<bool>(
     context: context,
     barrierColor: AppColors.scrim,
-    builder: (_) => _PassphrasePanel(
-      mode: _Mode.unlock,
-      store: store,
-    ),
+    builder: (_) => const _PassphrasePanel(mode: _Mode.unlock),
   );
   return ok ?? false;
 }
@@ -41,10 +29,9 @@ Future<bool> showMasterPassphraseUnlock(
 enum _Mode { setup, unlock }
 
 class _PassphrasePanel extends StatefulWidget {
-  const _PassphrasePanel({required this.mode, required this.store});
+  const _PassphrasePanel({required this.mode});
 
   final _Mode mode;
-  final AppStore store;
 
   @override
   State<_PassphrasePanel> createState() => _PassphrasePanelState();
@@ -89,8 +76,8 @@ class _PassphrasePanelState extends State<_PassphrasePanel> {
       _error = null;
     });
     final ok = widget.mode == _Mode.setup
-        ? await widget.store.setupPassphrase(_first.text)
-        : await widget.store.unlockPassphrase(_first.text);
+        ? await appState.store.setupPassphrase(_first.text)
+        : await appState.store.unlockPassphrase(_first.text);
     if (!mounted) return;
     if (ok) {
       Navigator.of(context).pop(true);

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../models/db_object.dart';
+import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
 import 'highlighted_text.dart';
-import 'sidebar_deps.dart';
 import 'table_row.dart';
 import 'tree_row.dart';
 
@@ -76,7 +76,6 @@ class SchemaBlock extends StatelessWidget {
     super.key,
     required this.schema,
     required this.tables,
-    required this.deps,
     required this.activeTableId,
     required this.favKeys,
     required this.forceExpanded,
@@ -85,7 +84,6 @@ class SchemaBlock extends StatelessWidget {
 
   final DbSchema schema;
   final List<DbTable> tables;
-  final SidebarDeps deps;
   final String? activeTableId;
   final Set<String> favKeys;
   final bool forceExpanded;
@@ -93,8 +91,10 @@ class SchemaBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final expanded = forceExpanded || deps.ui.isSchemaExpanded(schema.name);
-    final tint = AppColors.connectionTint(deps.session.activeConnection?.color);
+    final expanded =
+        forceExpanded || appState.ui.isSchemaExpanded(schema.name);
+    final tint =
+        AppColors.connectionTint(appState.session.activeConnection?.color);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -102,7 +102,7 @@ class SchemaBlock extends StatelessWidget {
           indent: 0,
           height: 26,
           padding: const EdgeInsets.symmetric(horizontal: 6),
-          onTap: () => deps.ui.toggleSchema(schema.name),
+          onTap: () => appState.ui.toggleSchema(schema.name),
           children: [
             AnimatedRotation(
               turns: expanded ? 0.25 : 0,
@@ -170,7 +170,6 @@ class SchemaBlock extends StatelessWidget {
           for (final t in tables)
             SchemaTableRow(
               table: t,
-              deps: deps,
               active: t.qualifiedName == activeTableId,
               isFav: favKeys.contains(t.qualifiedKey),
               indent: 1,

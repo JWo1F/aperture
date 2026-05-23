@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:highlight/highlight.dart' show highlight;
 import 'package:highlight/languages/pgsql.dart';
-import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
+import '../../state/app_globals.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
@@ -72,7 +71,7 @@ class _Header extends StatelessWidget {
           const Spacer(),
           Hoverable(
             cursor: SystemMouseCursors.click,
-            onTap: () => context.read<AppState>().clearQueryMessages(tab),
+            onTap: () => appState.clearQueryMessages(tab),
             builder: (context, hovering) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               child: Text(

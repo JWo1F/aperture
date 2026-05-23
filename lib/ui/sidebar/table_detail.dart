@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../models/db_catalog.dart';
 import '../../models/db_object.dart';
+import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/table_glyph.dart';
-import 'sidebar_deps.dart';
 import 'tree_row.dart';
 
 /// A right-pointing chevron that rotates to point down when [expanded].
@@ -50,24 +50,23 @@ class TableDetail extends StatelessWidget {
   const TableDetail({
     super.key,
     required this.table,
-    required this.deps,
     required this.indent,
     required this.scope,
   });
 
   final DbTable table;
-  final SidebarDeps deps;
   final int indent;
   final String scope;
 
   @override
   Widget build(BuildContext context) {
-    final catalog = deps.catalog.catalog;
+    final catalog = appState.catalog.catalog;
     if (!catalog.hasPhase(CatalogPhase.columns)) {
       return DetailMessageRow(indent: indent, text: 'Loading details…');
     }
 
-    final tint = AppColors.connectionTint(deps.session.activeConnection?.color);
+    final tint =
+        AppColors.connectionTint(appState.session.activeConnection?.color);
     final columns = catalog.columnsFor(table);
     final keys = catalog.keysFor(table);
     final foreignKeys = catalog.foreignKeysFor(table);
@@ -82,7 +81,6 @@ class TableDetail extends StatelessWidget {
         if (columns.isNotEmpty)
           DetailFolder(
             table: table,
-            deps: deps,
             scope: scope,
             indent: indent,
             folder: 'columns',
@@ -114,7 +112,6 @@ class TableDetail extends StatelessWidget {
         if (keys.isNotEmpty)
           DetailFolder(
             table: table,
-            deps: deps,
             scope: scope,
             indent: indent,
             folder: 'keys',
@@ -138,7 +135,6 @@ class TableDetail extends StatelessWidget {
         if (foreignKeys.isNotEmpty)
           DetailFolder(
             table: table,
-            deps: deps,
             scope: scope,
             indent: indent,
             folder: 'foreign keys',
@@ -157,7 +153,7 @@ class TableDetail extends StatelessWidget {
                       '(${fk.localColumns.join(', ')}) → ${fk.refTable}',
                   onTap: () {
                     final ref = catalog.relation(fk.refTableOid);
-                    if (ref != null) deps.tabs.openTable(ref);
+                    if (ref != null) appState.tabsController.openTable(ref);
                   },
                 ),
             ],
@@ -165,7 +161,6 @@ class TableDetail extends StatelessWidget {
         if (indexes.isNotEmpty)
           DetailFolder(
             table: table,
-            deps: deps,
             scope: scope,
             indent: indent,
             folder: 'indexes',
@@ -196,7 +191,6 @@ class DetailFolder extends StatelessWidget {
   const DetailFolder({
     super.key,
     required this.table,
-    required this.deps,
     required this.scope,
     required this.indent,
     required this.folder,
@@ -205,7 +199,6 @@ class DetailFolder extends StatelessWidget {
   });
 
   final DbTable table;
-  final SidebarDeps deps;
   final String scope;
   final int indent;
   final String folder;
@@ -215,14 +208,14 @@ class DetailFolder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final id = '$scope/${table.qualifiedKey}/$folder';
-    final expanded = deps.ui.isNodeExpanded(id);
+    final expanded = appState.ui.isNodeExpanded(id);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TreeRow(
           indent: indent,
           height: 24,
-          onTap: () => deps.ui.toggleNode(id),
+          onTap: () => appState.ui.toggleNode(id),
           children: [
             DetailChevron(expanded: expanded),
             Icon(

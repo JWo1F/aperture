@@ -1,22 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../models/count_format.dart';
 import '../../models/db_object.dart';
 import '../../models/order_term.dart';
 import '../../models/value_format.dart';
 import '../../services/sql_complete.dart';
-import '../../state/app_state.dart';
-import '../../state/app_store.dart';
+import '../../state/app_globals.dart';
 import '../../state/catalog_controller.dart';
-import '../../state/session_controller.dart';
-import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
-import '../edits/pending_edits_modal.dart';
+import '../app_shell/toolbar_actions.dart';
 import '../widgets/code_editor.dart';
 import '../widgets/common.dart';
 import '../widgets/pagebar.dart';
+import '../widgets/value_selector.dart';
 import 'results_grid/results_grid.dart';
 
 /// Data view for a single relation: a toolbar with row filter, sort, and
@@ -36,110 +33,114 @@ class TableView extends StatelessWidget {
     // the grid's typed-cell colouring + FK indicators — without dragging
     // in anything else. readOnly is a connection-level slice selected
     // narrowly.
-    final appState = context.read<AppState>();
-    final catalog = context.read<CatalogController>();
-    final tabs = context.read<TabsController>();
-    final store = context.read<AppStore>();
-    final session = context.read<SessionController>();
-    final readOnly = context.select<SessionController, bool>(
-      (s) => s.activeConnection?.readOnly ?? false,
-    );
+    final catalog = appState.catalog;
+    final tabs = appState.tabsController;
+    final store = appState.store;
+    final session = appState.session;
 
-    return ListenableBuilder(
-      listenable: catalog,
-      builder: (_, _) => Column(
-        children: [
-          _TableToolbar(tab: tab, tabs: tabs, catalog: catalog),
-          Expanded(
-            // Body uses `var(--bg)` per the design's `.grid-wrap` rule — the
-            // clause bar above is `var(--bg-deep)`, so the hairline between
-            // them reads even when the grid hasn't loaded any rows yet.
-            child: ColoredBox(
-              color: AppColors.bg,
-              child: tab.result == null
-                  ? (tab.loading
-                        ? Center(
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.accent,
+    return Selector<bool>(
+      listenable: session,
+      selector: () => session.activeConnection?.readOnly ?? false,
+      builder: (_, readOnly) => ListenableBuilder(
+        listenable: catalog,
+        builder: (_, _) => Column(
+          children: [
+            _TableToolbar(tab: tab),
+            Expanded(
+              // Body uses `var(--bg)` per the design's `.grid-wrap` rule — the
+              // clause bar above is `var(--bg-deep)`, so the hairline between
+              // them reads even when the grid hasn't loaded any rows yet.
+              child: ColoredBox(
+                color: AppColors.bg,
+                child: tab.result == null
+                    ? (tab.loading
+                          ? Center(
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.accent,
+                                ),
                               ),
-                            ),
-                          )
-                        : const EmptyState(
-                            icon: Icons.warning_amber_outlined,
-                            title: 'Could not load data',
-                          ))
-                  : Stack(
-                      // Force non-positioned children (the ResultsGrid) to
-                      // fill the available Stack box. Without this, the grid
-                      // sizes to its content (28px header + 0-N rows) and
-                      // leaves the rest of the body painted in `var(--bg)`,
-                      // which looked like bottom padding on the clause bar.
-                      fit: StackFit.expand,
-                      children: [
-                        ResultsGrid(
-                          result: tab.result!,
-                          editable: !tab.table.isView && !readOnly,
-                          edits: tab.edits,
-                          deletedRows: tab.deletedRows,
-                          inserts: tab.inserts,
-                          onDeleteRow: (row) => tabs.deleteRow(tab, row),
-                          onRestoreDeletedRow: (row) =>
-                              tabs.restoreDeletedRow(tab, row),
-                          onDuplicateRow: (row) => tabs.duplicateRow(tab, row),
-                          onAddRow: (row) => tabs.addRow(tab, row),
-                          widths: tab.columnWidths,
-                          onWidthChanged: (col, w) {
-                            final id = session.activeConnection?.id;
-                            if (id != null) {
-                              store.setColumnWidth(id, tab.table, col, w);
-                            }
-                          },
-                          onEditCell: (row, col, value) =>
-                              tabs.setCellEdit(tab, row, col, value),
-                          onRevertEdit: (row, col) =>
-                              tabs.revertCellEdit(tab, row, col),
-                          order: parseOrderBy(tab.orderBy),
-                          onSortColumn: (column) =>
-                              tabs.cycleTableOrder(tab, column),
-                          onSetSort: (column, desc) =>
-                              tabs.setColumnSort(tab, column, desc),
-                          onAddFilter: (column, value, not) =>
-                              _addFilter(tabs, column, value, not),
-                          foreignKeys: catalog.foreignKeysFor(tab.table),
-                          onFollowForeignKey: (fk, value) =>
-                              appState.followForeignKey(fk, value),
-                          columnMeta: _columnMeta(catalog),
-                          findRowOwner: (col) {
-                            final owner = catalog.findPrimaryKeyOwner(col);
-                            // Skip the redundant "Find row in {this table}"
-                            // when the PK match is the table we're viewing.
-                            if (owner == null ||
-                                owner.qualifiedName ==
-                                    tab.table.qualifiedName) {
-                              return null;
-                            }
-                            return owner;
-                          },
-                          onFindRow: (table, col, value) =>
-                              appState.findRowInTable(table, col, value),
-                        ),
-                        if (tab.loading)
-                          const Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            child: _RefreshBar(),
+                            )
+                          : const EmptyState(
+                              icon: Icons.warning_amber_outlined,
+                              title: 'Could not load data',
+                            ))
+                    : Stack(
+                        // Force non-positioned children (the ResultsGrid) to
+                        // fill the available Stack box. Without this, the
+                        // grid sizes to its content (28px header + 0-N rows)
+                        // and leaves the rest of the body painted in
+                        // `var(--bg)`, which looked like bottom padding on
+                        // the clause bar.
+                        fit: StackFit.expand,
+                        children: [
+                          ResultsGrid(
+                            result: tab.result!,
+                            editable: !tab.table.isView && !readOnly,
+                            edits: tab.edits,
+                            deletedRows: tab.deletedRows,
+                            inserts: tab.inserts,
+                            onDeleteRow: (row) => tabs.deleteRow(tab, row),
+                            onRestoreDeletedRow: (row) =>
+                                tabs.restoreDeletedRow(tab, row),
+                            onDuplicateRow: (row) =>
+                                tabs.duplicateRow(tab, row),
+                            onAddRow: (row) => tabs.addRow(tab, row),
+                            widths: tab.columnWidths,
+                            onWidthChanged: (col, w) {
+                              final id = session.activeConnection?.id;
+                              if (id != null) {
+                                store.setColumnWidth(id, tab.table, col, w);
+                              }
+                            },
+                            onEditCell: (row, col, value) =>
+                                tabs.setCellEdit(tab, row, col, value),
+                            onRevertEdit: (row, col) =>
+                                tabs.revertCellEdit(tab, row, col),
+                            order: parseOrderBy(tab.orderBy),
+                            onSortColumn: (column) =>
+                                tabs.cycleTableOrder(tab, column),
+                            onSetSort: (column, desc) =>
+                                tabs.setColumnSort(tab, column, desc),
+                            onAddFilter: (column, value, not) =>
+                                _addFilter(column, value, not),
+                            foreignKeys: catalog.foreignKeysFor(tab.table),
+                            onFollowForeignKey: (fk, value) =>
+                                appState.followForeignKey(fk, value),
+                            columnMeta: _columnMeta(catalog),
+                            findRowOwner: (col) {
+                              final owner =
+                                  catalog.findPrimaryKeyOwner(col);
+                              // Skip the redundant "Find row in {this
+                              // table}" when the PK match is the table
+                              // we're viewing.
+                              if (owner == null ||
+                                  owner.qualifiedName ==
+                                      tab.table.qualifiedName) {
+                                return null;
+                              }
+                              return owner;
+                            },
+                            onFindRow: (table, col, value) =>
+                                appState.findRowInTable(table, col, value),
                           ),
-                      ],
-                    ),
+                          if (tab.loading)
+                            const Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              child: _RefreshBar(),
+                            ),
+                        ],
+                      ),
+              ),
             ),
-          ),
-          _PaginationBar(tab: tab, tabs: tabs),
-        ],
+            _PaginationBar(tab: tab),
+          ],
+        ),
       ),
     );
   }
@@ -150,13 +151,11 @@ class TableView extends StatelessWidget {
     return {for (final c in cols) c.name: c};
   }
 
-  void _addFilter(
-    TabsController tabs,
-    String column,
-    Object? value,
-    bool not,
-  ) {
-    tabs.appendTableFilter(tab, equalityFragment(column, value, not: not));
+  void _addFilter(String column, Object? value, bool not) {
+    appState.tabsController.appendTableFilter(
+      tab,
+      equalityFragment(column, value, not: not),
+    );
   }
 }
 
@@ -180,15 +179,9 @@ class _RefreshBar extends StatelessWidget {
 }
 
 class _TableToolbar extends StatefulWidget {
-  const _TableToolbar({
-    required this.tab,
-    required this.tabs,
-    required this.catalog,
-  });
+  const _TableToolbar({required this.tab});
 
   final TableTab tab;
-  final TabsController tabs;
-  final CatalogController catalog;
 
   @override
   State<_TableToolbar> createState() => _TableToolbarState();
@@ -252,14 +245,20 @@ class _TableToolbarState extends State<_TableToolbar> {
     }
   }
 
-  void _applySelect() =>
-      widget.tabs.setTableSelect(widget.tab, _select.text.trim());
+  void _applySelect() => appState.tabsController.setTableSelect(
+        widget.tab,
+        _select.text.trim(),
+      );
 
-  void _applyFilter() =>
-      widget.tabs.setTableFilter(widget.tab, _filter.text.trim());
+  void _applyFilter() => appState.tabsController.setTableFilter(
+        widget.tab,
+        _filter.text.trim(),
+      );
 
-  void _applyOrder() =>
-      widget.tabs.setTableOrder(widget.tab, _order.text.trim());
+  void _applyOrder() => appState.tabsController.setTableOrder(
+        widget.tab,
+        _order.text.trim(),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -270,7 +269,7 @@ class _TableToolbarState extends State<_TableToolbar> {
     final whereActive = tab.filter.trim().isNotEmpty;
     final orderActive = tab.orderBy.trim().isNotEmpty;
 
-    final columns = widget.catalog.columnsFor(tab.table) ?? const [];
+    final columns = appState.catalog.columnsFor(tab.table) ?? const [];
     CodeSuggestProvider clauseSuggest(List<String> keywords) {
       return (req) =>
           completeClause(req: req, columns: columns, extraKeywords: keywords);
@@ -548,13 +547,13 @@ class _ClauseRowState extends State<_ClauseRow> {
 /// dropdown · prev/next on the right. Mono throughout, dot separators,
 /// bgDeep surface.
 class _PaginationBar extends StatelessWidget {
-  const _PaginationBar({required this.tab, required this.tabs});
+  const _PaginationBar({required this.tab});
 
   final TableTab tab;
-  final TabsController tabs;
 
   @override
   Widget build(BuildContext context) {
+    final tabs = appState.tabsController;
     final canPrev = tab.page > 0 && !tab.loading;
     final canNext = tab.page < tab.pageCount - 1 && !tab.loading;
     final result = tab.result;
@@ -602,13 +601,7 @@ class _PaginationBar extends StatelessWidget {
           ],
           const Spacer(),
           if (pendingCount > 0) ...[
-            _PendingChip(
-              count: pendingCount,
-              onTap: () {
-                final statements = tabs.previewEditStatements(tab);
-                showPendingEditsModal(context, statements: statements);
-              },
-            ),
+            _PendingActions(tab: tab, count: pendingCount),
             const PbDot(),
           ],
           RefreshDropdown(
@@ -639,44 +632,153 @@ class _PaginationBar extends StatelessWidget {
   }
 }
 
-class _PendingChip extends StatelessWidget {
-  const _PendingChip({required this.count, required this.onTap});
+/// One bordered cluster surfacing the cross-tab pending edit count along
+/// with direct Apply and Revert affordances. The count text opens the
+/// statement-preview modal; the two icons act without confirmation.
+class _PendingActions extends StatelessWidget {
+  const _PendingActions({required this.tab, required this.count});
 
+  final TableTab tab;
   final int count;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Hoverable(
-      onTap: onTap,
-      builder: (context, hovering) => Container(
-        height: 20,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          color: hovering ? AppColors.accentSoft : Colors.transparent,
-          borderRadius: Radii.brSm,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 5,
-              height: 5,
+    final busy = tab.applying;
+    return Container(
+      height: 22,
+      decoration: BoxDecoration(
+        color: AppColors.accentSoft,
+        borderRadius: Radii.brSm,
+        border: Border.all(color: AppColors.accentSoft),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Hoverable(
+            cursor: SystemMouseCursors.click,
+            onTap: () => showPendingForTab(context, tab),
+            builder: (context, hovering) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: AppColors.accent,
-                shape: BoxShape.circle,
+                color: hovering
+                    ? AppColors.accent.withValues(alpha: 0.18)
+                    : Colors.transparent,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  bottomLeft: Radius.circular(4),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 5,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '$count pending edit${count == 1 ? '' : 's'}',
+                    style: AppTheme.mono(
+                      size: 11,
+                      color: AppColors.accent,
+                      weight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 6),
-            Text(
-              '$count pending edit${count == 1 ? '' : 's'}',
-              style: AppTheme.mono(
-                size: 11,
-                color: AppColors.accent,
-                weight: FontWeight.w500,
-              ),
-            ),
-          ],
+          ),
+          Container(
+            width: 1,
+            height: 22,
+            color: AppColors.accent.withValues(alpha: 0.25),
+          ),
+          _PendingIcon(
+            icon: busy ? null : Icons.arrow_upward,
+            tooltip: 'Apply pending edits',
+            busy: busy,
+            onTap: busy
+                ? null
+                : () => applyEditsForTab(context, tab),
+          ),
+          Container(
+            width: 1,
+            height: 22,
+            color: AppColors.accent.withValues(alpha: 0.25),
+          ),
+          _PendingIcon(
+            icon: Icons.close,
+            tooltip: 'Discard pending edits',
+            trailing: true,
+            onTap: busy
+                ? null
+                : () => appState.tabsController.resetTableEdits(tab),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingIcon extends StatelessWidget {
+  const _PendingIcon({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.busy = false,
+    this.trailing = false,
+  });
+
+  final IconData? icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final bool busy;
+  final bool trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Tooltip(
+      message: tooltip,
+      child: Hoverable(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onTap: onTap,
+        builder: (context, hovering) => Container(
+          width: 24,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: hovering && enabled
+                ? AppColors.accent.withValues(alpha: 0.18)
+                : Colors.transparent,
+            borderRadius: trailing
+                ? const BorderRadius.only(
+                    topRight: Radius.circular(4),
+                    bottomRight: Radius.circular(4),
+                  )
+                : BorderRadius.zero,
+          ),
+          child: busy
+              ? SizedBox(
+                  width: 10,
+                  height: 10,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.4,
+                    color: AppColors.accent,
+                  ),
+                )
+              : Icon(
+                  icon,
+                  size: 12,
+                  color: enabled
+                      ? AppColors.accent
+                      : AppColors.accent.withValues(alpha: 0.4),
+                ),
         ),
       ),
     );

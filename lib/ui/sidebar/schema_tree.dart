@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../models/db_object.dart';
+import '../../state/app_globals.dart';
 import '../../state/connection_views.dart';
 import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import 'saved_query_row.dart';
-import 'sidebar_deps.dart';
 import 'sidebar_section.dart';
 import 'table_row.dart';
 
@@ -14,17 +14,19 @@ import 'table_row.dart';
 /// Schemas, with substring filtering and force-expanded schemas when the
 /// user is typing in the search bar.
 class SidebarBody extends StatelessWidget {
-  const SidebarBody({super.key, required this.deps, required this.query});
+  const SidebarBody({super.key, required this.query});
 
-  final SidebarDeps deps;
   final String query;
 
   @override
   Widget build(BuildContext context) {
-    final activeTableId = _activeTableQualifiedName(deps.tabs);
-    final activeQueryId = _activeQueryId(deps.tabs);
-    final activeConn = deps.session.activeConnection;
-    final favorites = favoriteTablesView(activeConn, deps.catalog);
+    final tabs = appState.tabsController;
+    final catalog = appState.catalog;
+    final session = appState.session;
+    final activeTableId = _activeTableQualifiedName(tabs);
+    final activeQueryId = _activeQueryId(tabs);
+    final activeConn = session.activeConnection;
+    final favorites = favoriteTablesView(activeConn, catalog);
     final favKeys = {for (final t in favorites) t.qualifiedKey};
     final filtering = query.isNotEmpty;
 
@@ -38,7 +40,7 @@ class SidebarBody extends StatelessWidget {
         ? <DbTable>[]
         : frequentTablesView(
             activeConn,
-            deps.catalog,
+            catalog,
             limit: 5 + favKeys.length,
           )
               .where((t) => !favKeys.contains(t.qualifiedKey))
@@ -49,19 +51,19 @@ class SidebarBody extends StatelessWidget {
         ? savedAll.where((q) => q.name.toLowerCase().contains(query)).toList()
         : savedAll;
 
-    final visibleSchemas = deps.catalog.schemas.map((s) {
+    final visibleSchemas = catalog.schemas.map((s) {
       final tables = filtering
           ? s.tables.where(tableMatches).toList()
           : s.tables;
       return (schema: s, tables: tables);
     }).where((e) => !filtering || e.tables.isNotEmpty).toList();
 
-    final totalTables = deps.catalog.schemas.fold<int>(
+    final totalTables = catalog.schemas.fold<int>(
       0,
       (a, b) => a + b.tables.length,
     );
 
-    final catalogError = deps.catalog.lastError;
+    final catalogError = catalog.lastError;
 
     final empty = favList.isEmpty &&
         frequent.isEmpty &&
@@ -83,7 +85,6 @@ class SidebarBody extends StatelessWidget {
               for (final t in favList)
                 SchemaTableRow(
                   table: t,
-                  deps: deps,
                   active: t.qualifiedName == activeTableId,
                   isFav: true,
                   indent: 0,
@@ -100,7 +101,6 @@ class SidebarBody extends StatelessWidget {
               for (final t in frequent)
                 SchemaTableRow(
                   table: t,
-                  deps: deps,
                   active: t.qualifiedName == activeTableId,
                   isFav: favKeys.contains(t.qualifiedKey),
                   indent: 0,
@@ -118,7 +118,6 @@ class SidebarBody extends StatelessWidget {
                 SavedQueryRow(
                   query: q,
                   active: q.id == activeQueryId,
-                  deps: deps,
                   match: query,
                 ),
             ],
@@ -132,7 +131,6 @@ class SidebarBody extends StatelessWidget {
               SchemaBlock(
                 schema: entry.schema,
                 tables: entry.tables,
-                deps: deps,
                 activeTableId: activeTableId,
                 favKeys: favKeys,
                 forceExpanded: filtering,

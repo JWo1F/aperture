@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
-import '../../state/session_controller.dart';
+import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
 
@@ -22,7 +20,7 @@ class _ConnectionLostBannerState extends State<ConnectionLostBanner> {
     if (_reconnecting) return;
     setState(() => _reconnecting = true);
     try {
-      await context.read<AppState>().reconnect();
+      await appState.reconnect();
     } finally {
       if (mounted) setState(() => _reconnecting = false);
     }
@@ -30,7 +28,7 @@ class _ConnectionLostBannerState extends State<ConnectionLostBanner> {
 
   @override
   Widget build(BuildContext context) {
-    final error = context.read<SessionController>().error;
+    final error = appState.session.error;
     return Container(
       color: AppColors.accent.withValues(alpha: 0.10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

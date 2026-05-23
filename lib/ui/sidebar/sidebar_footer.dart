@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../../state/app_globals.dart';
 import '../../state/session_controller.dart';
 import '../../theme/app_theme.dart';
-import 'sidebar_deps.dart';
 
 class SidebarFooter extends StatelessWidget {
-  const SidebarFooter({super.key, required this.deps});
-
-  final SidebarDeps deps;
+  const SidebarFooter({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final status = deps.session.status;
+    final status = appState.session.status;
     final connected = status == ConnectionStatus.connected;
     final color = switch (status) {
       ConnectionStatus.connected => AppColors.success,
@@ -28,7 +26,7 @@ class SidebarFooter extends StatelessWidget {
       ConnectionStatus.disconnected => 'offline',
     };
 
-    final tableCount = deps.catalog.schemas.fold<int>(
+    final tableCount = appState.catalog.schemas.fold<int>(
       0,
       (a, b) => a + b.tables.length,
     );

@@ -1,17 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
-import '../../state/app_store.dart';
-import '../../state/catalog_controller.dart';
+import '../../state/app_globals.dart';
 import '../../state/session_controller.dart';
-import '../../state/tabs_controller.dart';
-import '../../state/workspace_ui.dart';
 import '../../theme/app_theme.dart';
 import 'conn_hero.dart';
 import 'connections_list.dart';
 import 'schema_tree.dart';
-import 'sidebar_deps.dart';
 import 'sidebar_footer.dart';
 
 /// Sidebar v4 — Inter-typeset, search-led, pin-forward.
@@ -34,25 +28,16 @@ class _SidebarState extends State<Sidebar> {
   final FocusNode _searchFocus = FocusNode();
   String _query = '';
 
-  late final SidebarDeps _deps = SidebarDeps(
-    appState: context.read<AppState>(),
-    store: context.read<AppStore>(),
-    session: context.read<SessionController>(),
-    catalog: context.read<CatalogController>(),
-    tabs: context.read<TabsController>(),
-    ui: context.read<WorkspaceUi>(),
-  );
-
   /// The sidebar mirrors persisted state, the session, the catalog, the
   /// open tabs and the schema-tree UI. Listening to just those controllers
   /// — rather than the full set — keeps a navigation-history push or an
   /// event-log append from rebuilding the whole schema list.
   late final Listenable _sidebarListenable = Listenable.merge([
-    _deps.store,
-    _deps.session,
-    _deps.catalog,
-    _deps.tabs,
-    _deps.ui,
+    appState.store,
+    appState.session,
+    appState.catalog,
+    appState.tabsController,
+    appState.ui,
   ]);
 
   @override
@@ -79,10 +64,11 @@ class _SidebarState extends State<Sidebar> {
     return ListenableBuilder(
       listenable: _sidebarListenable,
       builder: (context, _) {
-        final connected = _deps.session.status == ConnectionStatus.connected;
+        final connected =
+            appState.session.status == ConnectionStatus.connected;
 
         return Container(
-          width: _deps.store.sidebarWidth,
+          width: appState.store.sidebarWidth,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -95,21 +81,18 @@ class _SidebarState extends State<Sidebar> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ConnHero(deps: _deps),
+              const ConnHero(),
               if (connected) ...[
                 SidebarSearchBar(
                   controller: _searchCtrl,
                   focusNode: _searchFocus,
                 ),
                 Expanded(
-                  child: SidebarBody(
-                    deps: _deps,
-                    query: _query.trim().toLowerCase(),
-                  ),
+                  child: SidebarBody(query: _query.trim().toLowerCase()),
                 ),
               ] else
-                Expanded(child: AllConnectionsList(deps: _deps)),
-              SidebarFooter(deps: _deps),
+                const Expanded(child: AllConnectionsList()),
+              const SidebarFooter(),
             ],
           ),
         );

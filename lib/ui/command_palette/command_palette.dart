@@ -1,20 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
-import '../../state/app_store.dart';
-import '../../state/catalog_controller.dart';
-import '../../state/event_log.dart';
-import '../../state/navigation_history.dart';
-import '../../state/session_controller.dart';
+import '../../state/app_globals.dart';
 import '../../state/connection_views.dart';
-import '../../state/tabs_controller.dart';
+import '../../state/session_controller.dart';
 import '../../theme/app_theme.dart';
 import 'fuzzy_matcher.dart';
 import 'item_model.dart';
 import 'item_sources.dart';
-import 'palette_deps.dart';
 import 'widgets/empty_state.dart';
 import 'widgets/footer.dart';
 import 'widgets/group_header.dart';
@@ -22,20 +15,7 @@ import 'widgets/result_row.dart';
 import 'widgets/search_field.dart';
 
 /// Opens the global command palette (⌘K). Resolves when it closes.
-///
-/// Captures every controller the palette needs at the call site so the
-/// dialog's own [BuildContext] (which sits below an Overlay and therefore
-/// outside the provider scope of the caller) never has to look them up.
 Future<void> showCommandPalette(BuildContext context) {
-  final deps = PaletteDeps(
-    appState: context.read<AppState>(),
-    store: context.read<AppStore>(),
-    session: context.read<SessionController>(),
-    catalog: context.read<CatalogController>(),
-    tabs: context.read<TabsController>(),
-    history: context.read<NavigationHistory>(),
-    eventLog: context.read<EventLog>(),
-  );
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
@@ -51,7 +31,7 @@ Future<void> showCommandPalette(BuildContext context) {
           offset: Offset(0, -10 * (1 - curved)),
           child: Transform.scale(
             scale: 0.985 + 0.015 * curved,
-            child: _PaletteScaffold(deps: deps),
+            child: const _PaletteScaffold(),
           ),
         ),
       );
@@ -60,9 +40,7 @@ Future<void> showCommandPalette(BuildContext context) {
 }
 
 class _PaletteScaffold extends StatelessWidget {
-  const _PaletteScaffold({required this.deps});
-
-  final PaletteDeps deps;
+  const _PaletteScaffold();
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +48,7 @@ class _PaletteScaffold extends StatelessWidget {
       alignment: const Alignment(0, -0.5),
       child: Material(
         color: Colors.transparent,
-        child: _Palette(deps: deps),
+        child: _Palette(),
       ),
     );
   }
@@ -97,10 +75,6 @@ class _ItemRow extends _Row {
 }
 
 class _Palette extends StatefulWidget {
-  const _Palette({required this.deps});
-
-  final PaletteDeps deps;
-
   @override
   State<_Palette> createState() => _PaletteState();
 }
@@ -121,8 +95,7 @@ class _PaletteState extends State<_Palette> {
 
   /// Union of every searchable item — commands, open tabs, saved queries,
   /// connections, every table in the catalog. Built once at open-time
-  /// because [PaletteDeps] captures its controllers when the palette is
-  /// shown and the palette never subscribes to mid-session updates: closing
+  /// because the palette never subscribes to mid-session updates: closing
   /// and reopening ⌘K is the only way to pick up fresh data. Keeps each
   /// keystroke down to re-scoring this list instead of reallocating a
   /// [PaletteItem] per table.
@@ -135,7 +108,7 @@ class _PaletteState extends State<_Palette> {
     // FocusNode's onKeyEvent runs first in the key event chain.
     _focus.onKeyEvent = _onKey;
     _controller.addListener(() => setState(() => _selected = 0));
-    _source = PaletteItemSource(deps: widget.deps, context: context);
+    _source = PaletteItemSource(context: context);
     _pool = [
       ..._source.commands(),
       ..._source.openTabs(),
@@ -164,10 +137,11 @@ class _PaletteState extends State<_Palette> {
     if (query.isEmpty) {
       // Idle view: a curated, grouped snapshot — not every table in the
       // database — so ⌘K is useful before the first keystroke.
-      final deps = widget.deps;
-      final activeConn = deps.session.activeConnection;
-      final recents = recentTablesView(activeConn, deps.catalog);
-      final favorites = favoriteTablesView(activeConn, deps.catalog);
+      final session = appState.session;
+      final catalog = appState.catalog;
+      final activeConn = session.activeConnection;
+      final recents = recentTablesView(activeConn, catalog);
+      final favorites = favoriteTablesView(activeConn, catalog);
       final groups = <PaletteKind, List<PaletteItem>>{
         PaletteKind.openTab: _source.openTabs(),
         PaletteKind.recent: [
@@ -179,7 +153,7 @@ class _PaletteState extends State<_Palette> {
             _source.tableItem(t, PaletteKind.favorite, 'in ${t.schema}'),
         ],
         PaletteKind.savedQuery: _source.savedQueries().take(5).toList(),
-        PaletteKind.connection: deps.session.status == ConnectionStatus.connected
+        PaletteKind.connection: session.status == ConnectionStatus.connected
             ? const []
             : _source.connections(),
         PaletteKind.command: _source.commands(),

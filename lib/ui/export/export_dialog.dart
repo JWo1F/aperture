@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../models/query_result.dart';
 import '../../services/exporter.dart';
+import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
 
@@ -80,7 +81,6 @@ class _ExportBodyState extends State<_ExportBody> {
   }
 
   Future<void> _export() async {
-    final messenger = ScaffoldMessenger.maybeOf(context);
     final navigator = Navigator.of(context);
 
     final cancel = CancelToken();
@@ -100,12 +100,14 @@ class _ExportBodyState extends State<_ExportBody> {
       }
 
       // 2. Dispatch by destination.
-      final String snackText;
+      final String toastTitle;
+      final String toastBody;
       if (_destination == _Destination.clipboard) {
         await Clipboard.setData(ClipboardData(text: _format.render(data)));
-        snackText =
-            'Copied ${data.rows.length} row${data.rows.length == 1 ? '' : 's'} '
-            'as ${_format.label} to the clipboard';
+        toastTitle = 'Copied to clipboard';
+        toastBody =
+            '${data.rows.length} row${data.rows.length == 1 ? '' : 's'} as '
+            '${_format.label}';
       } else {
         final suggested = _swapExtension(
           widget.target.suggestedFilename,
@@ -137,21 +139,13 @@ class _ExportBodyState extends State<_ExportBody> {
         }
 
         await _format.writeFile(File(location.path), data, cancel: cancel);
-        snackText =
-            'Exported ${data.rows.length} row${data.rows.length == 1 ? '' : 's'} '
-            'to ${location.path}';
+        toastTitle = 'Exported ${data.rows.length} '
+            'row${data.rows.length == 1 ? '' : 's'}';
+        toastBody = location.path;
       }
 
       navigator.pop();
-      messenger?.showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.surfaceAlt,
-          content: Text(
-            snackText,
-            style: AppTheme.mono(size: 11.5, color: AppColors.textPrimary),
-          ),
-        ),
-      );
+      appState.toasts.success(toastBody, title: toastTitle);
     } on ExportCancelledException {
       if (!mounted) return;
       setState(() {

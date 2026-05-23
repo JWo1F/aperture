@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:highlight/highlight.dart' show highlight;
 import 'package:highlight/languages/pgsql.dart';
-import 'package:provider/provider.dart';
 
 import '../../models/log_event.dart';
-import '../../state/app_store.dart';
+import '../../state/app_globals.dart';
 import '../../state/event_log.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/value_selector.dart';
 
 /// Slide-out pane that shows the in-memory event log (queries, edits,
 /// connection lifecycle, errors). Bound to ⌘L from the app shell.
@@ -21,13 +21,14 @@ class LogPanel extends StatelessWidget {
     // Width reflects the user's drag on the LogPanel resize handle. We
     // pull it narrowly so a sidebar drag (a separate preferences field
     // notify) doesn't rebuild the log panel.
-    final width = context.select<AppStore, double>(
-      (s) => s.logPanelWidth,
-    );
-    final log = context.read<EventLog>();
-    return ListenableBuilder(
-      listenable: log,
-      builder: (_, _) => _build(context, log, width),
+    final log = appState.eventLog;
+    return Selector<double>(
+      listenable: appState.store,
+      selector: () => appState.store.logPanelWidth,
+      builder: (_, width) => ListenableBuilder(
+        listenable: log,
+        builder: (_, _) => _build(context, log, width),
+      ),
     );
   }
 

@@ -1,22 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../models/connection_config.dart';
+import '../../state/app_globals.dart';
 import '../../state/session_controller.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
-import 'sidebar_deps.dart';
 
 /// The connection card at the top of the sidebar: engine glyph, database
 /// name, server tag, and a chevron that opens the connection menu.
 class ConnHero extends StatelessWidget {
-  const ConnHero({super.key, required this.deps});
-
-  final SidebarDeps deps;
+  const ConnHero({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final session = deps.session;
+    final session = appState.session;
     final conn = session.activeConnection;
     final connected = session.status == ConnectionStatus.connected;
     final menuEnabled = connected || session.status == ConnectionStatus.lost;
@@ -43,10 +41,10 @@ class ConnHero extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
       child: Hoverable(
         onTap: menuEnabled
-            ? () => openConnMenu(context, deps, _anchorBelow(context))
+            ? () => openConnMenu(context, _anchorBelow(context))
             : null,
         onSecondaryTapDown: menuEnabled
-            ? (d) => openConnMenu(context, deps, d.globalPosition)
+            ? (d) => openConnMenu(context, d.globalPosition)
             : null,
         builder: (context, hovering) {
           final highlight = hovering && menuEnabled;
@@ -173,12 +171,8 @@ class ConnHero extends StatelessWidget {
   }
 }
 
-void openConnMenu(
-  BuildContext context,
-  SidebarDeps deps,
-  Offset position,
-) {
-  final loading = deps.catalog.isPhase1Loading;
+void openConnMenu(BuildContext context, Offset position) {
+  final loading = appState.catalog.isPhase1Loading;
   showContextMenu(
     context,
     globalPosition: position,
@@ -187,14 +181,14 @@ void openConnMenu(
         icon: Icons.refresh,
         label: loading ? 'Refreshing schema…' : 'Refresh schema',
         enabled: !loading,
-        onTap: deps.appState.refreshCatalog,
+        onTap: appState.refreshCatalog,
       ),
       const CmDivider(),
       CmItem(
         icon: Icons.power_settings_new,
         label: 'Disconnect',
         danger: true,
-        onTap: deps.appState.disconnect,
+        onTap: appState.disconnect,
       ),
     ],
   );

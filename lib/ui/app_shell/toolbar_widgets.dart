@@ -78,64 +78,6 @@ class TbIcon extends StatelessWidget {
   }
 }
 
-/// Accent pill that surfaces the cross-tab pending edit count.
-class PendingPill extends StatelessWidget {
-  const PendingPill({super.key, required this.count, required this.onTap});
-
-  final int count;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Open pending edits',
-      child: Hoverable(
-        onTap: onTap,
-        builder: (context, hovering) => Container(
-          height: 24,
-          padding: const EdgeInsets.symmetric(horizontal: 9),
-          decoration: BoxDecoration(
-            color: hovering
-                ? AppColors.accent.withValues(alpha: 0.22)
-                : AppColors.accentSoft,
-            borderRadius: Radii.brSm,
-            border: Border.all(color: AppColors.accentSoft),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: AppColors.accent,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.accent.withValues(alpha: 0.4),
-                      blurRadius: 3,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '$count pending',
-                style: AppTheme.ui(
-                  size: 11.5,
-                  color: AppColors.accent,
-                  weight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Wide ⌘K search trigger styled as a flat input — surface bg, hairline
 /// border, magnifier glyph, hint text, kbd chip.
 class TbSearch extends StatelessWidget {

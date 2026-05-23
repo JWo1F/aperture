@@ -1,9 +1,7 @@
 import 'package:flutter/widgets.dart';
-import 'package:provider/provider.dart';
 
 import '../../models/connection_config.dart';
-import '../../state/app_state.dart';
-import '../../state/app_store.dart';
+import '../../state/app_globals.dart';
 import 'dialog/connection_dialog.dart';
 
 /// Open the create-connection dialog. On submit, add the new config to the
@@ -11,11 +9,9 @@ import 'dialog/connection_dialog.dart';
 /// dismissed the dialog or the [BuildContext] was unmounted by the time the
 /// dialog resolved.
 Future<ConnectionConfig?> createConnectionFlow(BuildContext context) async {
-  final appState = context.read<AppState>();
-  final store = context.read<AppStore>();
   final config = await showConnectionDialog(context);
   if (config == null) return null;
-  store.addConnection(config);
+  appState.store.addConnection(config);
   await appState.connect(config);
   return config;
 }
@@ -27,7 +23,6 @@ Future<ConnectionConfig?> editConnectionFlow(
   BuildContext context,
   ConnectionConfig existing,
 ) async {
-  final appState = context.read<AppState>();
   final updated = await showConnectionDialog(context, existing: existing);
   if (updated == null) return null;
   appState.updateConnection(updated);

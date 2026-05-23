@@ -5,9 +5,8 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../models/query_result.dart';
 import '../../models/time_ago.dart';
-import '../../state/tabs_controller.dart';
+import '../../state/app_globals.dart';
 import '../../state/workspace_tab.dart';
-import '../../theme/app_theme.dart';
 import '../edits/pending_edits_modal.dart';
 import '../export/export_dialog.dart';
 
@@ -28,11 +27,7 @@ QueryResult? exportableResult(WorkspaceTab? tab) {
   return null;
 }
 
-void openExportForActiveTab(
-  BuildContext context,
-  TabsController tabs,
-  WorkspaceTab? tab,
-) {
+void openExportForActiveTab(BuildContext context, WorkspaceTab? tab) {
   final timestamp = filenameTimestamp();
   if (tab is TableTab) {
     final result = tab.result;
@@ -42,7 +37,7 @@ void openExportForActiveTab(
       target: ExportTarget(
         suggestedFilename: '${tab.table.name}_$timestamp.csv',
         currentResult: result,
-        fetchAll: () => tabs.fetchAllForExport(tab),
+        fetchAll: () => appState.tabsController.fetchAllForExport(tab),
         totalRowsForAll: tab.totalRows,
       ),
     );
@@ -61,46 +56,26 @@ void openExportForActiveTab(
   }
 }
 
-void openPendingForActiveTab(BuildContext context, TabsController tabs) {
-  final tab = tabs.activeTab;
-  if (tab is TableTab && tab.hasEdits) {
-    _showPending(context, tabs, tab);
-    return;
-  }
-  // Active tab has no edits; surface the first tab that does.
-  for (final t in tabs.tabs) {
-    if (t is TableTab && t.hasEdits) {
-      tabs.selectTab(tabs.tabs.indexOf(t));
-      _showPending(context, tabs, t);
-      return;
-    }
-  }
+/// Apply [tab]'s pending edits and surface partial/failed outcomes via a
+/// sticky toast. Shared by the table footer's apply icon and the pending-edits
+/// modal so both paths report errors the same way.
+Future<void> applyEditsForTab(BuildContext context, TableTab tab) async {
+  final tabs = appState.tabsController;
+  final outcome = await tabs.applyTableEdits(tab);
+  if (outcome.ok) return;
+  final title = outcome.partial
+      ? 'Partial apply — ${outcome.appliedCount} of ${outcome.totalCount}'
+      : 'Apply failed — rolled back';
+  appState.toasts.error(outcome.error ?? 'Unknown error', title: title);
 }
 
-void _showPending(BuildContext context, TabsController tabs, TableTab tab) {
+void showPendingForTab(BuildContext context, TableTab tab) {
+  final tabs = appState.tabsController;
   final statements = tabs.previewEditStatements(tab);
-  final messenger = ScaffoldMessenger.maybeOf(context);
   showPendingEditsModal(
     context,
     statements: statements,
-    onApply: () async {
-      final outcome = await tabs.applyTableEdits(tab);
-      if (!outcome.ok && messenger != null) {
-        final prefix = outcome.partial
-            ? 'Partial apply (${outcome.appliedCount} of '
-                '${outcome.totalCount}; refresh to see current state)'
-            : '0 of ${outcome.totalCount} applied (rolled back)';
-        messenger.showSnackBar(
-          SnackBar(
-            backgroundColor: AppColors.surfaceAlt,
-            content: Text(
-              '$prefix: ${outcome.error}',
-              style: AppTheme.mono(size: 11.5, color: AppColors.error),
-            ),
-          ),
-        );
-      }
-    },
+    onApply: () => applyEditsForTab(context, tab),
     onRevert: () => tabs.resetTableEdits(tab),
   );
 }

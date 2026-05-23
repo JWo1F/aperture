@@ -1,11 +1,10 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../../models/connection_config.dart';
 import '../../../services/one_password_client.dart';
 import '../../../services/sqlite_service.dart';
-import '../../../state/app_store.dart';
+import '../../../state/app_globals.dart';
 import '../../../theme/app_theme.dart';
 import '../master_passphrase_setup.dart';
 import 'connection_form_model.dart';
@@ -25,14 +24,10 @@ Future<ConnectionConfig?> showConnectionDialog(
   BuildContext context, {
   ConnectionConfig? existing,
 }) {
-  final store = context.read<AppStore>();
   return showDialog<ConnectionConfig>(
     context: context,
     barrierColor: AppColors.scrim,
-    builder: (_) => _ConnectionDialog(
-      existing: existing,
-      store: store,
-    ),
+    builder: (_) => _ConnectionDialog(existing: existing),
   );
 }
 
@@ -51,10 +46,9 @@ const _sqliteTypeGroup = XTypeGroup(
 );
 
 class _ConnectionDialog extends StatefulWidget {
-  const _ConnectionDialog({this.existing, required this.store});
+  const _ConnectionDialog({this.existing});
 
   final ConnectionConfig? existing;
-  final AppStore store;
 
   @override
   State<_ConnectionDialog> createState() => _ConnectionDialogState();
@@ -80,20 +74,21 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
   Future<void> _submit() async {
     if (!_model.valid) return;
     if (_model.credentialMode == CredentialMode.encrypted) {
+      final store = appState.store;
       // First-time encrypted save: make sure a master passphrase is set
       // up. The setup modal both creates the verifier and leaves the
       // session unlocked, so we can encrypt immediately afterwards.
-      if (!widget.store.isPassphraseConfigured) {
-        final ok = await showMasterPassphraseSetup(context, widget.store);
+      if (!store.isPassphraseConfigured) {
+        final ok = await showMasterPassphraseSetup(context);
         if (!ok) return;
-      } else if (!widget.store.isPassphraseUnlocked) {
-        final ok = await showMasterPassphraseUnlock(context, widget.store);
+      } else if (!store.isPassphraseUnlocked) {
+        final ok = await showMasterPassphraseUnlock(context);
         if (!ok) return;
       }
       // A typed password is encrypted now; an empty field keeps whatever
       // cipher the connection already had.
       final cipher = _model.password.text.isNotEmpty
-          ? widget.store.encryptWithPassphrase(_model.password.text)
+          ? store.encryptWithPassphrase(_model.password.text)
           : _existingCipher(widget.existing);
       if (!mounted) return;
       Navigator.of(context).pop(_model.buildConfig(overrideCipher: cipher));
