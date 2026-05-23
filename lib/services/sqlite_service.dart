@@ -46,6 +46,7 @@ class SqliteService implements DbService {
 
   Database? _db;
   SqliteTableRepository? _repository;
+  SqliteIntrospector? _introspector;
 
   @override
   bool get isConnected => _db != null;
@@ -71,6 +72,7 @@ class SqliteService implements DbService {
       mode: config.readOnly ? OpenMode.readOnly : OpenMode.readWrite,
     );
     _repository = SqliteTableRepository(this);
+    _introspector = SqliteIntrospector(this);
   }
 
   @override
@@ -78,6 +80,7 @@ class SqliteService implements DbService {
     _db?.dispose();
     _db = null;
     _repository = null;
+    _introspector = null;
   }
 
   TableRepository get tableRepository {
@@ -87,7 +90,11 @@ class SqliteService implements DbService {
   }
 
   @override
-  Introspector get introspector => SqliteIntrospector(this);
+  Introspector get introspector {
+    final i = _introspector;
+    if (i == null) throw StateError('Not connected');
+    return i;
+  }
 
   /// Runs a row-returning statement and reports it to [onQueryRun]. Internal
   /// introspection passes `log: false` to keep the activity log uncluttered.

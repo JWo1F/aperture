@@ -13,21 +13,39 @@ import 'sqlite_service.dart';
 /// `PRAGMA`-based sweeps are inherently per-relation (N+1), which is fine for
 /// a local file; they are run with logging suppressed so the activity log
 /// stays focused on user-issued queries.
+///
+/// One catalog-load pass goes through `loadAllColumns` →
+/// `loadAllForeignKeys` → `loadAllKeys` → `loadAllIndexes` in parallel. The
+/// raw `_relations()` scan and the per-table `PRAGMA table_info` /
+/// `PRAGMA index_list` / `PRAGMA index_info` results are memoised on the
+/// introspector instance so each unique PRAGMA hits SQLite exactly once
+/// across the whole pass; without this a 200-table file emits ~1k blocking
+/// FFI calls per catalog refresh. The cache lives for the lifetime of the
+/// introspector — `SqliteService` keeps a single instance per connection
+/// (recreated on `connect`), so it stays warm across the four loaders but
+/// is reset when the database is reopened.
 class SqliteIntrospector implements Introspector {
   SqliteIntrospector(this._db);
 
   final SqliteService _db;
 
+  List<DbTable>? _relationsCache;
+  final Map<String, List<List<Object?>>> _tableInfoCache = {};
+  final Map<String, List<List<Object?>>> _indexListCache = {};
+  final Map<String, List<List<Object?>>> _indexInfoCache = {};
+
   /// Every user table/view, with `sqlite_master.rowid` as the relation id.
   /// Internal `sqlite_*` objects are excluded.
   List<DbTable> _relations() {
+    final cached = _relationsCache;
+    if (cached != null) return cached;
     final rs = _db.select(
       "SELECT rowid, name, type FROM sqlite_master "
       "WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' "
       'ORDER BY name',
       log: false,
     );
-    return [
+    return _relationsCache = [
       for (final row in rs.rows)
         DbTable(
           oid: row[0] as int,
@@ -38,6 +56,39 @@ class SqliteIntrospector implements Introspector {
               : DbRelationKind.table,
         ),
     ];
+  }
+
+  List<List<Object?>> _tableInfo(String name) {
+    return _tableInfoCache.putIfAbsent(
+      name,
+      () => _db
+          .select('PRAGMA table_info(${quoteIdent(name)})', log: false)
+          .rows
+          .map((r) => r.toList())
+          .toList(),
+    );
+  }
+
+  List<List<Object?>> _indexList(String name) {
+    return _indexListCache.putIfAbsent(
+      name,
+      () => _db
+          .select('PRAGMA index_list(${quoteIdent(name)})', log: false)
+          .rows
+          .map((r) => r.toList())
+          .toList(),
+    );
+  }
+
+  List<List<Object?>> _indexInfo(String name) {
+    return _indexInfoCache.putIfAbsent(
+      name,
+      () => _db
+          .select('PRAGMA index_info(${quoteIdent(name)})', log: false)
+          .rows
+          .map((r) => r.toList())
+          .toList(),
+    );
   }
 
   @override
@@ -51,13 +102,9 @@ class SqliteIntrospector implements Introspector {
   Future<Map<int, List<DbColumn>>> loadAllColumns() async {
     final out = <int, List<DbColumn>>{};
     for (final table in _relations()) {
-      final info = _db.select(
-        'PRAGMA table_info(${quoteIdent(table.name)})',
-        log: false,
-      );
       // Columns: cid, name, type, notnull, dflt_value, pk.
       out[table.oid] = [
-        for (final row in info.rows)
+        for (final row in _tableInfo(table.name))
           DbColumn(
             name: row[1] as String,
             dataType: (row[2] as String?) ?? '',
@@ -126,17 +173,12 @@ class SqliteIntrospector implements Introspector {
       final keys = <DbKey>[];
       // Columns: seq, name, unique, origin, partial. `origin` is 'pk' for the
       // primary key, 'u' for a UNIQUE constraint, 'c' for an explicit index.
-      final list = _db
-          .select('PRAGMA index_list(${quoteIdent(table.name)})', log: false)
-          .rows;
-      for (final row in list) {
+      for (final row in _indexList(table.name)) {
         final origin = row[3];
         if (origin != 'pk' && origin != 'u') continue;
         final name = row[1] as String;
         final cols = [
-          for (final ir in _db
-              .select('PRAGMA index_info(${quoteIdent(name)})', log: false)
-              .rows)
+          for (final ir in _indexInfo(name))
             if (ir[2] != null) ir[2] as String,
         ];
         if (cols.isEmpty) continue;
@@ -153,12 +195,7 @@ class SqliteIntrospector implements Introspector {
       // `table_info` (column 5 is the 1-based position within the PK).
       if (!keys.any((k) => k.isPrimary)) {
         final pkRows = [
-          for (final r in _db
-              .select(
-                'PRAGMA table_info(${quoteIdent(table.name)})',
-                log: false,
-              )
-              .rows)
+          for (final r in _tableInfo(table.name))
             if ((r[5] as int) != 0) r,
         ]..sort((a, b) => (a[5] as int).compareTo(b[5] as int));
         if (pkRows.isNotEmpty) {
@@ -193,24 +230,18 @@ class SqliteIntrospector implements Introspector {
 
     final out = <int, List<DbIndex>>{};
     for (final table in _relations()) {
-      final list = _db
-          .select('PRAGMA index_list(${quoteIdent(table.name)})', log: false)
-          .rows;
       // Columns: seq, name, unique, origin, partial. Every index is kept,
       // including the auto-indexes backing PK / UNIQUE constraints.
       final indexes = <DbIndex>[];
-      for (final row in list) {
+      for (final row in _indexList(table.name)) {
         final name = row[1] as String;
-        final info = _db
-            .select('PRAGMA index_info(${quoteIdent(name)})', log: false)
-            .rows;
         indexes.add(
           DbIndex(
             name: name,
             unique: (row[2] as int) != 0,
             def: defByName[name] ?? '',
             columns: [
-              for (final ir in info)
+              for (final ir in _indexInfo(name))
                 if (ir[2] != null) ir[2] as String,
             ],
           ),

@@ -93,6 +93,43 @@ void main() {
       expect(stmts.single, contains('DEFAULT VALUES'));
     });
 
+    test(
+      'omits CellDefault assignments from UPDATEs so SQLite does not see '
+      'the unsupported `SET col = DEFAULT` clause',
+      () {
+        final stmts = buildSqliteEditStatements(
+          table,
+          EditBatch(
+            updatesByCtid: {
+              '1': {
+                'name': const CellLiteral('Alice'),
+                'count': const CellDefault(),
+              },
+            },
+          ),
+        );
+        expect(stmts, hasLength(1));
+        expect(stmts.single, contains('"name" = \'Alice\''));
+        expect(stmts.single, isNot(contains('DEFAULT')));
+        expect(stmts.single, isNot(contains('"count"')));
+      },
+    );
+
+    test('drops an UPDATE entirely when every assignment is CellDefault', () {
+      final stmts = buildSqliteEditStatements(
+        table,
+        EditBatch(
+          updatesByCtid: {
+            '1': {
+              'name': const CellDefault(),
+              'count': const CellDefault(),
+            },
+          },
+        ),
+      );
+      expect(stmts, isEmpty);
+    });
+
     test('orders updates → deletes → inserts', () {
       final stmts = buildSqliteEditStatements(
         table,
@@ -243,6 +280,79 @@ void main() {
       expect(affected, 1);
       final check = await svc.runQuery('SELECT title FROM books WHERE id = 1');
       expect(check.rows.single.single, 'Earthsea');
+    });
+
+    test(
+      'applyTableEdits surfaces the original SQLite error and leaves the '
+      'connection ready for a subsequent edit batch',
+      () async {
+        final schemas = await svc.introspector.loadSchemas();
+        final books =
+            schemas.single.tables.firstWhere((t) => t.name == 'books');
+        // Force a SQLite error mid-batch by trying to write a non-existent
+        // column. The transaction must roll back AND the connection must be
+        // healthy enough for the next applyTableEdits to start a fresh tx.
+        await expectLater(
+          svc.applyTableEdits(
+            books,
+            EditBatch(
+              updatesByCtid: {
+                '1': {'no_such_column': const CellLiteral('x')},
+              },
+            ),
+          ),
+          throwsA(isA<EditFailureException>()),
+        );
+        expect(svc.conn.autocommit, isTrue);
+
+        final affected = await svc.applyTableEdits(
+          books,
+          EditBatch(
+            updatesByCtid: {
+              '1': {'title': const CellLiteral('Recovered')},
+            },
+          ),
+        );
+        expect(affected, 1);
+      },
+    );
+
+    test(
+      'applyTableEdits with a mix of CellLiteral and CellDefault keeps the '
+      'CellDefault columns at their pre-edit values',
+      () async {
+        final schemas = await svc.introspector.loadSchemas();
+        final books =
+            schemas.single.tables.firstWhere((t) => t.name == 'books');
+        final before = await svc.runQuery(
+          'SELECT title, author_id FROM books WHERE id = 1',
+        );
+        final originalAuthorId = before.rows.single[1];
+        final affected = await svc.applyTableEdits(
+          books,
+          EditBatch(
+            updatesByCtid: {
+              '1': {
+                'title': const CellLiteral('New Title'),
+                'author_id': const CellDefault(),
+              },
+            },
+          ),
+        );
+        expect(affected, 1);
+        final after = await svc.runQuery(
+          'SELECT title, author_id FROM books WHERE id = 1',
+        );
+        expect(after.rows.single[0], 'New Title');
+        expect(after.rows.single[1], originalAuthorId);
+      },
+    );
+
+    test('introspector is stable across calls so internal caches stick',
+        () async {
+      final first = svc.introspector;
+      final second = svc.introspector;
+      expect(identical(first, second), isTrue);
     });
 
     test('applyTableEdits raises StaleRowException for a vanished row',

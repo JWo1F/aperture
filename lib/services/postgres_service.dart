@@ -90,6 +90,7 @@ class PostgresService implements DbService {
 
   Connection? _connection;
   PostgresTableRepository? _repository;
+  PostgresIntrospector? _introspector;
 
   @override
   bool get isConnected => _connection?.isOpen ?? false;
@@ -111,6 +112,7 @@ class PostgresService implements DbService {
       ),
     );
     _repository = PostgresTableRepository(this);
+    _introspector = PostgresIntrospector(this);
   }
 
   @override
@@ -118,6 +120,7 @@ class PostgresService implements DbService {
     await _connection?.close();
     _connection = null;
     _repository = null;
+    _introspector = null;
   }
 
   Connection get _conn {
@@ -136,7 +139,11 @@ class PostgresService implements DbService {
 
   /// Catalog introspector bound to this connection.
   @override
-  Introspector get introspector => PostgresIntrospector(this);
+  Introspector get introspector {
+    final i = _introspector;
+    if (i == null) throw StateError('Not connected');
+    return i;
+  }
 
   /// The single SQL channel. Every statement issued by the app flows
   /// through here so [onQueryRun] sees it before it hits the wire.

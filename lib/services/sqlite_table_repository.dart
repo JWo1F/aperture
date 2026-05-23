@@ -190,9 +190,25 @@ class SqliteTableRepository implements TableRepository {
   @override
   Future<int> applyEdits(DbTable table, EditBatch batch) async {
     if (batch.isEmpty) return 0;
-    final statements = buildSqliteEditStatements(table, batch);
-    final updateIds = batch.updatesByCtid.keys.toList(growable: false);
-    final deleteIds = batch.deleteCtids;
+    // An UPDATE whose only assignments are `CellDefault` collapses to a
+    // no-op (see `_renderUpdate`); drop those rowids from the tracking
+    // lists so the statement-to-rowid index used for stale-row detection
+    // stays aligned with the emitted SQL.
+    final effectiveUpdates = {
+      for (final e in batch.updatesByCtid.entries)
+        if (e.value.values.any((v) => v is! CellDefault)) e.key: e.value,
+    };
+    final effectiveBatch = identical(effectiveUpdates, batch.updatesByCtid)
+        ? batch
+        : EditBatch(
+            updatesByCtid: effectiveUpdates,
+            deleteCtids: batch.deleteCtids,
+            inserts: batch.inserts,
+          );
+    if (effectiveBatch.isEmpty) return 0;
+    final statements = buildSqliteEditStatements(table, effectiveBatch);
+    final updateIds = effectiveUpdates.keys.toList(growable: false);
+    final deleteIds = effectiveBatch.deleteCtids;
     final mutationCount = updateIds.length + deleteIds.length;
     final conn = _db.conn;
 
@@ -217,14 +233,38 @@ class SqliteTableRepository implements TableRepository {
       conn.execute('COMMIT');
       return affected;
     } on StaleRowException {
-      conn.execute('ROLLBACK');
+      _safeRollback(conn);
       rethrow;
     } on SqliteException catch (e) {
-      conn.execute('ROLLBACK');
+      _safeRollback(conn);
       throw EditFailureException(e.message);
     } catch (e) {
-      conn.execute('ROLLBACK');
+      _safeRollback(conn);
       throw EditFailureException(e.toString());
+    }
+  }
+
+  /// Rolls back the open transaction without ever letting a rollback
+  /// failure replace the original exception, and without leaving the
+  /// connection stuck inside a half-open transaction.
+  ///
+  /// SQLite's `ROLLBACK` can itself fail (disconnect, disk error). If we
+  /// let that propagate it would mask the real cause and — worse — every
+  /// subsequent `applyEdits` would die with `cannot start a transaction
+  /// within a transaction`, breaking the edit subsystem until reconnect.
+  /// We swallow the rollback error, then re-check `autocommit` and try
+  /// one more best-effort `ROLLBACK` if the connection is still inside a
+  /// transaction.
+  static void _safeRollback(Database conn) {
+    try {
+      conn.execute('ROLLBACK');
+    } catch (_) {
+      // Original exception wins; rollback failures are swallowed.
+    }
+    if (!conn.autocommit) {
+      try {
+        conn.execute('ROLLBACK');
+      } catch (_) {}
     }
   }
 
@@ -239,20 +279,27 @@ class SqliteTableRepository implements TableRepository {
 List<String> buildSqliteEditStatements(DbTable table, EditBatch batch) {
   return [
     for (final entry in batch.updatesByCtid.entries)
-      _renderUpdate(table, entry.key, entry.value),
+      ?_renderUpdate(table, entry.key, entry.value),
     for (final id in batch.deleteCtids) _renderDelete(table, id),
     for (final insert in batch.inserts) _renderInsert(table, insert),
   ];
 }
 
-String _renderUpdate(
+/// SQLite rejects `SET col = DEFAULT`, so `CellDefault` assignments are
+/// dropped from the SET list — the column simply keeps its current value,
+/// which matches the user's intent of "revert this edit". If every
+/// assignment is `CellDefault` the UPDATE collapses to a no-op and we
+/// skip emitting it entirely.
+String? _renderUpdate(
   DbTable table,
   String rowId,
   Map<String, CellEditValue> assignments,
 ) {
   final lines = assignments.entries
+      .where((e) => e.value is! CellDefault)
       .map((e) => '  ${quoteIdent(e.key)} = ${renderAssignment(e.value)}')
       .join(',\n');
+  if (lines.isEmpty) return null;
   return 'UPDATE ${table.qualifiedName} SET\n$lines\nWHERE rowid = $rowId';
 }
 
