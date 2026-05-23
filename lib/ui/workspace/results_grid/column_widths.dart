@@ -9,7 +9,11 @@ import 'grid_metrics.dart';
 /// Owns the grid's per-column pixel widths and the off-screen [TextPainter]
 /// used to auto-size them. A column's width comes from the caller's saved
 /// store when present, otherwise from sampling the widest visible value.
-class ColumnWidths {
+///
+/// Mutations notify listeners so geometry-consuming widgets (header row, body
+/// extent, per-row cell strip) can subscribe selectively instead of routing a
+/// resize tick through `ResultsGrid.setState` and rebuilding the world.
+class ColumnWidths extends ChangeNotifier {
   final TextPainter _measurer = TextPainter(
     textDirection: TextDirection.ltr,
     maxLines: 1,
@@ -74,14 +78,22 @@ class ColumnWidths {
               sortable,
             ),
     ];
+    notifyListeners();
   }
 
   /// Apply a resize-handle drag delta to [index], clamped to sane bounds.
   void resize(int index, double delta) {
-    _widths[index] = (_widths[index] + delta).clamp(64.0, 900.0);
+    final next = (_widths[index] + delta).clamp(64.0, 900.0);
+    if (next == _widths[index]) return;
+    _widths[index] = next;
+    notifyListeners();
   }
 
-  void dispose() => _measurer.dispose();
+  @override
+  void dispose() {
+    _measurer.dispose();
+    super.dispose();
+  }
 
   /// Default width = widest visible cell (and the header) in this column,
   /// clamped between [_autoMin] and [_autoMax]. Cells already ellipsize, so we

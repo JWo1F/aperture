@@ -659,12 +659,10 @@ class _ResultsGridState extends State<ResultsGrid> {
       );
     }
 
-    final dataWidth = _widths.total;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildHeader(result.columns, dataWidth),
+        _buildHeader(result.columns),
         Expanded(
           child: _totalRowCount == 0
               ? const EmptyState(
@@ -672,36 +670,42 @@ class _ResultsGridState extends State<ResultsGrid> {
                   title: 'No rows',
                   message: 'This query returned an empty result set.',
                 )
-              : _buildBody(result, dataWidth),
+              : _buildBody(result),
         ),
       ],
     );
   }
 
-  Widget _buildHeader(List<String> columns, double dataWidth) {
-    final dataHeaderRow = SizedBox(
-      width: dataWidth,
-      child: Row(
-        children: [
-          for (var i = 0; i < columns.length; i++)
-            HeaderCell(
-              label: columns[i],
-              width: _widths[i],
-              sort: _sortFor(columns[i]),
-              sortPriority: _sortPriority(columns[i]),
-              meta: widget.columnMeta?[columns[i]],
-              foreignKey: widget.foreignKeys?[columns[i]],
-              onSort: widget.onSortColumn == null
-                  ? null
-                  : () => widget.onSortColumn!(columns[i]),
-              onResize: (delta) {
-                setState(() => _widths.resize(i, delta));
-                final w = _widths[i];
-                widget.widths?[columns[i]] = w;
-                widget.onWidthChanged?.call(columns[i], w);
-              },
-            ),
-        ],
+  Widget _buildHeader(List<String> columns) {
+    // The header subscribes directly to [_widths] — a resize tick rebuilds the
+    // header strip (its `SizedBox` width + each `HeaderCell.width`) without
+    // touching `_ResultsGridState.build` and the body subtree below.
+    final dataHeaderRow = ListenableBuilder(
+      listenable: _widths,
+      builder: (_, _) => SizedBox(
+        width: _widths.total,
+        child: Row(
+          children: [
+            for (var i = 0; i < columns.length; i++)
+              HeaderCell(
+                label: columns[i],
+                width: _widths[i],
+                sort: _sortFor(columns[i]),
+                sortPriority: _sortPriority(columns[i]),
+                meta: widget.columnMeta?[columns[i]],
+                foreignKey: widget.foreignKeys?[columns[i]],
+                onSort: widget.onSortColumn == null
+                    ? null
+                    : () => widget.onSortColumn!(columns[i]),
+                onResize: (delta) {
+                  _widths.resize(i, delta);
+                  final w = _widths[i];
+                  widget.widths?[columns[i]] = w;
+                  widget.onWidthChanged?.call(columns[i], w);
+                },
+              ),
+          ],
+        ),
       ),
     );
 
@@ -772,7 +776,7 @@ class _ResultsGridState extends State<ResultsGrid> {
     );
   }
 
-  Widget _buildBody(QueryResult result, double dataWidth) {
+  Widget _buildBody(QueryResult result) {
     // Suppress Material's auto-injected desktop scrollbars — we draw our own
     // via the outer Scrollbar wrappers. Inheriting platform scroll physics
     // makes the trackpad feel match other macOS apps.
@@ -798,7 +802,7 @@ class _ResultsGridState extends State<ResultsGrid> {
                   deletedRows: widget.deletedRows,
                   selection: _selection,
                 ),
-                Expanded(child: _buildDataArea(result, dataWidth)),
+                Expanded(child: _buildDataArea(result)),
               ],
             ),
           ),
@@ -807,12 +811,10 @@ class _ResultsGridState extends State<ResultsGrid> {
     );
   }
 
-  Widget _buildDataArea(QueryResult result, double dataWidth) {
+  Widget _buildDataArea(QueryResult result) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bodyWidth = dataWidth < constraints.maxWidth
-            ? constraints.maxWidth
-            : dataWidth;
+        final minRowWidth = constraints.maxWidth;
         return OverlayPortal(
           controller: _expandCtrl,
           overlayChildBuilder: _buildExpansion,
@@ -836,11 +838,20 @@ class _ResultsGridState extends State<ResultsGrid> {
                 }
                 return false;
               },
+              // Outer `SizedBox` width subscribes to `_widths` so a resize
+              // tick updates the horizontal scroll extent in place — the body
+              // content (gestures + ListView + GridRow) is passed as `child`
+              // and reused untouched. Each `GridRow` subscribes independently
+              // and re-lays its own cell strip.
               child: SingleChildScrollView(
                 controller: _hBody,
                 scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: bodyWidth,
+                child: ListenableBuilder(
+                  listenable: _widths,
+                  builder: (_, child) => SizedBox(
+                    width: math.max(_widths.total, minRowWidth),
+                    child: child,
+                  ),
                   child: Builder(
                     builder: (bodyCtx) {
                       _bodyCtx = bodyCtx;
@@ -920,7 +931,7 @@ class _ResultsGridState extends State<ResultsGrid> {
                                   isInsert: slot.isInsert,
                                   isDeleted: _isDeletedRow(r),
                                   values: values,
-                                  rowWidth: bodyWidth,
+                                  minRowWidth: minRowWidth,
                                   columns: result.columns,
                                   columnMeta: widget.columnMeta,
                                   widths: _widths,
