@@ -5,9 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../theme/app_theme.dart';
 import 'indent.dart' as indent;
 import 'metrics.dart';
-import 'suggestions/popup_controller.dart';
-import 'suggestions/popup_state.dart';
-import 'suggestions/popup_widget.dart';
+import 'suggestions/popup_overlay.dart';
 import 'suggestions/suggestion.dart';
 
 /// Gutter icon attached to a specific 0-based line index.
@@ -111,12 +109,20 @@ class _CodeEditorState extends State<CodeEditor> {
   bool _ownsScroll = false;
   final LayerLink _link = LayerLink();
 
-  double _scrollOffset = 0;
+  /// Drives only the gutter / line-icon / band overlay rebuilds; the
+  /// field itself doesn't depend on scroll offset.
+  final ValueNotifier<double> _scrollOffset = ValueNotifier<double>(0);
 
   final LineMetrics _metrics = LineMetrics();
 
-  late final PopupController _popupCtl;
-  OverlayEntry? _overlay;
+  late final PopupOverlay _popup;
+
+  /// Merged listenable for the decoration subtree: gutter line numbers,
+  /// line icons, bands, and the empty-text hint all repaint when the
+  /// controller's text changes or the scroll offset shifts. The field
+  /// itself sits outside this listener — TextField runs its own listener
+  /// against the controller, so it doesn't need an outer rebuild.
+  late Listenable _decorationsListenable;
 
   TextStyle get _bodyStyle => GoogleFonts.jetBrainsMono(
     fontSize: widget.fontSize,
@@ -143,15 +149,21 @@ class _CodeEditorState extends State<CodeEditor> {
     widget.controller.addListener(_onControllerChange);
     _focus.addListener(_onFocusChange);
 
-    _popupCtl = PopupController(
+    _popup = PopupOverlay(
       editingController: widget.controller,
       isFocused: () => _focus.hasFocus,
       isMounted: () => mounted,
       caretAnchor: _caretAnchor,
       tokenStartOf: indent.tokenStart,
+      link: _link,
+      fontSize: () => widget.fontSize,
       suggest: widget.suggest,
     );
-    _popupCtl.popup.addListener(_onPopupChange);
+
+    _decorationsListenable = Listenable.merge([
+      widget.controller,
+      _scrollOffset,
+    ]);
   }
 
   @override
@@ -160,6 +172,10 @@ class _CodeEditorState extends State<CodeEditor> {
     if (old.controller != widget.controller) {
       old.controller.removeListener(_onControllerChange);
       widget.controller.addListener(_onControllerChange);
+      _decorationsListenable = Listenable.merge([
+        widget.controller,
+        _scrollOffset,
+      ]);
     }
     if (old.focusNode != widget.focusNode) {
       _focus.removeListener(_onFocusChange);
@@ -178,21 +194,20 @@ class _CodeEditorState extends State<CodeEditor> {
       _scroll.addListener(_onScroll);
     }
     if (old.suggest != widget.suggest) {
-      _popupCtl.suggest = widget.suggest;
+      _popup.suggest = widget.suggest;
     }
   }
 
   @override
   void dispose() {
-    _dismissOverlay();
-    _popupCtl.popup.removeListener(_onPopupChange);
-    _popupCtl.dispose();
+    _popup.dispose();
     widget.controller.removeListener(_onControllerChange);
     _focus.removeListener(_onFocusChange);
     _focus.onKeyEvent = null;
     if (_ownsFocus) _focus.dispose();
     _scroll.removeListener(_onScroll);
     if (_ownsScroll) _scroll.dispose();
+    _scrollOffset.dispose();
     super.dispose();
   }
 
@@ -213,29 +228,30 @@ class _CodeEditorState extends State<CodeEditor> {
         key == LogicalKeyboardKey.numpadEnter;
     final isTab = key == LogicalKeyboardKey.tab;
 
-    if (_popupCtl.isOpen) {
+    final popupCtl = _popup.controller;
+    if (popupCtl.isOpen) {
       if (key == LogicalKeyboardKey.arrowDown) {
-        _popupCtl.move(1);
+        popupCtl.move(1);
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowUp) {
-        _popupCtl.move(-1);
+        popupCtl.move(-1);
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.escape) {
-        _popupCtl.dismiss(suppressNext: true);
+        popupCtl.dismiss(suppressNext: true);
         return KeyEventResult.handled;
       }
       // Tab accepts the highlighted suggestion. Enter no longer accepts —
       // it dismisses the popup and falls through to the newline / submit
       // handlers so pressing Return always inserts a line.
       if (noModifier && isTab) {
-        final s = _popupCtl.popup.value;
-        _popupCtl.accept(s.items[s.selected]);
+        final s = popupCtl.popup.value;
+        popupCtl.accept(s.items[s.selected]);
         return KeyEventResult.handled;
       }
       if (noModifier && isEnter) {
-        _popupCtl.dismiss();
+        popupCtl.dismiss();
       }
     }
 
@@ -246,7 +262,7 @@ class _CodeEditorState extends State<CodeEditor> {
         hk.isControlPressed &&
         !hk.isMetaPressed &&
         !hk.isAltPressed) {
-      _popupCtl.requestSuggestions(manualTrigger: true);
+      popupCtl.requestSuggestions(manualTrigger: true);
       return KeyEventResult.handled;
     }
 
@@ -296,7 +312,7 @@ class _CodeEditorState extends State<CodeEditor> {
   /// suggestion request — suppress that one trigger so structural edits
   /// (Tab, Enter) don't reopen the popup.
   void _applyEdit(indent.EditResult result) {
-    _popupCtl.suppressNextAutoTrigger();
+    _popup.controller.suppressNextAutoTrigger();
     widget.controller.value = TextEditingValue(
       text: result.text,
       selection: result.selection,
@@ -305,39 +321,19 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _onScroll() {
     final next = _scroll.hasClients ? _scroll.offset : 0.0;
-    if ((next - _scrollOffset).abs() > 0.5) {
-      setState(() => _scrollOffset = next);
-      _popupCtl.refreshAnchor();
+    if ((next - _scrollOffset.value).abs() > 0.5) {
+      _scrollOffset.value = next;
+      _popup.controller.refreshAnchor();
     }
   }
 
   void _onFocusChange() {
-    if (!_focus.hasFocus) _popupCtl.dismiss();
+    if (!_focus.hasFocus) _popup.controller.dismiss();
   }
 
   void _onControllerChange() {
     widget.onChanged?.call(widget.controller.text);
-    _popupCtl.onEditingChanged();
-    if (mounted) setState(() {});
-  }
-
-  void _onPopupChange() {
-    final state = _popupCtl.popup.value;
-    if (state.isHidden) {
-      _dismissOverlay();
-    } else if (_overlay == null) {
-      _overlay = OverlayEntry(builder: _buildOverlay);
-      Overlay.of(context, rootOverlay: true).insert(_overlay!);
-    } else {
-      _overlay!.markNeedsBuild();
-    }
-  }
-
-  void _dismissOverlay() {
-    if (_overlay != null) {
-      _overlay!.remove();
-      _overlay = null;
-    }
+    _popup.controller.onEditingChanged();
   }
 
   // --- Layout helpers -----------------------------------------------------
@@ -359,7 +355,7 @@ class _CodeEditorState extends State<CodeEditor> {
     );
     if (caret == Offset.zero && _metrics.width <= 0) return Offset.zero;
     final x = _effectiveGutterWidth + widget.padding.left + caret.dx;
-    final y = widget.padding.top + caret.dy - _scrollOffset;
+    final y = widget.padding.top + caret.dy - _scrollOffset.value;
     return Offset(x, y + _rowH + 4);
   }
 
@@ -386,11 +382,7 @@ class _CodeEditorState extends State<CodeEditor> {
   @override
   Widget build(BuildContext context) {
     final bg = widget.background ?? AppColors.bg;
-    final padded = Container(
-      color: bg,
-      padding: widget.padding,
-      child: _buildField(),
-    );
+    _popup.attach(context);
 
     return ClipRect(
       child: CompositedTransformTarget(
@@ -402,14 +394,18 @@ class _CodeEditorState extends State<CodeEditor> {
                 _effectiveGutterWidth -
                 widget.padding.left -
                 widget.padding.right;
-            _ensureMetrics(context, bodyWidth);
-            final lines = _logicalLineCount;
 
-            return Stack(
-              clipBehavior: Clip.hardEdge,
-              children: [
-                if (_hasGutter)
-                  Row(
+            // Built once per layout pass — both the gutter-and-field row
+            // and the bare-padded variant share the same Widget instance,
+            // so Element reuse keeps the TextField from rebuilding on
+            // scroll / text-driven decoration repaints.
+            final padded = Container(
+              color: bg,
+              padding: widget.padding,
+              child: _buildField(),
+            );
+            final fieldRow = _hasGutter
+                ? Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Container(
@@ -427,19 +423,31 @@ class _CodeEditorState extends State<CodeEditor> {
                       Expanded(child: padded),
                     ],
                   )
-                else
-                  padded,
-                // Bands paint on top of the body so the near-transparent
-                // accent tint shows through; IgnorePointer keeps caret hits
-                // flowing to the field.
-                for (final band in widget.lineBands) _buildBand(band),
-                if (widget.showLineNumbers)
-                  for (var i = 0; i < lines; i++) _buildLineNumber(i),
-                if (widget.lineIcon != null)
-                  for (var i = 0; i < lines; i++) ..._buildLineIcon(i),
-                if (widget.controller.text.isEmpty && widget.hintText != null)
-                  _buildHint(),
-              ],
+                : padded;
+
+            return ListenableBuilder(
+              listenable: _decorationsListenable,
+              builder: (context, _) {
+                _ensureMetrics(context, bodyWidth);
+                final lines = _logicalLineCount;
+                return Stack(
+                  clipBehavior: Clip.hardEdge,
+                  children: [
+                    fieldRow,
+                    // Bands paint on top of the body so the near-transparent
+                    // accent tint shows through; IgnorePointer keeps caret
+                    // hits flowing to the field.
+                    for (final band in widget.lineBands) _buildBand(band),
+                    if (widget.showLineNumbers)
+                      for (var i = 0; i < lines; i++) _buildLineNumber(i),
+                    if (widget.lineIcon != null)
+                      for (var i = 0; i < lines; i++) ..._buildLineIcon(i),
+                    if (widget.controller.text.isEmpty &&
+                        widget.hintText != null)
+                      _buildHint(),
+                  ],
+                );
+              },
             );
           },
         ),
@@ -477,9 +485,12 @@ class _CodeEditorState extends State<CodeEditor> {
         ? band.startLine
         : band.endLine;
     final end = band.startLine <= band.endLine ? band.endLine : band.startLine;
-    final top = widget.padding.top + _topPx(start) - _scrollOffset;
+    final top = widget.padding.top + _topPx(start) - _scrollOffset.value;
     final bottom =
-        widget.padding.top + _topPx(end) + _heightPx(end) - _scrollOffset;
+        widget.padding.top +
+        _topPx(end) +
+        _heightPx(end) -
+        _scrollOffset.value;
     return Positioned(
       left: _effectiveGutterWidth,
       right: 0,
@@ -504,7 +515,7 @@ class _CodeEditorState extends State<CodeEditor> {
     final digitsWidth = _effectiveGutterWidth - widget.iconColumnWidth - 8;
     return Positioned(
       left: 0,
-      top: widget.padding.top + _topPx(i) - _scrollOffset,
+      top: widget.padding.top + _topPx(i) - _scrollOffset.value,
       width: digitsWidth,
       height: _rowH,
       child: Padding(
@@ -527,7 +538,7 @@ class _CodeEditorState extends State<CodeEditor> {
     if (icon == null) return;
     yield Positioned(
       left: _effectiveGutterWidth - widget.iconColumnWidth - 2,
-      top: widget.padding.top + _topPx(i) - _scrollOffset,
+      top: widget.padding.top + _topPx(i) - _scrollOffset.value,
       width: widget.iconColumnWidth,
       height: _rowH,
       child: MouseRegion(
@@ -570,30 +581,6 @@ class _CodeEditorState extends State<CodeEditor> {
       left: _effectiveGutterWidth + widget.padding.left,
       top: widget.padding.top,
       child: IgnorePointer(child: Text(widget.hintText!, style: style)),
-    );
-  }
-
-  Widget _buildOverlay(BuildContext context) {
-    return ValueListenableBuilder<PopupState>(
-      valueListenable: _popupCtl.popup,
-      builder: (context, state, _) {
-        if (state.isHidden) return const SizedBox.shrink();
-        return Positioned(
-          left: 0,
-          top: 0,
-          child: CompositedTransformFollower(
-            link: _link,
-            showWhenUnlinked: false,
-            offset: state.anchor,
-            child: AutocompletePopup(
-              state: state,
-              onPick: _popupCtl.accept,
-              onHover: _popupCtl.setSelected,
-              fontSize: widget.fontSize,
-            ),
-          ),
-        );
-      },
     );
   }
 }
