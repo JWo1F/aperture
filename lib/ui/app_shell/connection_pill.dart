@@ -192,14 +192,9 @@ class _ConnectionPickerPanel extends StatelessWidget {
 
   final VoidCallback onClose;
 
-  Future<void> _newConnection(BuildContext context) async {
+  Future<void> _newConnection(BuildContext context) {
     onClose();
-    final appState = context.read<AppState>();
-    final registry = context.read<ConnectionRegistry>();
-    final config = await showConnectionDialog(context);
-    if (config == null) return;
-    registry.add(config);
-    await appState.connect(config);
+    return createConnectionFlow(context);
   }
 
   @override

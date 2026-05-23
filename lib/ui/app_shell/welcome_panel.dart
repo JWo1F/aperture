@@ -18,14 +18,8 @@ import '../widgets/common.dart';
 class WelcomePanel extends StatelessWidget {
   const WelcomePanel({super.key});
 
-  Future<void> _newConnection(BuildContext context) async {
-    final appState = context.read<AppState>();
-    final registry = context.read<ConnectionRegistry>();
-    final config = await showConnectionDialog(context);
-    if (config == null) return;
-    registry.add(config);
-    await appState.connect(config);
-  }
+  Future<void> _newConnection(BuildContext context) =>
+      createConnectionFlow(context);
 
   @override
   Widget build(BuildContext context) {
@@ -157,11 +151,8 @@ class _RecentsBlock extends StatelessWidget {
   Future<void> _editConnection(
     BuildContext context,
     ConnectionConfig config,
-  ) async {
-    final appState = context.read<AppState>();
-    final updated = await showConnectionDialog(context, existing: config);
-    if (updated != null) appState.updateConnection(updated);
-  }
+  ) =>
+      editConnectionFlow(context, config);
 
   @override
   Widget build(BuildContext context) {

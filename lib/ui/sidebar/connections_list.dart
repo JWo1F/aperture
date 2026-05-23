@@ -15,12 +15,8 @@ class AllConnectionsList extends StatelessWidget {
 
   final SidebarDeps deps;
 
-  Future<void> _newConnection(BuildContext context) async {
-    final config = await showConnectionDialog(context);
-    if (config == null) return;
-    deps.registry.add(config);
-    await deps.appState.connect(config);
-  }
+  Future<void> _newConnection(BuildContext context) =>
+      createConnectionFlow(context);
 
   @override
   Widget build(BuildContext context) {
@@ -145,10 +141,8 @@ class _SavedConnectionRow extends StatelessWidget {
   final ConnectionConfig config;
   final SidebarDeps deps;
 
-  Future<void> _edit(BuildContext context) async {
-    final updated = await showConnectionDialog(context, existing: config);
-    if (updated != null) deps.appState.updateConnection(updated);
-  }
+  Future<void> _edit(BuildContext context) =>
+      editConnectionFlow(context, config);
 
   void _delete() => deps.registry.remove(config.id);
 
