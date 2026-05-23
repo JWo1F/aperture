@@ -599,35 +599,36 @@ class TabsController extends ChangeNotifier {
     return service.previewEditStatements(tab.table, batch);
   }
 
-  Future<String?> applyTableEdits(TableTab tab) async {
+  Future<EditResult> applyTableEdits(TableTab tab) async {
     final service = session.service;
-    if (service == null || !tab.hasEdits || tab.applying) return null;
+    if (service == null || !tab.hasEdits || tab.applying) {
+      return const EditResult.success(0);
+    }
     final result = tab.result;
     if (result == null || result.rowIds == null) {
-      return 'This view has no row identity and cannot be edited.';
+      return const EditResult.failure(
+        appliedCount: 0,
+        totalCount: 0,
+        error: 'This view has no row identity and cannot be edited.',
+      );
     }
     final batch = _buildBatch(tab);
-    if (batch.isEmpty) return null;
+    if (batch.isEmpty) return const EditResult.success(0);
 
     tab.beginApply();
-
-    String? error;
-    try {
-      await service.applyTableEdits(tab.table, batch);
-    } on StaleRowException catch (e) {
-      error = e.toString();
-    } on EditFailureException catch (e) {
-      error = e.message;
-    } catch (e) {
-      error = e.toString();
-    }
+    final outcome = await service.applyTableEdits(tab.table, batch);
     tab.endApply();
 
-    if (error == null) {
+    if (outcome.ok) {
       tab.resetAllEdits();
       await loadTablePage(tab, tab.page);
+    } else if (outcome.partial) {
+      // Engine reported committed statements before the failure. Reload so
+      // the grid reflects whatever the database actually has — pending
+      // edits stay so the user can see which ones to retry.
+      await loadTablePage(tab, tab.page);
     }
-    return error;
+    return outcome;
   }
 
   // --- Query tabs ----------------------------------------------------

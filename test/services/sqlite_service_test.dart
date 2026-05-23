@@ -5,7 +5,6 @@ import 'package:dbv/models/connection_config.dart';
 import 'package:dbv/models/db_object.dart';
 import 'package:dbv/services/sqlite_service.dart';
 import 'package:dbv/services/sqlite_table_repository.dart';
-import 'package:dbv/services/table_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -269,7 +268,7 @@ void main() {
     test('applyTableEdits commits an update by rowid', () async {
       final schemas = await svc.introspector.loadSchemas();
       final books = schemas.single.tables.firstWhere((t) => t.name == 'books');
-      final affected = await svc.applyTableEdits(
+      final result = await svc.applyTableEdits(
         books,
         EditBatch(
           updatesByCtid: {
@@ -277,7 +276,9 @@ void main() {
           },
         ),
       );
-      expect(affected, 1);
+      expect(result.ok, isTrue);
+      expect(result.appliedCount, 1);
+      expect(result.totalCount, 1);
       final check = await svc.runQuery('SELECT title FROM books WHERE id = 1');
       expect(check.rows.single.single, 'Earthsea');
     });
@@ -292,20 +293,21 @@ void main() {
         // Force a SQLite error mid-batch by trying to write a non-existent
         // column. The transaction must roll back AND the connection must be
         // healthy enough for the next applyTableEdits to start a fresh tx.
-        await expectLater(
-          svc.applyTableEdits(
-            books,
-            EditBatch(
-              updatesByCtid: {
-                '1': {'no_such_column': const CellLiteral('x')},
-              },
-            ),
+        final failed = await svc.applyTableEdits(
+          books,
+          EditBatch(
+            updatesByCtid: {
+              '1': {'no_such_column': const CellLiteral('x')},
+            },
           ),
-          throwsA(isA<EditFailureException>()),
         );
+        expect(failed.ok, isFalse);
+        expect(failed.error, isNotNull);
+        expect(failed.appliedCount, 0,
+            reason: 'the only statement threw before _db.run returned');
         expect(svc.conn.autocommit, isTrue);
 
-        final affected = await svc.applyTableEdits(
+        final recovered = await svc.applyTableEdits(
           books,
           EditBatch(
             updatesByCtid: {
@@ -313,7 +315,8 @@ void main() {
             },
           ),
         );
-        expect(affected, 1);
+        expect(recovered.ok, isTrue);
+        expect(recovered.appliedCount, 1);
       },
     );
 
@@ -328,7 +331,7 @@ void main() {
           'SELECT title, author_id FROM books WHERE id = 1',
         );
         final originalAuthorId = before.rows.single[1];
-        final affected = await svc.applyTableEdits(
+        final result = await svc.applyTableEdits(
           books,
           EditBatch(
             updatesByCtid: {
@@ -339,7 +342,8 @@ void main() {
             },
           ),
         );
-        expect(affected, 1);
+        expect(result.ok, isTrue);
+        expect(result.appliedCount, 1);
         final after = await svc.runQuery(
           'SELECT title, author_id FROM books WHERE id = 1',
         );
@@ -355,22 +359,59 @@ void main() {
       expect(identical(first, second), isTrue);
     });
 
-    test('applyTableEdits raises StaleRowException for a vanished row',
+    test('applyTableEdits reports a stale-row failure with rolled-back state',
         () async {
       final schemas = await svc.introspector.loadSchemas();
       final books = schemas.single.tables.firstWhere((t) => t.name == 'books');
-      expect(
-        svc.applyTableEdits(
+      final result = await svc.applyTableEdits(
+        books,
+        EditBatch(
+          updatesByCtid: {
+            '999': {'title': const CellLiteral('ghost')},
+          },
+        ),
+      );
+      expect(result.ok, isFalse);
+      expect(result.error, contains('Row no longer matches'));
+      expect(result.totalCount, 1);
+      // SQLite reports the stale UPDATE as "attempted" — the statement
+      // executed (changed 0 rows) before the stale-row check threw.
+      expect(result.appliedCount, 1);
+      expect(result.partial, isFalse,
+          reason:
+              'one-statement batch cannot be partial; it is fully rolled back');
+    });
+
+    test(
+      'applyTableEdits reports partial progress for a multi-statement batch '
+      'that fails on the second update',
+      () async {
+        final schemas = await svc.introspector.loadSchemas();
+        final books =
+            schemas.single.tables.firstWhere((t) => t.name == 'books');
+        // Two UPDATEs: the first targets a real row, the second a column
+        // that doesn't exist. The first runs cleanly; the second throws.
+        final result = await svc.applyTableEdits(
           books,
           EditBatch(
             updatesByCtid: {
-              '999': {'title': const CellLiteral('ghost')},
+              '1': {'title': const CellLiteral('First')},
+              '2': {'no_such_column': const CellLiteral('boom')},
             },
           ),
-        ),
-        throwsA(isA<StaleRowException>()),
-      );
-    });
+        );
+        expect(result.ok, isFalse);
+        expect(result.appliedCount, 1,
+            reason: 'first UPDATE returned; second threw');
+        expect(result.totalCount, 2);
+        expect(result.partial, isTrue);
+        // ROLLBACK reverted the first UPDATE — the on-disk state is unchanged.
+        final after = await svc.runQuery(
+          'SELECT title FROM books WHERE id = 1',
+        );
+        expect(after.rows.single.single, 'A Wizard of Earthsea');
+      },
+    );
 
     test('loadTableDdl returns the verbatim CREATE plus index DDL', () async {
       final schemas = await svc.introspector.loadSchemas();

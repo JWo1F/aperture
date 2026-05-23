@@ -84,13 +84,17 @@ void _showPending(BuildContext context, TabsController tabs, TableTab tab) {
     context,
     statements: statements,
     onApply: () async {
-      final error = await tabs.applyTableEdits(tab);
-      if (error != null && messenger != null) {
+      final outcome = await tabs.applyTableEdits(tab);
+      if (!outcome.ok && messenger != null) {
+        final prefix = outcome.partial
+            ? 'Partial apply (${outcome.appliedCount} of '
+                '${outcome.totalCount}; refresh to see current state)'
+            : '0 of ${outcome.totalCount} applied (rolled back)';
         messenger.showSnackBar(
           SnackBar(
             backgroundColor: AppColors.surfaceAlt,
             content: Text(
-              'Apply failed: $error',
+              '$prefix: ${outcome.error}',
               style: AppTheme.mono(size: 11.5, color: AppColors.error),
             ),
           ),

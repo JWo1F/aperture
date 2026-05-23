@@ -214,11 +214,12 @@ class PostgresService implements DbService {
       buildPostgresEditStatements(table, batch);
 
   @override
-  Future<int> applyTableEdits(DbTable table, EditBatch batch) => timedEdit(
-    batch: batch,
-    logger: onEditApplied,
-    apply: () => tableRepository.applyEdits(table, batch),
-  );
+  Future<EditResult> applyTableEdits(DbTable table, EditBatch batch) =>
+      timedEdit(
+        batch: batch,
+        logger: onEditApplied,
+        apply: () => tableRepository.applyEdits(table, batch),
+      );
 
   /// Reads `SHOW server_version` and reduces it to a `vMAJOR.MINOR` tag via
   /// [versionTag]. Postgres returns something like `16.4 (Homebrew)`.

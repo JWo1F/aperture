@@ -6,10 +6,9 @@ import 'introspector.dart';
 import 'postgres_service.dart';
 import 'sqlite_service.dart';
 
-export '../models/cell_edit.dart' show EditBatch, PendingInsert;
+export '../models/cell_edit.dart' show EditBatch, EditResult, PendingInsert;
 export 'introspector.dart' show Introspector;
-export 'table_repository.dart'
-    show TableRepository, StaleRowException, EditFailureException;
+export 'table_repository.dart' show TableRepository;
 
 /// Called for every SQL statement that crosses a driver — successful or not.
 /// Lives on a single channel so each engine reports queries to the activity
@@ -78,9 +77,10 @@ abstract interface class DbService {
   /// A readable `CREATE TABLE …` reconstruction for the schema viewer.
   Future<String> loadTableDdl(DbTable table);
 
-  /// Applies a batch of pending cell edits in one transaction; returns the
-  /// total affected row count.
-  Future<int> applyTableEdits(DbTable table, EditBatch batch);
+  /// Applies a batch of pending cell edits in one transaction. The result
+  /// carries the applied-vs-total statement counts plus the engine's error
+  /// message on failure — see [EditResult] for engine semantics.
+  Future<EditResult> applyTableEdits(DbTable table, EditBatch batch);
 
   /// The exact SQL [applyTableEdits] would send for [batch], for the
   /// pending-edits preview modal.
@@ -103,35 +103,23 @@ String? versionTag(String raw) {
   return parts.length >= 2 ? 'v${parts[0]}.${parts[1]}' : 'v${parts.first}';
 }
 
-/// Times [apply] and reports the outcome to [logger]. Returns the affected
-/// row count from `apply` on success; on failure reports the elapsed time +
-/// error to [logger] and rethrows so the caller still sees the original
-/// driver/engine exception. Shared timing skin around the per-engine
-/// `TableRepository.applyEdits` paths.
-Future<int> timedEdit({
+/// Times [apply] and reports the outcome to [logger]. The repository owns
+/// the success/failure shape (an [EditResult]); this wrapper only times the
+/// call and forwards the engine's error to the activity log.
+Future<EditResult> timedEdit({
   required EditBatch batch,
   required EditLogger? logger,
-  required Future<int> Function() apply,
+  required Future<EditResult> Function() apply,
 }) async {
   final watch = Stopwatch()..start();
-  try {
-    final affected = await apply();
-    watch.stop();
-    logger?.call(
-      statementCount: batch.statementCount,
-      elapsed: watch.elapsed,
-      error: null,
-    );
-    return affected;
-  } catch (e) {
-    watch.stop();
-    logger?.call(
-      statementCount: batch.statementCount,
-      elapsed: watch.elapsed,
-      error: e.toString(),
-    );
-    rethrow;
-  }
+  final result = await apply();
+  watch.stop();
+  logger?.call(
+    statementCount: batch.statementCount,
+    elapsed: watch.elapsed,
+    error: result.error,
+  );
+  return result;
 }
 
 /// Builds the right [DbService] for [config]'s engine. The session

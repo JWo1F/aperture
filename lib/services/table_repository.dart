@@ -2,6 +2,8 @@ import '../models/cell_edit.dart';
 import '../models/db_object.dart';
 import '../models/query_result.dart';
 
+export '../models/cell_edit.dart' show EditResult;
+
 /// Engine-neutral per-relation database operations: paging, exporting,
 /// applying cell edits, and building the DDL for the schema viewer.
 ///
@@ -37,8 +39,9 @@ abstract interface class TableRepository {
   Future<String> loadDdl(DbTable table);
 
   /// Applies a batch of pending UPDATEs/DELETEs/INSERTs in one transaction.
-  /// Returns the total number of affected rows.
-  Future<int> applyEdits(DbTable table, EditBatch batch);
+  /// Returns an [EditResult] carrying applied-vs-total counts plus the
+  /// engine's error message on failure.
+  Future<EditResult> applyEdits(DbTable table, EditBatch batch);
 }
 
 /// Thrown when an UPDATE/DELETE batch hits a row whose identity no longer
@@ -63,13 +66,3 @@ class StaleRowException implements Exception {
       '(row $rowId affected $affectedRows rows). Reload and retry.';
 }
 
-/// Wraps a database-side failure during an edit batch so the UI layer never
-/// sees a raw driver exception type.
-class EditFailureException implements Exception {
-  EditFailureException(this.message);
-
-  final String message;
-
-  @override
-  String toString() => message;
-}

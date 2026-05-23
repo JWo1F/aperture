@@ -184,11 +184,19 @@ class SqliteTableRepository implements TableRepository {
 
   /// Applies a batch of pending edits inside one transaction. Any UPDATE or
   /// DELETE that doesn't touch exactly one row rolls the whole batch back
-  /// and raises [StaleRowException] — the rowid no longer resolves, so the
-  /// caller should reload and retry.
+  /// and is reported as a [StaleRowException]-shaped failure on the
+  /// returned [EditResult] — the rowid no longer resolves, so the caller
+  /// should reload and retry.
+  ///
+  /// `appliedCount` is best-effort progress: the number of statements that
+  /// `_db.run` returned before the throw. In the common case `_safeRollback`
+  /// reverts those rows, so the on-disk count is 0. The progress count
+  /// matters when ROLLBACK itself fails (disk error, disconnect) — see
+  /// [EditResult.partial] — at which point the UI must tell the user to
+  /// refresh before retrying.
   @override
-  Future<int> applyEdits(DbTable table, EditBatch batch) async {
-    if (batch.isEmpty) return 0;
+  Future<EditResult> applyEdits(DbTable table, EditBatch batch) async {
+    if (batch.isEmpty) return const EditResult.success(0);
     // An UPDATE whose only assignments are `CellDefault` collapses to a
     // no-op (see `_renderUpdate`); drop those rowids from the tracking
     // lists so the statement-to-rowid index used for stale-row detection
@@ -204,18 +212,20 @@ class SqliteTableRepository implements TableRepository {
             deleteCtids: batch.deleteCtids,
             inserts: batch.inserts,
           );
-    if (effectiveBatch.isEmpty) return 0;
+    if (effectiveBatch.isEmpty) return const EditResult.success(0);
     final statements = buildSqliteEditStatements(table, effectiveBatch);
+    final totalCount = statements.length;
     final updateIds = effectiveUpdates.keys.toList(growable: false);
     final deleteIds = effectiveBatch.deleteCtids;
     final mutationCount = updateIds.length + deleteIds.length;
     final conn = _db.conn;
 
     conn.execute('BEGIN');
+    var applied = 0;
     try {
-      var affected = 0;
       for (var i = 0; i < statements.length; i++) {
         _db.run(statements[i]);
+        applied = i + 1;
         final changed = _db.updatedRows;
         if (i < mutationCount && changed != 1) {
           final id = i < updateIds.length
@@ -227,19 +237,30 @@ class SqliteTableRepository implements TableRepository {
             table: table,
           );
         }
-        affected += changed;
       }
       conn.execute('COMMIT');
-      return affected;
-    } on StaleRowException {
+      return EditResult.success(totalCount);
+    } on StaleRowException catch (e) {
       _safeRollback(conn);
-      rethrow;
+      return EditResult.failure(
+        appliedCount: applied,
+        totalCount: totalCount,
+        error: e.toString(),
+      );
     } on SqliteException catch (e) {
       _safeRollback(conn);
-      throw EditFailureException(e.message);
+      return EditResult.failure(
+        appliedCount: applied,
+        totalCount: totalCount,
+        error: e.message,
+      );
     } catch (e) {
       _safeRollback(conn);
-      throw EditFailureException(e.toString());
+      return EditResult.failure(
+        appliedCount: applied,
+        totalCount: totalCount,
+        error: e.toString(),
+      );
     }
   }
 

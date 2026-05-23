@@ -93,7 +93,14 @@ class CatalogController extends ChangeNotifier {
   /// Run phase 1 (columns/FKs/indexes/enums/domains) under [gen]. The five
   /// sweeps run in parallel; any error leaves the catalog in its phase-0
   /// state and surfaces on [lastError].
+  ///
+  /// Every mutation of controller-owned state (loading flag, lastError,
+  /// catalog) is guarded by a fresh generation check. A stale success must
+  /// not clear a newer connection's error, and a stale failure must not
+  /// overwrite it — the user clicking "connect" while a slow phase-1 is
+  /// in flight should see only the new connection's outcome.
   Future<void> runPhase1(DbService service, int gen) async {
+    if (gen != _generation) return;
     _phase1Loading = true;
     _lastError = null;
     notifyListeners();
@@ -126,6 +133,7 @@ class CatalogController extends ChangeNotifier {
         },
       );
     } catch (e) {
+      if (gen != _generation) return;
       _lastError = e;
     } finally {
       if (gen == _generation) {

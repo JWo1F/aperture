@@ -317,19 +317,22 @@ class PostgresTableRepository implements TableRepository {
   /// whole batch back and raises [StaleRowException] — the row's ctid was
   /// moved by a concurrent VACUUM FULL / HOT update / DELETE, or the row
   /// no longer exists. The caller should ask the user to reload and retry.
+  ///
+  /// Postgres runs the batch under `runTx`. Any thrown failure aborts the
+  /// whole transaction, so the returned [EditResult] is either a full
+  /// success (`appliedCount == totalCount`) or a clean rollback
+  /// (`appliedCount == 0`). There is no partial-progress case.
   @override
-  Future<int> applyEdits(DbTable table, EditBatch batch) async {
-    if (batch.isEmpty) return 0;
+  Future<EditResult> applyEdits(DbTable table, EditBatch batch) async {
+    if (batch.isEmpty) return const EditResult.success(0);
     final statements = buildPostgresEditStatements(table, batch);
-    // Mirror the statement-list ordering used inside buildPostgresEditStatements
-    // so a stale-row failure can name the ctid it stumbled on.
+    final totalCount = statements.length;
     final updateCtids = batch.updatesByCtid.keys.toList(growable: false);
     final deleteCtids = batch.deleteCtids;
     final mutationCount = updateCtids.length + deleteCtids.length;
     try {
-      return await _db.runTx<int>(
+      await _db.runTx<void>(
         (scope) async {
-          var affected = 0;
           for (var i = 0; i < statements.length; i++) {
             final result = await scope.execute(statements[i]);
             if (i < mutationCount && result.affectedRows != 1) {
@@ -342,18 +345,25 @@ class PostgresTableRepository implements TableRepository {
                 table: table,
               );
             }
-            affected += result.affectedRows;
           }
-          return affected;
         },
         settings: TransactionSettings(
           isolationLevel: IsolationLevel.repeatableRead,
         ),
       );
-    } on StaleRowException {
-      rethrow;
+      return EditResult.success(totalCount);
+    } on StaleRowException catch (e) {
+      return EditResult.failure(
+        appliedCount: 0,
+        totalCount: totalCount,
+        error: e.toString(),
+      );
     } on ServerException catch (e) {
-      throw EditFailureException(e.message);
+      return EditResult.failure(
+        appliedCount: 0,
+        totalCount: totalCount,
+        error: e.message,
+      );
     }
   }
 }

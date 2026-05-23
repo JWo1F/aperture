@@ -233,11 +233,12 @@ class SqliteService implements DbService {
       buildSqliteEditStatements(table, batch);
 
   @override
-  Future<int> applyTableEdits(DbTable table, EditBatch batch) => timedEdit(
-    batch: batch,
-    logger: onEditApplied,
-    apply: () => tableRepository.applyEdits(table, batch),
-  );
+  Future<EditResult> applyTableEdits(DbTable table, EditBatch batch) =>
+      timedEdit(
+        batch: batch,
+        logger: onEditApplied,
+        apply: () => tableRepository.applyEdits(table, batch),
+      );
 
   /// Reduces `sqlite_version()` (e.g. `3.45.1`) to a `vMAJOR.MINOR` tag via
   /// [versionTag].

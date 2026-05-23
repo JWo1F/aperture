@@ -74,3 +74,47 @@ class EditBatch {
   int get statementCount =>
       updatesByCtid.length + deleteCtids.length + inserts.length;
 }
+
+/// Outcome of an apply-edits pass.
+///
+/// [totalCount] is the number of mutation statements the batch resolved to
+/// (UPDATEs + DELETEs + INSERTs, minus any UPDATE that collapsed to a no-op
+/// — see SQLite's CellDefault-only filter). [appliedCount] is what the
+/// engine actually committed before returning.
+///
+/// Engine semantics for [appliedCount] on failure:
+/// - Postgres runs the batch under `runTx`. Any thrown exception aborts the
+///   whole transaction, so [appliedCount] is always 0 on failure or
+///   [totalCount] on success — there is no in-between.
+/// - SQLite hand-rolls BEGIN/COMMIT and exposes a partial-progress count:
+///   the number of statements whose `_db.run` returned before the throw.
+///   The `_safeRollback` recovery still issues ROLLBACK, so committed rows
+///   are reverted in the common case — but a ROLLBACK that itself fails
+///   (disk error, disconnect) can leave statements partially persisted.
+///   [partial] flags that "rolled back" is not guaranteed; the user should
+///   refresh to see the on-disk state before deciding to retry.
+class EditResult {
+  const EditResult.success(int count)
+      : appliedCount = count,
+        totalCount = count,
+        error = null;
+
+  const EditResult.failure({
+    required this.appliedCount,
+    required this.totalCount,
+    required this.error,
+  });
+
+  /// Statements the engine reported as committed before the batch returned.
+  final int appliedCount;
+
+  /// Statements the batch resolved to.
+  final int totalCount;
+
+  /// Null on full success; otherwise the engine's message.
+  final String? error;
+
+  bool get ok => error == null;
+
+  bool get partial => appliedCount > 0 && appliedCount < totalCount;
+}

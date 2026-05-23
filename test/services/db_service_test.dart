@@ -39,7 +39,7 @@ void main() {
       String? loggedError;
       Duration? loggedElapsed;
 
-      final affected = await timedEdit(
+      final result = await timedEdit(
         batch: batch,
         logger:
             ({
@@ -51,44 +51,51 @@ void main() {
               loggedElapsed = elapsed;
               loggedError = error;
             },
-        apply: () async => 7,
+        apply: () async => const EditResult.success(1),
       );
 
-      expect(affected, 7);
+      expect(result.ok, isTrue);
+      expect(result.appliedCount, 1);
       expect(loggedStatementCount, batch.statementCount);
       expect(loggedError, isNull);
       expect(loggedElapsed, isNotNull);
     });
 
-    test('rethrows from apply and reports the error message', () async {
+    test('forwards a failure result and logs the engine error', () async {
       final batch = EditBatch(deleteCtids: const ['1', '2']);
       String? loggedError;
 
-      await expectLater(
-        timedEdit(
-          batch: batch,
-          logger:
-              ({
-                required int statementCount,
-                required Duration elapsed,
-                required String? error,
-              }) {
-                loggedError = error;
-              },
-          apply: () async => throw StateError('boom'),
+      final result = await timedEdit(
+        batch: batch,
+        logger:
+            ({
+              required int statementCount,
+              required Duration elapsed,
+              required String? error,
+            }) {
+              loggedError = error;
+            },
+        apply: () async => const EditResult.failure(
+          appliedCount: 1,
+          totalCount: 2,
+          error: 'boom',
         ),
-        throwsA(isA<StateError>()),
       );
-      expect(loggedError, contains('boom'));
+
+      expect(result.ok, isFalse);
+      expect(result.partial, isTrue);
+      expect(result.error, 'boom');
+      expect(loggedError, 'boom');
     });
 
     test('still works with a null logger', () async {
-      final affected = await timedEdit(
+      final result = await timedEdit(
         batch: EditBatch(),
         logger: null,
-        apply: () async => 0,
+        apply: () async => const EditResult.success(0),
       );
-      expect(affected, 0);
+      expect(result.ok, isTrue);
+      expect(result.totalCount, 0);
     });
   });
 }
