@@ -44,6 +44,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Per-machine Flutter / Android SDK paths
+/android/local.properties
+
 # Local review notes — kept locally but not part of the repo history.
 .review/
 devtools_options.yaml
