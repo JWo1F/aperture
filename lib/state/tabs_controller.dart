@@ -40,6 +40,20 @@ class TabsController extends ChangeNotifier {
   int _activeIndex = 0;
   int _idCounter = 0;
 
+  /// Per-tab mutable state (cell edits, result swap, applying flag, page
+  /// number, …) lives on each [WorkspaceTab]'s own [ChangeNotifier]. Toolbar
+  /// surfaces that derive from aggregate-across-tabs state — the pending-edit
+  /// pill (`unappliedEditCount`) and the export-availability key
+  /// (`activeTab.result`) — read through `context.select<TabsController, …>`,
+  /// which only re-runs when the controller itself notifies. Forwarding every
+  /// open tab's notifications back through this controller is what makes
+  /// those selectors live: without it, a cell edit on the active tab repaints
+  /// the grid but the pending pill stays at its last value until something
+  /// else (open/close/select) happens to fire a controller-level notify.
+  void _attachTab(WorkspaceTab tab) => tab.addListener(notifyListeners);
+
+  void _detachTab(WorkspaceTab tab) => tab.removeListener(notifyListeners);
+
   List<WorkspaceTab> get tabs => List.unmodifiable(_tabs);
 
   int get activeIndex => _activeIndex;
@@ -72,9 +86,19 @@ class TabsController extends ChangeNotifier {
     }
   }
 
+  @override
+  void dispose() {
+    for (final t in _tabs) {
+      _detachTab(t);
+      t.dispose();
+    }
+    super.dispose();
+  }
+
   /// Reset everything when the connection changes (or disconnects).
   void clear() {
     for (final t in _tabs) {
+      _detachTab(t);
       t.dispose();
     }
     _tabs.clear();
@@ -94,6 +118,7 @@ class TabsController extends ChangeNotifier {
 
   void newQueryTab() {
     final tab = QueryTab(_nextId(), name: _nextQueryName());
+    _attachTab(tab);
     _tabs.add(tab);
     _select(_tabs.length - 1);
   }
@@ -149,6 +174,7 @@ class TabsController extends ChangeNotifier {
     // Rehydrate the per-tab message log from the connection store so the
     // Messages tab opens populated after a restart.
     tab.hydrateMessages(perConnection.messagesFor(q.id));
+    _attachTab(tab);
     _tabs.add(tab);
     _select(_tabs.length - 1);
   }
@@ -157,6 +183,7 @@ class TabsController extends ChangeNotifier {
     final i = _tabs.indexWhere((t) => t.id == id);
     if (i == -1) return;
     final removed = _tabs.removeAt(i);
+    _detachTab(removed);
     removed.dispose();
     if (_activeIndex >= _tabs.length) {
       _activeIndex = _tabs.isEmpty ? 0 : _tabs.length - 1;
@@ -171,7 +198,10 @@ class TabsController extends ChangeNotifier {
       orElse: () => throw StateError('Tab not found'),
     );
     for (final t in _tabs) {
-      if (t.id != keepId) t.dispose();
+      if (t.id != keepId) {
+        _detachTab(t);
+        t.dispose();
+      }
     }
     _tabs
       ..clear()
@@ -185,6 +215,7 @@ class TabsController extends ChangeNotifier {
     final i = _tabs.indexWhere((t) => t.id == anchorId);
     if (i == -1 || i == _tabs.length - 1) return;
     for (final t in _tabs.sublist(i + 1)) {
+      _detachTab(t);
       t.dispose();
     }
     _tabs.removeRange(i + 1, _tabs.length);
@@ -195,6 +226,7 @@ class TabsController extends ChangeNotifier {
 
   void closeAllTabs() {
     for (final t in _tabs) {
+      _detachTab(t);
       t.dispose();
     }
     _tabs.clear();
@@ -214,6 +246,7 @@ class TabsController extends ChangeNotifier {
       return;
     }
     final tab = SchemaTab(_nextId(), table);
+    _attachTab(tab);
     _tabs.add(tab);
     _select(_tabs.length - 1);
 
@@ -252,6 +285,7 @@ class TabsController extends ChangeNotifier {
     final tab = TableTab(_nextId(), table);
     final savedWidths = perConnection.columnWidthsFor(table);
     if (savedWidths != null) tab.mergeSavedWidths(savedWidths);
+    _attachTab(tab);
     _tabs.add(tab);
     _select(_tabs.length - 1);
     await loadTablePage(tab, 0);

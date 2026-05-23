@@ -203,10 +203,22 @@ class _TableToolbarState extends State<_TableToolbar> {
     _select = CodeEditorController(text: widget.tab.selectList);
     _filter = CodeEditorController(text: widget.tab.filter);
     _order = CodeEditorController(text: widget.tab.orderBy);
+    widget.tab.addListener(_onTabChanged);
+  }
+
+  @override
+  void didUpdateWidget(_TableToolbar old) {
+    super.didUpdateWidget(old);
+    if (!identical(widget.tab, old.tab)) {
+      old.tab.removeListener(_onTabChanged);
+      widget.tab.addListener(_onTabChanged);
+      _syncFromTab();
+    }
   }
 
   @override
   void dispose() {
+    widget.tab.removeListener(_onTabChanged);
     _select.dispose();
     _filter.dispose();
     _order.dispose();
@@ -214,6 +226,25 @@ class _TableToolbarState extends State<_TableToolbar> {
     _filterFocus.dispose();
     _orderFocus.dispose();
     super.dispose();
+  }
+
+  // Tab clause mutations (FK follow, header sort cycle, appendTableFilter)
+  // are the indirect path back into the input controllers. Guarded on focus
+  // so a user mid-edit isn't clobbered, and on equality so an unrelated tab
+  // notification (e.g. a row-edit) doesn't dirty the editors.
+  void _onTabChanged() => _syncFromTab();
+
+  void _syncFromTab() {
+    final tab = widget.tab;
+    if (!_selectFocus.hasFocus && _select.text != tab.selectList) {
+      _select.text = tab.selectList;
+    }
+    if (!_filterFocus.hasFocus && _filter.text != tab.filter) {
+      _filter.text = tab.filter;
+    }
+    if (!_orderFocus.hasFocus && _order.text != tab.orderBy) {
+      _order.text = tab.orderBy;
+    }
   }
 
   void _applySelect() =>
@@ -225,47 +256,9 @@ class _TableToolbarState extends State<_TableToolbar> {
   void _applyOrder() =>
       widget.tabs.setTableOrder(widget.tab, _order.text.trim());
 
-  // ignore: unused_element
-  void _previewEdits() {
-    final statements = widget.tabs.previewEditStatements(widget.tab);
-    showPendingEditsModal(
-      context,
-      statements: statements,
-      onApply: widget.tab.applying ? null : _applyEdits,
-    );
-  }
-
-  Future<void> _applyEdits() async {
-    final error = await widget.tabs.applyTableEdits(widget.tab);
-    if (error != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.surfaceAlt,
-          content: Text(
-            'Apply failed: $error',
-            style: AppTheme.mono(size: 11.5, color: AppColors.error),
-          ),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final tab = widget.tab;
-
-    // Tab-state changes (FK follow → setTableFilter, header click → setOrder,
-    // etc.) need to flow back into the input controllers, but only when the
-    // user isn't actively typing in that field.
-    if (!_selectFocus.hasFocus && _select.text != tab.selectList) {
-      _select.text = tab.selectList;
-    }
-    if (!_filterFocus.hasFocus && _filter.text != tab.filter) {
-      _filter.text = tab.filter;
-    }
-    if (!_orderFocus.hasFocus && _order.text != tab.orderBy) {
-      _order.text = tab.orderBy;
-    }
 
     final selectActive =
         tab.selectList.trim().isNotEmpty && tab.selectList.trim() != '*';
