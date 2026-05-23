@@ -9,6 +9,13 @@ class SidebarFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([appState.session, appState.catalog]),
+      builder: (context, _) => _build(context),
+    );
+  }
+
+  Widget _build(BuildContext context) {
     final status = appState.session.status;
     final connected = status == ConnectionStatus.connected;
     final color = switch (status) {

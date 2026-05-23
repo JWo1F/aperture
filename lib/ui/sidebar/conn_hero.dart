@@ -9,11 +9,23 @@ import '../widgets/context_menu.dart';
 
 /// The connection card at the top of the sidebar: engine glyph, database
 /// name, server tag, and a chevron that opens the connection menu.
+///
+/// Subscribes to [SessionController] directly: when this widget is mounted
+/// as `const ConnHero()`, Flutter's element-update path short-circuits on
+/// identical widget references, so a parent `ListenableBuilder` rebuild
+/// alone would not refresh the hero's status text.
 class ConnHero extends StatelessWidget {
   const ConnHero({super.key});
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: appState.session,
+      builder: (context, _) => _build(context),
+    );
+  }
+
+  Widget _build(BuildContext context) {
     final session = appState.session;
     final conn = session.activeConnection;
     final connected = session.status == ConnectionStatus.connected;
