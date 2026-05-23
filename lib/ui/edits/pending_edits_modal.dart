@@ -25,78 +25,102 @@ Future<void> showPendingEditsModal(
     barrierDismissible: true,
     barrierLabel: 'Dismiss pending edits',
     barrierColor: Colors.transparent,
-    transitionDuration: const Duration(milliseconds: 180),
-    pageBuilder: (_, _, _) => _PendingEditsRoute(
+    transitionDuration: const Duration(milliseconds: 220),
+    pageBuilder: (_, _, _) => const SizedBox.shrink(),
+    transitionBuilder: (_, animation, _, _) => _PendingEditsRoute(
+      animation: animation,
       statements: statements,
       onApply: onApply,
       onRevert: onRevert,
     ),
-    transitionBuilder: (_, animation, _, child) {
-      final curve = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
-      return FadeTransition(
-        opacity: curve,
-        child: ScaleTransition(
-          scale: Tween(begin: 0.97, end: 1.0).animate(curve),
-          child: child,
-        ),
-      );
-    },
   );
 }
 
+/// Hand-rolled transition. Wrapping the whole stack in a [FadeTransition]
+/// makes the [BackdropFilter] punt blur work until it's near-opaque
+/// (Opacity+saveLayer skip the costly filter pass while ramping up), so
+/// the user sees a sharp scene that snaps to blurred at the end of the
+/// animation. We instead drive the blur sigma directly from the route
+/// animation — the filter runs every frame at the right intensity, the
+/// scrim alpha ramps with it, and the panel does its own fade+scale.
 class _PendingEditsRoute extends StatelessWidget {
   const _PendingEditsRoute({
+    required this.animation,
     required this.statements,
     required this.onApply,
     required this.onRevert,
   });
 
+  final Animation<double> animation;
   final List<String> statements;
   final Future<void> Function()? onApply;
   final VoidCallback? onRevert;
 
+  static const double _maxBlur = 14;
+  static const double _scrimNear = 0.55;
+  static const double _scrimFar = 0.78;
+  static const double _panelStartScale = 0.97;
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => Navigator.of(context).pop(),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment.center,
-                    radius: 1.2,
-                    colors: [
-                      AppColors.scrim.withValues(alpha: 0.55),
-                      AppColors.scrim.withValues(alpha: 0.78),
-                    ],
+    final curve = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    final panel = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: _PendingPanel(
+        statements: statements,
+        onApply: onApply,
+        onRevert: onRevert,
+      ),
+    );
+
+    return AnimatedBuilder(
+      animation: curve,
+      builder: (context, child) {
+        final t = curve.value.clamp(0.0, 1.0);
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.of(context).pop(),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(
+                    sigmaX: _maxBlur * t,
+                    sigmaY: _maxBlur * t,
+                  ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: Alignment.center,
+                        radius: 1.2,
+                        colors: [
+                          AppColors.scrim.withValues(alpha: _scrimNear * t),
+                          AppColors.scrim.withValues(alpha: _scrimFar * t),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ),
-        // Modal swallows pointer events so taps inside don't dismiss.
-        Center(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {},
-            child: _PendingPanel(
-              statements: statements,
-              onApply: onApply,
-              onRevert: onRevert,
+            Center(
+              child: Opacity(
+                opacity: t,
+                child: Transform.scale(
+                  scale: _panelStartScale + (1 - _panelStartScale) * t,
+                  child: child,
+                ),
+              ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
+      child: panel,
     );
   }
 }
