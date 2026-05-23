@@ -51,22 +51,13 @@ class TableView extends StatelessWidget {
               // them reads even when the grid hasn't loaded any rows yet.
               child: ColoredBox(
                 color: AppColors.bg,
+                // A null result means the first page has not arrived yet
+                // (failures set `result` to a failure QueryResult, so the
+                // grid branch covers them — see `failPageLoad`). The gap
+                // between tab creation and `beginPageLoad` firing also
+                // lands here, which is why we don't gate on `loading`.
                 child: tab.result == null
-                    ? (tab.loading
-                          ? Center(
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.accent,
-                                ),
-                              ),
-                            )
-                          : const EmptyState(
-                              icon: Icons.warning_amber_outlined,
-                              title: 'Could not load data',
-                            ))
+                    ? _TableInitialLoading(table: tab.table)
                     : Stack(
                         // Force non-positioned children (the ResultsGrid) to
                         // fill the available Stack box. Without this, the
@@ -154,6 +145,51 @@ class TableView extends StatelessWidget {
     appState.tabsController.appendTableFilter(
       tab,
       equalityFragment(column, value, not: not),
+    );
+  }
+}
+
+/// Centered spinner shown while the table's first page is in flight.
+/// Matches the welcome panel's preparing block in shape and weight so the
+/// "we're waiting on the database" beat reads the same across the app.
+class _TableInitialLoading extends StatelessWidget {
+  const _TableInitialLoading({required this.table});
+
+  final DbTable table;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.accent,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Loading rows…',
+            style: AppTheme.ui(
+              size: 12.5,
+              color: AppColors.textSecondary,
+              weight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            table.qualifiedName,
+            style: AppTheme.mono(
+              size: 11,
+              color: AppColors.textMuted,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
