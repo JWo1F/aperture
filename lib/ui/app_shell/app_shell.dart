@@ -5,9 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
+import '../../state/app_store.dart';
 import '../../state/event_log.dart';
-import '../../state/master_passphrase.dart';
-import '../../state/preferences_controller.dart';
 import '../../state/session_controller.dart';
 import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
@@ -46,24 +45,24 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final appState = context.read<AppState>();
-      final masterPassphrase = context.read<MasterPassphrase>();
+      final store = context.read<AppStore>();
       appState.onPassphraseNeeded = () =>
-          showMasterPassphraseUnlock(context, masterPassphrase);
+          showMasterPassphraseUnlock(context, store);
     });
   }
 
   @override
   void didChangeMetrics() {
-    // Native window size / position changed — debounce-save the current
-    // frame so reopening lands at roughly the same place.
-    context.read<PreferencesController>().captureWindowFrame();
+    // Native window size / position changed — stash the current frame
+    // so the next save tick persists it.
+    context.read<AppStore>().captureWindowFrame();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
     if (lifecycleState == AppLifecycleState.inactive ||
         lifecycleState == AppLifecycleState.detached) {
-      context.read<PreferencesController>().captureWindowFrame();
+      context.read<AppStore>().captureWindowFrame();
     }
   }
 
@@ -140,14 +139,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // log-panel resize, preference changes, tab mutations etc. all stay
     // out of this widget's rebuild path. The sidebar / log-panel /
     // workspace subtrees subscribe to their own state independently.
-    final preferences = context.read<PreferencesController>();
+    final store = context.read<AppStore>();
     final eventLog = context.read<EventLog>();
     final tabs = context.read<TabsController>();
     final status = context.select<SessionController, ConnectionStatus>(
       (s) => s.status,
     );
-    final sidebarVisible = context.select<PreferencesController, bool>(
-      (p) => p.sidebarVisible,
+    final sidebarVisible = context.select<AppStore, bool>(
+      (s) => s.sidebarVisible,
     );
     final logVisible = context.select<EventLog, bool>((l) => l.isVisible);
     final connected = status == ConnectionStatus.connected;
@@ -200,7 +199,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                       // versa.
                       if (sidebarVisible) ...[
                         const RepaintBoundary(child: Sidebar()),
-                        SidebarResizeHandle(preferences: preferences),
+                        SidebarResizeHandle(store: store),
                       ],
                       Expanded(
                         child: RepaintBoundary(
@@ -212,7 +211,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                           ),
                         ),
                       ),
-                      if (logVisible) LogResizeHandle(preferences: preferences),
+                      if (logVisible) LogResizeHandle(store: store),
                       const RepaintBoundary(child: LogPanel()),
                     ],
                   ),

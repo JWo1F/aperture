@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/catalog_controller.dart';
-import '../../state/per_connection_store.dart';
+import '../../state/connection_views.dart';
 import '../../state/session_controller.dart';
 import '../../state/tabs_controller.dart';
 import '../../theme/app_theme.dart';
@@ -25,7 +25,6 @@ class WorkspaceHome extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = context.watch<SessionController>();
     final catalog = context.watch<CatalogController>();
-    final perConnection = context.watch<PerConnectionStore>();
     final tabs = context.read<TabsController>();
     final conn = session.activeConnection;
     final tint = AppColors.connectionTint(conn?.color);
@@ -41,10 +40,10 @@ class WorkspaceHome extends StatelessWidget {
     ]..sort((a, b) => b.sizeBytes!.compareTo(a.sizeBytes!));
     final totalSize = sized.fold<int>(0, (sum, r) => sum + r.sizeBytes!);
 
-    final recents = perConnection.recents;
-    final frequent = perConnection.frequentTables(limit: 6);
+    final recents = recentTablesView(conn, catalog);
+    final frequent = frequentTablesView(conn, catalog, limit: 6);
     final jumpBack = recents.isNotEmpty ? recents : frequent;
-    final queries = perConnection.savedQueries;
+    final queries = conn?.savedQueries ?? const [];
 
     return DecoratedBox(
       decoration: BoxDecoration(

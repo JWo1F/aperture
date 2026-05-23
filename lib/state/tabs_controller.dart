@@ -10,9 +10,9 @@ import '../models/saved_query.dart';
 import '../models/value_format.dart';
 import '../services/db_service.dart';
 import '../services/postgres_service.dart';
+import 'app_store.dart';
 import 'catalog_controller.dart';
 import 'navigation_history.dart';
-import 'per_connection_store.dart';
 import 'session_controller.dart';
 import 'workspace_tab.dart';
 
@@ -28,13 +28,18 @@ class TabsController extends ChangeNotifier {
     required this.session,
     required this.catalog,
     required this.history,
-    required this.perConnection,
+    required this.store,
   });
 
   final SessionController session;
   final CatalogController catalog;
   final NavigationHistory history;
-  final PerConnectionStore perConnection;
+  final AppStore store;
+
+  List<SavedQuery> get _savedQueries =>
+      session.activeConnection?.savedQueries ?? const [];
+
+  String? get _connectionId => session.activeConnection?.id;
 
   final List<WorkspaceTab> _tabs = [];
   int _activeIndex = 0;
@@ -81,7 +86,7 @@ class TabsController extends ChangeNotifier {
     while (true) {
       final candidate = 'id${_idCounter++}';
       if (_tabs.any((t) => t.id == candidate)) continue;
-      if (perConnection.savedQueries.any((q) => q.id == candidate)) continue;
+      if (_savedQueries.any((q) => q.id == candidate)) continue;
       return candidate;
     }
   }
@@ -125,7 +130,7 @@ class TabsController extends ChangeNotifier {
 
   String _nextQueryName() {
     final taken = <String>{
-      for (final q in perConnection.savedQueries) q.name,
+      for (final q in _savedQueries) q.name,
       for (final t in _tabs)
         if (t is QueryTab) t.name,
     };
@@ -139,13 +144,15 @@ class TabsController extends ChangeNotifier {
   /// Autosave from the query editor — debounced upstream.
   void updateQuerySql(QueryTab tab, String sql) {
     tab.sql = sql;
-    perConnection.persistQueryEdit(tab.id, tab.name, sql);
+    final id = _connectionId;
+    if (id != null) store.upsertSavedQuery(id, tab.id, tab.name, sql);
   }
 
   void renameQuery(String id, String name) {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return;
-    perConnection.renameQuery(id, trimmed);
+    final connId = _connectionId;
+    if (connId != null) store.renameSavedQuery(connId, id, trimmed);
     for (final t in _tabs) {
       if (t is QueryTab && t.id == id) t.name = trimmed;
     }
@@ -153,13 +160,16 @@ class TabsController extends ChangeNotifier {
   }
 
   void deleteSavedQuery(String id) {
-    perConnection.deleteSavedQuery(id);
+    final connId = _connectionId;
+    if (connId != null) store.deleteSavedQuery(connId, id);
     final i = _tabs.indexWhere((t) => t is QueryTab && t.id == id);
     if (i != -1) closeTab(_tabs[i].id);
   }
 
   void duplicateSavedQuery(String id) {
-    perConnection.duplicateSavedQuery(id, _nextId(), _nextQueryName());
+    final connId = _connectionId;
+    if (connId == null) return;
+    store.duplicateSavedQuery(connId, id, _nextId(), _nextQueryName());
   }
 
   void openSavedQuery(SavedQuery q) {
@@ -171,9 +181,12 @@ class TabsController extends ChangeNotifier {
       return;
     }
     final tab = QueryTab(q.id, name: q.name, sql: q.sql);
-    // Rehydrate the per-tab message log from the connection store so the
-    // Messages tab opens populated after a restart.
-    tab.hydrateMessages(perConnection.messagesFor(q.id));
+    final connId = _connectionId;
+    if (connId != null) {
+      // Rehydrate the per-tab message log from the connection store so the
+      // Messages tab opens populated after a restart.
+      tab.hydrateMessages(store.queryMessagesFor(connId, q.id));
+    }
     _attachTab(tab);
     _tabs.add(tab);
     _select(_tabs.length - 1);
@@ -274,7 +287,8 @@ class TabsController extends ChangeNotifier {
   // --- Table tabs ----------------------------------------------------
 
   Future<TableTab> openTable(DbTable table) async {
-    perConnection.trackRecent(table);
+    final connId = _connectionId;
+    if (connId != null) store.trackRecentTable(connId, table);
     final existing = _tabs.indexWhere(
       (t) => t is TableTab && t.table.qualifiedName == table.qualifiedName,
     );
@@ -283,7 +297,8 @@ class TabsController extends ChangeNotifier {
       return _tabs[existing] as TableTab;
     }
     final tab = TableTab(_nextId(), table);
-    final savedWidths = perConnection.columnWidthsFor(table);
+    final savedWidths =
+        session.activeConnection?.columnWidths[table.qualifiedKey];
     if (savedWidths != null) tab.mergeSavedWidths(savedWidths);
     _attachTab(tab);
     _tabs.add(tab);
@@ -650,9 +665,10 @@ class TabsController extends ChangeNotifier {
       result: result,
       sql: sql,
       message: message,
-      maxMessages: PerConnectionStore.maxMessagesPerQuery,
+      maxMessages: AppStore.maxMessagesPerQuery,
     );
-    perConnection.appendQueryMessage(tab.id, message);
+    final connId = _connectionId;
+    if (connId != null) store.appendQueryMessage(connId, tab.id, message);
   }
 
   /// Loads or refreshes the EXPLAIN plan for [tab]'s most-recent run.

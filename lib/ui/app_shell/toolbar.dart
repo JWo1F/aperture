@@ -5,8 +5,8 @@ import 'package:macos_window_utils/macos_window_utils.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
+import '../../state/app_store.dart';
 import '../../state/navigation_history.dart';
-import '../../state/preferences_controller.dart';
 import '../../state/tabs_controller.dart';
 import '../../theme/app_theme.dart';
 import '../command_palette/command_palette.dart';
@@ -89,7 +89,7 @@ class _ToolbarState extends State<Toolbar> {
     // pending-edit count and the active tab's exportable result are the
     // only fields driving any visible change in here.
     final appState = context.read<AppState>();
-    final preferences = context.read<PreferencesController>();
+    final store = context.read<AppStore>();
     final tabs = context.read<TabsController>();
     final pending = context.select<TabsController, int>(
       (t) => t.unappliedEditCount,
@@ -100,8 +100,8 @@ class _ToolbarState extends State<Toolbar> {
     final canGoForward = context.select<NavigationHistory, bool>(
       (h) => h.canGoForward,
     );
-    final brightness = context.select<PreferencesController, AppBrightness>(
-      (p) => p.brightness,
+    final brightness = context.select<AppStore, AppBrightness>(
+      (s) => s.brightness,
     );
     // Export availability tracks the active tab's id + its result
     // existence. Selecting both as a record means switching tabs or
@@ -152,7 +152,7 @@ class _ToolbarState extends State<Toolbar> {
                 TbIcon(
                   icon: Icons.view_sidebar_outlined,
                   tooltip: 'Toggle sidebar',
-                  onPressed: preferences.toggleSidebar,
+                  onPressed: store.toggleSidebar,
                 ),
                 const TbRail(),
                 TbIcon(
@@ -207,7 +207,7 @@ class _ToolbarState extends State<Toolbar> {
                       ? Icons.dark_mode_outlined
                       : Icons.light_mode_outlined,
                   tooltip: 'Toggle theme',
-                  onPressed: preferences.toggleBrightness,
+                  onPressed: store.toggleBrightness,
                 ),
                 TbIcon(
                   icon: Icons.folder_outlined,

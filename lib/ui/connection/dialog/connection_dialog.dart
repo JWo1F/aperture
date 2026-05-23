@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../models/connection_config.dart';
 import '../../../services/one_password_client.dart';
 import '../../../services/sqlite_service.dart';
-import '../../../state/master_passphrase.dart';
+import '../../../state/app_store.dart';
 import '../../../theme/app_theme.dart';
 import '../master_passphrase_setup.dart';
 import 'connection_form_model.dart';
@@ -14,19 +14,24 @@ import 'dialog_body.dart';
 import 'dialog_footer.dart';
 import 'dialog_header.dart';
 
+String _existingCipher(ConnectionConfig? existing) {
+  final ec = existing?.credential;
+  return ec is EncryptedCredential ? ec.cipher : '';
+}
+
 /// Modal form for creating or editing a saved connection. Resolves to the
 /// resulting [ConnectionConfig], or null if dismissed.
 Future<ConnectionConfig?> showConnectionDialog(
   BuildContext context, {
   ConnectionConfig? existing,
 }) {
-  final masterPassphrase = context.read<MasterPassphrase>();
+  final store = context.read<AppStore>();
   return showDialog<ConnectionConfig>(
     context: context,
     barrierColor: AppColors.scrim,
     builder: (_) => _ConnectionDialog(
       existing: existing,
-      masterPassphrase: masterPassphrase,
+      store: store,
     ),
   );
 }
@@ -46,10 +51,10 @@ const _sqliteTypeGroup = XTypeGroup(
 );
 
 class _ConnectionDialog extends StatefulWidget {
-  const _ConnectionDialog({this.existing, required this.masterPassphrase});
+  const _ConnectionDialog({this.existing, required this.store});
 
   final ConnectionConfig? existing;
-  final MasterPassphrase masterPassphrase;
+  final AppStore store;
 
   @override
   State<_ConnectionDialog> createState() => _ConnectionDialogState();
@@ -74,28 +79,22 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
 
   Future<void> _submit() async {
     if (!_model.valid) return;
-    if (_model.credentialSource == CredentialSource.encrypted) {
+    if (_model.credentialMode == CredentialMode.encrypted) {
       // First-time encrypted save: make sure a master passphrase is set
       // up. The setup modal both creates the verifier and leaves the
       // session unlocked, so we can encrypt immediately afterwards.
-      if (!widget.masterPassphrase.isConfigured) {
-        final ok = await showMasterPassphraseSetup(
-          context,
-          widget.masterPassphrase,
-        );
+      if (!widget.store.isPassphraseConfigured) {
+        final ok = await showMasterPassphraseSetup(context, widget.store);
         if (!ok) return;
-      } else if (!widget.masterPassphrase.isUnlocked) {
-        final ok = await showMasterPassphraseUnlock(
-          context,
-          widget.masterPassphrase,
-        );
+      } else if (!widget.store.isPassphraseUnlocked) {
+        final ok = await showMasterPassphraseUnlock(context, widget.store);
         if (!ok) return;
       }
       // A typed password is encrypted now; an empty field keeps whatever
       // cipher the connection already had.
       final cipher = _model.password.text.isNotEmpty
-          ? widget.masterPassphrase.encrypt(_model.password.text)
-          : widget.existing?.passwordCipher;
+          ? widget.store.encryptWithPassphrase(_model.password.text)
+          : _existingCipher(widget.existing);
       if (!mounted) return;
       Navigator.of(context).pop(_model.buildConfig(overrideCipher: cipher));
       return;

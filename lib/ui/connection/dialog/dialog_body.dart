@@ -7,6 +7,12 @@ import '../../widgets/common.dart';
 import 'connection_form_model.dart';
 import 'form_widgets.dart';
 
+const String _credentialPlainHelp = 'Saved as plain text in store.json.';
+const String _credentialEncryptedHelp =
+    'Encrypted with your master passphrase (AES-GCM).';
+const String _credentialOnePasswordHelp =
+    'Resolved from the 1Password CLI each time you connect.';
+
 /// The scrollable form body of the connection dialog. Reads and mutates a
 /// [ConnectionFormModel]; file-picking and the SSL menu are delegated back
 /// to the owning dialog through the [onPickFile], [onCreateFile] and
@@ -129,19 +135,14 @@ class ConnectionDialogBody extends StatelessWidget {
   }
 
   Widget _passwordField() {
-    final isOnePassword =
-        model.credentialSource == CredentialSource.onePassword;
-    final helper = switch (model.credentialSource) {
-      CredentialSource.plain => 'Saved as plain text in connections.json.',
-      CredentialSource.encrypted =>
-        'Encrypted with your master passphrase (AES-GCM).',
-      CredentialSource.onePassword =>
-        'Resolved from the 1Password CLI each time you connect.',
+    final isOnePassword = model.credentialMode == CredentialMode.onePassword;
+    final helper = switch (model.credentialMode) {
+      CredentialMode.plain => _credentialPlainHelp,
+      CredentialMode.encrypted => _credentialEncryptedHelp,
+      CredentialMode.onePassword => _credentialOnePasswordHelp,
     };
-    final keepHint =
-        model.credentialSource == CredentialSource.encrypted &&
-        model.existing != null &&
-        (model.existing!.passwordCipher?.isNotEmpty ?? false);
+    final keepHint = model.credentialMode == CredentialMode.encrypted &&
+        model.hasExistingCipher;
 
     final Widget input;
     if (isOnePassword) {
@@ -173,9 +174,9 @@ class ConnectionDialogBody extends StatelessWidget {
               style: fieldLabelStyle,
             ),
             const Spacer(),
-            CredentialSourceToggle(
-              value: model.credentialSource,
-              onChanged: (v) => model.credentialSource = v,
+            CredentialModeToggle(
+              value: model.credentialMode,
+              onChanged: (v) => model.credentialMode = v,
             ),
           ],
         ),

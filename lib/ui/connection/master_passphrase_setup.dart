@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../state/master_passphrase.dart';
+import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
 
@@ -8,14 +8,14 @@ import '../widgets/common.dart';
 /// set a passphrase, false if they cancelled.
 Future<bool> showMasterPassphraseSetup(
   BuildContext context,
-  MasterPassphrase passphrase,
+  AppStore store,
 ) async {
   final ok = await showDialog<bool>(
     context: context,
     barrierColor: AppColors.scrim,
     builder: (_) => _PassphrasePanel(
       mode: _Mode.setup,
-      passphrase: passphrase,
+      store: store,
     ),
   );
   return ok ?? false;
@@ -25,14 +25,14 @@ Future<bool> showMasterPassphraseSetup(
 /// session is now unlocked, false if the user cancelled.
 Future<bool> showMasterPassphraseUnlock(
   BuildContext context,
-  MasterPassphrase passphrase,
+  AppStore store,
 ) async {
   final ok = await showDialog<bool>(
     context: context,
     barrierColor: AppColors.scrim,
     builder: (_) => _PassphrasePanel(
       mode: _Mode.unlock,
-      passphrase: passphrase,
+      store: store,
     ),
   );
   return ok ?? false;
@@ -41,10 +41,10 @@ Future<bool> showMasterPassphraseUnlock(
 enum _Mode { setup, unlock }
 
 class _PassphrasePanel extends StatefulWidget {
-  const _PassphrasePanel({required this.mode, required this.passphrase});
+  const _PassphrasePanel({required this.mode, required this.store});
 
   final _Mode mode;
-  final MasterPassphrase passphrase;
+  final AppStore store;
 
   @override
   State<_PassphrasePanel> createState() => _PassphrasePanelState();
@@ -89,8 +89,8 @@ class _PassphrasePanelState extends State<_PassphrasePanel> {
       _error = null;
     });
     final ok = widget.mode == _Mode.setup
-        ? await widget.passphrase.setup(_first.text)
-        : await widget.passphrase.unlock(_first.text);
+        ? await widget.store.setupPassphrase(_first.text)
+        : await widget.store.unlockPassphrase(_first.text);
     if (!mounted) return;
     if (ok) {
       Navigator.of(context).pop(true);

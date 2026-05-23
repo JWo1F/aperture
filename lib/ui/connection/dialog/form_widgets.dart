@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../models/connection_config.dart';
 import '../../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import 'connection_form_model.dart';
 
 /// Inter caption rendered above a form control.
 TextStyle get fieldLabelStyle => AppTheme.ui(
@@ -418,15 +419,15 @@ class EngineToggle extends StatelessWidget {
 }
 
 /// Three-up segmented control for where a connection's password is stored.
-class CredentialSourceToggle extends StatelessWidget {
-  const CredentialSourceToggle({
+class CredentialModeToggle extends StatelessWidget {
+  const CredentialModeToggle({
     super.key,
     required this.value,
     required this.onChanged,
   });
 
-  final CredentialSource value;
-  final ValueChanged<CredentialSource> onChanged;
+  final CredentialMode value;
+  final ValueChanged<CredentialMode> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -441,18 +442,18 @@ class CredentialSourceToggle extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _segment(CredentialSource.plain, 'Plain'),
-          _segment(CredentialSource.encrypted, 'Encrypted'),
-          _segment(CredentialSource.onePassword, '1Password'),
+          _segment(CredentialMode.plain, 'Plain'),
+          _segment(CredentialMode.encrypted, 'Encrypted'),
+          _segment(CredentialMode.onePassword, '1Password'),
         ],
       ),
     );
   }
 
-  Widget _segment(CredentialSource source, String label) {
-    final selected = source == value;
+  Widget _segment(CredentialMode mode, String label) {
+    final selected = mode == value;
     return Hoverable(
-      onTap: () => onChanged(source),
+      onTap: () => onChanged(mode),
       builder: (_, hovering) => AnimatedContainer(
         duration: const Duration(milliseconds: 120),
         padding: const EdgeInsets.symmetric(horizontal: 9),

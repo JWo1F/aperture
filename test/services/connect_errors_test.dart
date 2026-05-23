@@ -13,7 +13,7 @@ void main() {
     port: 5432,
     database: 'analytics',
     username: 'alice',
-    password: 'secret',
+    credential: const PlainCredential('secret'),
   );
 
   test('SocketException → "Can\'t reach …"', () {

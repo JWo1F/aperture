@@ -10,8 +10,8 @@ import '../../models/query_result.dart';
 import '../../services/sql_complete.dart';
 import '../../services/sql_statements.dart';
 import '../../state/app_state.dart';
+import '../../state/app_store.dart';
 import '../../state/catalog_controller.dart';
-import '../../state/preferences_controller.dart';
 import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
@@ -202,9 +202,9 @@ class _QueryEditorState extends State<QueryEditor> {
     // narrowly so a sidebar drag doesn't reach this widget.
     final appState = context.read<AppState>();
     final catalog = context.read<CatalogController>();
-    final preferences = context.read<PreferencesController>();
-    final fraction = context.select<PreferencesController, double>(
-      (p) => p.queryResultsFraction,
+    final store = context.read<AppStore>();
+    final fraction = context.select<AppStore, double>(
+      (s) => s.queryResultsFraction,
     );
     final tab = widget.tab;
 
@@ -321,7 +321,7 @@ class _QueryEditorState extends State<QueryEditor> {
                     child: ClipRect(child: editor),
                   ),
                   _QuerySplitHandle(
-                    preferences: preferences,
+                    store: store,
                     available: available,
                     handleHeight: handleHeight,
                   ),
@@ -353,12 +353,12 @@ class _QueryEditorState extends State<QueryEditor> {
 /// and the pane jumps back on direction reversal.
 class _QuerySplitHandle extends StatefulWidget {
   const _QuerySplitHandle({
-    required this.preferences,
+    required this.store,
     required this.available,
     required this.handleHeight,
   });
 
-  final PreferencesController preferences;
+  final AppStore store;
   final double available;
   final double handleHeight;
 
@@ -376,12 +376,12 @@ class _QuerySplitHandleState extends State<_QuerySplitHandle> {
       axis: Axis.horizontal,
       thickness: widget.handleHeight,
       onDragStart: () {
-        _startFraction = widget.preferences.queryResultsFraction;
+        _startFraction = widget.store.queryResultsFraction;
         _startAvailable = widget.available;
       },
       onDragUpdate: (dy) {
         if (_startAvailable <= 0) return;
-        widget.preferences.setQueryResultsFraction(
+        widget.store.setQueryResultsFraction(
           _startFraction - dy / _startAvailable,
         );
       },

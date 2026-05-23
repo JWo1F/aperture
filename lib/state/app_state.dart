@@ -1,17 +1,12 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
-
 import '../models/connection_config.dart';
 import '../models/db_object.dart';
 import '../models/value_format.dart';
+import 'app_store.dart';
 import 'catalog_controller.dart';
-import 'connection_registry.dart';
 import 'event_log.dart';
-import 'master_passphrase.dart';
 import 'navigation_history.dart';
-import 'per_connection_store.dart';
-import 'preferences_controller.dart';
 import 'session_controller.dart';
 import 'tabs_controller.dart';
 import 'workspace_tab.dart';
@@ -27,30 +22,21 @@ typedef PassphraseUnlockRequest = Future<bool> Function();
 
 /// Coordinator over the focused controllers that make up the app's state.
 ///
-/// Each concern (preferences, connection registry, live session, catalog,
-/// per-connection bags, tabs, navigation history, schema-tree UI) lives in
-/// its own [ChangeNotifier]. [AppState] owns one instance of each and wires
-/// the cross-controller flows that span more than one of them (e.g.
-/// connect → bump catalog generation → reset tabs → clear navigation
-/// history).
+/// Persistence is concentrated in [AppStore]; the runtime-only controllers
+/// (live database session, loaded catalog, tabs, navigation history,
+/// schema-tree UI, in-memory event log) live alongside it. AppState's
+/// public surface is the cross-controller orchestration below (connect,
+/// disconnect, reconnect, refreshCatalog, navigation playback, FK follow).
 ///
-/// The controllers are republished individually into the widget tree (see
-/// `main.dart`'s [MultiProvider]); UI watches the specific controller it
-/// depends on so an unrelated notification — a catalog tick, a cell edit,
-/// a log append — never rebuilds it. [AppState] itself is read
-/// non-reactively (via `context.read`) only to invoke the orchestration
-/// methods below; it deliberately does NOT re-broadcast its children, so
-/// nothing should `watch`/`select` it.
-class AppState extends ChangeNotifier {
-  AppState() {
-    unawaited(_hydrate());
+/// Deliberately not a [ChangeNotifier]: AppState has no observable state
+/// of its own — widgets only `read` it to invoke methods. Any reactive
+/// data lives on the individual controllers, each provided separately.
+class AppState {
+  AppState({AppStore? store}) : store = store ?? AppStore() {
+    this.store.addListener(_syncSessionFromStore);
   }
 
-  final PreferencesController preferences = PreferencesController();
-  final MasterPassphrase masterPassphrase = MasterPassphrase();
-  late final ConnectionRegistry registry = ConnectionRegistry(
-    masterPassphrase: masterPassphrase,
-  );
+  final AppStore store;
   final EventLog eventLog = EventLog();
   late final SessionController session = SessionController(log: eventLog);
   final CatalogController catalog = CatalogController();
@@ -61,41 +47,32 @@ class AppState extends ChangeNotifier {
   /// attempt needs the master passphrase but the session is locked.
   PassphraseUnlockRequest? onPassphraseNeeded;
 
-  late final PerConnectionStore perConnection = PerConnectionStore(
-    session: session,
-    registry: registry,
-    catalog: catalog,
-  );
-
   late final TabsController tabsController = TabsController(
     session: session,
     catalog: catalog,
     history: history,
-    perConnection: perConnection,
+    store: store,
   );
 
-  Future<void> _hydrate() async {
-    await preferences.hydrate();
-    await masterPassphrase.hydrate();
-    await registry.hydrate();
+  void _syncSessionFromStore() {
+    final id = session.activeConnection?.id;
+    if (id == null) return;
+    final fresh = store.connectionById(id);
+    if (fresh == null) return;
+    if (identical(fresh, session.activeConnection)) return;
+    session.setActiveConnection(fresh);
   }
 
-  // --- Orchestration ---------------------------------------------------
-  //
-  // AppState's public surface is just the cross-controller flows below.
-  // Per-controller getters / setters / methods live on the individual
-  // controllers; widgets read those directly via the providers wired up
-  // in main.dart.
+  /// Single async load on startup. Reads `store.json` into [store].
+  Future<void> load() => store.load();
 
-  /// Update a saved connection in the registry. If the change targets the
-  /// connection currently in session, the session's snapshot is refreshed
-  /// in place so anything reading [SessionController.activeConnection]
-  /// sees the new values without a reconnect.
+  // --- Orchestration ---------------------------------------------------
+
+  /// Update a saved connection in the store. The store-listener above
+  /// keeps the session's snapshot fresh when the change targets the
+  /// active connection — callers don't need to touch session themselves.
   void updateConnection(ConnectionConfig config) {
-    registry.update(config);
-    if (session.activeConnection?.id == config.id) {
-      session.setActiveConnection(config);
-    }
+    store.updateConnection(config);
   }
 
   Future<void> connect(ConnectionConfig config) async {
@@ -112,7 +89,7 @@ class AppState extends ChangeNotifier {
         session.setError('Master passphrase required.');
         return;
       case CredentialOk(password: final p):
-        if (p.isNotEmpty) resolved = resolved.copyWith(password: p);
+        resolved = resolved.copyWith(runtimePassword: p);
     }
 
     final ok = await session.connect(resolved);
@@ -121,22 +98,25 @@ class AppState extends ChangeNotifier {
     final schemas = await _loadCatalog(awaitPhase1: false);
     if (schemas == null) return;
 
-    final stamped = resolved.copyWith(lastConnectedAt: DateTime.now());
-    // Empty password keeps the metadata-touch update from writing
-    // plaintext back into the store.
-    registry.update(stamped.copyWith(password: ''));
-    session.setActiveConnection(stamped);
+    store.touchLastConnected(resolved.id, DateTime.now());
+    // _syncSessionFromStore already pushed the stamped config into the
+    // session via the AppStore listener, so we just need the runtime
+    // password overlaid back on top for use by the driver.
+    final stored = store.connectionById(resolved.id);
+    if (stored != null) {
+      session.setActiveConnection(
+        stored.copyWith(runtimePassword: resolved.runtimePassword),
+      );
+    }
   }
 
   /// Resolves the password for [config], pumping the UI through the
   /// unlock modal if the credential source is encrypted and the master
-  /// passphrase is locked. Re-tries the resolution exactly once after
-  /// a successful unlock — further failures (wrong cipher, no callback)
-  /// are surfaced as errors.
+  /// passphrase is locked.
   Future<CredentialResult> _resolveCredentialWithUnlock(
     ConnectionConfig config,
   ) async {
-    final first = await registry.readCredential(config);
+    final first = await store.readCredential(config);
     if (first is! CredentialNeedsPassphrase) return first;
     final ask = onPassphraseNeeded;
     if (ask == null) {
@@ -146,7 +126,7 @@ class AppState extends ChangeNotifier {
     }
     final unlocked = await ask();
     if (!unlocked) return first;
-    return registry.readCredential(config);
+    return store.readCredential(config);
   }
 
   Future<void> disconnect() async {
@@ -157,11 +137,6 @@ class AppState extends ChangeNotifier {
     history.clear();
   }
 
-  /// Reopen the dropped connection without disturbing the workspace.
-  ///
-  /// Reloads the catalog (OIDs can shift across server restarts) but
-  /// keeps the open tabs and navigation history intact, so the user
-  /// recovers to roughly where they were.
   Future<void> reconnect() async {
     final ok = await session.reconnect();
     if (!ok) return;
@@ -172,42 +147,27 @@ class AppState extends ChangeNotifier {
     await _loadCatalog(awaitPhase1: true);
   }
 
-  /// Shared catalog-loading shell for connect / reconnect / refresh.
-  /// Bumps the generation, runs phase 0, auto-expands a lone schema, and
-  /// then either awaits or backgrounds phase 1. Phase-0 and phase-1
-  /// failures land on [CatalogController.lastError] for the sidebar to
-  /// surface; this method never throws.
   Future<List<DbSchema>?> _loadCatalog({required bool awaitPhase1}) async {
     final svc = session.service;
     if (svc == null) return null;
     final schemas = await catalog.load(svc, awaitPhase1: awaitPhase1);
     if (schemas == null) return null;
-    // Auto-expand on every catalog load (not just initial connect): a
-    // reconnect or manual refresh that lands a one-schema database should
-    // show its tables the same way the first connect did.
     if (schemas.length == 1) ui.expandSingleSchema(schemas.first.name);
     return schemas;
   }
 
   // --- Query messages --------------------------------------------------
 
-  /// Wipe a query tab's message log: the in-memory copy on the tab plus
-  /// the persisted copy on the active connection.
   void clearQueryMessages(QueryTab tab) {
     tab.clearMessages();
-    perConnection.clearQueryMessages(tab.id);
+    final connId = session.activeConnection?.id;
+    if (connId != null) store.clearQueryMessages(connId, tab.id);
   }
 
   // --- Navigation history ---------------------------------------------
 
-  /// Walk one step back through the navigation history, applying the
-  /// recorded tab/filter/sort snapshot. Implemented here rather than on
-  /// [NavigationHistory] because the apply step has to coordinate with
-  /// [TabsController].
   void historyBack() => history.back(_applySnapshot);
 
-  /// Walk one step forward through the navigation history. See
-  /// [historyBack].
   void historyForward() => history.forward(_applySnapshot);
 
   bool _applySnapshot(NavSnapshot snap) {
@@ -268,27 +228,18 @@ class AppState extends ChangeNotifier {
     );
   }
 
-  /// Drain any pending debounced writes to `connections.json` so a quit
-  /// while a favourite toggle / recent track / query autosave is still
-  /// buffered doesn't lose the mutation. `dispose()` can't be async, so
-  /// the app's shutdown hook (`AppLifecycleListener.onExitRequested`)
-  /// awaits this before letting Cocoa terminate the process.
-  Future<void> flush() => registry.flush();
+  /// Drain the AppStore's pending debounced write so a quit while a
+  /// mutation is still buffered doesn't lose it.
+  Future<void> flush() => store.flush();
 
-  @override
   void dispose() {
-    // AppState owns the controllers' lifecycle. The `.value` providers in
-    // `main.dart` republish these same instances but never dispose them,
-    // so disposal stays here and happens exactly once.
+    store.removeListener(_syncSessionFromStore);
     tabsController.dispose();
-    perConnection.dispose();
     history.dispose();
     catalog.dispose();
     session.dispose();
-    registry.dispose();
-    preferences.dispose();
     ui.dispose();
     eventLog.dispose();
-    super.dispose();
+    store.dispose();
   }
 }

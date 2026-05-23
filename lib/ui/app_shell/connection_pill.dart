@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/connection_config.dart';
 import '../../state/app_state.dart';
-import '../../state/connection_registry.dart';
+import '../../state/app_store.dart';
 import '../../state/session_controller.dart';
 import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
@@ -203,7 +203,7 @@ class _ConnectionPickerPanel extends StatelessWidget {
     final active = context.select<SessionController, String?>(
       (s) => s.activeConnection?.id,
     );
-    final connections = context.watch<ConnectionRegistry>().all;
+    final connections = context.watch<AppStore>().connections;
 
     return Material(
       color: Colors.transparent,

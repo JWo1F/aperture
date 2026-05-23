@@ -1,29 +1,64 @@
 import 'query_message.dart';
 import 'saved_query.dart';
 
-/// Where a connection's password comes from.
-///
-/// - [plain]: stored verbatim in the JSON config file.
-/// - [encrypted]: stored as AES-GCM ciphertext in the JSON config file,
-///   gated by the app-level master passphrase.
-/// - [onePassword]: resolved on demand via the `op` CLI from
-///   [ConnectionConfig.opSecretRef].
-enum CredentialSource {
-  plain,
-  encrypted,
-  onePassword;
+/// How a connection's password is stored on disk and resolved at connect
+/// time. The sealed hierarchy makes illegal states unrepresentable —
+/// every variant carries exactly the field it needs.
+sealed class Credential {
+  const Credential();
 
-  static CredentialSource fromName(String? raw) => switch (raw) {
-    'encrypted' => encrypted,
-    'onePassword' => onePassword,
-    _ => plain,
-  };
+  /// Discriminator written to JSON.
+  String get kind;
+
+  Map<String, dynamic> toJson();
+
+  /// Round-trip from `connections.json`. Unknown kinds (including the
+  /// legacy `keychain` source) fall back to an empty plain credential
+  /// — the user re-enters the password on next edit.
+  factory Credential.fromJson(Object? raw) {
+    if (raw is! Map) return const PlainCredential('');
+    final kind = raw['kind'];
+    return switch (kind) {
+      'encrypted' => EncryptedCredential((raw['cipher'] as String?) ?? ''),
+      'onePassword' => OnePasswordCredential((raw['ref'] as String?) ?? ''),
+      _ => PlainCredential((raw['password'] as String?) ?? ''),
+    };
+  }
+}
+
+/// Password is stored verbatim in the JSON file.
+class PlainCredential extends Credential {
+  const PlainCredential(this.password);
+  final String password;
+  @override
+  String get kind => 'plain';
+  @override
+  Map<String, dynamic> toJson() => {'kind': kind, 'password': password};
+}
+
+/// Password is stored as AES-GCM ciphertext, gated by the app-level master
+/// passphrase. [cipher] is base64 `nonce || ciphertext || tag`.
+class EncryptedCredential extends Credential {
+  const EncryptedCredential(this.cipher);
+  final String cipher;
+  @override
+  String get kind => 'encrypted';
+  @override
+  Map<String, dynamic> toJson() => {'kind': kind, 'cipher': cipher};
+}
+
+/// Password is resolved on demand via the `op` CLI from [secretRef]
+/// (`op://Vault/Item/password`-style reference).
+class OnePasswordCredential extends Credential {
+  const OnePasswordCredential(this.secretRef);
+  final String secretRef;
+  @override
+  String get kind => 'onePassword';
+  @override
+  Map<String, dynamic> toJson() => {'kind': kind, 'ref': secretRef};
 }
 
 /// Which database engine a connection targets.
-///
-/// - [postgres]: networked endpoint (host/port/database/credentials).
-/// - [sqlite]: a local database file addressed by [ConnectionConfig.filePath].
 enum DbEngine {
   postgres,
   sqlite;
@@ -43,14 +78,12 @@ class ConnectionConfig {
     this.port = 5432,
     this.database = '',
     this.username = '',
-    this.password = '',
+    this.credential = const PlainCredential(''),
+    this.runtimePassword = '',
     this.filePath = '',
     this.useSsl = false,
     this.readOnly = false,
     this.color,
-    this.credentialSource = CredentialSource.plain,
-    this.passwordCipher,
-    this.opSecretRef,
     this.lastConnectedAt,
     Set<String>? favoriteTables,
     List<SavedQuery>? savedQueries,
@@ -80,22 +113,15 @@ class ConnectionConfig {
   /// connections; the sole address for [DbEngine.sqlite] connections.
   final String filePath;
 
-  /// Runtime plaintext. Populated for [CredentialSource.plain] from the
-  /// JSON file, for [CredentialSource.encrypted] only after the master
-  /// passphrase unlocks the session, and for [CredentialSource.onePassword]
-  /// after `op read` resolves the reference.
-  final String password;
+  /// How the password is stored and resolved.
+  final Credential credential;
+
+  /// Transient plaintext for the driver — populated by AppState after
+  /// resolving [credential], wiped by AppStore before any save. Never
+  /// present in `store.json`.
+  final String runtimePassword;
+
   final bool useSsl;
-
-  final CredentialSource credentialSource;
-
-  /// Base64 `nonce || ciphertext || tag` produced by [MasterPassphrase.encrypt].
-  /// Non-null only when [credentialSource] is [CredentialSource.encrypted].
-  final String? passwordCipher;
-
-  /// `op://Vault/Item/password`-style reference resolved through the `op`
-  /// CLI when [credentialSource] is [CredentialSource.onePassword].
-  final String? opSecretRef;
 
   /// When true, the workspace blocks cell edits and DDL/UPDATE/DELETE
   /// gestures. The flag is purely client-side — it does not change the
@@ -132,8 +158,7 @@ class ConnectionConfig {
   final Map<String, Map<String, double>> columnWidths;
 
   /// Per-query-tab message log, keyed by tab/SavedQuery id. The list grows
-  /// newest-last; [TabsController] trims to [PerConnectionStore.maxMessages]
-  /// after every append.
+  /// newest-last; trimmed to [AppStore.maxMessagesPerQuery] on append.
   final Map<String, List<QueryMessage>> queryMessages;
 
   String get summary => switch (engine) {
@@ -150,19 +175,9 @@ class ConnectionConfig {
     'database': database,
     'username': username,
     if (filePath.isNotEmpty) 'filePath': filePath,
-    if (credentialSource == CredentialSource.plain) 'password': password,
+    'credential': credential.toJson(),
     'useSsl': useSsl,
     if (color != null) 'color': color,
-    if (credentialSource != CredentialSource.plain)
-      'credentialSource': credentialSource.name,
-    if (credentialSource == CredentialSource.encrypted &&
-        passwordCipher != null &&
-        passwordCipher!.isNotEmpty)
-      'passwordCipher': passwordCipher,
-    if (credentialSource == CredentialSource.onePassword &&
-        opSecretRef != null &&
-        opSecretRef!.isNotEmpty)
-      'opSecretRef': opSecretRef,
     if (readOnly) 'readOnly': true,
     if (lastConnectedAt != null)
       'lastConnectedAt': lastConnectedAt!.toIso8601String(),
@@ -180,14 +195,6 @@ class ConnectionConfig {
   };
 
   factory ConnectionConfig.fromJson(Map<String, dynamic> j) {
-    // Legacy: connections written before the master-passphrase rewrite
-    // had credentialSource=keychain and the password living in the
-    // macOS keychain. The keychain is gone now — those configs surface
-    // as plain with no stored password, and the user re-enters it.
-    final raw = j['credentialSource'] as String?;
-    final source = raw == 'keychain'
-        ? CredentialSource.plain
-        : CredentialSource.fromName(raw);
     return ConnectionConfig(
       id: j['id'] as String,
       name: j['name'] as String? ?? '',
@@ -197,19 +204,10 @@ class ConnectionConfig {
       database: j['database'] as String? ?? '',
       username: j['username'] as String? ?? 'postgres',
       filePath: j['filePath'] as String? ?? '',
-      password: source == CredentialSource.plain
-          ? (j['password'] as String? ?? '')
-          : '',
+      credential: Credential.fromJson(j['credential']),
       useSsl: j['useSsl'] as bool? ?? false,
       readOnly: j['readOnly'] as bool? ?? false,
       color: (j['color'] as num?)?.toInt(),
-      credentialSource: source,
-      passwordCipher: source == CredentialSource.encrypted
-          ? j['passwordCipher'] as String?
-          : null,
-      opSecretRef: source == CredentialSource.onePassword
-          ? j['opSecretRef'] as String?
-          : null,
       lastConnectedAt: j['lastConnectedAt'] is String
           ? DateTime.tryParse(j['lastConnectedAt'] as String)
           : null,
@@ -259,14 +257,12 @@ class ConnectionConfig {
     int? port,
     String? database,
     String? username,
-    String? password,
+    Credential? credential,
+    String? runtimePassword,
     String? filePath,
     bool? useSsl,
     bool? readOnly,
     Object? color = _unset,
-    CredentialSource? credentialSource,
-    Object? passwordCipher = _unset,
-    Object? opSecretRef = _unset,
     DateTime? lastConnectedAt,
     Set<String>? favoriteTables,
     List<SavedQuery>? savedQueries,
@@ -283,18 +279,12 @@ class ConnectionConfig {
       port: port ?? this.port,
       database: database ?? this.database,
       username: username ?? this.username,
-      password: password ?? this.password,
+      credential: credential ?? this.credential,
+      runtimePassword: runtimePassword ?? this.runtimePassword,
       filePath: filePath ?? this.filePath,
       useSsl: useSsl ?? this.useSsl,
       readOnly: readOnly ?? this.readOnly,
       color: identical(color, _unset) ? this.color : color as int?,
-      credentialSource: credentialSource ?? this.credentialSource,
-      passwordCipher: identical(passwordCipher, _unset)
-          ? this.passwordCipher
-          : passwordCipher as String?,
-      opSecretRef: identical(opSecretRef, _unset)
-          ? this.opSecretRef
-          : opSecretRef as String?,
       lastConnectedAt: lastConnectedAt ?? this.lastConnectedAt,
       favoriteTables: favoriteTables ?? this.favoriteTables,
       savedQueries: savedQueries ?? this.savedQueries,

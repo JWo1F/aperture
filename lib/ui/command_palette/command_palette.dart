@@ -3,13 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
+import '../../state/app_store.dart';
 import '../../state/catalog_controller.dart';
-import '../../state/connection_registry.dart';
 import '../../state/event_log.dart';
 import '../../state/navigation_history.dart';
-import '../../state/per_connection_store.dart';
-import '../../state/preferences_controller.dart';
 import '../../state/session_controller.dart';
+import '../../state/connection_views.dart';
 import '../../state/tabs_controller.dart';
 import '../../theme/app_theme.dart';
 import 'fuzzy_matcher.dart';
@@ -30,11 +29,9 @@ import 'widgets/search_field.dart';
 Future<void> showCommandPalette(BuildContext context) {
   final deps = PaletteDeps(
     appState: context.read<AppState>(),
-    preferences: context.read<PreferencesController>(),
+    store: context.read<AppStore>(),
     session: context.read<SessionController>(),
-    registry: context.read<ConnectionRegistry>(),
     catalog: context.read<CatalogController>(),
-    perConnection: context.read<PerConnectionStore>(),
     tabs: context.read<TabsController>(),
     history: context.read<NavigationHistory>(),
     eventLog: context.read<EventLog>(),
@@ -168,14 +165,17 @@ class _PaletteState extends State<_Palette> {
       // Idle view: a curated, grouped snapshot — not every table in the
       // database — so ⌘K is useful before the first keystroke.
       final deps = widget.deps;
+      final activeConn = deps.session.activeConnection;
+      final recents = recentTablesView(activeConn, deps.catalog);
+      final favorites = favoriteTablesView(activeConn, deps.catalog);
       final groups = <PaletteKind, List<PaletteItem>>{
         PaletteKind.openTab: _source.openTabs(),
         PaletteKind.recent: [
-          for (final t in deps.perConnection.recents.take(6))
+          for (final t in recents.take(6))
             _source.tableItem(t, PaletteKind.recent, 'in ${t.schema}'),
         ],
         PaletteKind.favorite: [
-          for (final t in deps.perConnection.favoriteTables.take(5))
+          for (final t in favorites.take(5))
             _source.tableItem(t, PaletteKind.favorite, 'in ${t.schema}'),
         ],
         PaletteKind.savedQuery: _source.savedQueries().take(5).toList(),

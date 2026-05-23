@@ -77,7 +77,7 @@ class PaletteItemSource {
       subtitle: 'Show or hide the schema browser',
       icon: Icons.view_sidebar_outlined,
       tokens: 'panel tree tables hide',
-      run: deps.preferences.toggleSidebar,
+      run: deps.store.toggleSidebar,
     ));
     out.add(PaletteItem(
       kind: PaletteKind.command,
@@ -87,14 +87,14 @@ class PaletteItemSource {
       tokens: 'events console history queries',
       run: deps.eventLog.toggleVisible,
     ));
-    final dark = deps.preferences.brightness == AppBrightness.dark;
+    final dark = deps.store.brightness == AppBrightness.dark;
     out.add(PaletteItem(
       kind: PaletteKind.command,
       title: dark ? 'Switch to light theme' : 'Switch to dark theme',
       subtitle: 'Flip the workspace between Aperture dark and light',
       icon: dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
       tokens: 'appearance dark light mode color',
-      run: deps.preferences.toggleBrightness,
+      run: deps.store.toggleBrightness,
     ));
 
     if (connected) {
@@ -143,8 +143,9 @@ class PaletteItemSource {
   }
 
   List<PaletteItem> savedQueries() {
+    final saved = deps.session.activeConnection?.savedQueries ?? const [];
     return [
-      for (final q in deps.perConnection.savedQueries)
+      for (final q in saved)
         PaletteItem(
           kind: PaletteKind.savedQuery,
           title: q.name,
@@ -159,7 +160,7 @@ class PaletteItemSource {
   List<PaletteItem> connections() {
     final activeId = deps.session.activeConnection?.id;
     return [
-      for (final c in deps.registry.all)
+      for (final c in deps.store.connections)
         PaletteItem(
           kind: PaletteKind.connection,
           title: c.name,

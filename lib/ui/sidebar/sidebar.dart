@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
+import '../../state/app_store.dart';
 import '../../state/catalog_controller.dart';
-import '../../state/connection_registry.dart';
-import '../../state/per_connection_store.dart';
-import '../../state/preferences_controller.dart';
 import '../../state/session_controller.dart';
 import '../../state/tabs_controller.dart';
 import '../../state/workspace_ui.dart';
@@ -38,26 +36,21 @@ class _SidebarState extends State<Sidebar> {
 
   late final SidebarDeps _deps = SidebarDeps(
     appState: context.read<AppState>(),
-    preferences: context.read<PreferencesController>(),
-    registry: context.read<ConnectionRegistry>(),
+    store: context.read<AppStore>(),
     session: context.read<SessionController>(),
     catalog: context.read<CatalogController>(),
-    perConnection: context.read<PerConnectionStore>(),
     tabs: context.read<TabsController>(),
     ui: context.read<WorkspaceUi>(),
   );
 
-  /// The sidebar mirrors connections, the session, the catalog, the
-  /// per-connection lists, the open tabs and preferences. Listening to just
-  /// those controllers — rather than the full set — keeps a navigation-
-  /// history push, an event-log append, or a passphrase change from
-  /// rebuilding the whole schema list.
+  /// The sidebar mirrors persisted state, the session, the catalog, the
+  /// open tabs and the schema-tree UI. Listening to just those controllers
+  /// — rather than the full set — keeps a navigation-history push or an
+  /// event-log append from rebuilding the whole schema list.
   late final Listenable _sidebarListenable = Listenable.merge([
-    _deps.preferences,
-    _deps.registry,
+    _deps.store,
     _deps.session,
     _deps.catalog,
-    _deps.perConnection,
     _deps.tabs,
     _deps.ui,
   ]);
@@ -89,7 +82,7 @@ class _SidebarState extends State<Sidebar> {
         final connected = _deps.session.status == ConnectionStatus.connected;
 
         return Container(
-          width: _deps.preferences.sidebarWidth,
+          width: _deps.store.sidebarWidth,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,

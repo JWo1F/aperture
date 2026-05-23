@@ -7,8 +7,8 @@ import '../../models/order_term.dart';
 import '../../models/value_format.dart';
 import '../../services/sql_complete.dart';
 import '../../state/app_state.dart';
+import '../../state/app_store.dart';
 import '../../state/catalog_controller.dart';
-import '../../state/per_connection_store.dart';
 import '../../state/session_controller.dart';
 import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
@@ -39,7 +39,8 @@ class TableView extends StatelessWidget {
     final appState = context.read<AppState>();
     final catalog = context.read<CatalogController>();
     final tabs = context.read<TabsController>();
-    final perConnection = context.read<PerConnectionStore>();
+    final store = context.read<AppStore>();
+    final session = context.read<SessionController>();
     final readOnly = context.select<SessionController, bool>(
       (s) => s.activeConnection?.readOnly ?? false,
     );
@@ -91,8 +92,12 @@ class TableView extends StatelessWidget {
                           onDuplicateRow: (row) => tabs.duplicateRow(tab, row),
                           onAddRow: (row) => tabs.addRow(tab, row),
                           widths: tab.columnWidths,
-                          onWidthChanged: (col, w) => perConnection
-                              .persistColumnWidth(tab.table, col, w),
+                          onWidthChanged: (col, w) {
+                            final id = session.activeConnection?.id;
+                            if (id != null) {
+                              store.setColumnWidth(id, tab.table, col, w);
+                            }
+                          },
                           onEditCell: (row, col, value) =>
                               tabs.setCellEdit(tab, row, col, value),
                           onRevertEdit: (row, col) =>

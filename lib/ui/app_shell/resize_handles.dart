@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
-import '../../state/preferences_controller.dart';
+import '../../state/app_store.dart';
 import '../widgets/resize_handle.dart';
 
 /// Captures the sidebar's current width on drag start so updates resolve
 /// as `start + cumulative`. The start value lives in State so it survives
 /// the rebuilds that fire on every `setSidebarWidth` call mid-drag.
 class SidebarResizeHandle extends StatefulWidget {
-  const SidebarResizeHandle({super.key, required this.preferences});
+  const SidebarResizeHandle({super.key, required this.store});
 
-  final PreferencesController preferences;
+  final AppStore store;
 
   @override
   State<SidebarResizeHandle> createState() => _SidebarResizeHandleState();
@@ -22,17 +22,17 @@ class _SidebarResizeHandleState extends State<SidebarResizeHandle> {
   Widget build(BuildContext context) {
     return ResizeHandle(
       axis: Axis.vertical,
-      onDragStart: () => _startWidth = widget.preferences.sidebarWidth,
+      onDragStart: () => _startWidth = widget.store.sidebarWidth,
       onDragUpdate: (dx) =>
-          widget.preferences.setSidebarWidth(_startWidth + dx),
+          widget.store.setSidebarWidth(_startWidth + dx),
     );
   }
 }
 
 class LogResizeHandle extends StatefulWidget {
-  const LogResizeHandle({super.key, required this.preferences});
+  const LogResizeHandle({super.key, required this.store});
 
-  final PreferencesController preferences;
+  final AppStore store;
 
   @override
   State<LogResizeHandle> createState() => _LogResizeHandleState();
@@ -45,9 +45,9 @@ class _LogResizeHandleState extends State<LogResizeHandle> {
   Widget build(BuildContext context) {
     return ResizeHandle(
       axis: Axis.vertical,
-      onDragStart: () => _startWidth = widget.preferences.logPanelWidth,
+      onDragStart: () => _startWidth = widget.store.logPanelWidth,
       onDragUpdate: (dx) =>
-          widget.preferences.setLogPanelWidth(_startWidth - dx),
+          widget.store.setLogPanelWidth(_startWidth - dx),
     );
   }
 }

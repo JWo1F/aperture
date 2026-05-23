@@ -31,12 +31,13 @@ Future<TestResult> runConnectionTest(
   ConnectionConfig cfg,
   OnePasswordClient op,
 ) async {
-  var resolved = cfg;
-  if (cfg.credentialSource == CredentialSource.onePassword) {
-    final r = await op.read(cfg.opSecretRef ?? '');
+  final credential = cfg.credential;
+  final String runtimePassword;
+  if (credential is OnePasswordCredential) {
+    final r = await op.read(credential.secretRef);
     switch (r) {
       case OpSuccess(value: final v):
-        resolved = cfg.copyWith(password: v);
+        runtimePassword = v;
       case OpMissing():
         return const TestResult(
           status: TestStatus.fail,
@@ -45,8 +46,15 @@ Future<TestResult> runConnectionTest(
       case OpFailure(message: final m):
         return TestResult(status: TestStatus.fail, message: '1Password: $m');
     }
+  } else if (credential is PlainCredential) {
+    runtimePassword = credential.password;
+  } else {
+    // Encrypted: the dialog cannot decrypt mid-edit (the master passphrase
+    // flow lives at submit-time), so a test against an encrypted credential
+    // tries the empty password and surfaces the driver's auth failure.
+    runtimePassword = '';
   }
-  final svc = createDbService(resolved);
+  final svc = createDbService(cfg.copyWith(runtimePassword: runtimePassword));
   final watch = Stopwatch()..start();
   try {
     await svc.connect();
@@ -73,3 +81,4 @@ Future<TestResult> runConnectionTest(
     } catch (_) {}
   }
 }
+

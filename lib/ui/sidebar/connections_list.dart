@@ -20,7 +20,7 @@ class AllConnectionsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final list = deps.registry.all;
+    final list = deps.store.connections;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -144,7 +144,7 @@ class _SavedConnectionRow extends StatelessWidget {
   Future<void> _edit(BuildContext context) =>
       editConnectionFlow(context, config);
 
-  void _delete() => deps.registry.remove(config.id);
+  void _delete() => deps.store.removeConnection(config.id);
 
   @override
   Widget build(BuildContext context) {

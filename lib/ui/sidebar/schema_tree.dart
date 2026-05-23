@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/db_object.dart';
+import '../../state/connection_views.dart';
 import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
@@ -22,9 +23,9 @@ class SidebarBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final activeTableId = _activeTableQualifiedName(deps.tabs);
     final activeQueryId = _activeQueryId(deps.tabs);
-    final favKeys = {
-      for (final t in deps.perConnection.favoriteTables) t.qualifiedKey,
-    };
+    final activeConn = deps.session.activeConnection;
+    final favorites = favoriteTablesView(activeConn, deps.catalog);
+    final favKeys = {for (final t in favorites) t.qualifiedKey};
     final filtering = query.isNotEmpty;
 
     bool tableMatches(DbTable t) =>
@@ -32,21 +33,21 @@ class SidebarBody extends StatelessWidget {
         t.name.toLowerCase().contains(query) ||
         t.schema.toLowerCase().contains(query);
 
-    final favList = deps.perConnection.favoriteTables
-        .where(tableMatches)
-        .toList();
+    final favList = favorites.where(tableMatches).toList();
     final frequent = filtering
         ? <DbTable>[]
-        : deps.perConnection
-              .frequentTables(limit: 5 + favKeys.length)
+        : frequentTablesView(
+            activeConn,
+            deps.catalog,
+            limit: 5 + favKeys.length,
+          )
               .where((t) => !favKeys.contains(t.qualifiedKey))
               .take(5)
               .toList();
+    final savedAll = activeConn?.savedQueries ?? const [];
     final saved = filtering
-        ? deps.perConnection.savedQueries
-              .where((q) => q.name.toLowerCase().contains(query))
-              .toList()
-        : deps.perConnection.savedQueries;
+        ? savedAll.where((q) => q.name.toLowerCase().contains(query)).toList()
+        : savedAll;
 
     final visibleSchemas = deps.catalog.schemas.map((s) {
       final tables = filtering

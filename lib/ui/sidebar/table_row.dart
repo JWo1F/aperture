@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../models/count_format.dart';
 import '../../models/db_object.dart';
+import '../../state/connection_views.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
@@ -113,7 +114,10 @@ class SchemaTableRow extends StatelessWidget {
           if (showStar)
             StarToggle(
               filled: isFav,
-              onTap: () => deps.perConnection.toggleFavorite(table),
+              onTap: () {
+                final id = deps.session.activeConnection?.id;
+                if (id != null) deps.store.toggleFavorite(id, table);
+              },
             ),
         ];
       },
@@ -177,7 +181,8 @@ void openTableMenu(
   Offset position,
 ) {
   final qualified = '"${table.schema}"."${table.name}"';
-  final isFav = deps.perConnection.isFavorite(table);
+  final activeConn = deps.session.activeConnection;
+  final isFav = isFavoriteTable(activeConn, table);
 
   void copy(String value) => Clipboard.setData(ClipboardData(text: value));
 
@@ -199,7 +204,11 @@ void openTableMenu(
       CmItem(
         icon: isFav ? Icons.star : Icons.star_outline,
         label: isFav ? 'Remove from favourites' : 'Add to favourites',
-        onTap: () => deps.perConnection.toggleFavorite(table),
+        onTap: () {
+          if (activeConn != null) {
+            deps.store.toggleFavorite(activeConn.id, table);
+          }
+        },
       ),
       const CmDivider(),
       CmItem(

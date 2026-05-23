@@ -103,7 +103,7 @@ class PostgresService implements DbService {
         port: config.port,
         database: config.database,
         username: config.username,
-        password: config.password,
+        password: config.runtimePassword,
       ),
       settings: ConnectionSettings(
         sslMode: config.useSsl ? SslMode.require : SslMode.disable,
