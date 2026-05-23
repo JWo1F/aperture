@@ -28,6 +28,11 @@ class CatalogController extends ChangeNotifier {
 
   bool get isPhase1Loading => _phase1Loading;
 
+  /// True once phase 0 has populated the schema list — i.e. the sidebar
+  /// can stop showing the initial-load spinner. False both before the first
+  /// successful phase-0 fetch and after [reset] clears the catalog.
+  bool get hasSchemas => _catalog.hasPhase(CatalogPhase.schemas);
+
   Object? get lastError => _lastError;
 
   /// Bumps the generation counter, clears the catalog, and returns the new

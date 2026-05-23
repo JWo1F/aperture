@@ -70,74 +70,96 @@ class SidebarBody extends StatelessWidget {
         saved.isEmpty &&
         visibleSchemas.isEmpty;
 
+    final Widget body;
     if (empty && filtering) {
-      return _NoResults(query: query);
+      body = _NoResults(query: query);
+    } else {
+      body = ListView(
+        padding: const EdgeInsets.fromLTRB(0, 2, 0, 16),
+        children: [
+          if (favList.isNotEmpty)
+            SidebarSection(
+              label: 'Pinned',
+              badge: '${favList.length}',
+              children: [
+                for (final t in favList)
+                  SchemaTableRow(
+                    table: t,
+                    active: t.qualifiedName == activeTableId,
+                    isFav: true,
+                    indent: 0,
+                    query: query,
+                    scope: 'pin',
+                  ),
+              ],
+            ),
+          if (frequent.isNotEmpty)
+            SidebarSection(
+              label: 'Frequent',
+              badge: '${frequent.length}',
+              children: [
+                for (final t in frequent)
+                  SchemaTableRow(
+                    table: t,
+                    active: t.qualifiedName == activeTableId,
+                    isFav: favKeys.contains(t.qualifiedKey),
+                    indent: 0,
+                    query: query,
+                    scope: 'freq',
+                  ),
+              ],
+            ),
+          if (saved.isNotEmpty)
+            SidebarSection(
+              label: 'Queries',
+              badge: '${saved.length}',
+              children: [
+                for (final q in saved)
+                  SavedQueryRow(
+                    query: q,
+                    active: q.id == activeQueryId,
+                    match: query,
+                  ),
+              ],
+            ),
+          SidebarSection(
+            label: 'Schemas',
+            badge: '$totalTables',
+            children: [
+              if (catalogError != null)
+                _CatalogErrorNotice(error: catalogError),
+              for (final entry in visibleSchemas)
+                SchemaBlock(
+                  schema: entry.schema,
+                  tables: entry.tables,
+                  activeTableId: activeTableId,
+                  favKeys: favKeys,
+                  forceExpanded: filtering,
+                  query: query,
+                ),
+            ],
+          ),
+        ],
+      );
     }
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(0, 2, 0, 16),
+    // Slim indeterminate bar pinned above the body while phase 1 fills in
+    // columns / FKs / indexes / enums / domains. The schema tree is already
+    // usable once phase 0 lands; this is a hint that table views opened
+    // right away may still be filling in.
+    return Column(
       children: [
-        if (favList.isNotEmpty)
-          SidebarSection(
-            label: 'Pinned',
-            badge: '${favList.length}',
-            children: [
-              for (final t in favList)
-                SchemaTableRow(
-                  table: t,
-                  active: t.qualifiedName == activeTableId,
-                  isFav: true,
-                  indent: 0,
-                  query: query,
-                  scope: 'pin',
-                ),
-            ],
-          ),
-        if (frequent.isNotEmpty)
-          SidebarSection(
-            label: 'Frequent',
-            badge: '${frequent.length}',
-            children: [
-              for (final t in frequent)
-                SchemaTableRow(
-                  table: t,
-                  active: t.qualifiedName == activeTableId,
-                  isFav: favKeys.contains(t.qualifiedKey),
-                  indent: 0,
-                  query: query,
-                  scope: 'freq',
-                ),
-            ],
-          ),
-        if (saved.isNotEmpty)
-          SidebarSection(
-            label: 'Queries',
-            badge: '${saved.length}',
-            children: [
-              for (final q in saved)
-                SavedQueryRow(
-                  query: q,
-                  active: q.id == activeQueryId,
-                  match: query,
-                ),
-            ],
-          ),
-        SidebarSection(
-          label: 'Schemas',
-          badge: '$totalTables',
-          children: [
-            if (catalogError != null) _CatalogErrorNotice(error: catalogError),
-            for (final entry in visibleSchemas)
-              SchemaBlock(
-                schema: entry.schema,
-                tables: entry.tables,
-                activeTableId: activeTableId,
-                favKeys: favKeys,
-                forceExpanded: filtering,
-                query: query,
-              ),
-          ],
+        SizedBox(
+          height: 2,
+          child: catalog.isPhase1Loading
+              ? LinearProgressIndicator(
+                  minHeight: 2,
+                  backgroundColor: Colors.transparent,
+                  valueColor: AlwaysStoppedAnimation(AppColors.accent),
+                )
+              : null,
         ),
+        Expanded(child: body),
       ],
     );
   }

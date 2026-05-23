@@ -64,8 +64,18 @@ class _SidebarState extends State<Sidebar> {
     return ListenableBuilder(
       listenable: _sidebarListenable,
       builder: (context, _) {
-        final connected =
-            appState.session.status == ConnectionStatus.connected;
+        final status = appState.session.status;
+        final catalog = appState.catalog;
+        final connecting = status == ConnectionStatus.connecting;
+        final connected = status == ConnectionStatus.connected;
+        // Loading covers two distinct gaps the user perceives as one wait:
+        // the TCP/auth handshake (status == connecting) and the post-connect
+        // window before phase 0 lands. Without this, the sidebar flips from
+        // the connections list to an empty schema tree with no signal that
+        // introspection is in flight.
+        final loadingCatalog =
+            connecting ||
+            (connected && !catalog.hasSchemas && catalog.lastError == null);
 
         return Container(
           width: appState.store.sidebarWidth,
@@ -82,7 +92,9 @@ class _SidebarState extends State<Sidebar> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const ConnHero(),
-              if (connected) ...[
+              if (loadingCatalog)
+                const Expanded(child: _SidebarLoading())
+              else if (connected) ...[
                 SidebarSearchBar(
                   controller: _searchCtrl,
                   focusNode: _searchFocus,
@@ -97,6 +109,45 @@ class _SidebarState extends State<Sidebar> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Centered spinner shown while a connection is opening and its first
+/// schema fetch lands. The caption disambiguates the two gaps so the user
+/// can tell whether the network round-trip or the catalog read is what's
+/// taking time.
+class _SidebarLoading extends StatelessWidget {
+  const _SidebarLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    final connecting =
+        appState.session.status == ConnectionStatus.connecting;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.accent,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            connecting ? 'Connecting…' : 'Loading schemas…',
+            style: AppTheme.ui(
+              size: 11.5,
+              color: AppColors.textSecondary,
+              weight: FontWeight.w500,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
