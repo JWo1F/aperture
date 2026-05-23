@@ -131,10 +131,12 @@ extension on _Kind {
     _Kind.table => ('table', AppColors.info),
   };
 
-  /// A small constant added to a hit's score so that, on a near-tie, the
-  /// more actionable kinds (a command, a tab to jump to) sort above a raw
-  /// table name. Kept far below the magnitude of a real fuzzy match so it
-  /// only ever breaks ties.
+  /// A small constant added to a hit's score so the more actionable kinds
+  /// (a command, a tab to jump to) sort above a raw table name when fuzzy
+  /// scores are close. Magnitudes here (0–8) sit below a typical fuzzy hit
+  /// but the coverage term in [_score] (up to +20) can outrank kind bias on
+  /// its own, so this is more of a thumb on the scale than a strict
+  /// tie-break.
   double get bias => switch (this) {
     _Kind.command => 8,
     _Kind.openTab => 6,
@@ -333,6 +335,15 @@ class _PaletteState extends State<_Palette> {
   /// key handler so arrow keys and ↵ act on exactly what's painted.
   List<_ItemRow> _items = const [];
 
+  /// Union of every searchable item — commands, open tabs, saved queries,
+  /// connections, every table in the catalog. Built once at open-time
+  /// because [_PaletteDeps] captures its controllers when the palette is
+  /// shown and the palette never subscribes to mid-session updates: closing
+  /// and reopening ⌘K is the only way to pick up fresh data. Keeps each
+  /// keystroke down to re-scoring this list instead of reallocating an
+  /// `_Item` per table.
+  late final List<_Item> _pool;
+
   @override
   void initState() {
     super.initState();
@@ -340,6 +351,13 @@ class _PaletteState extends State<_Palette> {
     // FocusNode's onKeyEvent runs first in the key event chain.
     _focus.onKeyEvent = _onKey;
     _controller.addListener(() => setState(() => _selected = 0));
+    _pool = [
+      ..._commands(),
+      ..._openTabs(),
+      ..._savedQueries(),
+      ..._connections(),
+      ..._allTables(),
+    ];
   }
 
   @override
@@ -535,15 +553,6 @@ class _PaletteState extends State<_Palette> {
     return out;
   }
 
-  /// The full searchable index used while the user is typing.
-  List<_Item> _searchPool() => [
-        ..._commands(),
-        ..._openTabs(),
-        ..._savedQueries(),
-        ..._connections(),
-        ..._allTables(),
-      ];
-
   // --- Row assembly --------------------------------------------------------
 
   /// Builds the painted rows plus the flat list of selectable items.
@@ -582,9 +591,11 @@ class _PaletteState extends State<_Palette> {
         }
       }
     } else {
-      // Search view: one globally-ranked list, best match first.
+      // Search view: one globally-ranked list, best match first. Iterates
+      // the pool cached at open-time so each keystroke is pure scoring with
+      // no `_Item` reallocation.
       final hits = <_Hit>[];
-      for (final item in _searchPool()) {
+      for (final item in _pool) {
         final hit = _score(item, query);
         if (hit != null) hits.add(hit);
       }
