@@ -359,44 +359,13 @@ class PostgresTableRepository implements TableRepository {
 }
 
 /// Pure builder for the SQL Postgres would receive for a batch of pending
-/// edits. Ordering is UPDATE → DELETE → INSERT — UPDATEs run first so a
-/// pending edit on a row that's also being duplicated propagates the new
-/// value into the source row before the duplicate is committed.
-List<String> buildPostgresEditStatements(DbTable table, EditBatch batch) {
-  return [
-    for (final entry in batch.updatesByCtid.entries)
-      _renderUpdate(table, entry.key, entry.value),
-    for (final ctid in batch.deleteCtids) _renderDelete(table, ctid),
-    for (final insert in batch.inserts) _renderInsert(table, insert),
-  ];
-}
+/// edits. Thin wrapper around [buildEditStatements] with the Postgres-
+/// specific row-identity + DEFAULT policy.
+List<String> buildPostgresEditStatements(DbTable table, EditBatch batch) =>
+    buildEditStatements(table, batch, _postgresPolicy);
 
-String _renderUpdate(
-  DbTable table,
-  String ctid,
-  Map<String, CellEditValue> assignments,
-) {
-  final lines = assignments.entries
-      .map((e) => '  ${quoteIdent(e.key)} = ${renderAssignment(e.value)}')
-      .join(',\n');
-  return 'UPDATE ${table.qualifiedName} SET\n'
-      '$lines\n'
-      "WHERE ctid = '$ctid'::tid";
-}
-
-String _renderDelete(DbTable table, String ctid) =>
-    "DELETE FROM ${table.qualifiedName}\n"
-    "WHERE ctid = '$ctid'::tid";
-
-String _renderInsert(DbTable table, PendingInsert insert) {
-  if (insert.values.isEmpty) {
-    return 'INSERT INTO ${table.qualifiedName} DEFAULT VALUES';
-  }
-  final cols = insert.values.keys.toList(growable: false);
-  final colList = cols.map(quoteIdent).join(', ');
-  final valList = cols
-      .map((c) => renderAssignment(insert.values[c]!))
-      .join(', ');
-  return 'INSERT INTO ${table.qualifiedName} ($colList)\n'
-      'VALUES ($valList)';
-}
+final EditPolicy _postgresPolicy = EditPolicy(
+  rowIdPredicate: (ctid) => "WHERE ctid = '$ctid'::tid",
+  insertOmitsDefaultColumns: false,
+  updateDropsDefaultAssignments: false,
+);

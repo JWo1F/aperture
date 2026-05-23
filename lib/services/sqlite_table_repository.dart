@@ -3,7 +3,6 @@ import 'package:sqlite3/sqlite3.dart';
 import '../models/cell_edit.dart';
 import '../models/db_object.dart';
 import '../models/query_result.dart';
-import 'sql_identifier.dart';
 import 'sql_render.dart';
 import 'sqlite_service.dart';
 import 'table_repository.dart';
@@ -273,58 +272,16 @@ class SqliteTableRepository implements TableRepository {
 }
 
 /// Pure builder for the SQL SQLite would receive for a batch of pending
-/// edits. Ordering is UPDATE → DELETE → INSERT, matching the Postgres
-/// builder, so a row that's edited and duplicated in the same batch
-/// propagates the edit before the duplicate is committed.
-List<String> buildSqliteEditStatements(DbTable table, EditBatch batch) {
-  return [
-    for (final entry in batch.updatesByCtid.entries)
-      ?_renderUpdate(table, entry.key, entry.value),
-    for (final id in batch.deleteCtids) _renderDelete(table, id),
-    for (final insert in batch.inserts) _renderInsert(table, insert),
-  ];
-}
+/// edits. Thin wrapper around [buildEditStatements] with the SQLite-
+/// specific row-identity + DEFAULT policy.
+List<String> buildSqliteEditStatements(DbTable table, EditBatch batch) =>
+    buildEditStatements(table, batch, _sqlitePolicy);
 
-/// SQLite rejects `SET col = DEFAULT`, so `CellDefault` assignments are
-/// dropped from the SET list — the column simply keeps its current value,
-/// which matches the user's intent of "revert this edit". If every
-/// assignment is `CellDefault` the UPDATE collapses to a no-op and we
-/// skip emitting it entirely.
-String? _renderUpdate(
-  DbTable table,
-  String rowId,
-  Map<String, CellEditValue> assignments,
-) {
-  final lines = assignments.entries
-      .where((e) => e.value is! CellDefault)
-      .map((e) => '  ${quoteIdent(e.key)} = ${renderAssignment(e.value)}')
-      .join(',\n');
-  if (lines.isEmpty) return null;
-  return 'UPDATE ${table.qualifiedName} SET\n$lines\nWHERE rowid = $rowId';
-}
-
-String _renderDelete(DbTable table, String rowId) =>
-    'DELETE FROM ${table.qualifiedName}\nWHERE rowid = $rowId';
-
-String _renderInsert(DbTable table, PendingInsert insert) {
-  // SQLite has no per-column DEFAULT keyword in a VALUES list. Columns the
-  // user left as DEFAULT are omitted entirely so the column default (or
-  // INTEGER PRIMARY KEY auto-assignment) applies — this is what makes the
-  // Duplicate-row gesture produce a fresh primary key.
-  final cols = [
-    for (final entry in insert.values.entries)
-      if (entry.value is! CellDefault) entry.key,
-  ];
-  if (cols.isEmpty) {
-    return 'INSERT INTO ${table.qualifiedName} DEFAULT VALUES';
-  }
-  final colList = cols.map(quoteIdent).join(', ');
-  final valList = cols
-      .map((c) => renderAssignment(insert.values[c]!))
-      .join(', ');
-  return 'INSERT INTO ${table.qualifiedName} ($colList)\n'
-      'VALUES ($valList)';
-}
+final EditPolicy _sqlitePolicy = EditPolicy(
+  rowIdPredicate: (rowId) => 'WHERE rowid = $rowId',
+  insertOmitsDefaultColumns: true,
+  updateDropsDefaultAssignments: true,
+);
 
 /// Reflows a verbatim `CREATE TABLE` statement onto one column/constraint per
 /// line. SQLite stores `CREATE` text exactly as written, and dumpers (Rails,
