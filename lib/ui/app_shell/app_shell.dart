@@ -135,19 +135,31 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // workspace subtrees subscribe to their own state independently.
     final store = appState.store;
     final eventLog = appState.eventLog;
+    final catalog = appState.catalog;
     final tabs = appState.tabsController;
-    return Selector<(ConnectionStatus, bool, bool)>(
-      listenable: Listenable.merge([appState.session, store, eventLog]),
+    return Selector<(ConnectionStatus, bool, bool, bool)>(
+      listenable: Listenable.merge([
+        appState.session,
+        store,
+        eventLog,
+        catalog,
+      ]),
       selector: () => (
         appState.session.status,
         store.sidebarVisible,
         eventLog.isVisible,
+        catalog.hasSchemas,
       ),
       builder: (context, value) {
-        final (status, sidebarVisible, logVisible) = value;
+        final (status, sidebarVisible, logVisible, hasSchemas) = value;
         final connected = status == ConnectionStatus.connected;
         final lost = status == ConnectionStatus.lost;
-        final showWorkspace = connected || lost;
+        // Keep the welcome panel mounted through the connect → phase-0
+        // gap so the workspace home doesn't pop in with zero schemas and
+        // then snap to the populated layout once introspection lands.
+        // Lost connections fall through immediately — the catalog from
+        // the prior session is still meaningful UI.
+        final showWorkspace = (connected && hasSchemas) || lost;
 
         final body = CallbackShortcuts(
           bindings: {

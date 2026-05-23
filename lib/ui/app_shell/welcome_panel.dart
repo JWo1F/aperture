@@ -22,17 +22,31 @@ class WelcomePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: appState.store,
+      listenable: Listenable.merge([
+        appState.store,
+        appState.session,
+        appState.catalog,
+      ]),
       builder: (context, _) => _build(context),
     );
   }
 
   Widget _build(BuildContext context) {
     final session = appState.session;
+    final catalog = appState.catalog;
     final store = appState.store;
-    final connecting = session.status == ConnectionStatus.connecting;
+    final status = session.status;
+    final connecting = status == ConnectionStatus.connecting;
+    // The same loader covers the network handshake and the post-connect
+    // wait for phase 0. The shell keeps the welcome panel mounted across
+    // both gaps so the workspace doesn't pop in with empty data.
+    final preparing = connecting ||
+        (status == ConnectionStatus.connected &&
+            !catalog.hasSchemas &&
+            catalog.lastError == null);
     final recents = store.recentConnections;
     final hasAny = store.connections.isNotEmpty;
+    final connName = session.activeConnection?.name;
 
     return Container(
       color: AppColors.bg,
@@ -47,14 +61,10 @@ class WelcomePanel extends StatelessWidget {
               children: [
                 _BrandHero(),
                 const SizedBox(height: Insets.xl),
-                if (connecting)
-                  SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.accent,
-                    ),
+                if (preparing)
+                  _PreparingBlock(
+                    connecting: connecting,
+                    connectionName: connName,
                   )
                 else if (recents.isNotEmpty)
                   _RecentsBlock(
@@ -356,6 +366,57 @@ class _EmptyBlock extends StatelessWidget {
           primary: true,
           onPressed: onNew,
         ),
+      ],
+    );
+  }
+}
+
+/// Centered spinner + caption shown while a connection is opening and its
+/// first schema fetch lands. Two captions, one per gap, so the user can
+/// tell whether the network round-trip or the catalog read is the slow
+/// part. Connection name appears underneath when known so the user can
+/// see *which* database is being opened.
+class _PreparingBlock extends StatelessWidget {
+  const _PreparingBlock({
+    required this.connecting,
+    required this.connectionName,
+  });
+
+  final bool connecting;
+  final String? connectionName;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = connectionName;
+    return Column(
+      children: [
+        SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppColors.accent,
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          connecting ? 'Connecting…' : 'Loading schemas…',
+          style: AppTheme.ui(
+            size: 12.5,
+            color: AppColors.textSecondary,
+            weight: FontWeight.w500,
+          ),
+        ),
+        if (name != null && name.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            name,
+            style: AppTheme.mono(
+              size: 11,
+              color: AppColors.textMuted,
+            ),
+          ),
+        ],
       ],
     );
   }
