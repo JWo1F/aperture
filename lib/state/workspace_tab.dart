@@ -121,44 +121,56 @@ class QueryTab extends WorkspaceTab {
 
   QueryResult? get result => _result;
 
-  set result(QueryResult? value) {
-    _result = value;
-    notifyListeners();
-  }
-
-  bool get running => _running;
-
-  set running(bool value) {
-    if (_running == value) return;
-    _running = value;
-    notifyListeners();
-  }
-
   /// Wall-clock time the most recent run completed. Powers the "refreshed
   /// HH:MM:SS" stamp in the query pagebar.
   DateTime? get lastRefreshedAt => _lastRefreshedAt;
-
-  set lastRefreshedAt(DateTime? value) {
-    _lastRefreshedAt = value;
-    notifyListeners();
-  }
 
   /// SQL the most recent run actually sent — may differ from [sql] when the
   /// user invoked Run statement on a single block. The footer's refresh
   /// button re-issues this exact text rather than the whole editor body.
   String? get lastRunSql => _lastRunSql;
 
-  set lastRunSql(String? value) {
-    _lastRunSql = value;
-    notifyListeners();
-  }
+  bool get running => _running;
 
   /// Active section below the editor.
   QueryResultsView get view => _view;
 
-  set view(QueryResultsView value) {
+  void setView(QueryResultsView value) {
     if (_view == value) return;
     _view = value;
+    notifyListeners();
+  }
+
+  /// Mark a query as in-flight. Pairs with [completeRun].
+  void beginRun() {
+    if (_running) return;
+    _running = true;
+    notifyListeners();
+  }
+
+  /// Atomic post-run swap: result, lastRunSql, lastRefreshedAt, plan-cache
+  /// invalidation, and message-log append land in one notification so any
+  /// listener sees a consistent post-run snapshot.
+  void completeRun({
+    required QueryResult result,
+    required String sql,
+    required QueryMessage message,
+    required int maxMessages,
+  }) {
+    _result = result;
+    _lastRunSql = sql;
+    _lastRefreshedAt = DateTime.now();
+    if (_planSourceSql != sql) {
+      _planJson = null;
+      _planError = null;
+      _planLoading = false;
+      _planSourceSql = null;
+    }
+    _messages.add(message);
+    if (_messages.length > maxMessages) {
+      _messages.removeRange(0, _messages.length - maxMessages);
+    }
+    _running = false;
     notifyListeners();
   }
 
@@ -172,16 +184,6 @@ class QueryTab extends WorkspaceTab {
   /// [lastRunSql] until the next run, at which point the plan view shows
   /// a stale indicator unless [loadQueryPlan] is invoked again.
   String? get planSourceSql => _planSourceSql;
-
-  /// Reset plan to empty so the next switch into the Plan tab triggers a
-  /// fresh EXPLAIN.
-  void clearPlan() {
-    _planJson = null;
-    _planError = null;
-    _planLoading = false;
-    _planSourceSql = null;
-    notifyListeners();
-  }
 
   void beginPlan() {
     _planLoading = true;
@@ -222,14 +224,6 @@ class QueryTab extends WorkspaceTab {
     if (_messages.isNotEmpty) notifyListeners();
   }
 
-  void appendQueryMessage(QueryMessage message, {required int maxMessages}) {
-    _messages.add(message);
-    if (_messages.length > maxMessages) {
-      _messages.removeRange(0, _messages.length - maxMessages);
-    }
-    notifyListeners();
-  }
-
   void clearMessages() {
     if (_messages.isEmpty) return;
     _messages.clear();
@@ -258,23 +252,29 @@ class SchemaTab extends WorkspaceTab {
 
   String? get ddl => _ddl;
 
-  set ddl(String? value) {
-    _ddl = value;
-    notifyListeners();
-  }
-
   String? get error => _error;
-
-  set error(String? value) {
-    _error = value;
-    notifyListeners();
-  }
 
   bool get loading => _loading;
 
-  set loading(bool value) {
-    if (_loading == value) return;
-    _loading = value;
+  /// Mark a DDL fetch as in-flight. Clears the previous error so a retry
+  /// after a transient failure doesn't show stale red text alongside a
+  /// fresh spinner.
+  void beginDdlLoad() {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+  }
+
+  void completeDdlLoad(String ddl) {
+    _ddl = ddl;
+    _error = null;
+    _loading = false;
+    notifyListeners();
+  }
+
+  void failDdlLoad(Object error) {
+    _error = error.toString();
+    _loading = false;
     notifyListeners();
   }
 
@@ -300,6 +300,13 @@ class TableTab extends WorkspaceTab {
   Timer? _autoRefreshTimer;
   DateTime? _lastRefreshedAt;
 
+  /// Generation token for in-flight page loads. Each call to [beginPageLoad]
+  /// bumps this; [completePageLoad] / [failPageLoad] only apply when the
+  /// caller's token still matches. Without the CAS, a slow first request
+  /// can land its result after a faster second request and pair stale rows
+  /// with the live clauses on screen.
+  int _loadGeneration = 0;
+
   final Map<CellEdit, CellEditValue> _edits = {};
   final Set<int> _deletedRows = {};
   final List<PendingInsert> _inserts = [];
@@ -318,34 +325,11 @@ class TableTab extends WorkspaceTab {
 
   QueryResult? get result => _result;
 
-  set result(QueryResult? value) {
-    _result = value;
-    notifyListeners();
-  }
-
   bool get loading => _loading;
-
-  set loading(bool value) {
-    if (_loading == value) return;
-    _loading = value;
-    notifyListeners();
-  }
 
   bool get applying => _applying;
 
-  set applying(bool value) {
-    if (_applying == value) return;
-    _applying = value;
-    notifyListeners();
-  }
-
   int get page => _page;
-
-  set page(int value) {
-    if (_page == value) return;
-    _page = value;
-    notifyListeners();
-  }
 
   int get pageSize => _pageSize;
 
@@ -357,7 +341,11 @@ class TableTab extends WorkspaceTab {
 
   int get totalRows => _totalRows;
 
-  set totalRows(int value) {
+  /// Apply a fresh row-count if [filterAtRequest] still matches the live
+  /// filter. A slow count can outlive the filter that triggered it; the
+  /// match check keeps a stale total from overwriting a fresher one.
+  void setTotalRows(int value, {required String filterAtRequest}) {
+    if (_filter != filterAtRequest) return;
     if (_totalRows == value) return;
     _totalRows = value;
     notifyListeners();
@@ -366,29 +354,11 @@ class TableTab extends WorkspaceTab {
   /// Column projection — a raw SQL select list. Defaults to `*`.
   String get selectList => _selectList;
 
-  set selectList(String value) {
-    if (_selectList == value) return;
-    _selectList = value;
-    notifyListeners();
-  }
-
   /// Active row filter — a raw SQL `WHERE` fragment typed by the user.
   String get filter => _filter;
 
-  set filter(String value) {
-    if (_filter == value) return;
-    _filter = value;
-    notifyListeners();
-  }
-
   /// Active sort — a raw SQL `ORDER BY` fragment, also driven by header clicks.
   String get orderBy => _orderBy;
-
-  set orderBy(String value) {
-    if (_orderBy == value) return;
-    _orderBy = value;
-    notifyListeners();
-  }
 
   /// Auto-refresh cadence. Pair with [setAutoRefresh] to wire the timer.
   Duration? get autoRefreshInterval => _autoRefreshInterval;
@@ -410,8 +380,86 @@ class TableTab extends WorkspaceTab {
   /// the pagination bar.
   DateTime? get lastRefreshedAt => _lastRefreshedAt;
 
-  set lastRefreshedAt(DateTime? value) {
-    _lastRefreshedAt = value;
+  /// Begin a page fetch against [page]. Eagerly bumps the page index and
+  /// clears row-indexed cell edits (a new page invalidates them) so the
+  /// pagebar shows the new number immediately; returns a generation token
+  /// the caller must pass back to [completePageLoad] / [failPageLoad].
+  /// Concurrent loads are tracked by token — late arrivals from a
+  /// superseded fetch are rejected and don't desync clauses from rows.
+  int beginPageLoad({required int page}) {
+    _loadGeneration++;
+    _loading = true;
+    _page = page;
+    _edits.clear();
+    notifyListeners();
+    return _loadGeneration;
+  }
+
+  /// Atomic post-fetch swap: pairs the new clauses with the new result so
+  /// the clausebar never displays clauses that don't describe the rows on
+  /// screen. Ignored if [token] is stale (a newer fetch has since started).
+  bool completePageLoad(
+    int token, {
+    required QueryResult result,
+    String? filter,
+    String? selectList,
+    String? orderBy,
+  }) {
+    if (token != _loadGeneration) return false;
+    _result = result;
+    if (filter != null) _filter = filter;
+    if (selectList != null) _selectList = selectList;
+    if (orderBy != null) _orderBy = orderBy;
+    _lastRefreshedAt = DateTime.now();
+    _loading = false;
+    notifyListeners();
+    return true;
+  }
+
+  /// Failure counterpart to [completePageLoad]: leaves clauses untouched
+  /// (so the bar keeps matching the previous rows) and surfaces the error
+  /// as a failed [QueryResult]. Ignored if [token] is stale.
+  bool failPageLoad(int token, Object error) {
+    if (token != _loadGeneration) return false;
+    _result = QueryResult.failure(
+      error: error.toString(),
+      elapsed: Duration.zero,
+    );
+    _loading = false;
+    notifyListeners();
+    return true;
+  }
+
+  /// Mark an apply-edits round-trip as in-flight. Pairs with [endApply].
+  void beginApply() {
+    if (_applying) return;
+    _applying = true;
+    notifyListeners();
+  }
+
+  void endApply() {
+    if (!_applying) return;
+    _applying = false;
+    notifyListeners();
+  }
+
+  /// Filter mutator — clausebar autocomplete and the navigation history
+  /// snapshot apply step both land here.
+  void setFilter(String value) {
+    if (_filter == value) return;
+    _filter = value;
+    notifyListeners();
+  }
+
+  void setSelectList(String value) {
+    if (_selectList == value) return;
+    _selectList = value;
+    notifyListeners();
+  }
+
+  void setOrderBy(String value) {
+    if (_orderBy == value) return;
+    _orderBy = value;
     notifyListeners();
   }
 
@@ -427,14 +475,6 @@ class TableTab extends WorkspaceTab {
       _totalRows == 0 ? 1 : ((_totalRows - 1) ~/ _pageSize) + 1;
 
   int get offset => _page * _pageSize;
-
-  /// Wipe pending cell edits without touching inserts/deletes. Used by
-  /// page loads — a fresh page invalidates row-indexed edits.
-  void clearEdits() {
-    if (_edits.isEmpty) return;
-    _edits.clear();
-    notifyListeners();
-  }
 
   /// Wipe every pending mutation. Used after a successful Apply and by
   /// the explicit "Reset edits" action.

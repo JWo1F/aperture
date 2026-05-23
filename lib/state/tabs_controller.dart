@@ -219,30 +219,23 @@ class TabsController extends ChangeNotifier {
 
     final service = session.service;
     if (service == null) return;
-    tab.loading = true;
-    notifyListeners();
+    tab.beginDdlLoad();
     try {
-      tab.ddl = await service.loadTableDdl(table);
+      tab.completeDdlLoad(await service.loadTableDdl(table));
     } catch (e) {
-      tab.error = e.toString();
+      tab.failDdlLoad(e);
     }
-    tab.loading = false;
-    notifyListeners();
   }
 
   Future<void> reloadSchema(SchemaTab tab) async {
     final service = session.service;
     if (service == null) return;
-    tab.loading = true;
-    tab.error = null;
-    notifyListeners();
+    tab.beginDdlLoad();
     try {
-      tab.ddl = await service.loadTableDdl(tab.table);
+      tab.completeDdlLoad(await service.loadTableDdl(tab.table));
     } catch (e) {
-      tab.error = e.toString();
+      tab.failDdlLoad(e);
     }
-    tab.loading = false;
-    notifyListeners();
   }
 
   // --- Table tabs ----------------------------------------------------
@@ -279,6 +272,11 @@ class TabsController extends ChangeNotifier {
   /// [clauses] — clicking Next while a slow fetch is in flight should
   /// show the new page number immediately. The success vs. failure split
   /// only governs the clause triple.
+  ///
+  /// Concurrent loads are serialized by a per-tab generation token: if a
+  /// second [loadTablePage] starts before the first returns, the first
+  /// one's swap is dropped (it would pair its stale rows with the second
+  /// load's already-shown page number).
   Future<void> loadTablePage(
     TableTab tab,
     int page, {
@@ -289,36 +287,30 @@ class TabsController extends ChangeNotifier {
     final filter = clauses?.filter ?? tab.filter;
     final selectList = clauses?.selectList ?? tab.selectList;
     final orderBy = clauses?.orderBy ?? tab.orderBy;
+    final pageSize = tab.pageSize;
+    final offset = page * pageSize;
 
-    tab.loading = true;
-    tab.page = page;
-    tab.clearEdits();
-    notifyListeners();
+    final token = tab.beginPageLoad(page: page);
 
     try {
       final result = await service.fetchTablePage(
         tab.table,
-        limit: tab.pageSize,
-        offset: tab.offset,
+        limit: pageSize,
+        offset: offset,
         filter: filter,
         orderBy: orderBy,
         selectList: selectList,
       );
-      if (clauses != null) {
-        tab.filter = filter;
-        tab.selectList = selectList;
-        tab.orderBy = orderBy;
-      }
-      tab.result = result;
-      tab.lastRefreshedAt = DateTime.now();
-    } catch (e) {
-      tab.result = QueryResult.failure(
-        error: e.toString(),
-        elapsed: Duration.zero,
+      tab.completePageLoad(
+        token,
+        result: result,
+        filter: clauses == null ? null : filter,
+        selectList: clauses == null ? null : selectList,
+        orderBy: clauses == null ? null : orderBy,
       );
+    } catch (e) {
+      tab.failPageLoad(token, e);
     }
-    tab.loading = false;
-    notifyListeners();
 
     // The row count can be a full-table scan on large relations; keep it off
     // the critical path so the grid renders as soon as the page arrives.
@@ -331,9 +323,7 @@ class TabsController extends ChangeNotifier {
     final filterAtRequest = tab.filter;
     try {
       final count = await service.countRows(tab.table, filter: filterAtRequest);
-      // A slow count can outlive the filter that triggered it; only apply
-      // the result if the tab is still showing that same filter.
-      if (tab.filter == filterAtRequest) tab.totalRows = count;
+      tab.setTotalRows(count, filterAtRequest: filterAtRequest);
     } catch (_) {
       // A failed or timed-out count leaves the previous total in place.
     }
@@ -357,7 +347,7 @@ class TabsController extends ChangeNotifier {
   Future<void> setTableSelect(TableTab tab, String selectList) async {
     final next = selectList.trim().isEmpty ? '*' : selectList.trim();
     if (next == tab.selectList) return;
-    tab.selectList = next;
+    tab.setSelectList(next);
     tab.clearColumnWidths();
     history.pushTab(tab);
     await loadTablePage(tab, 0);
@@ -365,14 +355,14 @@ class TabsController extends ChangeNotifier {
 
   Future<void> setTableFilter(TableTab tab, String filter) async {
     if (filter == tab.filter) return;
-    tab.filter = filter;
+    tab.setFilter(filter);
     history.pushTab(tab);
     await loadTablePage(tab, 0);
   }
 
   Future<void> setTableOrder(TableTab tab, String orderBy) async {
     if (orderBy == tab.orderBy) return;
-    tab.orderBy = orderBy;
+    tab.setOrderBy(orderBy);
     history.pushTab(tab);
     await loadTablePage(tab, 0);
   }
@@ -585,8 +575,7 @@ class TabsController extends ChangeNotifier {
     final batch = _buildBatch(tab);
     if (batch.isEmpty) return null;
 
-    tab.applying = true;
-    notifyListeners();
+    tab.beginApply();
 
     String? error;
     try {
@@ -598,13 +587,11 @@ class TabsController extends ChangeNotifier {
     } catch (e) {
       error = e.toString();
     }
-    tab.applying = false;
+    tab.endApply();
 
     if (error == null) {
       tab.resetAllEdits();
       await loadTablePage(tab, tab.page);
-    } else {
-      notifyListeners();
     }
     return error;
   }
@@ -615,16 +602,8 @@ class TabsController extends ChangeNotifier {
     final service = session.service;
     final sql = sqlOverride ?? tab.sql;
     if (service == null || sql.trim().isEmpty || tab.running) return;
-    tab.running = true;
-    notifyListeners();
+    tab.beginRun();
     final result = await service.runQuery(sql);
-    tab.result = result;
-    tab.lastRunSql = sql;
-    tab.lastRefreshedAt = DateTime.now();
-    // Plan cache is keyed by SQL; a fresh run almost always invalidates it.
-    // Skip clearing if we just re-ran the exact statement the plan was
-    // computed against — keeps the Plan tab non-stale on auto-refresh.
-    if (tab.planSourceSql != sql) tab.clearPlan();
     final message = QueryMessage(
       timestamp: DateTime.now(),
       sql: sql,
@@ -632,13 +611,13 @@ class TabsController extends ChangeNotifier {
       affectedRows: result.affectedRows,
       error: result.isError ? result.error : null,
     );
-    tab.appendQueryMessage(
-      message,
+    tab.completeRun(
+      result: result,
+      sql: sql,
+      message: message,
       maxMessages: PerConnectionStore.maxMessagesPerQuery,
     );
     perConnection.appendQueryMessage(tab.id, message);
-    tab.running = false;
-    notifyListeners();
   }
 
   /// Loads or refreshes the EXPLAIN plan for [tab]'s most-recent run.

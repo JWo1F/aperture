@@ -112,7 +112,7 @@ class _QueryEditorState extends State<QueryEditor> {
 
   Future<void> _runAll() async {
     widget.tab.sql = _controller.text;
-    widget.tab.view = QueryResultsView.results;
+    widget.tab.setView(QueryResultsView.results);
     final tabs = context.read<TabsController>();
     final stmts = _statements.isNotEmpty
         ? _statements
@@ -133,7 +133,7 @@ class _QueryEditorState extends State<QueryEditor> {
   }
 
   void _runStatement(SqlStatement stmt) {
-    widget.tab.view = QueryResultsView.results;
+    widget.tab.setView(QueryResultsView.results);
     context.read<TabsController>().runQuery(widget.tab, sqlOverride: stmt.text);
   }
 
@@ -620,19 +620,19 @@ class _ResultsDivider extends StatelessWidget {
           _RdTab(
             label: 'Results',
             active: tab.view == QueryResultsView.results,
-            onTap: () => tab.view = QueryResultsView.results,
+            onTap: () => tab.setView(QueryResultsView.results),
           ),
           const SizedBox(width: 12),
           _RdTab(
             label: 'Plan',
             active: tab.view == QueryResultsView.plan,
-            onTap: () => tab.view = QueryResultsView.plan,
+            onTap: () => tab.setView(QueryResultsView.plan),
           ),
           const SizedBox(width: 12),
           _RdTab(
             label: 'Messages',
             active: tab.view == QueryResultsView.messages,
-            onTap: () => tab.view = QueryResultsView.messages,
+            onTap: () => tab.setView(QueryResultsView.messages),
             badge: messageCount == 0 ? null : '$messageCount',
           ),
         ],
