@@ -77,45 +77,53 @@ class GridCell extends StatelessWidget {
       fill = isEdited ? AppColors.accentSoft : null;
     }
 
-    final Widget body = Container(
-      width: maxWidth == null ? width : null,
-      height: kRowHeight,
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(horizontal: 9),
-      constraints: maxWidth == null
-          ? null
-          : BoxConstraints(minWidth: width, maxWidth: maxWidth!),
-      decoration: BoxDecoration(
-        color: fill,
-        border: Border(
-          right: BorderSide(color: AppColors.hairline, width: 1),
-          left: isEdited
-              ? BorderSide(color: AppColors.accent, width: 2)
-              : BorderSide.none,
-          bottom: bottomBorder
-              ? BorderSide(color: AppColors.hairline, width: 1)
-              : BorderSide.none,
-        ),
+    final decoration = BoxDecoration(
+      color: fill,
+      border: Border(
+        right: BorderSide(color: AppColors.hairline, width: 1),
+        left: isEdited
+            ? BorderSide(color: AppColors.accent, width: 2)
+            : BorderSide.none,
+        bottom: bottomBorder
+            ? BorderSide(color: AppColors.hairline, width: 1)
+            : BorderSide.none,
       ),
-      child: maxWidth == null
-          ? Text.rich(
+    );
+
+    // Row cells size to their column width exactly; the hover expansion sizes
+    // to its text up to [maxWidth]. A Container with `alignment` set expands
+    // to fill its constraints, which would defeat intrinsic sizing — so the
+    // expansion path uses an Align(widthFactor: 1) child for centring instead.
+    final Widget body = maxWidth == null
+        ? Container(
+            width: width,
+            height: kRowHeight,
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 9),
+            decoration: decoration,
+            child: Text.rich(
               content,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-            )
-          // The Align hugs the text horizontally (widthFactor: 1) so the cell
-          // box only grows to the natural glyph run, while still centring it
-          // vertically inside the row.
-          : Align(
-              alignment: Alignment.centerLeft,
-              widthFactor: 1,
-              child: Text.rich(
-                content,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            ),
+          )
+        : ConstrainedBox(
+            constraints: BoxConstraints(minWidth: width, maxWidth: maxWidth!),
+            child: Container(
+              height: kRowHeight,
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              decoration: decoration,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                widthFactor: 1,
+                child: Text.rich(
+                  content,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
-    );
+          );
 
     Widget cell = body;
     if (isSelected || isFocus) {
