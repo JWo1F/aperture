@@ -14,14 +14,24 @@ String? formatCellValue(Object? value) {
 
   if (value is Uint8List) return _hexPreview(value);
 
+  // ISO-8601 (with offset for UTC, naive otherwise) matches the form the
+  // cell editor parses back via DateTime.tryParse in editor_state.dart, so
+  // a value round-tripped through display → re-edit doesn't change shape.
+  if (value is DateTime) return value.toIso8601String();
+
   if (value is Map || value is List) {
-    try {
-      return jsonEncode(value);
-    } catch (_) {
-      return value.toString();
-    }
+    return jsonEncode(value, toEncodable: _encodeForJson);
   }
 
+  return value.toString();
+}
+
+/// Fallback encoder for `jsonEncode`. Handles [DateTime] (nested inside a
+/// Map/List) as ISO-8601 to match the top-level [DateTime] branch above;
+/// any other type that the default encoder can't serialise degrades to
+/// its `toString()` so a single odd value can't produce invalid JSON.
+Object? _encodeForJson(Object? value) {
+  if (value is DateTime) return value.toIso8601String();
   return value.toString();
 }
 

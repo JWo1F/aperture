@@ -265,23 +265,51 @@ class TabsController extends ChangeNotifier {
     return tab;
   }
 
-  Future<void> loadTablePage(TableTab tab, int page) async {
+  /// Fetch one page of [tab]'s relation.
+  ///
+  /// When [clauses] is non-null, the fetch runs against that triple
+  /// (filter, selectList, orderBy) instead of the tab's current clauses.
+  /// On success, the tab's clauses are swapped to [clauses] together
+  /// with the new result — old data and old clauses stay visible until
+  /// the fetch returns, then both move in one notification. On failure,
+  /// the tab keeps its previous clauses + previous data so the clausebar
+  /// never shows clauses that don't match the rows on screen.
+  ///
+  /// The page index updates eagerly (before the fetch) regardless of
+  /// [clauses] — clicking Next while a slow fetch is in flight should
+  /// show the new page number immediately. The success vs. failure split
+  /// only governs the clause triple.
+  Future<void> loadTablePage(
+    TableTab tab,
+    int page, {
+    TableClauses? clauses,
+  }) async {
     final service = session.service;
     if (service == null) return;
+    final filter = clauses?.filter ?? tab.filter;
+    final selectList = clauses?.selectList ?? tab.selectList;
+    final orderBy = clauses?.orderBy ?? tab.orderBy;
+
     tab.loading = true;
     tab.page = page;
     tab.clearEdits();
     notifyListeners();
 
     try {
-      tab.result = await service.fetchTablePage(
+      final result = await service.fetchTablePage(
         tab.table,
         limit: tab.pageSize,
         offset: tab.offset,
-        filter: tab.filter,
-        orderBy: tab.orderBy,
-        selectList: tab.selectList,
+        filter: filter,
+        orderBy: orderBy,
+        selectList: selectList,
       );
+      if (clauses != null) {
+        tab.filter = filter;
+        tab.selectList = selectList;
+        tab.orderBy = orderBy;
+      }
+      tab.result = result;
       tab.lastRefreshedAt = DateTime.now();
     } catch (e) {
       tab.result = QueryResult.failure(

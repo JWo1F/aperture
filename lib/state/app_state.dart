@@ -217,15 +217,25 @@ class AppState extends ChangeNotifier {
     tabsController.selectTab(i);
     final tab = list[i];
     if (tab is TableTab && snap.hasTableState) {
-      final filterChanged = tab.filter != snap.filter;
-      final selectChanged = tab.selectList != snap.selectList;
-      final orderChanged = tab.orderBy != snap.orderBy;
-      final pageChanged = snap.page != null && tab.page != snap.page;
-      tab.filter = snap.filter!;
-      tab.selectList = snap.selectList!;
-      tab.orderBy = snap.orderBy!;
-      if (filterChanged || selectChanged || orderChanged || pageChanged) {
-        unawaited(tabsController.loadTablePage(tab, snap.page ?? 0));
+      final current = NavSnapshot.table(
+        tab.id,
+        filter: tab.filter,
+        selectList: tab.selectList,
+        orderBy: tab.orderBy,
+        page: tab.page,
+      );
+      if (current != snap) {
+        unawaited(
+          tabsController.loadTablePage(
+            tab,
+            snap.page ?? 0,
+            clauses: TableClauses(
+              filter: snap.filter!,
+              selectList: snap.selectList!,
+              orderBy: snap.orderBy!,
+            ),
+          ),
+        );
       }
     }
     return true;

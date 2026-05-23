@@ -31,6 +31,48 @@ void main() {
       expect(formatted.startsWith(r'\x'), isTrue);
       expect(formatted.endsWith('…'), isTrue);
     });
+
+    test('DateTime (local) renders as naive ISO-8601 (no Z)', () {
+      final dt = DateTime(2026, 5, 23, 14, 32, 10, 123);
+      expect(formatCellValue(dt), dt.toIso8601String());
+      expect(formatCellValue(dt), '2026-05-23T14:32:10.123');
+    });
+
+    test('DateTime (UTC) renders with trailing Z', () {
+      final dt = DateTime.utc(2026, 5, 23, 14, 32, 10);
+      expect(formatCellValue(dt), '2026-05-23T14:32:10.000Z');
+    });
+
+    test('Map with nested DateTime encodes value as ISO-8601 string', () {
+      final dt = DateTime.utc(2026, 5, 23, 14, 32, 10);
+      final out = formatCellValue({'at': dt, 'n': 7});
+      expect(out, '{"at":"2026-05-23T14:32:10.000Z","n":7}');
+    });
+
+    test('List with nested DateTime encodes as ISO-8601 string', () {
+      final dt = DateTime.utc(2026, 1, 1);
+      expect(
+        formatCellValue([dt, 'x']),
+        '["2026-01-01T00:00:00.000Z","x"]',
+      );
+    });
+
+    test('Deeply nested DateTime is encoded throughout', () {
+      final dt = DateTime.utc(2026, 5, 23, 14, 32, 10);
+      final out = formatCellValue({
+        'events': [
+          {'at': dt, 'kind': 'a'},
+          {'at': dt, 'kind': 'b'},
+        ],
+      });
+      expect(
+        out,
+        '{"events":['
+        '{"at":"2026-05-23T14:32:10.000Z","kind":"a"},'
+        '{"at":"2026-05-23T14:32:10.000Z","kind":"b"}'
+        ']}',
+      );
+    });
   });
 
   group('equalityFragment', () {

@@ -55,6 +55,22 @@ sealed class WorkspaceTab extends ChangeNotifier {
 /// the editor: the result grid, the plan tree, or the messages log.
 enum QueryResultsView { results, plan, messages }
 
+/// The user-facing clause triple on a [TableTab]: WHERE filter, projection
+/// (SELECT list), and ORDER BY. Bundled into one value so a clause change
+/// can be paired atomically with the fetch that backs it — see
+/// `TabsController.loadTablePage`.
+class TableClauses {
+  const TableClauses({
+    required this.filter,
+    required this.selectList,
+    required this.orderBy,
+  });
+
+  final String filter;
+  final String selectList;
+  final String orderBy;
+}
+
 class QueryTab extends WorkspaceTab {
   QueryTab(super.id, {String name = 'Query', String sql = ''})
     : _name = name,
