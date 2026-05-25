@@ -41,6 +41,7 @@ class Palette {
     required this.info,
     required this.shadow,
     required this.scrim,
+    required this.gridRowBg,
     required this.gridRowHover,
     required this.gridRowSelection,
     required this.gridRowInsert,
@@ -116,7 +117,13 @@ class Palette {
   /// Modal barrier / scrim that dims the workspace behind a dialog.
   final Color scrim;
 
-  // Grid row state overlays. Alpha-blended over the row background, so they
+  /// Opaque base painted under every grid row. The translucent
+  /// [gridRowHover] / [gridRowSelection] / insert / delete tints blend onto
+  /// this — and the hover-expansion overlay uses it as its backdrop so the
+  /// floating clone matches the row underneath.
+  final Color gridRowBg;
+
+  // Grid row state overlays. Alpha-blended over [gridRowBg], so they
   // must stay translucent (an opaque value would erase the row striping).
   final Color gridRowHover;
   final Color gridRowSelection;
@@ -173,6 +180,7 @@ const Palette darkPalette = Palette(
   info: Color(0xFF60A5FA),
   shadow: Color(0x99000000),
   scrim: Color(0x88000000),
+  gridRowBg: Color(0xFF0E1014),
   gridRowHover: Color(0x06FFFFFF),
   gridRowSelection: Color(0x1A5B7CFA),
   gridRowInsert: Color(0x145B7CFA),
@@ -228,6 +236,7 @@ const Palette lightPalette = Palette(
   info: Color(0xFF2F6FE5),
   shadow: Color(0x1F1E2436),
   scrim: Color(0x3315171C),
+  gridRowBg: Color(0xFFFFFFFF),
   gridRowHover: Color(0x0A000000),
   gridRowSelection: Color(0x1F4F6FE8),
   gridRowInsert: Color(0x144F6FE8),
@@ -345,6 +354,8 @@ class AppColors {
   static Color get shadow => _palette.shadow;
 
   static Color get scrim => _palette.scrim;
+
+  static Color get gridRowBg => _palette.gridRowBg;
 
   static Color get gridRowHover => _palette.gridRowHover;
 

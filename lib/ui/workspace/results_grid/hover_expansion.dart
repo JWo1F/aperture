@@ -193,7 +193,7 @@ Widget buildExpansionCell(
         isRowSelected: sel.rowSegments(row).isNotEmpty,
         isSelected: sel.contains(row, column),
         isFocus: sel.focus == (row, column),
-        backdrop: AppColors.bg,
+        backdrop: AppColors.gridRowBg,
         bottomBorder: true,
         content: gridCellSpan(
           pending: pending,
