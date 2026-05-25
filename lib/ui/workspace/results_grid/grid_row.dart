@@ -88,18 +88,15 @@ class GridRow extends StatelessWidget {
     // selected pending-insert still reads as selected. The row paints
     // hover / selection / focus once at the row level (overlay below),
     // so [GridCell] is told not to repaint those — only the per-cell
-    // edit decoration lives inside each cell. The translucent fill is
-    // pre-blended onto [AppColors.gridRowBg] so the row paints an opaque
-    // colour — in light theme that base is white, giving each cell a
-    // crisp paper background that doesn't show through to the page bg.
-    final bg = Color.alphaBlend(
-      gridRowFill(
-        isInsert: isInsert,
-        isDeleted: isDeleted,
-        isHovered: hovering,
-        isRowSelected: hasSelection,
-      ),
-      AppColors.gridRowBg,
+    // edit decoration lives inside each cell. The fill is translucent —
+    // the data area paints an opaque [AppColors.gridRowBg] base, so the
+    // tints blend onto that single backdrop everywhere (under rows AND
+    // below the last row).
+    final bg = gridRowFill(
+      isInsert: isInsert,
+      isDeleted: isDeleted,
+      isHovered: hovering,
+      isRowSelected: hasSelection,
     );
 
     final rowWidth = math.max(widths.total, minRowWidth);

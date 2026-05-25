@@ -6,6 +6,7 @@ import '../../../models/cell_edit.dart';
 import '../../../models/db_object.dart';
 import '../../../models/order_term.dart';
 import '../../../models/query_result.dart';
+import '../../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 import 'body_gestures.dart';
 import 'cell_interaction.dart';
@@ -418,8 +419,14 @@ class _ResultsGridState extends State<ResultsGrid> {
   }
 
   Widget _buildDataArea(QueryResult result) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
+    // Opaque backdrop for the whole data area — rows paint translucent
+    // state tints on top of it, and the area below the last row inherits
+    // the same colour. White in light theme, the page bg in dark (so the
+    // dark grid stays visually identical to before this base existed).
+    return ColoredBox(
+      color: AppColors.gridRowBg,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
         final minRowWidth = constraints.maxWidth;
         return OverlayPortal(
           controller: _expansion.controller,
@@ -523,6 +530,7 @@ class _ResultsGridState extends State<ResultsGrid> {
           ),
         );
       },
+      ),
     );
   }
 }
