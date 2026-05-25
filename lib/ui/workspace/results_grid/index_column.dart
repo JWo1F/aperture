@@ -41,6 +41,7 @@ class IndexColumn extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             itemCount: slots.length,
             itemExtent: kRowHeight,
+            padding: const EdgeInsets.only(bottom: kGridBottomGutter),
             addAutomaticKeepAlives: false,
             itemBuilder: (_, r) {
               final slot = slots[r];

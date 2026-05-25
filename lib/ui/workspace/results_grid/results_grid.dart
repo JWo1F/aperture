@@ -496,6 +496,9 @@ class _ResultsGridState extends State<ResultsGrid> {
                           controller: _vBody,
                           itemCount: _totalRowCount,
                           itemExtent: kRowHeight,
+                          padding: const EdgeInsets.only(
+                            bottom: kGridBottomGutter,
+                          ),
                           // Rows hold no local state (selection lives in a
                           // ValueNotifier). Skipping per-child keepalives
                           // saves a widget allocation per row scrolled in.
