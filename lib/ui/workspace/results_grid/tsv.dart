@@ -39,3 +39,59 @@ String _quote(String s) {
   }
   return s;
 }
+
+/// Parse Excel-style TSV back into a 2D grid of strings. Tabs separate cells;
+/// `\n` (or `\r\n`) separates rows. A cell that begins with `"` is treated as
+/// a quoted cell: tabs and newlines inside are literal characters, and `""`
+/// becomes a single `"`. A trailing newline is dropped so a round-tripped
+/// selection doesn't grow a phantom empty row.
+List<List<String>> parseTsv(String input) {
+  final rows = <List<String>>[];
+  var row = <String>[];
+  final buf = StringBuffer();
+  var inQuotes = false;
+  var cellStart = true;
+
+  for (var i = 0; i < input.length; i++) {
+    final ch = input[i];
+    if (inQuotes) {
+      if (ch == '"') {
+        if (i + 1 < input.length && input[i + 1] == '"') {
+          buf.write('"');
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        buf.write(ch);
+      }
+      continue;
+    }
+    if (ch == '"' && cellStart) {
+      inQuotes = true;
+      cellStart = false;
+    } else if (ch == '\t') {
+      row.add(buf.toString());
+      buf.clear();
+      cellStart = true;
+    } else if (ch == '\n') {
+      row.add(buf.toString());
+      buf.clear();
+      rows.add(row);
+      row = <String>[];
+      cellStart = true;
+    } else if (ch == '\r') {
+      // Swallow the CR — the following LF (or EOF) commits the row.
+    } else {
+      buf.write(ch);
+      cellStart = false;
+    }
+  }
+
+  if (buf.isNotEmpty || row.isNotEmpty || inQuotes) {
+    row.add(buf.toString());
+    rows.add(row);
+  }
+
+  return rows;
+}

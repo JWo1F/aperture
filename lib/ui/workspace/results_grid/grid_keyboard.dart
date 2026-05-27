@@ -8,6 +8,7 @@ import '../../../models/value_format.dart';
 import 'cell_interaction.dart';
 import 'column_widths.dart';
 import 'grid_metrics.dart';
+import 'grid_selection.dart';
 import 'grid_slots.dart';
 import 'results_grid.dart';
 import 'selection_controller.dart';
@@ -72,18 +73,24 @@ class GridKeyboard {
       selection.clear();
       return KeyEventResult.handled;
     }
-    final isCopyChord = key == LogicalKeyboardKey.keyC &&
-        (HardwareKeyboard.instance.isMetaPressed ||
-            HardwareKeyboard.instance.isControlPressed);
-    if (isCopyChord && !selection.value.isEmpty) {
+    final cmd = HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isControlPressed;
+    if (cmd && key == LogicalKeyboardKey.keyC && !selection.value.isEmpty) {
       final sel = selection.value;
-      final singleCell = sel.ranges.length == 1 &&
-          sel.ranges.first.r0 == sel.ranges.first.r1 &&
-          sel.ranges.first.c0 == sel.ranges.first.c1;
-      final text = singleCell
+      final text = _isSingleCell(sel)
           ? _selectedCellText()
           : selectionToTsv(sel, _cellTextAt);
       Clipboard.setData(ClipboardData(text: text));
+      return KeyEventResult.handled;
+    }
+    if (cmd &&
+        key == LogicalKeyboardKey.keyV &&
+        widget.editable &&
+        widget.onEditCell != null &&
+        !selection.value.isEmpty) {
+      final sel = selection.value;
+      final anchor = _selectionTopLeft(sel);
+      _pasteFromClipboard(anchor.$1, anchor.$2, single: _isSingleCell(sel));
       return KeyEventResult.handled;
     }
 
@@ -115,6 +122,56 @@ class GridKeyboard {
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  bool _isSingleCell(GridSelection sel) =>
+      sel.ranges.length == 1 &&
+      sel.ranges.first.r0 == sel.ranges.first.r1 &&
+      sel.ranges.first.c0 == sel.ranges.first.c1;
+
+  (int, int) _selectionTopLeft(GridSelection sel) {
+    var minR = sel.ranges.first.r0;
+    var minC = sel.ranges.first.c0;
+    for (final rg in sel.ranges) {
+      if (rg.r0 < minR) minR = rg.r0;
+      if (rg.c0 < minC) minC = rg.c0;
+    }
+    return (minR, minC);
+  }
+
+  /// Clipboard read is async — we capture the anchor at keypress time and
+  /// apply the edits once the platform clipboard returns. Cells outside the
+  /// current grid or marked for delete are skipped silently; the rest paste.
+  Future<void> _pasteFromClipboard(
+    int anchorRow,
+    int anchorCol, {
+    required bool single,
+  }) async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text == null || text.isEmpty) return;
+    if (single) {
+      _pasteCell(anchorRow, anchorCol, text);
+      return;
+    }
+    final grid = parseTsv(text);
+    for (var r = 0; r < grid.length; r++) {
+      final cells = grid[r];
+      for (var c = 0; c < cells.length; c++) {
+        _pasteCell(anchorRow + r, anchorCol + c, cells[c]);
+      }
+    }
+  }
+
+  void _pasteCell(int row, int col, String text) {
+    if (row < 0 || row >= slots.length) return;
+    if (col < 0 || col >= widget.result.columns.length) return;
+    if (interaction.isDeletedRow(row)) return;
+    widget.onEditCell!(
+      interaction.stateRowFor(row),
+      col,
+      CellLiteral(text),
+    );
   }
 
   /// Nudge the body scrollers so the cell sits inside the viewport. We
