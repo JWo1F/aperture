@@ -94,7 +94,10 @@ class _SidebarState extends State<Sidebar> {
               const ConnHero(),
               if (loadingCatalog)
                 const Expanded(child: _SidebarLoading())
-              else if (connected) ...[
+              else if (connected || status == ConnectionStatus.lost) ...[
+                // `lost` keeps the prior catalog visible so the user doesn't
+                // lose their place in the schema tree while reconnecting. The
+                // toolbar banner + footer dot signal that data may be stale.
                 SidebarSearchBar(
                   controller: _searchCtrl,
                   focusNode: _searchFocus,

@@ -61,46 +61,23 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Refresh the lost-state error message in place. Used by the reconnect
+  /// orchestrator when a pre-flight step (credential resolution, master
+  /// passphrase unlock) fails: the banner re-renders with the new reason
+  /// and the workspace stays mounted, instead of flipping to `error` and
+  /// dumping the user on the welcome panel.
+  void updateLostError(String message) {
+    if (_status != ConnectionStatus.lost) return;
+    _error = message;
+    notifyListeners();
+  }
+
   /// Opens [config] and transitions through connecting → connected | error.
   /// Returns true on success.
   Future<bool> connect(ConnectionConfig config) async {
     _cancelKeepalive();
     await _service?.close();
-    _service = createDbService(
-      config,
-      onQueryRun:
-          ({
-            required sql,
-            required elapsed,
-            required affectedRows,
-            required error,
-          }) {
-            log?.add(
-              LogEvent(
-                timestamp: DateTime.now(),
-                kind: error == null ? LogEventKind.query : LogEventKind.error,
-                connectionName: config.name,
-                sql: sql,
-                elapsed: elapsed,
-                affectedRows: affectedRows,
-                error: error,
-              ),
-            );
-          },
-      onEditApplied:
-          ({required statementCount, required elapsed, required error}) {
-            log?.add(
-              LogEvent(
-                timestamp: DateTime.now(),
-                kind: error == null ? LogEventKind.edit : LogEventKind.error,
-                connectionName: config.name,
-                sql: '$statementCount UPDATE statement(s)',
-                elapsed: elapsed,
-                error: error,
-              ),
-            );
-          },
-    );
+    _service = _buildService(config);
     _activeConnection = config;
     _status = ConnectionStatus.connecting;
     _error = null;
@@ -143,14 +120,91 @@ class SessionController extends ChangeNotifier {
 
   /// Re-open the dropped connection without disturbing the workspace.
   ///
-  /// Returns true on success. Differs from [connect] in that we don't
-  /// re-emit a 'connecting' status until we're sure we still want to
-  /// reach the old server — i.e. there's still an active connection
-  /// config to reconnect to.
+  /// Returns true on success. From a `lost` state we deliberately hold
+  /// status at `lost` for the entire attempt — transitioning through
+  /// `connecting` would tear down the workspace (the shell only mounts
+  /// it for `connected || lost`) and a failure transition to `error`
+  /// would dump the user on the welcome panel. Keeping `lost` mounted
+  /// means the banner stays, the workspace stays, and a failure just
+  /// refreshes the banner's error text so the user can retry in place.
   Future<bool> reconnect() async {
     final conn = _activeConnection;
     if (conn == null) return false;
-    return connect(conn);
+    if (_status != ConnectionStatus.lost) return connect(conn);
+
+    _cancelKeepalive();
+    await _service?.close();
+    _service = _buildService(conn);
+
+    try {
+      await _service!.connect();
+      _status = ConnectionStatus.connected;
+      _error = null;
+      _serverVersion = null;
+      _startKeepalive();
+      log?.add(
+        LogEvent(
+          timestamp: DateTime.now(),
+          kind: LogEventKind.connect,
+          connectionName: conn.name,
+        ),
+      );
+      notifyListeners();
+      unawaited(_fetchServerVersion());
+      return true;
+    } catch (e) {
+      final friendly = friendlyConnectError(e, conn);
+      _service = null;
+      _error = friendly.message;
+      log?.add(
+        LogEvent(
+          timestamp: DateTime.now(),
+          kind: LogEventKind.error,
+          connectionName: conn.name,
+          error: friendly.detail,
+        ),
+      );
+      notifyListeners();
+      return false;
+    }
+  }
+
+  DbService _buildService(ConnectionConfig config) {
+    return createDbService(
+      config,
+      onQueryRun:
+          ({
+            required sql,
+            required elapsed,
+            required affectedRows,
+            required error,
+          }) {
+            log?.add(
+              LogEvent(
+                timestamp: DateTime.now(),
+                kind: error == null ? LogEventKind.query : LogEventKind.error,
+                connectionName: config.name,
+                sql: sql,
+                elapsed: elapsed,
+                affectedRows: affectedRows,
+                error: error,
+              ),
+            );
+          },
+      onEditApplied:
+          ({required statementCount, required elapsed, required error}) {
+            log?.add(
+              LogEvent(
+                timestamp: DateTime.now(),
+                kind: error == null ? LogEventKind.edit : LogEventKind.error,
+                connectionName: config.name,
+                sql: '$statementCount UPDATE statement(s)',
+                elapsed: elapsed,
+                error: error,
+              ),
+            );
+          },
+    );
   }
 
   /// Replace the active-connection snapshot in place (e.g. after a

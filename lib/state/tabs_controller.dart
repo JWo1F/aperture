@@ -14,7 +14,22 @@ import 'app_store.dart';
 import 'catalog_controller.dart';
 import 'navigation_history.dart';
 import 'session_controller.dart';
+import 'toast_controller.dart';
 import 'workspace_tab.dart';
+
+/// Heuristic for spotting an exception that points at a dead socket rather
+/// than a SQL-level error. Used to promote an in-flight failure to
+/// [SessionController.markLost] so the lost-banner appears immediately
+/// without waiting for the 30s keepalive tick.
+bool _looksLikeConnectionError(Object e) {
+  final s = e.toString().toLowerCase();
+  return s.contains('connection is closed') ||
+      s.contains('connection closed') ||
+      s.contains('socket') ||
+      s.contains('broken pipe') ||
+      s.contains('eof') ||
+      s.contains('connection reset');
+}
 
 /// Owns the workspace tab list, the active index, and per-tab actions
 /// (open, close, load page, apply edits, run query, …).
@@ -29,12 +44,30 @@ class TabsController extends ChangeNotifier {
     required this.catalog,
     required this.history,
     required this.store,
+    required this.toasts,
   });
 
   final SessionController session;
   final CatalogController catalog;
   final NavigationHistory history;
   final AppStore store;
+  final ToastController toasts;
+
+  /// Common precondition for every action that requires a live driver.
+  /// Returns the live service or null, and toasts a "Disconnected" warning
+  /// in the null case so user-initiated actions don't silently no-op when
+  /// the socket has been lost. Background hot paths (e.g. row-count
+  /// refresh) should not go through this helper.
+  DbService? _requireService(String action) {
+    final service = session.service;
+    if (service != null) return service;
+    toasts.warning(
+      'Cannot $action: connection lost. Click Reconnect to retry.',
+      title: 'Disconnected',
+      duration: const Duration(seconds: 4),
+    );
+    return null;
+  }
 
   List<SavedQuery> get _savedQueries =>
       session.activeConnection?.savedQueries ?? const [];
@@ -263,7 +296,7 @@ class TabsController extends ChangeNotifier {
     _tabs.add(tab);
     _select(_tabs.length - 1);
 
-    final service = session.service;
+    final service = _requireService('open schema');
     if (service == null) return;
     tab.beginDdlLoad();
     try {
@@ -274,7 +307,7 @@ class TabsController extends ChangeNotifier {
   }
 
   Future<void> reloadSchema(SchemaTab tab) async {
-    final service = session.service;
+    final service = _requireService('reload schema');
     if (service == null) return;
     tab.beginDdlLoad();
     try {
@@ -331,7 +364,7 @@ class TabsController extends ChangeNotifier {
     int page, {
     TableClauses? clauses,
   }) async {
-    final service = session.service;
+    final service = _requireService('load page');
     if (service == null) return;
     final filter = clauses?.filter ?? tab.filter;
     final selectList = clauses?.selectList ?? tab.selectList;
@@ -359,6 +392,14 @@ class TabsController extends ChangeNotifier {
       );
     } catch (e) {
       tab.failPageLoad(token, e);
+      toasts.warning(
+        e.toString(),
+        title: 'Failed to load page',
+        duration: const Duration(seconds: 5),
+      );
+      if (_looksLikeConnectionError(e)) {
+        unawaited(session.markLost(e));
+      }
     }
 
     // The row count can be a full-table scan on large relations; keep it off
@@ -615,17 +656,20 @@ class TabsController extends ChangeNotifier {
   }
 
   Future<EditResult> applyTableEdits(TableTab tab) async {
-    final service = session.service;
-    if (service == null || !tab.hasEdits || tab.applying) {
+    if (!tab.hasEdits || tab.applying) {
       return const EditResult.success(0);
     }
+    final service = _requireService('apply edits');
+    if (service == null) return const EditResult.success(0);
     final result = tab.result;
     if (result == null || result.rowIds == null) {
-      return const EditResult.failure(
+      final outcome = const EditResult.failure(
         appliedCount: 0,
         totalCount: 0,
         error: 'This view has no row identity and cannot be edited.',
       );
+      _toastApplyOutcome(outcome);
+      return outcome;
     }
     final batch = _buildBatch(tab);
     if (batch.isEmpty) return const EditResult.success(0);
@@ -643,15 +687,28 @@ class TabsController extends ChangeNotifier {
       // edits stay so the user can see which ones to retry.
       await loadTablePage(tab, tab.page);
     }
+    if (!outcome.ok) _toastApplyOutcome(outcome);
     return outcome;
+  }
+
+  void _toastApplyOutcome(EditResult outcome) {
+    final title = outcome.partial
+        ? 'Partial apply — ${outcome.appliedCount} of ${outcome.totalCount}'
+        : 'Apply failed — rolled back';
+    final err = outcome.error ?? 'Unknown error';
+    toasts.error(err, title: title);
+    if (_looksLikeConnectionError(err)) {
+      unawaited(session.markLost(err));
+    }
   }
 
   // --- Query tabs ----------------------------------------------------
 
   Future<void> runQuery(QueryTab tab, {String? sqlOverride}) async {
-    final service = session.service;
     final sql = sqlOverride ?? tab.sql;
-    if (service == null || sql.trim().isEmpty || tab.running) return;
+    if (sql.trim().isEmpty || tab.running) return;
+    final service = _requireService('run query');
+    if (service == null) return;
     tab.beginRun(sql: sql);
     final result = await service.runQuery(sql);
     final message = QueryMessage(
@@ -669,6 +726,17 @@ class TabsController extends ChangeNotifier {
     );
     final connId = _connectionId;
     if (connId != null) store.appendQueryMessage(connId, tab.id, message);
+    if (result.isError) {
+      final err = result.error ?? 'Query failed';
+      toasts.warning(
+        err,
+        title: 'Query error',
+        duration: const Duration(seconds: 5),
+      );
+      if (_looksLikeConnectionError(err)) {
+        unawaited(session.markLost(err));
+      }
+    }
   }
 
   /// Loads or refreshes the EXPLAIN plan for [tab]'s most-recent run.
@@ -680,10 +748,11 @@ class TabsController extends ChangeNotifier {
   /// times are real numbers, not estimates); falls back to a non-executing
   /// EXPLAIN for statements that would mutate data or aren't planned at all.
   Future<void> loadQueryPlan(QueryTab tab) async {
-    final service = session.service;
     final sql = tab.lastRunSql;
-    if (service == null || sql == null || sql.trim().isEmpty) return;
+    if (sql == null || sql.trim().isEmpty) return;
     if (tab.planLoading) return;
+    final service = _requireService('load query plan');
+    if (service == null) return;
 
     // The visual plan reads Postgres' `EXPLAIN (FORMAT JSON)`; SQLite's
     // `EXPLAIN QUERY PLAN` is a different shape entirely.

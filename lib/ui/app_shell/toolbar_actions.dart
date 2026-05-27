@@ -56,17 +56,8 @@ void openExportForActiveTab(BuildContext context, WorkspaceTab? tab) {
   }
 }
 
-/// Apply [tab]'s pending edits and surface partial/failed outcomes via a
-/// sticky toast. Shared by the table footer's apply icon and the pending-edits
-/// modal so both paths report errors the same way.
-Future<void> applyEditsForTab(BuildContext context, TableTab tab) async {
-  final tabs = appState.tabsController;
-  final outcome = await tabs.applyTableEdits(tab);
-  if (outcome.ok) return;
-  final title = outcome.partial
-      ? 'Partial apply — ${outcome.appliedCount} of ${outcome.totalCount}'
-      : 'Apply failed — rolled back';
-  appState.toasts.error(outcome.error ?? 'Unknown error', title: title);
+Future<void> applyEditsForTab(TableTab tab) async {
+  await appState.tabsController.applyTableEdits(tab);
 }
 
 void showPendingForTab(BuildContext context, TableTab tab) {
@@ -75,7 +66,7 @@ void showPendingForTab(BuildContext context, TableTab tab) {
   showPendingEditsModal(
     context,
     statements: statements,
-    onApply: () => applyEditsForTab(context, tab),
+    onApply: () => applyEditsForTab(tab),
     onRevert: () => tabs.resetTableEdits(tab),
   );
 }

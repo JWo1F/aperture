@@ -334,7 +334,7 @@ class _TbPendingChip extends StatelessWidget {
           tooltip: 'Apply pending edits',
           busy: busy,
           onTap: hasPending && !busy
-              ? () => applyEditsForTab(context, tab)
+              ? () => applyEditsForTab(tab)
               : null,
         ),
         _PendingAction(

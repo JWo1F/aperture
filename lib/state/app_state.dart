@@ -54,6 +54,7 @@ class AppState {
     catalog: catalog,
     history: history,
     store: store,
+    toasts: toasts,
   );
 
   void _syncSessionFromStore() {
@@ -140,9 +141,41 @@ class AppState {
   }
 
   Future<void> reconnect() async {
+    final active = session.activeConnection;
+    if (active == null) return;
+
+    // Re-resolve the credential. The session's activeConnection snapshot
+    // has lost its runtimePassword to the store-listener overwrite — the
+    // store strips runtime passwords on every persisted mutation (table
+    // open, column resize, favorite toggle), and the listener pushes that
+    // stripped snapshot into the session. Without re-resolution we'd send
+    // an empty password and the server would reject the reconnect.
+    final credential = await _resolveCredentialWithUnlock(active);
+    switch (credential) {
+      case CredentialError(message: final m):
+        _surfaceReconnectError(m);
+        return;
+      case CredentialNeedsPassphrase():
+        _surfaceReconnectError('Master passphrase required.');
+        return;
+      case CredentialOk(password: final p):
+        session.setActiveConnection(active.copyWith(runtimePassword: p));
+    }
+
     final ok = await session.reconnect();
     if (!ok) return;
     await _loadCatalog(awaitPhase1: false);
+  }
+
+  /// Surface a pre-flight failure on the reconnect path. From a `lost`
+  /// state we update the banner in place so the workspace stays mounted;
+  /// otherwise the existing setError path takes over.
+  void _surfaceReconnectError(String message) {
+    if (session.status == ConnectionStatus.lost) {
+      session.updateLostError(message);
+    } else {
+      session.setError(message);
+    }
   }
 
   Future<void> refreshCatalog() async {
