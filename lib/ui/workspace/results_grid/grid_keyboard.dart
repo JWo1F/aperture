@@ -88,9 +88,7 @@ class GridKeyboard {
         widget.editable &&
         widget.onEditCell != null &&
         !selection.value.isEmpty) {
-      final sel = selection.value;
-      final anchor = _selectionTopLeft(sel);
-      _pasteFromClipboard(anchor.$1, anchor.$2, single: _isSingleCell(sel));
+      _pasteFromClipboard(selection.value);
       return KeyEventResult.handled;
     }
 
@@ -139,26 +137,45 @@ class GridKeyboard {
     return (minR, minC);
   }
 
-  /// Clipboard read is async — we capture the anchor at keypress time and
-  /// apply the edits once the platform clipboard returns. Cells outside the
-  /// current grid or marked for delete are skipped silently; the rest paste.
-  Future<void> _pasteFromClipboard(
-    int anchorRow,
-    int anchorCol, {
-    required bool single,
-  }) async {
+  /// Clipboard read is async — we capture the selection at keypress time and
+  /// apply the edits once the platform clipboard returns. The shape of the
+  /// clipboard, not the selection, decides the mode: a single value fills
+  /// every selected cell; an N×M TSV block stamps from the selection's
+  /// top-left corner regardless of how large the selection was. Cells off
+  /// the grid or marked for delete are skipped silently.
+  Future<void> _pasteFromClipboard(GridSelection sel) async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text;
     if (text == null || text.isEmpty) return;
-    if (single) {
-      _pasteCell(anchorRow, anchorCol, text);
+    final grid = parseTsv(text);
+    if (grid.isEmpty) return;
+
+    if (grid.length == 1 && grid.first.length == 1) {
+      final value = grid.first.first;
+      for (final cell in _enumerateSelection(sel)) {
+        _pasteCell(cell.$1, cell.$2, value);
+      }
       return;
     }
-    final grid = parseTsv(text);
+
+    final anchor = _selectionTopLeft(sel);
     for (var r = 0; r < grid.length; r++) {
       final cells = grid[r];
       for (var c = 0; c < cells.length; c++) {
-        _pasteCell(anchorRow + r, anchorCol + c, cells[c]);
+        _pasteCell(anchor.$1 + r, anchor.$2 + c, cells[c]);
+      }
+    }
+  }
+
+  /// Every cell covered by [sel], de-duplicated across overlapping ranges so
+  /// a Cmd-click stack with intersecting rects doesn't pay an edit twice.
+  Iterable<(int, int)> _enumerateSelection(GridSelection sel) sync* {
+    final seen = <(int, int)>{};
+    for (final rg in sel.ranges) {
+      for (var r = rg.r0; r <= rg.r1; r++) {
+        for (var c = rg.c0; c <= rg.c1; c++) {
+          if (seen.add((r, c))) yield (r, c);
+        }
       }
     }
   }
