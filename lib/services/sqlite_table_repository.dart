@@ -62,7 +62,10 @@ class SqliteTableRepository implements TableRepository {
             'FROM ${table.qualifiedName}$tail',
           );
           watch.stop();
-          return _shapePage(rs, watch.elapsed, withRowId: true);
+          final page = _shapePage(rs, watch.elapsed, withRowId: true);
+          if (page != null) return page;
+          // The identity column came back as something other than an
+          // integer — fall through to the read-only shape.
         } on SqliteException catch (e) {
           if (!_isMissingRowId(e)) rethrow;
           // WITHOUT ROWID table — retry without the identity column.
@@ -72,7 +75,7 @@ class SqliteTableRepository implements TableRepository {
         'SELECT $projection FROM ${table.qualifiedName}$tail',
       );
       watch.stop();
-      return _shapePage(rs, watch.elapsed, withRowId: false);
+      return _shapePage(rs, watch.elapsed, withRowId: false)!;
     } on SqliteException catch (e) {
       watch.stop();
       return QueryResult.failure(error: e.message, elapsed: watch.elapsed);
@@ -82,7 +85,18 @@ class SqliteTableRepository implements TableRepository {
     }
   }
 
-  QueryResult _shapePage(
+  /// Shapes [rs] into a page. Returns null when [withRowId] was requested
+  /// but the leading identity column isn't an integer.
+  ///
+  /// `SELECT rowid` normally yields SQLite's implicit integer identity, but
+  /// a table may legally declare a column of its own by that name
+  /// (`CREATE TABLE t(rowid TEXT)`), and then the query hands back that
+  /// column's user data instead. The edit builder inlines the identity
+  /// token straight into `WHERE rowid = …` rather than binding it, so a
+  /// non-integer here is arbitrary user text heading for the statement
+  /// body. Such a relation has no identity we can address: the caller
+  /// re-shapes it as a read-only page.
+  QueryResult? _shapePage(
     ResultSet rs,
     Duration elapsed, {
     required bool withRowId,
@@ -102,7 +116,9 @@ class SqliteTableRepository implements TableRepository {
     final rowIds = <String>[];
     final rows = <List<Object?>>[];
     for (final r in rs.rows) {
-      rowIds.add('${r.first}');
+      final id = r.first;
+      if (id is! int) return null;
+      rowIds.add('$id');
       rows.add(List<Object?>.from(r.sublist(1)));
     }
     return QueryResult.rows(
@@ -205,13 +221,11 @@ class SqliteTableRepository implements TableRepository {
       for (final e in batch.updatesByCtid.entries)
         if (e.value.values.any((v) => v is! CellDefault)) e.key: e.value,
     };
-    final effectiveBatch = identical(effectiveUpdates, batch.updatesByCtid)
-        ? batch
-        : EditBatch(
-            updatesByCtid: effectiveUpdates,
-            deleteCtids: batch.deleteCtids,
-            inserts: batch.inserts,
-          );
+    final effectiveBatch = EditBatch(
+      updatesByCtid: effectiveUpdates,
+      deleteCtids: batch.deleteCtids,
+      inserts: batch.inserts,
+    );
     if (effectiveBatch.isEmpty) return const EditResult.success(0);
     final statements = buildSqliteEditStatements(table, effectiveBatch);
     final totalCount = statements.length;

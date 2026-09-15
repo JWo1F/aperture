@@ -186,6 +186,27 @@ void main() {
       await tmp.delete(recursive: true);
     });
 
+    test('a table with its own rowid column is not editable', () async {
+      svc.conn.execute('CREATE TABLE odd (rowid TEXT, note TEXT);');
+      svc.conn.execute("INSERT INTO odd VALUES ('a; DROP TABLE books', 'x');");
+
+      final page = await svc.fetchTablePage(
+        DbTable(
+          oid: 9,
+          schema: 'main',
+          name: 'odd',
+          kind: DbRelationKind.table,
+        ),
+        limit: 10,
+        offset: 0,
+      );
+
+      // `SELECT rowid` hands back the declared column here, and the edit
+      // builder inlines the identity token into the statement text.
+      expect(page.rowIds, isNull);
+      expect(page.columns, ['rowid', 'note']);
+    });
+
     test('connect fails clearly for a missing file', () async {
       final missing = SqliteService(
         ConnectionConfig(
