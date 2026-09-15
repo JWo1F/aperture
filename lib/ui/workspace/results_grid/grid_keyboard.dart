@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import '../../../models/cell_edit.dart';
 import '../../../models/value_format.dart';
 import 'cell_interaction.dart';
+import 'clipboard_cells.dart';
 import 'column_widths.dart';
 import 'grid_metrics.dart';
 import 'grid_selection.dart';
@@ -57,12 +58,12 @@ class GridKeyboard {
 
   String _cellTextAt(int row, int column) {
     final pending = interaction.pendingFor(row, column);
-    if (pending is CellLiteral) return pending.value ?? 'NULL';
-    if (pending is CellDefault) return 'DEFAULT';
+    if (pending is CellLiteral) return pending.value ?? nullToken;
+    if (pending is CellDefault) return defaultToken;
     final slot = slots[row];
-    if (slot.isInsert) return 'NULL';
+    if (slot.isInsert) return nullToken;
     return exactCellValue(widget.result.rows[slot.sourceIdx][column]) ??
-        'NULL';
+        nullToken;
   }
 
   KeyEventResult handleKey(FocusNode node, KeyEvent event) {
@@ -187,7 +188,7 @@ class GridKeyboard {
     widget.onEditCell!(
       interaction.stateRowFor(row),
       col,
-      CellLiteral(text),
+      clipboardCellValue(text),
     );
   }
 
