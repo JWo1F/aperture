@@ -46,6 +46,32 @@ String? exactCellValue(Object? value) {
   return formatCellValue(value);
 }
 
+/// Renders [value] as a Postgres array literal — `{1,2}`, not `[1,2]`.
+///
+/// The driver hands both `int[]` and `jsonb` back as a Dart `List`, and
+/// [formatCellValue] renders either as JSON because that reads better in a
+/// grid cell. JSON is not accepted back: `SET tags = '[1,2]'` fails with
+/// `malformed array literal`. The array editor seeds and commits this form
+/// instead, so what the user edits is what the column takes.
+///
+/// Elements follow the array_in rules: NULL is the bare word, nested lists
+/// recurse, and anything textual is double-quoted with `"` and `\` escaped.
+String postgresArrayLiteral(List<Object?> value) {
+  final parts = value.map(_arrayElement).join(',');
+  return '{$parts}';
+}
+
+String _arrayElement(Object? element) {
+  if (element == null) return 'NULL';
+  if (element is List) return postgresArrayLiteral(element);
+  if (element is num || element is BigInt || element is bool) {
+    return element.toString();
+  }
+  final text = formatCellValue(element) ?? '';
+  final escaped = text.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
+  return '"$escaped"';
+}
+
 /// How many bytes of a binary value the grid paints before eliding. A cell
 /// is one ellipsized line; the full blob can be megabytes.
 const int _previewBytes = 16;

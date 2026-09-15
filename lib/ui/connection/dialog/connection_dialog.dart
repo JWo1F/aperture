@@ -27,6 +27,10 @@ Future<ConnectionConfig?> showConnectionDialog(
   return showDialog<ConnectionConfig>(
     context: context,
     barrierColor: AppColors.scrim,
+    // The form holds a host, port, database, user and password. A stray
+    // click on the sidebar behind it used to throw all of that away with
+    // no prompt and no way back; the footer's Cancel is the way out.
+    barrierDismissible: false,
     builder: (_) => _ConnectionDialog(existing: existing),
   );
 }

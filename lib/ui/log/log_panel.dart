@@ -82,7 +82,13 @@ class LogPanel extends StatelessWidget {
                     itemCount: log.events.length,
                     itemBuilder: (context, i) {
                       final e = log.events[log.events.length - 1 - i];
-                      return _LogRow(event: e);
+                      // Keyed by the event itself. `_LogRow` holds its
+                      // expansion in State, and with `reverse: true` the
+                      // index→event mapping shifts by one on every new
+                      // entry — so a row expanded with "Show more"
+                      // collapsed and an unrelated statement expanded in
+                      // its place as soon as anything else ran.
+                      return _LogRow(key: ObjectKey(e), event: e);
                     },
                   ),
           ),
@@ -137,7 +143,7 @@ const int _collapseCharThreshold = 240;
 const int _collapsedMaxLines = 4;
 
 class _LogRow extends StatefulWidget {
-  const _LogRow({required this.event});
+  const _LogRow({super.key, required this.event});
 
   final LogEvent event;
 

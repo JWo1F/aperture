@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 
+import '../../models/value_format.dart';
 import '../../state/workspace_tab.dart';
 
 /// What `Panel` owns per kind. Each subclass holds the live editor value
@@ -68,6 +69,9 @@ String initialText(Object? raw, CellEditValue? pending) {
   if (pending is CellLiteral) return pending.value ?? '';
   if (pending is CellDefault) return '';
   if (raw == null) return '';
+  // Uint8List implements List<int>, so it has to precede the generic List
+  // case — behind it, a bytea cell opened as a JSON array of byte values.
+  if (raw is Uint8List) return '';
   if (raw is Map || raw is List) {
     try {
       return const JsonEncoder.withIndent('  ').convert(raw);
@@ -75,8 +79,20 @@ String initialText(Object? raw, CellEditValue? pending) {
       return raw.toString();
     }
   }
-  if (raw is Uint8List) return '';
   if (raw is DateTime) return raw.toIso8601String();
+  return raw.toString();
+}
+
+/// Seed text for an array cell: a Postgres array literal.
+///
+/// Kept apart from [initialText], which renders a `List` as JSON for the
+/// grid's benefit. JSON is not valid input for an array column, so the
+/// editor has to show — and commit — the braces form.
+String initialArrayText(Object? raw, CellEditValue? pending) {
+  if (pending is CellLiteral) return pending.value ?? '';
+  if (pending is CellDefault) return '';
+  if (raw == null) return '';
+  if (raw is List) return postgresArrayLiteral(raw);
   return raw.toString();
 }
 
@@ -126,15 +142,20 @@ DateTime initialMoment(Object? raw, CellEditValue? pending) {
 /// staged edit pre-fills the TZ field. Falls back to empty (server default).
 String initialTz(Object? raw, CellEditValue? pending) {
   if (pending is CellLiteral) {
-    final s = pending.value;
+    final s = pending.value?.trim();
     if (s != null) {
       final m = RegExp(
         r'(?:[+-]\d{2}(?::?\d{2})?|\b[A-Z][A-Za-z_/+\-0-9]{1,})$',
-      ).firstMatch(s.trim());
+      ).firstMatch(s);
       if (m != null) {
         final hit = m.group(0)!;
-        // Don't mistake the date's first 4-digit year for a tz.
-        if (hit.length >= 2 && !RegExp(r'^\d').hasMatch(hit)) return hit;
+        if (hit.length >= 2 && !RegExp(r'^\d').hasMatch(hit)) {
+          // A numeric offset only follows a time, and a time contains a
+          // colon. Without that check the `-23` of a bare `2026-05-23`
+          // read as a zone and pre-filled the TZ field with it.
+          final numeric = hit.startsWith('+') || hit.startsWith('-');
+          if (!numeric || s.substring(0, m.start).contains(':')) return hit;
+        }
       }
     }
   }

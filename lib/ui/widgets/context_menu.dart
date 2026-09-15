@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../theme/app_theme.dart';
 import 'common.dart';
@@ -90,21 +91,44 @@ class _ContextMenuOverlay extends StatelessWidget {
     if (x < 8) x = 8;
     if (y < 8) y = 8;
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onClose,
-            onSecondaryTap: onClose,
-          ),
+    // The menu sits in an overlay, outside the tree that owns focus, so
+    // Escape only reaches it if something here holds focus. Without this
+    // the documented dismissal did nothing and the grid's own Escape
+    // handler cleared the cell selection behind the open menu instead.
+    return FocusScope(
+      autofocus: true,
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): onClose,
+        },
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onClose,
+                onSecondaryTap: onClose,
+              ),
+            ),
+            Positioned(
+              left: x,
+              top: y,
+              // A tall menu (the cell menu reaches ~18 entries) would run
+              // off the bottom of a short window with nothing to scroll.
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: media.height - 16),
+                child: SingleChildScrollView(
+                  child: _Menu(
+                    entries: entries,
+                    onClose: onClose,
+                    width: _menuWidth,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-        Positioned(
-          left: x,
-          top: y,
-          child: _Menu(entries: entries, onClose: onClose, width: _menuWidth),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -221,6 +245,12 @@ class _Row extends StatelessWidget {
               Expanded(
                 child: Text(
                   item.label,
+                  // The row is a fixed 26px and the label column ~190px.
+                  // Dynamic labels interpolate column names and qualified
+                  // FK targets — `Follow → public.organization_members.id`
+                  // wrapped to a second line and bled over the row below.
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTheme.ui(
                     size: 12,
                     color: fg,

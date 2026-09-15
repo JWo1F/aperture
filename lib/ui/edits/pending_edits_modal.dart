@@ -43,7 +43,7 @@ Future<void> showPendingEditsModal(
 /// animation. We instead drive the blur sigma directly from the route
 /// animation — the filter runs every frame at the right intensity, the
 /// scrim alpha ramps with it, and the panel does its own fade+scale.
-class _PendingEditsRoute extends StatelessWidget {
+class _PendingEditsRoute extends StatefulWidget {
   const _PendingEditsRoute({
     required this.animation,
     required this.statements,
@@ -56,6 +56,23 @@ class _PendingEditsRoute extends StatelessWidget {
   final Future<void> Function()? onApply;
   final VoidCallback? onRevert;
 
+  @override
+  State<_PendingEditsRoute> createState() => _PendingEditsRouteState();
+}
+
+class _PendingEditsRouteState extends State<_PendingEditsRoute> {
+  /// Shared with the panel so the backdrop honours the same in-flight
+  /// guard the Close and Revert buttons do. Without it a backdrop tap
+  /// dismissed the modal mid-transaction, dropping the "Applying…" state
+  /// the other three paths deliberately protect.
+  final ValueNotifier<bool> _applying = ValueNotifier(false);
+
+  @override
+  void dispose() {
+    _applying.dispose();
+    super.dispose();
+  }
+
   static const double _maxBlur = 14;
   static const double _scrimNear = 0.55;
   static const double _scrimFar = 0.78;
@@ -64,7 +81,7 @@ class _PendingEditsRoute extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final curve = CurvedAnimation(
-      parent: animation,
+      parent: widget.animation,
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
     );
@@ -72,9 +89,10 @@ class _PendingEditsRoute extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: () {},
       child: _PendingPanel(
-        statements: statements,
-        onApply: onApply,
-        onRevert: onRevert,
+        statements: widget.statements,
+        onApply: widget.onApply,
+        onRevert: widget.onRevert,
+        applying: _applying,
       ),
     );
 
@@ -87,7 +105,10 @@ class _PendingEditsRoute extends StatelessWidget {
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.of(context).pop(),
+                onTap: () {
+                  if (_applying.value) return;
+                  Navigator.of(context).pop();
+                },
                 child: BackdropFilter(
                   filter: ImageFilter.blur(
                     sigmaX: _maxBlur * t,
@@ -130,18 +151,24 @@ class _PendingPanel extends StatefulWidget {
     required this.statements,
     required this.onApply,
     required this.onRevert,
+    required this.applying,
   });
 
   final List<String> statements;
   final Future<void> Function()? onApply;
   final VoidCallback? onRevert;
 
+  /// Owned by the route so its backdrop can refuse to dismiss mid-apply.
+  final ValueNotifier<bool> applying;
+
   @override
   State<_PendingPanel> createState() => _PendingPanelState();
 }
 
 class _PendingPanelState extends State<_PendingPanel> {
-  bool _applying = false;
+  bool get _applying => widget.applying.value;
+
+  set _applying(bool value) => widget.applying.value = value;
   final FocusNode _focus = FocusNode();
 
   @override

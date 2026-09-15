@@ -84,10 +84,21 @@ class _PanelState extends State<Panel> {
         );
       case KindId.text:
       case KindId.json:
-        final text = initialText(
-          widget.target.originalValue,
-          widget.target.pendingEdit,
-        );
+      case KindId.array:
+        // An array seeds as a Postgres array literal, not as JSON. The
+        // grid paints `[1,2]` because that reads better in a cell, but
+        // that is not a value the column accepts back — `SET tags =
+        // '[1,2]'` is a malformed array literal. Seeding the braces form
+        // means what the user sees is what gets written.
+        final text = k == KindId.array
+            ? initialArrayText(
+                widget.target.originalValue,
+                widget.target.pendingEdit,
+              )
+            : initialText(
+                widget.target.originalValue,
+                widget.target.pendingEdit,
+              );
         final isJson = k == KindId.json;
         _state = TextEditorState(
           controller: isJson
@@ -168,6 +179,7 @@ class _PanelState extends State<Panel> {
       case KindId.bool:
         return 'esc cancel';
       case KindId.json:
+      case KindId.array:
       case KindId.date:
       case KindId.time:
       case KindId.datetime:
@@ -200,9 +212,8 @@ class _PanelState extends State<Panel> {
   void _shiftHour({int hours = 0}) =>
       _applyMoment((m) => m.add(Duration(hours: hours)));
 
-  void _roundHour() => _applyMoment(
-    (m) => m.copyWith(minute: 0, second: 0, millisecond: 0),
-  );
+  void _roundHour() =>
+      _applyMoment((m) => m.copyWith(minute: 0, second: 0, millisecond: 0));
 
   void _setToday({bool zeroTime = false}) => _applyMoment((m) {
     final n = DateTime.now();
@@ -213,49 +224,59 @@ class _PanelState extends State<Panel> {
 
   @override
   Widget build(BuildContext context) {
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): widget.onClose,
-        const SingleActivator(LogicalKeyboardKey.enter, meta: true): _save,
-      },
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: AppColors.accent, width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.shadow,
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-              BoxShadow(
-                color: AppColors.accentSoft,
-                blurRadius: 0,
-                spreadRadius: 4,
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Header(target: widget.target, kind: widget.kind),
-              Expanded(child: _buildBody()),
-              Footer(
-                hasPending: widget.target.pendingEdit != null,
-                canSave: _isDirty,
-                canBeNull: widget.target.canBeNull,
-                hasDefault: widget.target.hasDefault,
-                kindHint: _footerHint(),
-                onSave: _save,
-                onCancel: widget.onClose,
-                onSetNull: _setNull,
-                onSetDefault: _setDefault,
-                onRevert: widget.onRevert,
-              ),
-            ],
+    // The picker lives in an OverlayEntry, outside the grid's element
+    // tree, so `CallbackShortcuts` only sees keys if focus is inside it.
+    // Only the text and JSON kinds request focus for their field; the
+    // bool, date and time bodies never did, so the footer advertised
+    // `⌘↵ commit · esc cancel` while Escape fell through to the grid and
+    // silently cleared the cell selection behind the open picker. This
+    // FocusScope gives every kind somewhere for focus to land.
+    return FocusScope(
+      autofocus: true,
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): widget.onClose,
+          const SingleActivator(LogicalKeyboardKey.enter, meta: true): _save,
+        },
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.accent, width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadow,
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+                BoxShadow(
+                  color: AppColors.accentSoft,
+                  blurRadius: 0,
+                  spreadRadius: 4,
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Header(target: widget.target, kind: widget.kind),
+                Expanded(child: _buildBody()),
+                Footer(
+                  hasPending: widget.target.pendingEdit != null,
+                  canSave: _isDirty,
+                  canBeNull: widget.target.canBeNull,
+                  hasDefault: widget.target.hasDefault,
+                  kindHint: _footerHint(),
+                  onSave: _save,
+                  onCancel: widget.onClose,
+                  onSetNull: _setNull,
+                  onSetDefault: _setDefault,
+                  onRevert: widget.onRevert,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -319,10 +340,7 @@ class _PanelState extends State<Panel> {
         primary: true,
         onTap: _setToNow,
       ),
-      QuickAction(
-        label: 'Today 00:00',
-        onTap: () => _setToday(zeroTime: true),
-      ),
+      QuickAction(label: 'Today 00:00', onTap: () => _setToday(zeroTime: true)),
       QuickAction(label: 'Tomorrow', onTap: () => _shiftDate(days: 1)),
     ],
     _ => const [],
@@ -332,20 +350,20 @@ class _PanelState extends State<Panel> {
     KindId.date => CalendarBody(
       initial: s.value,
       resetTick: _resetTick,
-      onChange: (d) => setState(
-        () => s.value = DateTime(d.year, d.month, d.day),
-      ),
+      onChange: (d) =>
+          setState(() => s.value = DateTime(d.year, d.month, d.day)),
     ),
-    KindId.time => s.withTz
-        ? Container(
-            color: AppColors.bg,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: TzInput(
-              value: s.tz,
-              onChange: (tz) => setState(() => s.tz = tz),
-            ),
-          )
-        : const SizedBox.shrink(),
+    KindId.time =>
+      s.withTz
+          ? Container(
+              color: AppColors.bg,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: TzInput(
+                value: s.tz,
+                onChange: (tz) => setState(() => s.tz = tz),
+              ),
+            )
+          : const SizedBox.shrink(),
     KindId.datetime => DateTimeBody(
       initial: s.value,
       withTz: s.withTz,

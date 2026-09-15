@@ -132,4 +132,49 @@ void main() {
       expect(equalityFragment('big', BigInt.from(9)), '"big" = 9');
     });
   });
+
+  group('postgresArrayLiteral', () {
+    test('numbers and booleans go in bare', () {
+      expect(postgresArrayLiteral([1, 2, 3]), '{1,2,3}');
+      expect(postgresArrayLiteral([1.5, -2]), '{1.5,-2}');
+      expect(postgresArrayLiteral([true, false]), '{true,false}');
+      expect(postgresArrayLiteral([BigInt.two]), '{2}');
+    });
+
+    test('text is double-quoted, with quotes and backslashes escaped', () {
+      expect(postgresArrayLiteral(['a', 'b c']), '{"a","b c"}');
+      expect(postgresArrayLiteral([r'say "hi"']), r'{"say \"hi\""}');
+      expect(postgresArrayLiteral([r'back\slash']), r'{"back\\slash"}');
+    });
+
+    test('null is the bare keyword, not a quoted string', () {
+      expect(postgresArrayLiteral([null, 1]), '{NULL,1}');
+    });
+
+    test('nested arrays recurse', () {
+      expect(
+        postgresArrayLiteral([
+          [1, 2],
+          [3],
+        ]),
+        '{{1,2},{3}}',
+      );
+    });
+
+    test('an empty array is empty braces', () {
+      expect(postgresArrayLiteral([]), '{}');
+    });
+
+    test('a comma or brace inside text is quoted, not structural', () {
+      expect(postgresArrayLiteral(['a,b', '{c}']), '{"a,b","{c}"}');
+    });
+
+    test('is not JSON — the form Postgres actually accepts', () {
+      // `SET tags = '[1,2]'` fails with `malformed array literal`, which is
+      // what the array editor used to produce.
+      final out = postgresArrayLiteral([1, 2]);
+      expect(out.startsWith('{'), isTrue);
+      expect(out.contains('['), isFalse);
+    });
+  });
 }

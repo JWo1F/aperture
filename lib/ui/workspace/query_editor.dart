@@ -172,6 +172,10 @@ class _QueryEditorState extends State<QueryEditor> {
         return ResultsGrid(
           result: tab.result!,
           widths: tab.columnWidths,
+          // A query tab has no table key to persist against, so the tab's
+          // own map is the whole story — without writing back, every
+          // re-run re-derived auto widths and undid the user's drag.
+          onWidthChanged: tab.setColumnWidth,
           foreignKeys: _resolveFks(catalog, tab.result!),
           onFollowForeignKey: (fk, value) =>
               appState.followForeignKey(fk, value),

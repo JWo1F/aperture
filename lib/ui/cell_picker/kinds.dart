@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
 
 /// Discriminator on which kind of editor the picker should render.
-enum KindId { text, bool, json, date, time, datetime }
+enum KindId { text, bool, json, array, date, time, datetime }
 
 /// Sizing + cosmetic config picked once per opened picker; the body widget
 /// is dispatched on [id] separately.
@@ -54,7 +54,7 @@ Kind get _kJson => Kind(
   multiline: true,
 );
 Kind get _kArray => Kind(
-  id: KindId.json,
+  id: KindId.array,
   label: 'array',
   color: AppColors.tJson,
   size: const Size(540, 340),

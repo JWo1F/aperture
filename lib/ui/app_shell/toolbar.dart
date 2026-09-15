@@ -126,6 +126,17 @@ class _ToolbarState extends State<Toolbar> {
   }) {
     final store = appState.store;
     final tabs = appState.tabsController;
+    // Every child of the row below is fixed-width, and the Stack clips —
+    // so once the fixed total exceeds the window, the right-hand controls
+    // (theme toggle, reveal-config) were silently cut off rather than
+    // overflowing visibly. Snapping Aperture to half a 14" screen was
+    // enough. Pick the elastic sizes from the width we actually have.
+    final width = MediaQuery.sizeOf(context).width;
+    final searchWidth = switch (width) {
+      >= 1100 => 220.0,
+      >= 940 => 150.0,
+      _ => 0.0,
+    };
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanStart: (_) => _windowChannel.invokeMethod('startDrag'),
@@ -197,16 +208,25 @@ class _ToolbarState extends State<Toolbar> {
                 const SizedBox(width: 6),
                 const TbGroupRail(),
                 const SizedBox(width: 6),
-                // Fixed-width search pill — making it Flexible would force it
-                // to compete with the Spacer above for leftover space, so on a
-                // wide window the spacer would collapse to half its slack and
-                // the search would drift away from the right edge.
-                SizedBox(
-                  width: 220,
-                  child: TbSearch(
-                    onTap: () => showCommandPalette(context),
+                // Deliberately a fixed width rather than Flexible: sharing
+                // slack with the Spacer above would let the pill drift away
+                // from the right edge on a wide window. The width is chosen
+                // from the viewport instead, and below the narrowest step
+                // the pill gives way to a plain ⌘K button so the palette
+                // stays reachable.
+                if (searchWidth > 0)
+                  SizedBox(
+                    width: searchWidth,
+                    child: TbSearch(
+                      onTap: () => showCommandPalette(context),
+                    ),
+                  )
+                else
+                  TbIcon(
+                    icon: Icons.search,
+                    tooltip: 'Search  ⌘K',
+                    onPressed: () => showCommandPalette(context),
                   ),
-                ),
                 const TbRail(),
                 TbIcon(
                   icon: brightness == AppBrightness.dark
