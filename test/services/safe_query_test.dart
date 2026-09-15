@@ -6,13 +6,13 @@ void main() {
     test('appends LIMIT to a bare SELECT', () {
       final s = applyDefaultLimit('SELECT * FROM events', limit: 10);
       expect(s.appliedLimit, isTrue);
-      expect(s.sql, 'SELECT * FROM events LIMIT 10');
+      expect(s.sql, 'SELECT * FROM events\nLIMIT 10');
     });
 
     test('strips a trailing semicolon before LIMIT', () {
       final s = applyDefaultLimit('SELECT 1;', limit: 5);
       expect(s.appliedLimit, isTrue);
-      expect(s.sql, 'SELECT 1 LIMIT 5');
+      expect(s.sql, 'SELECT 1\nLIMIT 5');
     });
 
     test('leaves an existing LIMIT alone', () {
@@ -69,6 +69,34 @@ void main() {
       );
       expect(s.appliedLimit, isTrue);
       expect(s.sql.endsWith('LIMIT 5'), isTrue);
+    });
+
+    test('a LIMIT inside a string literal is not a real LIMIT', () {
+      final s = applyDefaultLimit(
+        "SELECT * FROM t WHERE note = 'LIMIT 5'",
+        limit: 10,
+      );
+      expect(
+        s.appliedLimit,
+        isTrue,
+        reason: 'the cap must still apply — the match is quoted text',
+      );
+    });
+
+    test('a LIMIT inside a comment is not a real LIMIT', () {
+      final s = applyDefaultLimit(
+        'SELECT * FROM t -- LIMIT 5 one day\n',
+        limit: 10,
+      );
+      expect(s.appliedLimit, isTrue);
+    });
+
+    test('the cap survives a trailing line comment', () {
+      final s = applyDefaultLimit('SELECT * FROM t -- why', limit: 10);
+      expect(s.appliedLimit, isTrue);
+      // Appended inline, the cap would sit inside the comment and do nothing.
+      expect(s.sql.endsWith('LIMIT 10'), isTrue);
+      expect(s.sql, contains('\nLIMIT 10'));
     });
 
     test('limit <= 0 is a no-op', () {

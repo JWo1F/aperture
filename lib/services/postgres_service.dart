@@ -253,10 +253,6 @@ class PostgresService implements DbService {
   /// DDL, etc. — pass through untouched.
   static const defaultSelectLimit = 10000;
 
-  /// Executes a user-supplied statement, applying [defaultSelectLimit]
-  /// to bare SELECTs and shaping the driver result into a [QueryResult].
-  /// Logging happens in [execute] so this method just translates the
-  /// outcome — no separate log entry is emitted here.
   /// Sends the wire-protocol cancel handshake to the backend running this
   /// connection's current statement. The handshake is `cancelPendingStatement`
   /// on the concrete `PgConnectionImplementation` — the package's public
@@ -275,6 +271,10 @@ class PostgresService implements DbService {
     } catch (_) {}
   }
 
+  /// Executes a user-supplied statement, applying [defaultSelectLimit]
+  /// to bare SELECTs and shaping the driver result into a [QueryResult].
+  /// Logging happens in [execute] so this method just translates the
+  /// outcome — no separate log entry is emitted here.
   @override
   Future<QueryResult> runQuery(String sql) async {
     final safe = applyDefaultLimit(sql, limit: defaultSelectLimit);

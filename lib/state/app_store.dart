@@ -129,12 +129,16 @@ class AppStore extends ChangeNotifier {
 
   /// One-time hydration from `store.json`. Failures fall back to defaults
   /// so a corrupt file never blocks launch.
+  ///
+  /// `main()` awaits this before `runApp`, so a throw here is not a degraded
+  /// session — it is a window that never opens, with no UI to explain why.
+  /// A section that won't parse is dropped and the rest still loads.
   Future<void> load() async {
     final decoded = await _file.load();
     if (decoded is Map<String, dynamic>) {
-      _readPreferences(decoded['preferences']);
-      _readConnections(decoded['connections']);
-      _readSecurity(decoded['security']);
+      _readSection('preferences', () => _readPreferences(decoded['preferences']));
+      _readSection('connections', () => _readConnections(decoded['connections']));
+      _readSection('security', () => _readSecurity(decoded['security']));
     }
     AppColors.setPalette(
       _brightness == AppBrightness.dark ? darkPalette : lightPalette,
@@ -584,6 +588,19 @@ class AppStore extends ChangeNotifier {
     if (_security != null) 'security': _security,
     'connections': [for (final c in _connections) c.toJson()],
   };
+
+  void _readSection(String name, void Function() read) {
+    try {
+      read();
+    } catch (e, st) {
+      developer.log(
+        'failed to read $name from store.json',
+        name: 'dbv.store',
+        error: e,
+        stackTrace: st,
+      );
+    }
+  }
 
   void _readPreferences(Object? raw) {
     if (raw is! Map) return;

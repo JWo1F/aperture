@@ -7,6 +7,8 @@
 /// touched. Everything else passes through untouched.
 library;
 
+import 'sql_complete/text_scan.dart';
+
 class SafeQuery {
   SafeQuery._(this.sql, this.appliedLimit);
 
@@ -22,16 +24,30 @@ SafeQuery applyDefaultLimit(String sql, {required int limit}) {
   if (!head.startsWith('SELECT ') && head != 'SELECT') {
     return SafeQuery._(sql, false);
   }
-  if (RegExp(r'\bLIMIT\s+\d', caseSensitive: false).hasMatch(body)) {
-    return SafeQuery._(sql, false);
-  }
+  if (_hasRealLimit(body)) return SafeQuery._(sql, false);
   // Strip a single trailing `;` (and any following whitespace) before
   // appending so the rendered statement remains valid.
   var trimmed = body.trimRight();
   if (trimmed.endsWith(';')) {
     trimmed = trimmed.substring(0, trimmed.length - 1).trimRight();
   }
-  return SafeQuery._('$trimmed LIMIT $limit', true);
+  // Newline, not a space: a statement ending in a `-- …` comment would
+  // otherwise swallow the clause we just appended and run uncapped.
+  return SafeQuery._('$trimmed\nLIMIT $limit', true);
+}
+
+/// True when [body] carries a `LIMIT <n>` that the engine will actually
+/// honour. A textual match is not enough: `WHERE note = 'LIMIT 5'` and
+/// `-- LIMIT 5 one day` both read as one, and skipping the cap on those
+/// leaves an unbounded `SELECT *` free to materialise a whole relation.
+bool _hasRealLimit(String body) {
+  for (final m in RegExp(
+    r'\bLIMIT\s+\d',
+    caseSensitive: false,
+  ).allMatches(body)) {
+    if (!isInsideStringOrComment(body, m.start)) return true;
+  }
+  return false;
 }
 
 /// Skip line (`-- …`) and block (`/* … */`) comments plus surrounding
