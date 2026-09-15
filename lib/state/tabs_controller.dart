@@ -503,7 +503,7 @@ class TabsController extends ChangeNotifier {
 
   void setQueryAutoRefresh(QueryTab tab, Duration? interval) {
     tab.setAutoRefresh(interval, () {
-      if (!_tabs.contains(tab)) return;
+      if (!_canAutoRefresh(tab)) return;
       if (tab.running) return;
       final sql = tab.lastRunSql;
       if (sql == null) return;
@@ -513,11 +513,21 @@ class TabsController extends ChangeNotifier {
 
   void setTableAutoRefresh(TableTab tab, Duration? interval) {
     tab.setAutoRefresh(interval, () {
-      if (!_tabs.contains(tab)) return;
+      if (!_canAutoRefresh(tab)) return;
       if (tab.loading || tab.applying || tab.hasEdits) return;
       unawaited(loadTablePage(tab, tab.page));
     });
   }
+
+  /// Whether an auto-refresh tick should fire at all.
+  ///
+  /// A timer must never reach [_requireService]: that helper exists to tell
+  /// the user why the thing they just clicked didn't happen. On a dropped
+  /// socket a 5-second refresh would raise "Cannot load page: connection
+  /// lost" every 5 seconds, indefinitely, over whatever the user is doing.
+  /// Ticks skip quietly and resume on their own once reconnected.
+  bool _canAutoRefresh(WorkspaceTab tab) =>
+      _tabs.contains(tab) && !tab.disposed && session.service != null;
 
   void setCellEdit(TableTab tab, int row, int column, CellEditValue value) {
     final result = tab.result;

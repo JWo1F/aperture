@@ -48,10 +48,21 @@ class AppStore extends ChangeNotifier {
     AtomicJsonFile? file,
     OnePasswordClient? onePassword,
     WindowFrame? window,
+    this.onSaveFailed,
     this.saveDebounce = const Duration(milliseconds: 500),
   }) : _file = file ?? AtomicJsonFile('store.json'),
        _op = onePassword ?? OnePasswordClient(),
        _window = window ?? WindowFrame();
+
+  /// Called when a write to `store.json` fails.
+  ///
+  /// Everything the app remembers between launches goes through this one
+  /// file. A full disk or a read-only support directory makes every save
+  /// and the quit-time flush fail, and without a sink the user adds
+  /// connections and saved queries all evening, sees no complaint, and
+  /// finds them gone on the next launch. `AppState` wires this to the
+  /// event log and a toast.
+  void Function(Object error)? onSaveFailed;
 
   final AtomicJsonFile _file;
   final OnePasswordClient _op;
@@ -576,6 +587,7 @@ class AppStore extends ChangeNotifier {
         error: e,
         stackTrace: st,
       );
+      onSaveFailed?.call(e);
     }
   }
 

@@ -69,7 +69,16 @@ class TableView extends StatelessWidget {
                         children: [
                           ResultsGrid(
                             result: tab.result!,
-                            editable: !tab.table.isView && !readOnly,
+                            // Frozen while a batch is in flight. The
+                            // transaction was built from a snapshot taken
+                            // before the await, so a cell edited during the
+                            // round-trip isn't in it — and the success path
+                            // then calls resetAllEdits, deleting it without
+                            // ever having sent it.
+                            editable:
+                                !tab.table.isView &&
+                                !readOnly &&
+                                !tab.applying,
                             edits: tab.edits,
                             deletedRows: tab.deletedRows,
                             inserts: tab.inserts,

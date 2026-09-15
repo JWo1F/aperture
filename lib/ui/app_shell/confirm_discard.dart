@@ -3,23 +3,29 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
 
-/// Asks whether to quit with [pending] un-applied mutations still staged.
-/// Returns true to go ahead and quit.
+/// Asks before an action throws away [pending] un-applied mutations.
+/// Returns true to go ahead.
 ///
-/// Called from `AppLifecycleListener.onExitRequested`, which is the one
-/// chokepoint every quit passes through — ⌘Q, the app menu, the Dock, and a
-/// logout all arrive there. Guarding the ⌘Q keystroke alone left every other
-/// route discarding staged edits without a word.
-Future<bool> confirmQuitWithPendingEdits(
-  BuildContext context,
-  int pending,
-) async {
+/// One prompt for every route that can lose staged work: quitting,
+/// closing a tab, disconnecting, and switching to another connection.
+/// Only the quit route used to ask, so the other three discarded the same
+/// edits without a word.
+///
+/// [action] completes the sentence "…discards them" — pass a short phrase
+/// naming what the user is about to do.
+Future<bool> confirmDiscardEdits(
+  BuildContext context, {
+  required int pending,
+  required String title,
+  required String action,
+  required String proceedLabel,
+}) async {
   final keepEditing = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       backgroundColor: AppColors.surface,
       title: Text(
-        'Quit Aperture?',
+        title,
         style: AppTheme.ui(
           size: 14,
           weight: FontWeight.w600,
@@ -28,7 +34,7 @@ Future<bool> confirmQuitWithPendingEdits(
       ),
       content: Text(
         'You have $pending pending edit${pending == 1 ? '' : 's'}. '
-        "Quitting now discards them — they aren't on the server yet.",
+        "$action discards them — they aren't on the server yet.",
         style: AppTheme.ui(color: AppColors.textSecondary),
       ),
       actions: [
@@ -37,14 +43,14 @@ Future<bool> confirmQuitWithPendingEdits(
           onPressed: () => Navigator.of(ctx).pop(true),
         ),
         AppButton(
-          label: 'Quit anyway',
+          label: proceedLabel,
           danger: true,
           onPressed: () => Navigator.of(ctx).pop(false),
         ),
       ],
     ),
   );
-  // A dismissed barrier reads as "don't quit" — the safe side of a choice
-  // whose other branch throws away work.
+  // A dismissed barrier reads as "don't" — the safe side of a choice whose
+  // other branch throws away work.
   return keepEditing == false;
 }

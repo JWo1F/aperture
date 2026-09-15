@@ -222,13 +222,19 @@ class SessionController extends ChangeNotifier {
 
   Future<void> disconnect() async {
     _cancelKeepalive();
-    await _service?.close();
     final name = _activeConnection?.name;
+    // Flip the status BEFORE closing the socket. Any request still in
+    // flight fails the moment the socket goes, and `markLost` gates on the
+    // status — closing first left a window where a deliberate disconnect
+    // reported itself as a lost connection, complete with a "Failed to
+    // load page" toast and a `lost` entry in the activity log.
+    final closing = _service;
     _service = null;
     _activeConnection = null;
     _status = ConnectionStatus.disconnected;
     _error = null;
     _serverVersion = null;
+    await closing?.close();
     log?.add(
       LogEvent(
         timestamp: DateTime.now(),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,6 +13,7 @@ import '../log/log_panel.dart';
 import '../sidebar/sidebar.dart';
 import '../widgets/value_selector.dart';
 import '../workspace/workspace.dart';
+import 'confirm_discard.dart';
 import 'connection_lost_banner.dart';
 import 'resize_handles.dart';
 import 'toast_overlay.dart';
@@ -40,6 +43,19 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       appState.onPassphraseNeeded = () => showMasterPassphraseUnlock(context);
+      appState.onConfirmDiscardEdits =
+          ({
+            required pending,
+            required title,
+            required action,
+            required proceedLabel,
+          }) => confirmDiscardEdits(
+            context,
+            pending: pending,
+            title: title,
+            action: action,
+            proceedLabel: proceedLabel,
+          );
     });
   }
 
@@ -63,6 +79,38 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     HardwareKeyboard.instance.removeHandler(_onKey);
     super.dispose();
+  }
+
+  /// ⌘W. Goes through the same discard prompt as the tab strip's close
+  /// button, so the keystroke can't do quietly what the button asks about.
+  void _closeActiveTab() {
+    final tabs = appState.tabsController;
+    final tab = tabs.activeTab;
+    if (tab == null) return;
+    unawaited(
+      _confirmThen(
+        closing: tab,
+        close: () => tabs.closeTab(tab.id),
+      ),
+    );
+  }
+
+  Future<void> _confirmThen({
+    required WorkspaceTab closing,
+    required VoidCallback close,
+  }) async {
+    final pending = closing is TableTab ? closing.pendingOpCount : 0;
+    if (pending > 0) {
+      final proceed = await confirmDiscardEdits(
+        context,
+        pending: pending,
+        title: 'Close this tab?',
+        action: 'Closing',
+        proceedLabel: 'Close anyway',
+      );
+      if (!proceed) return;
+    }
+    close();
   }
 
   bool _onKey(KeyEvent event) {
@@ -123,6 +171,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 showCommandPalette(context),
             const SingleActivator(LogicalKeyboardKey.keyL, meta: true):
                 eventLog.toggleVisible,
+            // ⌘N and ⌘W are advertised by the tab strip's tooltip, the
+            // workspace-home quick actions and the tab context menu, so
+            // they have to exist.
+            const SingleActivator(LogicalKeyboardKey.keyN, meta: true):
+                tabs.newQueryTab,
+            const SingleActivator(LogicalKeyboardKey.keyW, meta: true):
+                _closeActiveTab,
             if (connected)
               const SingleActivator(LogicalKeyboardKey.keyR, meta: true): () {
                 final tab = tabs.activeTab;

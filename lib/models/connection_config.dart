@@ -128,6 +128,24 @@ class ConnectionConfig {
   /// session role at the Postgres end.
   final bool readOnly;
 
+  /// True when [other] addresses the same database over the same
+  /// transport — everything a live socket was opened against.
+  ///
+  /// Name, colour and credential are excluded: renaming a connection or
+  /// switching where its password comes from doesn't change which server
+  /// the open session is talking to. `readOnly` is included because the
+  /// workspace gates edit gestures on it, so a stale value would offer to
+  /// write to a connection the user just marked read-only.
+  bool sameTarget(ConnectionConfig other) =>
+      engine == other.engine &&
+      host == other.host &&
+      port == other.port &&
+      database == other.database &&
+      username == other.username &&
+      filePath == other.filePath &&
+      useSsl == other.useSsl &&
+      readOnly == other.readOnly;
+
   /// User-chosen identity color, stored as a 0xAARRGGBB int. Tints the
   /// sidebar header, active-row markers, and connection chips so multiple
   /// open databases stay visually distinct. Null falls back to the app

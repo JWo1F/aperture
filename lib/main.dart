@@ -7,7 +7,7 @@ import 'state/app_globals.dart';
 import 'state/app_state.dart';
 import 'theme/app_theme.dart';
 import 'ui/app_shell/app_shell.dart';
-import 'ui/app_shell/quit_confirm.dart';
+import 'ui/app_shell/confirm_discard.dart';
 import 'ui/widgets/value_selector.dart';
 
 Future<void> main() async {
@@ -63,9 +63,14 @@ class _ApertureAppState extends State<ApertureApp> {
     final pending = appState.tabsController.unappliedEditCount;
     final context = _navigator.currentContext;
     if (pending > 0 && context != null) {
-      if (!await confirmQuitWithPendingEdits(context, pending)) {
-        return AppExitResponse.cancel;
-      }
+      final proceed = await confirmDiscardEdits(
+        context,
+        pending: pending,
+        title: 'Quit Aperture?',
+        action: 'Quitting now',
+        proceedLabel: 'Quit anyway',
+      );
+      if (!proceed) return AppExitResponse.cancel;
     }
     await appState.flush();
     return AppExitResponse.exit;

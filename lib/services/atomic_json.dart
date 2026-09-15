@@ -5,8 +5,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-/// Crash-safe JSON-on-disk helper used by [ConnectionStore] and
-/// [PreferencesStore].
+/// Crash-safe JSON-on-disk helper behind `AppStore`'s `store.json`.
 ///
 /// Writes go to `<name>.tmp`, are flushed to disk, then atomically renamed
 /// over the destination. POSIX guarantees rename(2) atomicity on the same
@@ -31,10 +30,32 @@ class AtomicJsonFile {
     return File('${dir.path}/$filename');
   }
 
+  /// Reads and decodes the file, or returns null when there is nothing
+  /// usable there.
+  ///
+  /// Never throws. `AppStore.load` awaits this before `runApp`, so an
+  /// exception escaping here is not a degraded session — it is a window
+  /// that never opens, with no UI to explain why and no way out but a
+  /// terminal. Locating the directory, reading the bytes and decoding them
+  /// can each fail independently (a missing support dir, a file that isn't
+  /// valid UTF-8, a mode that denies reading after a bad restore), so all
+  /// three are inside the guard.
   Future<Object?> load() async {
-    final file = await _file();
-    if (!await file.exists()) return null;
-    final raw = await file.readAsString();
+    final String raw;
+    final File file;
+    try {
+      file = await _file();
+      if (!await file.exists()) return null;
+      raw = await file.readAsString();
+    } catch (e, st) {
+      developer.log(
+        'could not read $filename — starting from defaults',
+        name: 'aperture.store',
+        error: e,
+        stackTrace: st,
+      );
+      return null;
+    }
     if (raw.trim().isEmpty) return null;
     try {
       return jsonDecode(raw);

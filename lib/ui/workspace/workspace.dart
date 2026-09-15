@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../state/app_globals.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../app_shell/confirm_discard.dart';
 import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
 import '../widgets/value_selector.dart';
@@ -103,8 +104,13 @@ class _TabStrip extends StatelessWidget {
                                 tab: tabs[i],
                                 active: i == activeIndex,
                                 onTap: () => tabsController.selectTab(i),
-                                onClose: () =>
-                                    tabsController.closeTab(tabs[i].id),
+                                onClose: () => _closeGuarded(
+                                  context,
+                                  closing: [tabs[i]],
+                                  noun: 'this tab',
+                                  close: () =>
+                                      tabsController.closeTab(tabs[i].id),
+                                ),
                                 onContextMenu: (pos) => _showTabMenu(
                                   context,
                                   tab: tabs[i],
@@ -172,6 +178,34 @@ class _NewTabButton extends StatelessWidget {
   }
 }
 
+/// Staged mutations across [tabs] — only `TableTab`s carry any.
+int _pendingIn(Iterable<WorkspaceTab> tabs) => tabs
+    .whereType<TableTab>()
+    .fold(0, (n, t) => n + t.pendingOpCount);
+
+/// Runs [close] after confirming, if the tabs it will destroy hold staged
+/// edits. Closing a tab disposes it, and its pending mutations go with it —
+/// the same loss the quit route has always prompted for.
+Future<void> _closeGuarded(
+  BuildContext context, {
+  required Iterable<WorkspaceTab> closing,
+  required String noun,
+  required VoidCallback close,
+}) async {
+  final pending = _pendingIn(closing);
+  if (pending > 0) {
+    final proceed = await confirmDiscardEdits(
+      context,
+      pending: pending,
+      title: 'Close $noun?',
+      action: 'Closing',
+      proceedLabel: 'Close anyway',
+    );
+    if (!proceed) return;
+  }
+  close();
+}
+
 void _showTabMenu(
   BuildContext context, {
   required WorkspaceTab tab,
@@ -179,6 +213,8 @@ void _showTabMenu(
   required bool canCloseRight,
 }) {
   final tabsController = appState.tabsController;
+  final tabs = tabsController.tabs;
+  final anchor = tabs.indexWhere((t) => t.id == tab.id);
   showContextMenu(
     context,
     globalPosition: position,
@@ -187,27 +223,47 @@ void _showTabMenu(
         icon: Icons.close,
         label: 'Close',
         shortcut: '⌘W',
-        onTap: () => tabsController.closeTab(tab.id),
+        onTap: () => _closeGuarded(
+          context,
+          closing: [tab],
+          noun: 'this tab',
+          close: () => tabsController.closeTab(tab.id),
+        ),
       ),
       CmItem(
         icon: Icons.layers_clear_outlined,
         label: 'Close others',
-        enabled: tabsController.tabs.length > 1,
-        onTap: () => tabsController.closeOtherTabs(tab.id),
+        enabled: tabs.length > 1,
+        onTap: () => _closeGuarded(
+          context,
+          closing: tabs.where((t) => t.id != tab.id),
+          noun: 'the other tabs',
+          close: () => tabsController.closeOtherTabs(tab.id),
+        ),
       ),
       CmItem(
         icon: Icons.last_page,
         label: 'Close tabs to the right',
         enabled: canCloseRight,
-        onTap: () => tabsController.closeTabsToRight(tab.id),
+        onTap: () => _closeGuarded(
+          context,
+          closing: anchor == -1 ? const [] : tabs.skip(anchor + 1),
+          noun: 'those tabs',
+          close: () => tabsController.closeTabsToRight(tab.id),
+        ),
       ),
       const CmDivider(),
       CmItem(
         icon: Icons.delete_sweep_outlined,
         label: 'Close all',
-        enabled: tabsController.tabs.isNotEmpty,
+        enabled: tabs.isNotEmpty,
         danger: true,
-        onTap: tabsController.closeAllTabs,
+        onTap: () => _closeGuarded(
+          context,
+          closing: tabs,
+          noun: 'every tab',
+          close: tabsController.closeAllTabs,
+        ),
       ),
     ],
   );

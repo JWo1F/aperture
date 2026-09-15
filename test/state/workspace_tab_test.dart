@@ -18,6 +18,53 @@ QueryResult _page(List<String> rowIds) => QueryResult.rows(
 );
 
 void main() {
+  group('a closed tab absorbs its in-flight results', () {
+    test('a page load landing after close does not throw', () {
+      final tab = TableTab('d1', _table());
+      final token = tab.beginPageLoad(page: 0);
+      tab.dispose();
+
+      // ⌘W on a tab whose 20-second query is still running. Notifying a
+      // disposed ChangeNotifier asserts, which used to surface as a
+      // sticky "Unexpected error" toast.
+      expect(tab.disposed, isTrue);
+      expect(
+        () => tab.completePageLoad(token, result: _page(['(0,1)'])),
+        returnsNormally,
+      );
+      expect(() => tab.failPageLoad(token, 'boom'), returnsNormally);
+    });
+
+    test('a query run landing after close does not throw', () {
+      final tab = QueryTab('d2', sql: 'SELECT 1');
+      tab.beginRun(sql: 'SELECT 1');
+      tab.dispose();
+
+      expect(
+        () => tab.completeRun(
+          result: QueryResult.command(affectedRows: 0, elapsed: Duration.zero),
+          sql: 'SELECT 1',
+          message: QueryMessage(
+            timestamp: DateTime.now(),
+            sql: 'SELECT 1',
+            elapsedMs: 1,
+          ),
+          maxMessages: 10,
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('a DDL fetch landing after close does not throw', () {
+      final tab = SchemaTab('d3', _table());
+      tab.beginDdlLoad();
+      tab.dispose();
+
+      expect(() => tab.completeDdlLoad('CREATE TABLE t ()'), returnsNormally);
+      expect(() => tab.failDdlLoad('boom'), returnsNormally);
+    });
+  });
+
   group('TableTab column widths', () {
     test('the public view refuses writes, so callers must use the mutator', () {
       final tab = TableTab('w1', _table());

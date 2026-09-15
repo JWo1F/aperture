@@ -22,6 +22,17 @@ export 'session_controller.dart' show ConnectionStatus;
 /// successful unlock.
 typedef PassphraseUnlockRequest = Future<bool> Function();
 
+/// Callback the UI installs to confirm an action that would discard staged
+/// cell edits. Resolves true to go ahead. [action] completes the sentence
+/// "…discards them".
+typedef DiscardEditsRequest =
+    Future<bool> Function({
+      required int pending,
+      required String title,
+      required String action,
+      required String proceedLabel,
+    });
+
 /// Coordinator over the focused controllers that make up the app's state.
 ///
 /// Persistence is concentrated in [AppStore]; the runtime-only controllers
@@ -34,8 +45,34 @@ typedef PassphraseUnlockRequest = Future<bool> Function();
 /// of its own — widgets only `read` it to invoke methods. Any reactive
 /// data lives on the individual controllers, each provided separately.
 class AppState {
-  AppState({AppStore? store}) : store = store ?? AppStore() {
+  AppState({AppStore? store})
+    : store = store ?? AppStore() {
     this.store.addListener(_syncSessionFromStore);
+    this.store.onSaveFailed = _reportSaveFailure;
+  }
+
+  /// A failed write means nothing the user does this session will be there
+  /// next launch, so it has to be said out loud once rather than logged
+  /// where no one is looking. Repeats are swallowed: the debounce retries
+  /// on every subsequent mutation, and a full disk would otherwise raise a
+  /// sticky toast per keystroke.
+  bool _reportedSaveFailure = false;
+
+  void _reportSaveFailure(Object error) {
+    eventLog.add(
+      LogEvent(
+        timestamp: DateTime.now(),
+        kind: LogEventKind.error,
+        error: 'Could not save store.json: $error',
+      ),
+    );
+    if (_reportedSaveFailure) return;
+    _reportedSaveFailure = true;
+    toasts.error(
+      'Preferences, connections and saved queries are not being written '
+      'to disk. Changes made now will be lost on the next launch.\n\n$error',
+      title: 'Cannot save settings',
+    );
   }
 
   final AppStore store;
@@ -50,6 +87,30 @@ class AppState {
   /// attempt needs the master passphrase but the session is locked.
   PassphraseUnlockRequest? onPassphraseNeeded;
 
+  /// Set by the UI at startup. Consulted before anything that tears the
+  /// workspace down with staged edits in it.
+  DiscardEditsRequest? onConfirmDiscardEdits;
+
+  /// True when it is safe to destroy every open tab. Asks the user first if
+  /// there is un-applied work; with no UI wired, allows it (the state layer
+  /// must not deadlock on a missing callback).
+  Future<bool> _mayDiscardWorkspace({
+    required String title,
+    required String action,
+    required String proceedLabel,
+  }) async {
+    final pending = tabsController.unappliedEditCount;
+    if (pending == 0) return true;
+    final ask = onConfirmDiscardEdits;
+    if (ask == null) return true;
+    return ask(
+      pending: pending,
+      title: title,
+      action: action,
+      proceedLabel: proceedLabel,
+    );
+  }
+
   late final TabsController tabsController = TabsController(
     session: session,
     catalog: catalog,
@@ -58,13 +119,58 @@ class AppState {
     toasts: toasts,
   );
 
+  /// Keeps the session's config snapshot in step with the store, and deals
+  /// with the two edits that make the snapshot and the live socket disagree.
+  ///
+  /// Pushing the new config in blindly used to leave the sidebar hero and
+  /// the connection pill naming a database while every query still went to
+  /// the old one — two sources of truth for "where am I connected", with
+  /// the UI showing the wrong one.
   void _syncSessionFromStore() {
-    final id = session.activeConnection?.id;
-    if (id == null) return;
-    final fresh = store.connectionById(id);
-    if (fresh == null) return;
-    if (identical(fresh, session.activeConnection)) return;
+    final active = session.activeConnection;
+    if (active == null) return;
+    final fresh = store.connectionById(active.id);
+
+    if (fresh == null) {
+      // The active connection was deleted from under us. Nothing can be
+      // persisted against it any more, so keeping the socket open would
+      // silently drop every favourite, recent and saved query from here on.
+      if (session.status != ConnectionStatus.disconnected) {
+        unawaited(_disconnectNow());
+      }
+      return;
+    }
+
+    if (identical(fresh, active)) return;
+    final retargeted = !fresh.sameTarget(active);
     session.setActiveConnection(fresh);
+    if (retargeted) _retarget(fresh);
+  }
+
+  /// The user edited the active connection's address. Re-open against it so
+  /// the workspace and the socket agree — unless there is staged work,
+  /// which must not be silently re-pointed at a different database.
+  void _retarget(ConnectionConfig fresh) {
+    if (session.status == ConnectionStatus.disconnected ||
+        session.status == ConnectionStatus.error) {
+      return;
+    }
+    final pending = tabsController.unappliedEditCount;
+    if (pending > 0) {
+      toasts.warning(
+        'This connection now points somewhere else, but $pending staged '
+        'change${pending == 1 ? '' : 's'} still belong${pending == 1 ? 's' : ''} '
+        'to the open session. Apply or reset them, then reconnect.',
+        title: 'Reconnect pending',
+        duration: const Duration(seconds: 8),
+      );
+      return;
+    }
+    toasts.info(
+      fresh.engine == DbEngine.sqlite ? fresh.filePath : fresh.database,
+      title: 'Reconnecting',
+    );
+    unawaited(reconnect());
   }
 
   /// Single async load on startup. Reads `store.json` into [store].
@@ -80,6 +186,16 @@ class AppState {
   }
 
   Future<void> connect(ConnectionConfig config) async {
+    // Switching connections closes every tab, so ask before it costs the
+    // user staged work. Reconnecting to the one already open doesn't.
+    if (config.id != session.activeConnection?.id &&
+        !await _mayDiscardWorkspace(
+          title: 'Switch connection?',
+          action: 'Opening ${config.name}',
+          proceedLabel: 'Switch anyway',
+        )) {
+      return;
+    }
     // Resolve the credential BEFORE touching the workspace. This step can
     // fail on its own — a locked vault, a missing `op` binary, a connection
     // saved without a password — and none of those are a reason to throw
@@ -140,6 +256,19 @@ class AppState {
   }
 
   Future<void> disconnect() async {
+    if (!await _mayDiscardWorkspace(
+      title: 'Disconnect?',
+      action: 'Disconnecting',
+      proceedLabel: 'Disconnect anyway',
+    )) {
+      return;
+    }
+    await _disconnectNow();
+  }
+
+  /// Tear-down without the prompt, for the paths that have already decided
+  /// (a deleted connection, an app that is quitting).
+  Future<void> _disconnectNow() async {
     await session.disconnect();
     catalog.reset();
     ui.reset();

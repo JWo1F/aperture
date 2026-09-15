@@ -6,6 +6,7 @@ import 'package:aperture/state/app_state.dart';
 import 'package:aperture/state/app_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 class _StubPathProvider extends PathProviderPlatform {
   _StubPathProvider(this.root);
@@ -30,6 +31,95 @@ void main() {
   tearDown(() async {
     state.dispose();
     await tmp.delete(recursive: true);
+  });
+
+  group('ConnectionConfig.sameTarget', () {
+    final base = ConnectionConfig(
+      id: 'c',
+      name: 'base',
+      host: 'db.internal',
+      port: 5432,
+      database: 'app',
+      username: 'postgres',
+    );
+
+    test('name, colour and credential do not change the target', () {
+      expect(base.sameTarget(base.copyWith(name: 'renamed')), isTrue);
+      expect(base.sameTarget(base.copyWith(color: 0xFF00FF00)), isTrue);
+      expect(
+        base.sameTarget(
+          base.copyWith(credential: const EncryptedCredential('x')),
+        ),
+        isTrue,
+      );
+    });
+
+    test('anything a socket was opened against does', () {
+      expect(base.sameTarget(base.copyWith(host: 'other')), isFalse);
+      expect(base.sameTarget(base.copyWith(port: 5433)), isFalse);
+      expect(base.sameTarget(base.copyWith(database: 'app_test')), isFalse);
+      expect(base.sameTarget(base.copyWith(username: 'readonly')), isFalse);
+      expect(base.sameTarget(base.copyWith(useSsl: true)), isFalse);
+      expect(base.sameTarget(base.copyWith(engine: DbEngine.sqlite)), isFalse);
+      expect(base.sameTarget(base.copyWith(filePath: '/tmp/a.db')), isFalse);
+    });
+
+    test('readOnly counts, because the grid gates editing on it', () {
+      expect(base.sameTarget(base.copyWith(readOnly: true)), isFalse);
+    });
+  });
+
+  test('deleting the active connection closes the session', () async {
+    final path = '${tmp.path}/gone.db';
+    sqlite3.open(path)
+      ..execute('CREATE TABLE t (id INTEGER PRIMARY KEY);')
+      ..dispose();
+    final config = ConnectionConfig(
+      id: 'gone',
+      name: 'gone',
+      engine: DbEngine.sqlite,
+      filePath: path,
+    );
+    state.store.addConnection(config);
+    await state.connect(config);
+    expect(state.session.status, ConnectionStatus.connected);
+
+    // Nothing can be persisted against a connection that no longer exists,
+    // so leaving the session open would drop every later write silently.
+    state.store.removeConnection('gone');
+    await Future<void>.delayed(Duration.zero);
+
+    expect(state.session.status, ConnectionStatus.disconnected);
+    expect(state.session.activeConnection, isNull);
+  });
+
+  test('editing the active connection re-opens against the new target',
+      () async {
+    final a = '${tmp.path}/a.db';
+    final b = '${tmp.path}/b.db';
+    for (final p in [a, b]) {
+      sqlite3.open(p)
+        ..execute('CREATE TABLE t (id INTEGER PRIMARY KEY);')
+        ..dispose();
+    }
+    final config = ConnectionConfig(
+      id: 'sw',
+      name: 'switcher',
+      engine: DbEngine.sqlite,
+      filePath: a,
+    );
+    state.store.addConnection(config);
+    await state.connect(config);
+    expect(state.session.activeConnection!.filePath, a);
+
+    // Repointing the config used to leave the UI naming b while every
+    // query still went to a.
+    state.store.updateConnection(config.copyWith(filePath: b));
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(state.session.status, ConnectionStatus.connected);
+    expect(state.session.activeConnection!.filePath, b);
+    expect(state.session.service!.config.filePath, b);
   });
 
   test('a connect that never opens keeps the workspace', () async {

@@ -24,6 +24,31 @@ sealed class WorkspaceTab extends ChangeNotifier {
 
   final String id;
 
+  bool _disposed = false;
+
+  /// True once the tab has been closed. Every round-trip the controller
+  /// starts on a tab can outlive it — a 20-second query, a DDL fetch, an
+  /// EXPLAIN — and the user is free to ⌘W in the meantime. Callers that do
+  /// more than notify should check this and drop the result.
+  bool get disposed => _disposed;
+
+  /// Swallowed after [dispose]. `ChangeNotifier` asserts on a notification
+  /// to a disposed instance, so without this a query landing after its tab
+  /// closed throws out of the controller — visible in a debug build as a
+  /// sticky "Unexpected error" toast, and a write to a dead notifier in
+  /// release.
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   final Map<String, double> _columnWidths = {};
 
   /// Per-tab column widths, keyed by column name. Read-only view; mutate
