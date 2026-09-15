@@ -163,12 +163,33 @@ SELECT 2
       expect(statementAtOffset(stmts, 10)?.text, 'SELECT 2;');
     });
 
-    test('returns null in the gap between statements', () {
+    test('the caret just past a semicolon is still in that statement', () {
       const sql = 'SELECT 1;\n\nSELECT 2';
       final stmts = parseSqlStatements(sql);
-      // The exact gap depends on parser behaviour — at minimum offset 9
-      // (just past the first ';' in source) is part of the first stmt.
       expect(statementAtOffset(stmts, 9)?.text, 'SELECT 1;');
+    });
+
+    test('the whitespace gap between statements belongs to neither', () {
+      const sql = 'SELECT 1;\n\nSELECT 2';
+      final stmts = parseSqlStatements(sql);
+      // Offsets 10 and 11 are the two newlines.
+      expect(statementAtOffset(stmts, 10), isNull);
+    });
+
+    test('abutting statements do not both claim the boundary', () {
+      // `SELECT 1;SELECT 2` — a caret at offset 9 sits at the start of the
+      // second statement. Run-statement used to send the first one.
+      const sql = 'SELECT 1;SELECT 2';
+      final stmts = parseSqlStatements(sql);
+      expect(stmts, hasLength(2));
+      expect(statementAtOffset(stmts, 9)?.text, 'SELECT 2');
+      expect(statementAtOffset(stmts, 8)?.text, 'SELECT 1;');
+    });
+
+    test('an offset past the end belongs to the last statement', () {
+      const sql = 'SELECT 1';
+      final stmts = parseSqlStatements(sql);
+      expect(statementAtOffset(stmts, 8)?.text, 'SELECT 1');
     });
   });
 }

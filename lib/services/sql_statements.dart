@@ -27,7 +27,7 @@ class SqlStatement {
 ///     `CREATE FUNCTION`, `DO`, plpgsql bodies — semicolons inside the
 ///     dollar quotes are part of the statement, not separators.
 ///   - double-quoted identifiers (`"…"`, with `""` for escaped quote)
-///   - line comments (`-- …`) and block comments (`/* … */`, non-nested)
+///   - line comments (`-- …`) and block comments (`/* … */`)
 ///
 /// Empty / whitespace-only fragments are dropped. A trailing statement
 /// without `;` is included as the last entry.
@@ -152,7 +152,10 @@ List<SqlStatement> parseSqlStatements(String sql) {
       continue;
     }
 
-    // Block comment /* … */ (non-nested for Postgres parser compatibility).
+    // Block comment /* … */. Treated as non-nesting, which Postgres is
+    // not — it nests. The difference only makes this over-reject (a
+    // nested comment can look like it ends early), which is the safe
+    // direction for a gate whose job is refusing smuggled statements.
     if (c == 0x2F && i + 1 < length && sql.codeUnitAt(i + 1) == 0x2A) {
       i += 2;
       while (i + 1 < length) {
@@ -256,8 +259,19 @@ bool _containsSql(String fragment) {
 /// Returns the statement that contains [offset], or null if [offset] sits in
 /// the whitespace/comments between statements.
 SqlStatement? statementAtOffset(List<SqlStatement> stmts, int offset) {
-  for (final s in stmts) {
-    if (offset >= s.startOffset && offset <= s.endOffset) return s;
+  for (var i = 0; i < stmts.length; i++) {
+    final s = stmts[i];
+    if (offset < s.startOffset) continue;
+    if (offset < s.endOffset) return s;
+    // The caret sitting exactly on `endOffset` — just past the final `;` —
+    // still belongs to this statement, because that is where it lands
+    // after typing one. The exception is an abutting neighbour: in
+    // `SELECT 1;SELECT 2` offset 9 is the start of the second statement,
+    // and Run-statement was sending the first.
+    if (offset == s.endOffset) {
+      final next = i + 1 < stmts.length ? stmts[i + 1] : null;
+      if (next == null || next.startOffset != offset) return s;
+    }
   }
   return null;
 }

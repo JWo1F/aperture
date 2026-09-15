@@ -14,6 +14,14 @@ import '../widgets/context_menu.dart';
 /// as `const ConnHero()`, Flutter's element-update path short-circuits on
 /// identical widget references, so a parent `ListenableBuilder` rebuild
 /// alone would not refresh the hero's status text.
+/// Darkens [color] by [amount] (0–1) while keeping its hue and
+/// saturation — the connection tint has to stay recognisable.
+Color _shade(Color color, double amount) {
+  final hsl = HSLColor.fromColor(color);
+  return hsl.withLightness((hsl.lightness * (1 - amount)).clamp(0.0, 1.0))
+      .toColor();
+}
+
 class ConnHero extends StatelessWidget {
   const ConnHero({super.key});
 
@@ -104,10 +112,11 @@ class ConnHero extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [
-                        tint,
-                        Color.lerp(tint, Colors.black, 0.3)!,
-                      ],
+                      // Darkened in HSL rather than lerped toward a
+                      // hardcoded black: it keeps the connection's hue
+                      // instead of desaturating toward grey, and it
+                      // needs no colour literal.
+                      colors: [tint, _shade(tint, 0.3)],
                     ),
                     borderRadius: Radii.brSm,
                     boxShadow: [

@@ -41,6 +41,10 @@ class SessionController extends ChangeNotifier {
   /// `ChangeNotifier` throws.
   bool _disposed = false;
 
+  /// Bumped by every [connect] / [reconnect]. An attempt whose token is
+  /// stale has been superseded and must not touch the session.
+  int _attempt = 0;
+
   DbService? get service => _service;
 
   ConnectionConfig? get activeConnection => _activeConnection;
@@ -79,17 +83,35 @@ class SessionController extends ChangeNotifier {
 
   /// Opens [config] and transitions through connecting → connected | error.
   /// Returns true on success.
+  ///
+  /// Guarded by an attempt token. Resolving a credential can take seconds
+  /// — a 1Password lookup spawns `op` and may wait on Touch ID — and
+  /// nothing stops the user clicking a second connection meanwhile. Two
+  /// overlapping attempts used to interleave: the slower one's failure
+  /// overwrote the faster one's success, nulling `_service` while its
+  /// socket stayed open and unreachable, and the catalog load for the
+  /// winner then found no service and dumped the user on the welcome
+  /// panel with the loser's error. A superseded attempt now closes
+  /// whatever it opened and reports nothing.
   Future<bool> connect(ConnectionConfig config) async {
+    final attempt = ++_attempt;
     _cancelKeepalive();
     await _service?.close();
-    _service = _buildService(config);
+    if (attempt != _attempt) return false;
+    final service = _buildService(config);
+    _service = service;
     _activeConnection = config;
     _status = ConnectionStatus.connecting;
     _error = null;
     notifyListeners();
 
     try {
-      await _service!.connect();
+      await service.connect();
+      if (attempt != _attempt) {
+        // A later attempt owns the session now; don't strand this socket.
+        await service.close();
+        return false;
+      }
       _status = ConnectionStatus.connected;
       _serverVersion = null;
       _startKeepalive();
@@ -106,6 +128,7 @@ class SessionController extends ChangeNotifier {
       unawaited(_fetchServerVersion());
       return true;
     } catch (e) {
+      if (attempt != _attempt) return false;
       final friendly = friendlyConnectError(e, config);
       _status = ConnectionStatus.error;
       _error = friendly.message;
@@ -137,12 +160,19 @@ class SessionController extends ChangeNotifier {
     if (conn == null) return false;
     if (_status != ConnectionStatus.lost) return connect(conn);
 
+    final attempt = ++_attempt;
     _cancelKeepalive();
     await _service?.close();
-    _service = _buildService(conn);
+    if (attempt != _attempt) return false;
+    final service = _buildService(conn);
+    _service = service;
 
     try {
-      await _service!.connect();
+      await service.connect();
+      if (attempt != _attempt) {
+        await service.close();
+        return false;
+      }
       _status = ConnectionStatus.connected;
       _error = null;
       _serverVersion = null;
@@ -158,6 +188,7 @@ class SessionController extends ChangeNotifier {
       unawaited(_fetchServerVersion());
       return true;
     } catch (e) {
+      if (attempt != _attempt) return false;
       final friendly = friendlyConnectError(e, conn);
       _service = null;
       _error = friendly.message;
@@ -221,6 +252,7 @@ class SessionController extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    _attempt++;
     _cancelKeepalive();
     final name = _activeConnection?.name;
     // Flip the status BEFORE closing the socket. Any request still in
