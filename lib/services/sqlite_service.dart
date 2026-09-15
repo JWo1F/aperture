@@ -158,6 +158,11 @@ class SqliteService implements DbService {
   /// Rows changed by the most recent INSERT/UPDATE/DELETE.
   int get updatedRows => conn.updatedRows;
 
+  @override
+  Future<void> ping() async {
+    select('SELECT 1', log: false);
+  }
+
   /// SQLite's Dart driver doesn't expose `sqlite3_interrupt`, so an
   /// in-flight statement can't be aborted. The tab's cancel flag still
   /// breaks the run-all loop between statements; this is just a no-op

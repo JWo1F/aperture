@@ -53,6 +53,15 @@ abstract interface class DbService {
   /// [QueryResult]. Bare `SELECT`s without a `LIMIT` are capped.
   Future<QueryResult> runQuery(String sql);
 
+  /// Round-trips a trivial statement to prove the socket is still alive.
+  /// Throws if it isn't.
+  ///
+  /// Deliberately bypasses [QueryLogger]: the session controller calls this
+  /// on a 30-second timer, and at 120 entries an hour a logged probe would
+  /// flush the user's real query history out of the event log's ring buffer
+  /// in an afternoon.
+  Future<void> ping();
+
   /// Best-effort cancel of the statement currently in flight.
   ///
   /// Postgres uses the wire-protocol cancel handshake (`pg_cancel_backend`

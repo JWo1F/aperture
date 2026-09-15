@@ -159,6 +159,18 @@ class PostgresService implements DbService {
     logger: onQueryRun,
   );
 
+  @override
+  Future<void> ping() async {
+    await _logged(
+      _conn,
+      'SELECT 1',
+      timeout: _pingTimeout,
+      logger: null,
+    );
+  }
+
+  static const _pingTimeout = Duration(seconds: 10);
+
   /// Runs [action] inside a real transaction. Statements executed on the
   /// supplied [TxScope] log through the same channel as standalone calls.
   Future<T> runTx<T>(

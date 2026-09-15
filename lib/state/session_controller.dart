@@ -289,10 +289,7 @@ class SessionController extends ChangeNotifier {
     if (svc == null || _status != ConnectionStatus.connected) return;
     _keepalivePending = true;
     try {
-      final result = await svc.runQuery('SELECT 1');
-      if (result.isError) {
-        await markLost(result.error ?? 'Connection lost');
-      }
+      await svc.ping();
     } catch (e) {
       await markLost(e);
     } finally {
