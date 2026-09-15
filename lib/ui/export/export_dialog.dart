@@ -42,6 +42,11 @@ Future<void> showExportDialog(
   return showDialog<void>(
     context: context,
     barrierColor: AppColors.scrim,
+    // The footer owns dismissal: "Cancel" while idle, "Stop export" while
+    // a write is in flight. A barrier tap would unmount the dialog with
+    // the export still running, leaving it to finish, prompt for a path,
+    // and write a file nothing is watching.
+    barrierDismissible: false,
     builder: (_) => Dialog(
       backgroundColor: AppColors.surface,
       elevation: 0,
@@ -125,6 +130,7 @@ class _ExportBodyState extends State<_ExportBody> {
             ],
           );
         } catch (e) {
+          if (!mounted) return;
           setState(() {
             _busy = false;
             _error = 'Save dialog failed: $e';
@@ -144,7 +150,11 @@ class _ExportBodyState extends State<_ExportBody> {
         toastBody = location.path;
       }
 
-      navigator.pop();
+      // Only pop if this dialog is still the thing on top. An export of
+      // "all filtered rows" can outlive its own dialog, and popping then
+      // would take out whatever route replaced it — at worst the app's
+      // only route, leaving a blank window.
+      if (mounted) navigator.pop();
       appState.toasts.success(toastBody, title: toastTitle);
     } on ExportCancelledException {
       if (!mounted) return;

@@ -136,7 +136,6 @@ class _ResultsGridState extends State<ResultsGrid> {
 
   late final CellInteraction _interaction = CellInteraction(
     widget: widget,
-    columns: widget.result.columns,
     isInsertRow: _isInsertRow,
     isDeletedRow: _isDeletedRow,
     pendingFor: _pendingFor,
@@ -175,6 +174,7 @@ class _ResultsGridState extends State<ResultsGrid> {
   @override
   void didUpdateWidget(ResultsGrid old) {
     super.didUpdateWidget(old);
+    _syncWidgetRefs();
     // A new result set invalidates the format cache, the persistent
     // selection, and any in-progress drag. Clear them *before* re-syncing
     // widths — _syncWidths primes the format cache for sample rows in the
@@ -220,6 +220,15 @@ class _ResultsGridState extends State<ResultsGrid> {
   void _syncSlots() {
     _slots = buildSlots(_persistentRowCount, widget.inserts);
     _keyboard.slots = _slots;
+  }
+
+  /// The keyboard handler and the cell-menu dispatcher are built once and
+  /// live as long as this `State`, which outlives every result the grid
+  /// shows. Re-point them at the current `widget` on each update or they
+  /// keep answering with the first page's rows, columns and callbacks.
+  void _syncWidgetRefs() {
+    _interaction.widget = widget;
+    _keyboard.widget = widget;
   }
 
   // --- slot helpers ----------------------------------------------------

@@ -31,7 +31,11 @@ class GridKeyboard {
     required this.bodyCtxOf,
   });
 
-  final ResultsGrid widget;
+  /// Re-pointed by `_ResultsGridState.didUpdateWidget`, like [slots]. A
+  /// captured `widget` would have ⌘C copying the previous page's value for
+  /// the same row slot, and would bound arrow-key navigation by the
+  /// previous result's column count.
+  ResultsGrid widget;
   final SelectionController selection;
   final ColumnWidths widths;
   List<Slot> slots;

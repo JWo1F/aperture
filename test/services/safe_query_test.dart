@@ -71,6 +71,28 @@ void main() {
       expect(s.sql.endsWith('LIMIT 5'), isTrue);
     });
 
+    test('a newline or tab after SELECT still gets the cap', () {
+      // How anyone actually formats a query longer than one line.
+      final nl = applyDefaultLimit('SELECT\n  *\nFROM big', limit: 10);
+      expect(nl.appliedLimit, isTrue);
+      expect(nl.sql, endsWith('LIMIT 10'));
+
+      final tab = applyDefaultLimit('SELECT\t* FROM big', limit: 10);
+      expect(tab.appliedLimit, isTrue);
+    });
+
+    test('a LIMIT belonging to a subquery is not the statement\'s own', () {
+      final s = applyDefaultLimit(
+        'SELECT * FROM big WHERE id IN (SELECT id FROM small LIMIT 5)',
+        limit: 10,
+      );
+      expect(
+        s.appliedLimit,
+        isTrue,
+        reason: 'the outer SELECT is still unbounded',
+      );
+    });
+
     test('a LIMIT inside a string literal is not a real LIMIT', () {
       final s = applyDefaultLimit(
         "SELECT * FROM t WHERE note = 'LIMIT 5'",
@@ -97,6 +119,38 @@ void main() {
       // Appended inline, the cap would sit inside the comment and do nothing.
       expect(s.sql.endsWith('LIMIT 10'), isTrue);
       expect(s.sql, contains('\nLIMIT 10'));
+    });
+
+    test('FETCH FIRST is a row limit too, so the cap stays out', () {
+      final s = applyDefaultLimit(
+        'SELECT * FROM t FETCH FIRST 10 ROWS ONLY',
+        limit: 100,
+      );
+      // Appending LIMIT here is a syntax error, not a safety net.
+      expect(s.appliedLimit, isFalse);
+      expect(s.sql, 'SELECT * FROM t FETCH FIRST 10 ROWS ONLY');
+    });
+
+    test('leading comments survive the rewrite', () {
+      final s = applyDefaultLimit('/* why */ SELECT 1', limit: 5);
+      expect(s.appliedLimit, isTrue);
+      expect(s.sql, '/* why */ SELECT 1\nLIMIT 5');
+    });
+
+    test('a LIMIT inside a dollar-quoted body is not the statement\'s', () {
+      final s = applyDefaultLimit(
+        r"SELECT $$ LIMIT 5 $$ AS note FROM t",
+        limit: 10,
+      );
+      expect(s.appliedLimit, isTrue);
+    });
+
+    test('a LIMIT after a closed subquery still counts', () {
+      final s = applyDefaultLimit(
+        'SELECT * FROM (SELECT 1) s LIMIT 3',
+        limit: 10,
+      );
+      expect(s.appliedLimit, isFalse);
     });
 
     test('limit <= 0 is a no-op', () {

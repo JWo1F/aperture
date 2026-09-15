@@ -11,7 +11,6 @@ import 'results_grid.dart';
 class CellInteraction {
   CellInteraction({
     required this.widget,
-    required this.columns,
     required this.isInsertRow,
     required this.isDeletedRow,
     required this.pendingFor,
@@ -19,8 +18,15 @@ class CellInteraction {
     required this.cellRect,
   });
 
-  final ResultsGrid widget;
-  final List<String> columns;
+  /// Re-pointed by `_ResultsGridState.didUpdateWidget`. Deliberately not
+  /// `final`: the grid's `State` outlives every result it displays, so a
+  /// captured `widget` would keep answering with the first page's rows,
+  /// columns and callbacks for the life of the tab.
+  ResultsGrid widget;
+
+  /// Always read through the live [widget] — a copy taken at construction
+  /// would name the previous result's columns after a re-run.
+  List<String> get columns => widget.result.columns;
   final bool Function(int row) isInsertRow;
   final bool Function(int row) isDeletedRow;
   final CellEditValue? Function(int row, int column) pendingFor;

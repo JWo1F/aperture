@@ -595,8 +595,13 @@ class TabsController extends ChangeNotifier {
         if (pending != null) {
           sourceValues[columns[c]] = pending;
         } else {
+          // These values go into an INSERT, so they need the exact form,
+          // not the grid's elided one. `formatCellValue` caps binary at 16
+          // bytes: on SQLite a BLOB column has no affinity conversion, so
+          // the duplicate would store the hex preview as text and look
+          // fine doing it.
           sourceValues[columns[c]] = CellLiteral(
-            formatCellValue(result.rows[row][c]),
+            exactCellValue(result.rows[row][c]),
           );
         }
       }
