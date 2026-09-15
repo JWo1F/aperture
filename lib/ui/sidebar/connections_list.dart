@@ -10,6 +10,11 @@ import '../widgets/common.dart';
 /// The body shown when no connection is active — header, list of saved
 /// configs, and a "New connection" call to action that opens the
 /// connection dialog.
+///
+/// Subscribes to [AppStore] directly: mounted as `const AllConnectionsList()`,
+/// Flutter's element-update path short-circuits on the identical widget
+/// reference, so a parent `ListenableBuilder` rebuild alone would leave a
+/// deleted or renamed connection on screen.
 class AllConnectionsList extends StatelessWidget {
   const AllConnectionsList({super.key});
 
@@ -18,6 +23,13 @@ class AllConnectionsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: appState.store,
+      builder: (context, _) => _build(context),
+    );
+  }
+
+  Widget _build(BuildContext context) {
     final list = appState.store.connections;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
