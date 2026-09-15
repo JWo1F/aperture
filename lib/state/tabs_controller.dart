@@ -372,7 +372,21 @@ class TabsController extends ChangeNotifier {
     final pageSize = tab.pageSize;
     final offset = page * pageSize;
 
+    // `beginPageLoad` drops the row-indexed pending mutations because the
+    // rows they point at are about to be replaced. Say so — paging, sorting
+    // and ⌘R all arrive here, and losing staged work without a word is the
+    // kind of thing the user only notices after Apply does nothing.
+    final discarded = tab.edits.length + tab.deletedRows.length;
+
     final token = tab.beginPageLoad(page: page);
+
+    if (discarded > 0) {
+      toasts.warning(
+        'Reloading the page discarded $discarded staged '
+        'change${discarded == 1 ? '' : 's'}.',
+        title: 'Pending edits cleared',
+      );
+    }
 
     try {
       final result = await service.fetchTablePage(
@@ -674,17 +688,34 @@ class TabsController extends ChangeNotifier {
     final batch = _buildBatch(tab);
     if (batch.isEmpty) return const EditResult.success(0);
 
+    final EditResult outcome;
     tab.beginApply();
-    final outcome = await service.applyTableEdits(tab.table, batch);
-    tab.endApply();
+    try {
+      outcome = await service.applyTableEdits(tab.table, batch);
+    } catch (e) {
+      // A repository only converts the engine errors it knows about into an
+      // EditResult; a dropped socket or a refused BEGIN still throws. Without
+      // this the `applying` flag would stay set for the tab's lifetime, and
+      // every later Apply would early-return as a no-op.
+      final thrown = EditResult.failure(
+        appliedCount: 0,
+        totalCount: batch.statementCount,
+        error: e.toString(),
+      );
+      _toastApplyOutcome(thrown);
+      return thrown;
+    } finally {
+      tab.endApply();
+    }
 
     if (outcome.ok) {
       tab.resetAllEdits();
       await loadTablePage(tab, tab.page);
     } else if (outcome.partial) {
       // Engine reported committed statements before the failure. Reload so
-      // the grid reflects whatever the database actually has — pending
-      // edits stay so the user can see which ones to retry.
+      // the grid reflects whatever the database actually has; the reload
+      // drops the row-indexed pending mutations along with the rows they
+      // pointed at, so the retry starts from the on-disk state.
       await loadTablePage(tab, tab.page);
     }
     if (!outcome.ok) _toastApplyOutcome(outcome);

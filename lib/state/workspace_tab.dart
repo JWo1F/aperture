@@ -406,17 +406,26 @@ class TableTab extends WorkspaceTab {
   /// the pagination bar.
   DateTime? get lastRefreshedAt => _lastRefreshedAt;
 
-  /// Begin a page fetch against [page]. Eagerly bumps the page index and
-  /// clears row-indexed cell edits (a new page invalidates them) so the
+  /// Begin a page fetch against [page]. Eagerly bumps the page index so the
   /// pagebar shows the new number immediately; returns a generation token
   /// the caller must pass back to [completePageLoad] / [failPageLoad].
   /// Concurrent loads are tracked by token — late arrivals from a
   /// superseded fetch are rejected and don't desync clauses from rows.
+  ///
+  /// Both [edits] and [deletedRows] address rows by their index into
+  /// `result.rows`, so a fetch that replaces those rows invalidates every
+  /// one of them. They are dropped together: a surviving delete index would
+  /// resolve against the *new* page's `rowIds` on the next Apply and remove
+  /// whatever row now occupies that slot, and the repository's
+  /// `affectedRows == 1` guard cannot catch it because that row does exist.
+  /// Pending inserts survive — they carry column names and values, not row
+  /// positions, and `buildSlots` re-anchors an out-of-range `afterRow`.
   int beginPageLoad({required int page}) {
     _loadGeneration++;
     _loading = true;
     _page = page;
     _edits.clear();
+    _deletedRows.clear();
     notifyListeners();
     return _loadGeneration;
   }
