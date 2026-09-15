@@ -35,34 +35,39 @@ class Kind {
 final intFilter = FilteringTextInputFormatter.allow(RegExp(r'[0-9\-]'));
 final numberFilter = FilteringTextInputFormatter.allow(RegExp(r'[0-9\-+.eE]'));
 
-final _kBool = Kind(
+// Each `_k*` below is a getter rather than a `final`: a top-level `final`
+// resolves once per process, so its `color` would pin whichever palette was
+// active when the first picker opened and never follow a dark ⇄ light swap.
+// `kindFor` runs once per picker open, so rebuilding the record is free.
+
+Kind get _kBool => Kind(
   id: KindId.bool,
   label: 'bool',
   color: AppColors.tBool,
   size: const Size(296, 130),
 );
-final _kJson = Kind(
+Kind get _kJson => Kind(
   id: KindId.json,
   label: 'json',
   color: AppColors.tJson,
   size: const Size(540, 340),
   multiline: true,
 );
-final _kArray = Kind(
+Kind get _kArray => Kind(
   id: KindId.json,
   label: 'array',
   color: AppColors.tJson,
   size: const Size(540, 340),
   multiline: true,
 );
-final _kInt = Kind(
+Kind get _kInt => Kind(
   id: KindId.text,
   label: 'int',
   color: AppColors.tNum,
   size: const Size(296, 132),
   inputFormatters: [intFilter],
 );
-final _kNumber = Kind(
+Kind get _kNumber => Kind(
   id: KindId.text,
   label: 'number',
   color: AppColors.tNum,
@@ -80,46 +85,46 @@ final _kNumber = Kind(
 //     rows. Datetime's body is just the calendar (~242) — h/m/s editing
 //     happens via the value-line segments above. The tz variant adds ~50 for
 //     a divider + TZ input row beneath the calendar.
-final _kDate = Kind(
+Kind get _kDate => Kind(
   id: KindId.date,
   label: 'date',
   color: AppColors.tDate,
   size: const Size(296, 384),
 );
-final _kTime = Kind(
+Kind get _kTime => Kind(
   id: KindId.time,
   label: 'time',
   color: AppColors.tDate,
   size: const Size(296, 140),
 );
-final _kTimeTz = Kind(
+Kind get _kTimeTz => Kind(
   id: KindId.time,
   label: 'timetz',
   color: AppColors.tDate,
   size: const Size(320, 190),
   withTimezone: true,
 );
-final _kDatetime = Kind(
+Kind get _kDatetime => Kind(
   id: KindId.datetime,
   label: 'timestamp',
   color: AppColors.tDate,
   size: const Size(320, 400),
 );
-final _kDatetimeTz = Kind(
+Kind get _kDatetimeTz => Kind(
   id: KindId.datetime,
   label: 'timestamptz',
   color: AppColors.tDate,
   size: const Size(340, 460),
   withTimezone: true,
 );
-final _kBytes = Kind(
+Kind get _kBytes => Kind(
   id: KindId.text,
   label: 'bytes',
   color: AppColors.textMuted,
   size: const Size(380, 220),
   multiline: true,
 );
-final _kString = Kind(
+Kind get _kString => Kind(
   id: KindId.text,
   label: 'string',
   color: AppColors.tStr,

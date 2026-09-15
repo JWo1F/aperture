@@ -52,7 +52,10 @@ InlineSpan gridCellSpan({
       : formatCache.format(sourceIdx, column, original);
 
   if (displayValue == null) {
-    return TextSpan(text: 'NULL', style: gridNullStyle);
+    return TextSpan(
+      text: 'NULL',
+      style: gridNullStyle.copyWith(color: AppColors.textMuted),
+    );
   }
 
   // The grid cell reuses the cache's 256-char memoised forms; the wider

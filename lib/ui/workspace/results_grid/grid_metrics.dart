@@ -22,9 +22,15 @@ const double kGridBottomGutter = 12;
 
 /// Base style for data cells — also the input style `jsonSpans` highlights
 /// against, so the highlighted and plain branches share one metric.
+///
+/// These are `final`, so they resolve once per process and the colour they
+/// pick up belongs to whichever palette was active at first paint. Both are
+/// used for their *metrics* only; every call site supplies a live
+/// [AppColors] colour, because the grid repaints thousands of cells a frame
+/// and rebuilding a GoogleFonts style per cell is not worth the theme
+/// fidelity. Do not read the baked colour.
 final TextStyle gridCellStyle = AppTheme.mono(size: 11.5);
 
 final TextStyle gridNullStyle = AppTheme.mono(
   size: 11.5,
-  color: AppColors.textMuted,
 ).copyWith(fontStyle: FontStyle.italic);
