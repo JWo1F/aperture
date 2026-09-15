@@ -21,7 +21,6 @@ class HeaderStrip extends StatelessWidget {
     required this.foreignKeys,
     required this.order,
     required this.onSortColumn,
-    required this.savedWidths,
     required this.onWidthChanged,
   });
 
@@ -32,7 +31,6 @@ class HeaderStrip extends StatelessWidget {
   final Map<String, DbForeignKey>? foreignKeys;
   final List<OrderTerm>? order;
   final void Function(String column)? onSortColumn;
-  final Map<String, double>? savedWidths;
   final void Function(String column, double width)? onWidthChanged;
 
   OrderTerm? _sortFor(String column) {
@@ -73,10 +71,9 @@ class HeaderStrip extends StatelessWidget {
                     : () => onSortColumn!(columns[i]),
                 onResize: (delta) {
                   widths.resize(i, delta);
-                  // Reporting the width is the only way out of here.
-                  // Assigning into `savedWidths` instead would throw — it
-                  // is the tab's `UnmodifiableMapView` — and take this
-                  // callback down with it.
+                  // Reporting the width is the only way out of here: the
+                  // tab's own map is an UnmodifiableMapView, so assigning
+                  // into it threw and took this callback with it.
                   onWidthChanged?.call(columns[i], widths[i]);
                 },
               ),

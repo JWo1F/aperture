@@ -97,13 +97,10 @@ class TableClauses {
 }
 
 class QueryTab extends WorkspaceTab {
-  QueryTab(super.id, {String name = 'Query', String sql = ''})
-    : _name = name,
-      _sql = sql;
+  QueryTab(super.id, {String name = 'Query', this.sql = ''}) : _name = name;
 
   // ignore_for_file: prefer_initializing_formals
   String _name;
-  String _sql;
   QueryResult? _result;
   bool _running = false;
   String? _runningSql;
@@ -138,13 +135,20 @@ class QueryTab extends WorkspaceTab {
     notifyListeners();
   }
 
-  String get sql => _sql;
-
-  set sql(String value) {
-    if (_sql == value) return;
-    _sql = value;
-    notifyListeners();
-  }
+  /// The editor's live text. A plain field, deliberately NOT notifying.
+  ///
+  /// Every writer is the query editor recording the text of its own
+  /// `CodeEditorController`, which needs no telling. Notifying fanned a
+  /// single keystroke out to three un-gated listeners: the editor subtree
+  /// rebuilt twice (its own `setState` plus the tab listener), the plan
+  /// view re-parsed and re-analysed the whole plan, and `TabsController`
+  /// forwarded it to the sidebar, which re-derived the favourites and
+  /// frequent lists and re-allocated a row widget for every table in
+  /// every expanded schema. On a long script against a large catalog that
+  /// was enough for typing to lag behind the caret.
+  ///
+  /// A future writer that isn't the editor should notify explicitly.
+  String sql;
 
   QueryResult? get result => _result;
 

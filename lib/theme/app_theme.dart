@@ -396,15 +396,17 @@ class AppColors {
   static Color get sqlOperator => _palette.sqlOperator;
 }
 
+/// Cross-module layout constants.
+///
+/// Deliberately thin: metrics that belong to one surface live with it —
+/// `kRowHeight` / `kIndexWidth` in `results_grid/grid_metrics.dart`,
+/// `pagebarHeight` in `widgets/pagebar.dart`. Duplicating them here gave
+/// five constants nobody read, sitting a refactor away from disagreeing
+/// with the values actually in force.
 class AppLayout {
   const AppLayout._();
 
-  static const double toolbarHeight = 36.0;
   static const double tabHeight = 36.0;
-  static const double gridRowHeight = 26.0;
-  static const double treeRowHeight = 22.0;
-  static const double gridHeaderHeight = 28.0;
-  static const double pageBarHeight = 28.0;
 }
 
 class Insets {

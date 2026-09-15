@@ -559,6 +559,15 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   Widget _buildGutter(int lines, Color bg) {
+    // Resolved once per build rather than once per line. This runs inside
+    // the controller's ListenableBuilder, so on a few-hundred-line script
+    // it was a GoogleFonts lookup and a TextStyle allocation per line per
+    // keystroke.
+    final numberStyle = GoogleFonts.jetBrainsMono(
+      fontSize: widget.fontSize,
+      height: widget.lineHeight,
+      color: AppColors.text4,
+    );
     return SizedBox(
       width: _effectiveGutterWidth,
       child: DecoratedBox(
@@ -572,7 +581,8 @@ class _CodeEditorState extends State<CodeEditor> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SizedBox(height: widget.padding.top),
-            for (var i = 0; i < lines; i++) _buildGutterRow(i),
+            for (var i = 0; i < lines; i++)
+              _buildGutterRow(i, numberStyle),
           ],
         ),
       ),
@@ -583,7 +593,7 @@ class _CodeEditorState extends State<CodeEditor> {
   /// a wrapped logical line gets the full multi-row span — but the icon
   /// and the number themselves sit in row-height boxes pinned to the top
   /// of that span (matching the first visual row of the line).
-  Widget _buildGutterRow(int i) {
+  Widget _buildGutterRow(int i, TextStyle numberStyle) {
     final lineIcon = widget.lineIcon?.call(i);
     final h = _metrics.heightPx(i) > 0 ? _metrics.heightPx(i) : _rowH;
     final digitsWidth = _effectiveGutterWidth - widget.iconColumnWidth - 8;
@@ -601,11 +611,7 @@ class _CodeEditorState extends State<CodeEditor> {
                 child: Text(
                   '${i + 1}',
                   textAlign: TextAlign.right,
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: widget.fontSize,
-                    height: widget.lineHeight,
-                    color: AppColors.text4,
-                  ),
+                  style: numberStyle,
                 ),
               ),
             ),

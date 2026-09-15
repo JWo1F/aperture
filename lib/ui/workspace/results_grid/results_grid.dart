@@ -376,7 +376,6 @@ class _ResultsGridState extends State<ResultsGrid> {
           foreignKeys: widget.foreignKeys,
           order: widget.order,
           onSortColumn: widget.onSortColumn,
-          savedWidths: widget.widths,
           onWidthChanged: widget.onWidthChanged,
         ),
         Expanded(
