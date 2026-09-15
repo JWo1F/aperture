@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
 
 /// Slim banner shown above the workspace while a live connection has
@@ -34,7 +35,7 @@ class _ConnectionLostBannerState extends State<ConnectionLostBanner> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          Icon(Icons.link_off, size: 14, color: AppColors.accent),
+          Icon(Hgi.unlink01, size: 14, color: AppColors.accent),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

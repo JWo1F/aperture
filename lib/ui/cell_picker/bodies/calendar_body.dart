@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 
 class CalendarBody extends StatefulWidget {
@@ -176,7 +177,7 @@ class _CalendarGridState extends State<CalendarGrid> {
       ),
       child: Row(
         children: [
-          _navBtn(Icons.chevron_left, _prev, 'prev month'),
+          _navBtn(Hgi.chevronLeft, _prev, 'prev month'),
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -203,8 +204,8 @@ class _CalendarGridState extends State<CalendarGrid> {
               ],
             ),
           ),
-          _navBtn(Icons.adjust, _jumpToday, 'jump to current month'),
-          _navBtn(Icons.chevron_right, _next, 'next month'),
+          _navBtn(Hgi.record, _jumpToday, 'jump to current month'),
+          _navBtn(Hgi.chevronRight, _next, 'next month'),
         ],
       ),
     );
@@ -225,7 +226,7 @@ class _CalendarGridState extends State<CalendarGrid> {
           ),
           child: Icon(
             icon,
-            size: icon == Icons.adjust ? 8 : 14,
+            size: icon == Hgi.record ? 8 : 14,
             color: hovering ? AppColors.textPrimary : AppColors.textMuted,
           ),
         ),

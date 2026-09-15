@@ -6,6 +6,7 @@ import '../../state/connection_views.dart';
 import '../../state/tabs_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import 'saved_query_row.dart';
 import 'sidebar_section.dart';
 import 'table_row.dart';
@@ -193,7 +194,7 @@ class _CatalogErrorNotice extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            Icons.error_outline_rounded,
+            Hgi.alertCircle,
             size: 13,
             color: AppColors.error,
           ),
@@ -245,7 +246,7 @@ class _NoResults extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            Icons.search_off_rounded,
+            Hgi.searchRemove,
             size: 18,
             color: AppColors.textMuted,
           ),

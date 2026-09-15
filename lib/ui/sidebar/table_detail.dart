@@ -4,6 +4,7 @@ import '../../models/db_catalog.dart';
 import '../../models/db_object.dart';
 import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/table_glyph.dart';
 import 'tree_row.dart';
 
@@ -28,7 +29,7 @@ class DetailChevron extends StatelessWidget {
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOut,
           child: Icon(
-            Icons.chevron_right_rounded,
+            Hgi.chevronRight,
             size: 14,
             color: AppColors.textMuted,
           ),
@@ -121,7 +122,7 @@ class TableDetail extends StatelessWidget {
                 DetailLeaf(
                   indent: indent + 2,
                   leading: Icon(
-                    Icons.key_rounded,
+                    Hgi.key01,
                     size: 12,
                     color: k.isPrimary ? tint : AppColors.textMuted,
                   ),
@@ -144,7 +145,7 @@ class TableDetail extends StatelessWidget {
                 DetailLeaf(
                   indent: indent + 2,
                   leading: Icon(
-                    Icons.link_rounded,
+                    Hgi.link01,
                     size: 12,
                     color: AppColors.info,
                   ),
@@ -170,7 +171,7 @@ class TableDetail extends StatelessWidget {
                 DetailLeaf(
                   indent: indent + 2,
                   leading: Icon(
-                    Icons.bolt_rounded,
+                    Hgi.flash,
                     size: 12,
                     color: AppColors.textMuted,
                   ),
@@ -219,7 +220,7 @@ class DetailFolder extends StatelessWidget {
           children: [
             DetailChevron(expanded: expanded),
             Icon(
-              Icons.folder_outlined,
+              Hgi.folder01,
               size: 13,
               color: AppColors.textMuted,
             ),

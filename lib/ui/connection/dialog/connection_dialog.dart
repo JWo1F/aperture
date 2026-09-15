@@ -6,6 +6,7 @@ import '../../../services/one_password_client.dart';
 import '../../../services/sqlite_service.dart';
 import '../../../state/app_globals.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../master_passphrase_setup.dart';
 import 'connection_form_model.dart';
 import 'connection_test.dart';
@@ -163,7 +164,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
             child: Row(
               children: [
                 Icon(
-                  m == _model.sslMode ? Icons.check_rounded : Icons.circle,
+                  m == _model.sslMode ? Hgi.tick02 : Hgi.circle,
                   size: m == _model.sslMode ? 14 : 4,
                   color: m == _model.sslMode
                       ? AppColors.accent

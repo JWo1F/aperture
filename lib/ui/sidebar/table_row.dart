@@ -6,6 +6,7 @@ import '../../models/db_object.dart';
 import '../../state/app_globals.dart';
 import '../../state/connection_views.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
 import '../widgets/table_glyph.dart';
@@ -131,13 +132,13 @@ class SchemaTableRow extends StatelessWidget {
         );
       case DbRelationKind.view:
         return Icon(
-          Icons.visibility_outlined,
+          Hgi.view,
           size: 12,
           color: active ? tint : AppColors.info,
         );
       case DbRelationKind.materializedView:
         return Icon(
-          Icons.layers_outlined,
+          Hgi.layers01,
           size: 12,
           color: active ? tint : AppColors.info,
         );
@@ -162,7 +163,7 @@ class StarToggle extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.all(2),
           child: Icon(
-            filled ? Icons.star_rounded : Icons.star_outline_rounded,
+            Hgi.star,
             size: 13,
             color: color,
           ),
@@ -184,18 +185,18 @@ void openTableMenu(BuildContext context, DbTable table, Offset position) {
     globalPosition: position,
     entries: [
       CmItem(
-        icon: Icons.north_east,
+        icon: Hgi.arrowUpRight01,
         label: 'Open data',
         onTap: () => appState.tabsController.openTable(table),
       ),
       CmItem(
-        icon: Icons.data_object,
+        icon: Hgi.braces,
         label: 'Show schema (CREATE TABLE)',
         onTap: () => appState.tabsController.openSchema(table),
       ),
       const CmDivider(),
       CmItem(
-        icon: isFav ? Icons.star : Icons.star_outline,
+        icon: Hgi.star,
         label: isFav ? 'Remove from favourites' : 'Add to favourites',
         onTap: () {
           if (activeConn != null) {
@@ -205,23 +206,23 @@ void openTableMenu(BuildContext context, DbTable table, Offset position) {
       ),
       const CmDivider(),
       CmItem(
-        icon: Icons.label_outline,
+        icon: Hgi.tag01,
         label: 'Copy name',
         onTap: () => copy(table.name),
       ),
       CmItem(
-        icon: Icons.tag,
+        icon: Hgi.hash,
         label: 'Copy qualified name',
         onTap: () => copy(qualified),
       ),
       CmItem(
-        icon: Icons.code,
+        icon: Hgi.sourceCode,
         label: 'Copy SELECT *',
         onTap: () => copy('SELECT * FROM $qualified;'),
       ),
       const CmDivider(),
       CmItem(
-        icon: Icons.refresh,
+        icon: Hgi.refresh,
         label: 'Refresh catalog',
         onTap: appState.refreshCatalog,
       ),

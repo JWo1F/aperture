@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../../widgets/code_editor.dart';
 
 class TextBody extends StatelessWidget {
@@ -49,7 +50,7 @@ class TextBody extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.error_outline, size: 13, color: AppColors.error),
+                  Icon(Hgi.alertCircle, size: 13, color: AppColors.error),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
 import 'kinds.dart';
 import 'target.dart';
@@ -40,10 +41,10 @@ class Header extends StatelessWidget {
       child: Row(
         children: [
           if (target.isPrimaryKey) ...[
-            Icon(Icons.vpn_key, size: 10, color: AppColors.accent),
+            Icon(Hgi.key01, size: 10, color: AppColors.accent),
             const SizedBox(width: 6),
           ] else if (target.isForeignKey) ...[
-            Icon(Icons.north_east, size: 10, color: AppColors.tFk),
+            Icon(Hgi.arrowUpRight01, size: 10, color: AppColors.tFk),
             const SizedBox(width: 6),
           ],
           Flexible(

@@ -4,6 +4,7 @@ import '../../models/connection_config.dart';
 import '../../models/time_ago.dart';
 import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../connection/connection_dialog.dart';
 import '../widgets/common.dart';
 
@@ -83,7 +84,7 @@ class AllConnectionsList extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
-                        Icons.power_off_outlined,
+                        Hgi.powerOff,
                         size: 20,
                         color: AppColors.textMuted,
                       ),
@@ -126,7 +127,7 @@ class AllConnectionsList extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Row(
               children: [
-                Icon(Icons.add_rounded, size: 14, color: AppColors.accent),
+                Icon(Hgi.add01, size: 14, color: AppColors.accent),
                 const SizedBox(width: 8),
                 Text(
                   'New connection',
@@ -225,8 +226,8 @@ class _SavedConnectionRow extends StatelessWidget {
               ),
             ),
             if (hovering) ...[
-              _MiniIcon(icon: Icons.edit_outlined, onTap: () => _edit(context)),
-              _MiniIcon(icon: Icons.delete_outline, onTap: _delete),
+              _MiniIcon(icon: Hgi.edit02, onTap: () => _edit(context)),
+              _MiniIcon(icon: Hgi.delete02, onTap: _delete),
             ],
           ],
         ),

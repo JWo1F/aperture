@@ -9,6 +9,7 @@ import '../../services/exporter.dart';
 import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../../theme/hugeicons.dart';
 
 /// Describes one thing the user can export.
 ///
@@ -192,7 +193,7 @@ class _ExportBodyState extends State<_ExportBody> {
         children: [
           Row(
             children: [
-              Icon(Icons.ios_share, size: 14, color: AppColors.accent),
+              Icon(Hgi.share01, size: 14, color: AppColors.accent),
               const SizedBox(width: 8),
               Text(
                 'Export',
@@ -261,7 +262,7 @@ class _ExportBodyState extends State<_ExportBody> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.error_outline, size: 13, color: AppColors.error),
+                  Icon(Hgi.alertCircle, size: 13, color: AppColors.error),
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
@@ -296,8 +297,8 @@ class _ExportBodyState extends State<_ExportBody> {
                           ? 'Copy'
                           : 'Export…'),
                 icon: _destination == _Destination.clipboard
-                    ? Icons.content_copy
-                    : Icons.save_alt,
+                    ? Hgi.copy01
+                    : Hgi.download01,
                 primary: true,
                 onPressed: _busy ? null : _export,
               ),
@@ -386,14 +387,14 @@ class _DestinationChips extends StatelessWidget {
           destination: _Destination.file,
           selected: selected == _Destination.file,
           label: 'File',
-          icon: Icons.insert_drive_file_outlined,
+          icon: Hgi.file01,
           onTap: () => onSelect(_Destination.file),
         ),
         _DestinationChip(
           destination: _Destination.clipboard,
           selected: selected == _Destination.clipboard,
           label: 'Clipboard',
-          icon: Icons.content_copy,
+          icon: Hgi.copy01,
           onTap: () => onSelect(_Destination.clipboard),
         ),
       ],

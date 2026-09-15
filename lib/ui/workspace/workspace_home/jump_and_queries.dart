@@ -5,6 +5,7 @@ import '../../../models/db_object.dart';
 import '../../../models/saved_query.dart';
 import '../../../models/time_ago.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 import '../../widgets/table_glyph.dart';
 import 'section.dart';
@@ -38,7 +39,7 @@ class JumpAndQueries extends StatelessWidget {
       count: jumpBack.length,
       child: jumpBack.isEmpty
           ? const HomeSectionEmpty(
-              icon: Icons.table_chart_outlined,
+              icon: Hgi.table01,
               message: 'Open a table from the sidebar and it lands here.',
             )
           : Column(
@@ -54,7 +55,7 @@ class JumpAndQueries extends StatelessWidget {
       count: queries.length,
       child: queries.isEmpty
           ? HomeSectionEmpty(
-              icon: Icons.bookmark_border_rounded,
+              icon: Hgi.bookmark01,
               message: 'Queries you save show up here.',
               action: HomeTextAction(label: 'New query', onTap: onNewQuery),
             )
@@ -157,7 +158,7 @@ class _TableRow extends StatelessWidget {
               ),
             const SizedBox(width: 6),
             Icon(
-              Icons.arrow_forward_rounded,
+              Hgi.arrowRight01,
               size: 13,
               color: hovering ? tint : Colors.transparent,
             ),
@@ -201,7 +202,7 @@ class _QueryRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.code_rounded, size: 14, color: tint),
+            Icon(Hgi.sourceCode, size: 14, color: tint),
             const SizedBox(width: 10),
             Expanded(
               child: Column(

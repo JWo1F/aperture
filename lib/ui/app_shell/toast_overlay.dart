@@ -6,6 +6,7 @@ import '../../state/app_globals.dart';
 import '../../state/toast_controller.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../../theme/hugeicons.dart';
 
 /// Floating-toast layer for the app shell. Anchors bottom-right, stacks
 /// newest closest to the corner, and never blocks pointer events outside
@@ -264,7 +265,7 @@ class _CloseButton extends StatelessWidget {
             borderRadius: Radii.brSm,
           ),
           child: Icon(
-            Icons.close,
+            Hgi.cancel01,
             size: 13,
             color: hovering ? AppColors.textPrimary : AppColors.textMuted,
           ),
@@ -282,8 +283,8 @@ Color _severityColor(ToastSeverity s) => switch (s) {
 };
 
 IconData _severityIcon(ToastSeverity s) => switch (s) {
-  ToastSeverity.info => Icons.info_outline,
-  ToastSeverity.success => Icons.check_circle_outline,
-  ToastSeverity.warning => Icons.warning_amber_rounded,
-  ToastSeverity.error => Icons.error_outline,
+  ToastSeverity.info => Hgi.informationCircle,
+  ToastSeverity.success => Hgi.checkmarkCircle02,
+  ToastSeverity.warning => Hgi.alert02,
+  ToastSeverity.error => Hgi.alertCircle,
 };

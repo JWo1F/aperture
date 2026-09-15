@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 import '../kinds.dart';
 
@@ -75,12 +76,12 @@ class _NumberBodyState extends State<NumberBody> {
               Column(
                 children: [
                   _StepperBtn(
-                    icon: Icons.keyboard_arrow_up,
+                    icon: Hgi.arrowUp01,
                     onTap: () => _bump(1),
                   ),
                   Container(width: 22, height: 1, color: AppColors.border),
                   _StepperBtn(
-                    icon: Icons.keyboard_arrow_down,
+                    icon: Hgi.arrowDown01,
                     onTap: () => _bump(-1),
                   ),
                 ],

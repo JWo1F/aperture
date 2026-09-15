@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../theme/app_theme.dart';
+import '../../../../theme/hugeicons.dart';
 import '../../../widgets/common.dart';
 import '../analysis/advice_engine.dart';
 import '../analysis/plan_metrics.dart';
@@ -30,7 +31,7 @@ class PlanTreeView extends StatelessWidget {
     final root = parsePlan(planJson);
     if (root == null) {
       return const EmptyState(
-        icon: Icons.account_tree_outlined,
+        icon: Hgi.hierarchySquare01,
         title: 'Plan was empty',
         message: 'Postgres returned a result with no Plan node.',
       );

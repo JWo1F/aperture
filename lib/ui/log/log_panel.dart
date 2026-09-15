@@ -8,6 +8,7 @@ import '../../state/app_globals.dart';
 import '../../state/event_log.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
 import '../widgets/value_selector.dart';
 
@@ -52,7 +53,7 @@ class LogPanel extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.subject, size: 12, color: AppColors.textMuted),
+                Icon(Hgi.paragraph, size: 12, color: AppColors.textMuted),
                 const SizedBox(width: 6),
                 Text('Activity log', style: AppTheme.eyebrow()),
                 const Spacer(),
@@ -114,7 +115,7 @@ class _CloseButton extends StatelessWidget {
           borderRadius: Radii.brSm,
         ),
         child: Icon(
-          Icons.close,
+          Hgi.cancel01,
           size: 12,
           color: hovering ? AppColors.textPrimary : AppColors.textMuted,
         ),
@@ -339,7 +340,7 @@ class _ExpandToggle extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                expanded ? Icons.unfold_less : Icons.unfold_more,
+                expanded ? Hgi.collapse : Hgi.expand,
                 size: 11,
                 color: color,
               ),
@@ -382,7 +383,7 @@ class _CopyButtonState extends State<_CopyButton> {
     return Hoverable(
       onTap: _copy,
       builder: (context, hovering) => Icon(
-        _copied ? Icons.check : Icons.content_copy,
+        _copied ? Hgi.tick02 : Hgi.copy01,
         size: 11,
         color: _copied
             ? AppColors.success

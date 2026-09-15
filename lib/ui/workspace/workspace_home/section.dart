@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 
 /// Eyebrow-labelled wrapper around a section's child column. The count chip is
@@ -110,7 +111,7 @@ class HomeTextAction extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.add_rounded,
+            Hgi.add01,
             size: 13,
             color: hovering ? AppColors.accentHover : AppColors.accent,
           ),

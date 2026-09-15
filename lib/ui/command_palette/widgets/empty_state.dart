@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 
 class PaletteEmptyState extends StatelessWidget {
   const PaletteEmptyState({super.key, required this.query});
@@ -16,7 +17,7 @@ class PaletteEmptyState extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            searching ? Icons.search_off_rounded : Icons.bolt_outlined,
+            searching ? Hgi.searchRemove : Hgi.flash,
             size: 30,
             color: AppColors.text4,
           ),

@@ -7,6 +7,7 @@ import '../../../models/cell_edit.dart';
 import '../../../models/db_object.dart';
 import '../../../models/value_format.dart';
 import '../../widgets/context_menu.dart';
+import '../../../theme/hugeicons.dart';
 
 /// The cell a results-grid right-click menu acts on.
 class CellMenuTarget {
@@ -92,7 +93,7 @@ void showCellContextMenu(
 
   final entries = <CmEntry>[
     CmItem(
-      icon: Icons.copy,
+      icon: Hgi.copy01,
       label: 'Copy value',
       shortcut: '⌘C',
       onTap: () => copy(displayValue ?? 'NULL'),
@@ -100,7 +101,7 @@ void showCellContextMenu(
     if (!target.isInsert &&
         (target.original is Map || target.original is List))
       CmItem(
-        icon: Icons.data_object,
+        icon: Hgi.braces,
         label: 'Copy pretty JSON',
         onTap: () {
           try {
@@ -109,12 +110,12 @@ void showCellContextMenu(
         },
       ),
     CmItem(
-      icon: Icons.label_outline,
+      icon: Hgi.tag01,
       label: 'Copy column name',
       onTap: () => copy(columnName),
     ),
     CmItem(
-      icon: Icons.format_align_left,
+      icon: Hgi.textAlignLeft,
       label: 'Copy as "$columnName = …"',
       onTap: () => copy('$columnName = ${displayValue ?? 'NULL'}'),
     ),
@@ -123,7 +124,7 @@ void showCellContextMenu(
         target.foreignKey != null &&
         actions.onFollowForeignKey != null) ...[
       CmItem(
-        icon: Icons.north_east,
+        icon: Hgi.arrowUpRight01,
         label: 'Follow → ${target.foreignKey!.refQualified}',
         onTap: () => actions.onFollowForeignKey?.call(),
       ),
@@ -133,7 +134,7 @@ void showCellContextMenu(
         target.findRowOwner != null &&
         actions.onFindRow != null) ...[
       CmItem(
-        icon: Icons.search,
+        icon: Hgi.search01,
         label: 'Find row in ${target.findRowOwner!.qualifiedKey}',
         onTap: () => actions.onFindRow?.call(),
       ),
@@ -141,26 +142,26 @@ void showCellContextMenu(
     ],
     if (actions.onSetValue != null) ...[
       CmItem(
-        icon: Icons.edit_outlined,
+        icon: Hgi.edit02,
         label: 'Edit cell',
         shortcut: '⏎⏎',
         onTap: () => actions.onOpenEditor?.call(),
       ),
       CmItem(
-        icon: Icons.not_interested,
+        icon: Hgi.cancelCircle,
         label: canBeNull ? 'Set NULL' : 'Set NULL (column is NOT NULL)',
         enabled: canBeNull,
         onTap: () => actions.onSetValue!(const CellLiteral(null)),
       ),
       CmItem(
-        icon: Icons.settings_backup_restore,
+        icon: Hgi.reload,
         label: hasDefault ? 'Set DEFAULT' : 'Set DEFAULT (no default value)',
         enabled: hasDefault,
         onTap: () => actions.onSetValue!(const CellDefault()),
       ),
       if (actions.onRevert != null)
         CmItem(
-          icon: Icons.undo,
+          icon: Hgi.undo,
           label: 'Revert change',
           onTap: () => actions.onRevert?.call(),
         ),
@@ -169,7 +170,7 @@ void showCellContextMenu(
     if (target.editable) ...[
       if (target.isInsert)
         CmItem(
-          icon: Icons.delete_outline,
+          icon: Hgi.delete02,
           label: 'Discard new row',
           enabled: actions.onDeleteRow != null,
           danger: true,
@@ -177,27 +178,27 @@ void showCellContextMenu(
         )
       else if (target.isDeleted)
         CmItem(
-          icon: Icons.restore_from_trash,
+          icon: Hgi.restoreBin,
           label: 'Restore row',
           enabled: actions.onRestoreRow != null,
           onTap: () => actions.onRestoreRow?.call(),
         )
       else
         CmItem(
-          icon: Icons.delete_outline,
+          icon: Hgi.delete02,
           label: 'Delete row',
           enabled: actions.onDeleteRow != null,
           danger: true,
           onTap: () => actions.onDeleteRow?.call(),
         ),
       CmItem(
-        icon: Icons.content_copy,
+        icon: Hgi.copy02,
         label: 'Duplicate row',
         enabled: actions.onDuplicateRow != null && !target.isDeleted,
         onTap: () => actions.onDuplicateRow?.call(),
       ),
       CmItem(
-        icon: Icons.add_box_outlined,
+        icon: Hgi.addSquare,
         label: 'Add new row',
         enabled: actions.onAddRow != null && !target.isDeleted,
         onTap: () => actions.onAddRow?.call(),
@@ -206,24 +207,24 @@ void showCellContextMenu(
     ],
     if (!target.isInsert && actions.onAddFilter != null) ...[
       CmItem(
-        icon: Icons.filter_alt_outlined,
+        icon: Hgi.filter,
         label: 'Filter: $columnName = value',
         onTap: () => actions.onAddFilter!(false),
       ),
       CmItem(
-        icon: Icons.block,
+        icon: Hgi.ban,
         label: 'Filter: $columnName ≠ value',
         onTap: () => actions.onAddFilter!(true),
       ),
     ],
     if (actions.onSetSort != null) ...[
       CmItem(
-        icon: Icons.arrow_upward,
+        icon: Hgi.arrowUp01,
         label: 'Sort ascending',
         onTap: () => actions.onSetSort!(false),
       ),
       CmItem(
-        icon: Icons.arrow_downward,
+        icon: Hgi.arrowDown01,
         label: 'Sort descending',
         onTap: () => actions.onSetSort!(true),
       ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../models/db_object.dart';
 import '../../../models/order_term.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 import 'grid_metrics.dart';
 
@@ -60,10 +61,10 @@ class HeaderCell extends StatelessWidget {
         child: Row(
           children: [
             if (_isPrimaryKey) ...[
-              Icon(Icons.vpn_key, size: 10, color: AppColors.accent),
+              Icon(Hgi.key01, size: 10, color: AppColors.accent),
               const SizedBox(width: 5),
             ] else if (_isForeignKey) ...[
-              Icon(Icons.north_east, size: 10, color: AppColors.tFk),
+              Icon(Hgi.arrowUpRight01, size: 10, color: AppColors.tFk),
               const SizedBox(width: 5),
             ],
             Flexible(
@@ -81,7 +82,7 @@ class HeaderCell extends StatelessWidget {
             if (sort != null) ...[
               const Spacer(),
               Icon(
-                sort!.descending ? Icons.arrow_downward : Icons.arrow_upward,
+                sort!.descending ? Hgi.arrowDown01 : Hgi.arrowUp01,
                 size: 11,
                 color: AppColors.accent,
               ),

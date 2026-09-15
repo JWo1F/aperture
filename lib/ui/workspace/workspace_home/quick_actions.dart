@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 
 class QuickActions extends StatelessWidget {
@@ -20,7 +21,7 @@ class QuickActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final newQuery = _ActionTile(
-      icon: Icons.add_rounded,
+      icon: Hgi.add01,
       title: 'New query',
       subtitle: 'Open a blank SQL editor',
       shortcut: '⌘N',
@@ -28,7 +29,7 @@ class QuickActions extends StatelessWidget {
       onTap: onNewQuery,
     );
     final search = _ActionTile(
-      icon: Icons.search_rounded,
+      icon: Hgi.search01,
       title: 'Search everything',
       subtitle: 'Tables, queries & actions',
       shortcut: '⌘K',

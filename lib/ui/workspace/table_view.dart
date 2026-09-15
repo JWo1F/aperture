@@ -9,6 +9,7 @@ import '../../state/app_globals.dart';
 import '../../state/catalog_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/code_editor.dart';
 import '../widgets/common.dart';
 import '../widgets/pagebar.dart';
@@ -402,7 +403,7 @@ class _ClauseBar extends StatelessWidget {
               onApply: onApplyFilter,
               hint: "e.g.  status = 'active'",
               active: whereActive,
-              actionIcon: Icons.filter_alt_outlined,
+              actionIcon: Hgi.filter,
               actionTooltip: 'Apply filter (↵)',
               isLast: false,
               suggest: filterSuggest,
@@ -414,7 +415,7 @@ class _ClauseBar extends StatelessWidget {
               onApply: onApplySelect,
               hint: '*  or  col_a, col_b',
               active: selectActive,
-              actionIcon: Icons.view_column_outlined,
+              actionIcon: Hgi.columnInsert,
               actionTooltip: 'Apply columns (↵)',
               isLast: false,
               suggest: selectSuggest,
@@ -426,7 +427,7 @@ class _ClauseBar extends StatelessWidget {
               onApply: onApplyOrder,
               hint: 'click a column header',
               active: orderActive,
-              actionIcon: Icons.swap_vert,
+              actionIcon: Hgi.sorting01,
               actionTooltip: 'Apply sort (↵)',
               isLast: true,
               suggest: orderSuggest,
@@ -669,7 +670,7 @@ class _PageNumbers extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         PbChev(
-          icon: Icons.chevron_left,
+          icon: Hgi.chevronLeft,
           tooltip: 'Previous page',
           onPressed: canPrev
               ? () => tabs.loadTablePage(tab, tab.page - 1)
@@ -687,7 +688,7 @@ class _PageNumbers extends StatelessWidget {
                   : () => tabs.loadTablePage(tab, p - 1),
             ),
         PbChev(
-          icon: Icons.chevron_right,
+          icon: Hgi.chevronRight,
           tooltip: 'Next page',
           onPressed: canNext
               ? () => tabs.loadTablePage(tab, tab.page + 1)

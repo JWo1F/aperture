@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 import 'connection_test.dart';
 
@@ -35,13 +36,13 @@ class ConnectionDialogFooter extends StatelessWidget {
           const SizedBox(width: 10),
           AppButton(
             label: result.status == TestStatus.busy ? 'Testing…' : 'Test',
-            icon: Icons.bolt_rounded,
+            icon: Hgi.flash,
             onPressed: onTest,
           ),
           const SizedBox(width: 8),
           AppButton(
             label: isEdit ? 'Save' : 'Create',
-            icon: isEdit ? Icons.check_rounded : Icons.add_rounded,
+            icon: isEdit ? Hgi.tick02 : Hgi.add01,
             primary: true,
             onPressed: onSubmit,
           ),

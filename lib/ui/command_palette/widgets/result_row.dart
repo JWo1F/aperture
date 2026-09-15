@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../item_model.dart';
 
 class PaletteResultRow extends StatelessWidget {
@@ -110,7 +111,7 @@ class PaletteResultRow extends StatelessWidget {
                 child: selected
                     ? Center(
                         child: Icon(
-                          Icons.keyboard_return_rounded,
+                          Hgi.cornerDownLeft,
                           size: 13,
                           color: AppColors.accent,
                         ),

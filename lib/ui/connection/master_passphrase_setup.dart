@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
 
 /// Opens the master-passphrase setup modal. Returns true if the user
@@ -148,7 +149,7 @@ class _PassphrasePanelState extends State<_PassphrasePanel> {
             ),
             alignment: Alignment.center,
             child: Icon(
-              isSetup ? Icons.lock_outline : Icons.lock_open_outlined,
+              isSetup ? Hgi.lock : Hgi.lockOpen,
               size: 16,
               color: AppColors.accent,
             ),
@@ -165,7 +166,7 @@ class _PassphrasePanelState extends State<_PassphrasePanel> {
           ),
           const Spacer(),
           IconAction(
-            icon: Icons.close,
+            icon: Hgi.cancel01,
             tooltip: 'Close',
             onPressed: () => Navigator.of(context).pop(false),
           ),
@@ -290,7 +291,7 @@ class _PassphrasePanelState extends State<_PassphrasePanel> {
             label: isSetup
                 ? (_busy ? 'Setting…' : 'Set passphrase')
                 : (_busy ? 'Unlocking…' : 'Unlock'),
-            icon: isSetup ? Icons.lock_outline : Icons.lock_open_outlined,
+            icon: isSetup ? Hgi.lock : Hgi.lockOpen,
             primary: true,
             onPressed: _valid && !_busy ? _submit : null,
           ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/db_object.dart';
 import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import 'highlighted_text.dart';
 import 'table_row.dart';
 import 'tree_row.dart';
@@ -109,7 +110,7 @@ class SchemaBlock extends StatelessWidget {
               duration: const Duration(milliseconds: 120),
               curve: Curves.easeOut,
               child: Icon(
-                Icons.chevron_right_rounded,
+                Hgi.chevronRight,
                 size: 14,
                 color: AppColors.textMuted,
               ),

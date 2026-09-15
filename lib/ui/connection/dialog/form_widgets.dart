@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../models/connection_config.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 import 'connection_form_model.dart';
 
@@ -229,7 +230,7 @@ class BoxedSelect extends StatelessWidget {
             ),
             const Spacer(),
             Icon(
-              Icons.unfold_more_rounded,
+              Hgi.expand,
               size: 15,
               color: hovering ? AppColors.textSecondary : AppColors.textMuted,
             ),
@@ -348,7 +349,7 @@ class EngineToggle extends StatelessWidget {
           Expanded(
             child: _segment(
               DbEngine.postgres,
-              Icons.dns_rounded,
+              Hgi.serverStack01,
               'PostgreSQL',
             ),
           ),
@@ -356,7 +357,7 @@ class EngineToggle extends StatelessWidget {
           Expanded(
             child: _segment(
               DbEngine.sqlite,
-              Icons.insert_drive_file_rounded,
+              Hgi.file01,
               'SQLite',
             ),
           ),
@@ -525,7 +526,7 @@ class ColorSwatchButton extends StatelessWidget {
               : null,
         ),
         child: selected
-            ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+            ? const Icon(Hgi.tick02, size: 14, color: Colors.white)
             : null,
       ),
     );

@@ -5,6 +5,7 @@ import '../../state/app_globals.dart';
 import '../../state/session_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../about/about_dialog.dart';
 import 'item_model.dart';
 
@@ -31,7 +32,7 @@ class PaletteItemSource {
           kind: PaletteKind.command,
           title: 'New query',
           subtitle: 'Open a blank SQL editor tab',
-          icon: Icons.terminal_rounded,
+          icon: Hgi.terminal,
           tokens: 'sql editor scratch run',
           run: tabs.newQueryTab,
         ),
@@ -43,7 +44,7 @@ class PaletteItemSource {
             kind: PaletteKind.command,
             title: 'Refresh this table',
             subtitle: 'Re-fetch the current page of ${active.table.name}',
-            icon: Icons.sync_rounded,
+            icon: Hgi.refresh,
             tokens: 'reload requery',
             run: () => tabs.refreshTable(active),
           ),
@@ -54,7 +55,7 @@ class PaletteItemSource {
           kind: PaletteKind.command,
           title: 'Refresh catalog',
           subtitle: 'Re-introspect schemas, tables and types',
-          icon: Icons.refresh_rounded,
+          icon: Hgi.refresh,
           tokens: 'reload schema introspect',
           run: appState.refreshCatalog,
         ),
@@ -65,7 +66,7 @@ class PaletteItemSource {
             kind: PaletteKind.command,
             title: 'Go back',
             subtitle: 'Step back through tab and filter history  ⌘[',
-            icon: Icons.arrow_back_rounded,
+            icon: Hgi.arrowLeft01,
             tokens: 'history previous navigate',
             run: appState.historyBack,
           ),
@@ -77,7 +78,7 @@ class PaletteItemSource {
             kind: PaletteKind.command,
             title: 'Go forward',
             subtitle: 'Step forward through history  ⌘]',
-            icon: Icons.arrow_forward_rounded,
+            icon: Hgi.arrowRight01,
             tokens: 'history next navigate',
             run: appState.historyForward,
           ),
@@ -90,7 +91,7 @@ class PaletteItemSource {
         kind: PaletteKind.command,
         title: 'Toggle sidebar',
         subtitle: 'Show or hide the schema browser',
-        icon: Icons.view_sidebar_outlined,
+        icon: Hgi.sidebarLeft,
         tokens: 'panel tree tables hide',
         run: store.toggleSidebar,
       ),
@@ -100,7 +101,7 @@ class PaletteItemSource {
         kind: PaletteKind.command,
         title: 'Activity log',
         subtitle: 'Show or hide the SQL event log  ⌘L',
-        icon: Icons.receipt_long_outlined,
+        icon: Hgi.invoice01,
         tokens: 'events console history queries',
         run: eventLog.toggleVisible,
       ),
@@ -110,19 +111,19 @@ class PaletteItemSource {
         AppThemeMode.dark,
         'Dark theme',
         'Pin the workspace to Aperture dark',
-        Icons.dark_mode_outlined,
+        Hgi.moon02,
       ),
       (
         AppThemeMode.light,
         'Light theme',
         'Pin the workspace to Aperture light',
-        Icons.light_mode_outlined,
+        Hgi.sun03,
       ),
       (
         AppThemeMode.auto,
         'Auto theme',
         'Follow the macOS appearance',
-        Icons.brightness_auto_outlined,
+        Hgi.contrast,
       ),
     ]) {
       out.add(
@@ -144,7 +145,7 @@ class PaletteItemSource {
           kind: PaletteKind.command,
           title: 'Disconnect',
           subtitle: session.activeConnection?.summary ?? 'Close the session',
-          icon: Icons.power_settings_new_rounded,
+          icon: Hgi.power,
           tokens: 'close session logout end',
           run: appState.disconnect,
         ),
@@ -155,7 +156,7 @@ class PaletteItemSource {
         kind: PaletteKind.command,
         title: 'About Aperture',
         subtitle: 'Version, keyboard shortcuts and credits',
-        icon: Icons.info_outline_rounded,
+        icon: Hgi.informationCircle,
         tokens: 'help shortcuts version',
         run: () => showAboutAperture(context),
       ),
@@ -171,9 +172,9 @@ class PaletteItemSource {
       final tab = tabs.tabs[i];
       final isActive = tab.id == activeId;
       final (label, icon) = switch (tab) {
-        QueryTab() => ('SQL query', Icons.terminal_rounded),
-        TableTab() => ('Table view', Icons.grid_on_rounded),
-        SchemaTab() => ('Schema', Icons.schema_outlined),
+        QueryTab() => ('SQL query', Hgi.terminal),
+        TableTab() => ('Table view', Hgi.gridTable),
+        SchemaTab() => ('Schema', Hgi.structure01),
       };
       out.add(
         PaletteItem(
@@ -198,7 +199,7 @@ class PaletteItemSource {
           kind: PaletteKind.savedQuery,
           title: q.name,
           subtitle: sqlPreview(q.sql),
-          icon: Icons.bookmark_outline_rounded,
+          icon: Hgi.bookmark01,
           tokens: q.sql,
           run: () => tabs.openSavedQuery(q),
         ),
@@ -213,7 +214,7 @@ class PaletteItemSource {
           kind: PaletteKind.connection,
           title: c.name,
           subtitle: c.id == activeId ? '${c.summary} · connected' : c.summary,
-          icon: c.id == activeId ? Icons.lan_rounded : Icons.lan_outlined,
+          icon: Hgi.network,
           accent: c.id == activeId,
           tokens: '${c.host} ${c.database} ${c.username}',
           run: () => appState.connect(c),
@@ -226,7 +227,7 @@ class PaletteItemSource {
       kind: kind,
       title: t.name,
       subtitle: subtitle,
-      icon: t.isView ? Icons.visibility_outlined : Icons.table_rows_outlined,
+      icon: t.isView ? Hgi.view : Hgi.table02,
       tokens: '${t.schema} ${t.qualifiedName}',
       run: () => appState.tabsController.openTable(t),
     );

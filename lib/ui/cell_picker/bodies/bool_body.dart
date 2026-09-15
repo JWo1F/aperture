@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 
 class BoolBody extends StatelessWidget {
@@ -24,21 +25,21 @@ class BoolBody extends StatelessWidget {
         children: [
           _option(
             label: 'true',
-            icon: Icons.check,
+            icon: Hgi.tick02,
             selected: value == true,
             onTap: () => onChange(true),
           ),
           const SizedBox(width: 4),
           _option(
             label: 'false',
-            icon: Icons.close,
+            icon: Hgi.cancel01,
             selected: value == false,
             onTap: () => onChange(false),
           ),
           const SizedBox(width: 4),
           _option(
             label: 'NULL',
-            icon: Icons.horizontal_rule,
+            icon: Hgi.minusSign,
             selected: value == null,
             onTap: onNull,
           ),

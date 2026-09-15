@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
 
 /// Build/version is wired in here rather than read from pubspec at runtime
 /// so the About dialog stays a zero-dependency widget. Bump on release.
-const _version = '1.23.1';
+const _version = '1.24.0';
 const _tagline = 'A native macOS client for PostgreSQL and SQLite.';
 
 Future<void> showAboutAperture(BuildContext context) {
@@ -37,7 +38,7 @@ Future<void> showAboutAperture(BuildContext context) {
                       borderRadius: Radii.brSm,
                     ),
                     child: Icon(
-                      Icons.adjust,
+                      Hgi.aperture,
                       size: 18,
                       color: AppColors.accent,
                     ),

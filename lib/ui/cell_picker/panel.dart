@@ -19,6 +19,7 @@ import 'quick_actions.dart';
 import 'target.dart';
 import 'tz_input.dart';
 import 'value_line.dart';
+import '../../theme/hugeicons.dart';
 
 /// The picker's core widget: hosts the kind-specific [EditorState], dispatches
 /// `save` / `revert` / `setNull` / `setDefault`, and assembles the per-kind
@@ -316,7 +317,7 @@ class _PanelState extends State<Panel> {
     KindId.date => [
       QuickAction(
         label: 'Today',
-        icon: Icons.today_outlined,
+        icon: Hgi.calendar01,
         primary: true,
         onTap: () => _setToday(zeroTime: true),
       ),
@@ -326,7 +327,7 @@ class _PanelState extends State<Panel> {
     KindId.time => [
       QuickAction(
         label: 'Now',
-        icon: Icons.bolt,
+        icon: Hgi.flash,
         primary: true,
         onTap: _setToNow,
       ),
@@ -336,7 +337,7 @@ class _PanelState extends State<Panel> {
     KindId.datetime => [
       QuickAction(
         label: 'Now',
-        icon: Icons.bolt,
+        icon: Hgi.flash,
         primary: true,
         onTap: _setToNow,
       ),

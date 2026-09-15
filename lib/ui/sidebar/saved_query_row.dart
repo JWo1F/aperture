@@ -5,6 +5,7 @@ import '../../models/saved_query.dart';
 import '../../models/time_ago.dart';
 import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/context_menu.dart';
 import '../widgets/text_prompt_dialog.dart';
 import 'highlighted_text.dart';
@@ -37,29 +38,29 @@ class _SavedQueryRowState extends State<SavedQueryRow> {
       globalPosition: position,
       entries: [
         CmItem(
-          icon: Icons.north_east,
+          icon: Hgi.arrowUpRight01,
           label: 'Open',
           onTap: () => tabs.openSavedQuery(query),
         ),
         CmItem(
-          icon: Icons.edit_outlined,
+          icon: Hgi.edit02,
           label: 'Rename…',
           onTap: _renameDialog,
         ),
         CmItem(
-          icon: Icons.content_copy,
+          icon: Hgi.copy01,
           label: 'Duplicate',
           onTap: () => tabs.duplicateSavedQuery(query.id),
         ),
         const CmDivider(),
         CmItem(
-          icon: Icons.code,
+          icon: Hgi.sourceCode,
           label: 'Copy SQL',
           onTap: () => copy(query.sql),
         ),
         const CmDivider(),
         CmItem(
-          icon: Icons.delete_outline,
+          icon: Hgi.delete02,
           label: 'Delete',
           danger: true,
           onTap: () => tabs.deleteSavedQuery(query.id),
@@ -96,7 +97,7 @@ class _SavedQueryRowState extends State<SavedQueryRow> {
       onSecondaryTapDown: (d) => _openMenu(d.globalPosition),
       children: [
         Icon(
-          Icons.code_rounded,
+          Hgi.sourceCode,
           size: 12,
           color: widget.active ? tint : AppColors.textMuted,
         ),

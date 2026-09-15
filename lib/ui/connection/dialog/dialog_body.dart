@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../models/connection_config.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 import 'connection_form_model.dart';
 import 'form_widgets.dart';
@@ -118,13 +119,13 @@ class ConnectionDialogBody extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             InlineAction(
-              icon: Icons.add_rounded,
+              icon: Hgi.add01,
               label: 'New',
               onTap: onCreateFile,
             ),
             const SizedBox(width: 4),
             InlineAction(
-              icon: Icons.folder_open_rounded,
+              icon: Hgi.folderOpen,
               label: 'Browse',
               onTap: onPickFile,
             ),
@@ -157,8 +158,8 @@ class ConnectionDialogBody extends StatelessWidget {
         hint: keepHint ? 'Leave blank to keep current' : 'Password',
         trailing: GhostIconButton(
           icon: model.showPassword
-              ? Icons.visibility_off_rounded
-              : Icons.visibility_rounded,
+              ? Hgi.viewOff
+              : Hgi.view,
           onTap: () => model.showPassword = !model.showPassword,
         ),
       );
@@ -193,7 +194,7 @@ class ConnectionDialogBody extends StatelessWidget {
     return LabeledField(
       label: 'SSL mode',
       child: BoxedSelect(
-        icon: secure ? Icons.lock_rounded : Icons.lock_open_rounded,
+        icon: secure ? Hgi.lock : Hgi.lockOpen,
         iconColor: secure ? AppColors.accent : AppColors.textMuted,
         label: model.sslMode,
         onTap: onOpenSslMenu,
@@ -238,7 +239,7 @@ class ConnectionDialogBody extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              model.readOnly ? Icons.shield_rounded : Icons.shield_outlined,
+              Hgi.shield01,
               size: 16,
               color: model.readOnly ? AppColors.accent : AppColors.textMuted,
             ),

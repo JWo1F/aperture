@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import 'common.dart';
 
 /// Show a small modal with one labelled text field plus Cancel / action
@@ -11,7 +12,7 @@ Future<String?> showTextPrompt(
   required String title,
   required String initial,
   String actionLabel = 'OK',
-  IconData? actionIcon = Icons.check,
+  IconData? actionIcon = Hgi.tick02,
 }) {
   return showDialog<String>(
     context: context,

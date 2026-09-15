@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import 'key_cap.dart';
 
 class PaletteSearchField extends StatelessWidget {
@@ -21,7 +22,7 @@ class PaletteSearchField extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 15, 12, 15),
       child: Row(
         children: [
-          Icon(Icons.search_rounded, size: 19, color: AppColors.textSecondary),
+          Icon(Hgi.search01, size: 19, color: AppColors.textSecondary),
           const SizedBox(width: 11),
           Expanded(
             child: TextField(
@@ -88,7 +89,7 @@ class _ClearButtonState extends State<_ClearButton> {
             borderRadius: Radii.brSm,
           ),
           child: Icon(
-            Icons.close_rounded,
+            Hgi.cancel01,
             size: 14,
             color: _hover ? AppColors.textPrimary : AppColors.textMuted,
           ),

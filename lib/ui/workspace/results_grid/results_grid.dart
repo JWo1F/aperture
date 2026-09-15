@@ -7,6 +7,7 @@ import '../../../models/db_object.dart';
 import '../../../models/order_term.dart';
 import '../../../models/query_result.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 import 'body_gestures.dart';
 import 'cell_interaction.dart';
@@ -352,14 +353,14 @@ class _ResultsGridState extends State<ResultsGrid> {
 
     if (result.isError) {
       return EmptyState(
-        icon: Icons.error_outline,
+        icon: Hgi.alertCircle,
         title: 'Query failed',
         message: result.error,
       );
     }
     if (!result.hasColumns) {
       return EmptyState(
-        icon: Icons.check_circle_outline,
+        icon: Hgi.checkmarkCircle02,
         title: 'Statement executed',
         message: '${result.affectedRows ?? 0} row(s) affected.',
       );
@@ -381,7 +382,7 @@ class _ResultsGridState extends State<ResultsGrid> {
         Expanded(
           child: _totalRowCount == 0
               ? const EmptyState(
-                  icon: Icons.inbox_outlined,
+                  icon: Hgi.inbox,
                   title: 'No rows',
                   message: 'This query returned an empty result set.',
                 )

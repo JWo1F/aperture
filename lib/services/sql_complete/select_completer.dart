@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 
 import '../../models/db_catalog.dart';
 import '../../models/db_object.dart';
+import '../../theme/hugeicons.dart';
 import '../../ui/widgets/code_editor.dart';
 import 'clause.dart';
 import 'keywords.dart';
@@ -222,7 +222,7 @@ List<CodeSuggestion> _joinSuggestions({
           label: fk.refTable,
           insertText: insert,
           detail: '→ ${src.name}.${fk.localColumn}',
-          icon: Icons.link,
+          icon: Hgi.link01,
           kind: SuggestionKind.snippet,
           matchBoost: 8,
         ),
@@ -245,7 +245,7 @@ List<CodeSuggestion> _joinSuggestions({
             label: other.name,
             insertText: insert,
             detail: '← ${other.name}.${fk.localColumn}',
-            icon: Icons.link,
+            icon: Hgi.link01,
             kind: SuggestionKind.snippet,
             matchBoost: 8,
           ),

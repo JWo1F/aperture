@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
 
 /// Short 1×14 hairline used *within* a toolbar group — e.g. between the
@@ -103,7 +104,7 @@ class TbSearch extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(Icons.search, size: 12, color: AppColors.textMuted),
+              Icon(Hgi.search01, size: 12, color: AppColors.textMuted),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

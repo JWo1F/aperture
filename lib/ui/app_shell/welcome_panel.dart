@@ -7,6 +7,7 @@ import '../../models/time_ago.dart';
 import '../../state/app_globals.dart';
 import '../../state/session_controller.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../about/about_dialog.dart';
 import '../connection/connection_dialog.dart';
 import '../widgets/common.dart';
@@ -284,7 +285,7 @@ class _RecentCard extends StatelessWidget {
                     builder: (context, _) => Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Icon(
-                        Icons.edit_outlined,
+                        Hgi.edit02,
                         size: 13,
                         color: AppColors.textMuted,
                       ),
@@ -325,7 +326,7 @@ class _NewConnectionLink extends StatelessWidget {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.add, size: 13, color: fg),
+            Icon(Hgi.add01, size: 13, color: fg),
             const SizedBox(width: 6),
             Text(
               'New connection',
@@ -362,7 +363,7 @@ class _EmptyBlock extends StatelessWidget {
         const SizedBox(height: Insets.lg),
         AppButton(
           label: 'New Connection',
-          icon: Icons.add_link,
+          icon: Hgi.addSquare,
           primary: true,
           onPressed: onNew,
         ),
@@ -441,7 +442,7 @@ class _ErrorBox extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.error_outline, size: 15, color: AppColors.error),
+            Icon(Hgi.alertCircle, size: 15, color: AppColors.error),
             const SizedBox(width: Insets.sm),
             Flexible(
               child: Text(

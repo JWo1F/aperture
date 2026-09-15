@@ -7,6 +7,7 @@ import '../../state/app_globals.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
 
 /// Per-query message log. Renders every SQL the tab has run, newest
@@ -21,7 +22,7 @@ class QueryMessagesView extends StatelessWidget {
   Widget build(BuildContext context) {
     if (tab.messages.isEmpty) {
       return const EmptyState(
-        icon: Icons.subject,
+        icon: Hgi.paragraph,
         title: 'No messages',
         message:
             'Every SQL this tab runs lands here — successes, failures, '
@@ -206,7 +207,7 @@ class _MessageRowState extends State<_MessageRow> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      _expanded ? Icons.unfold_less : Icons.unfold_more,
+                      _expanded ? Hgi.collapse : Hgi.expand,
                       size: 11,
                       color: color,
                     ),
@@ -263,7 +264,7 @@ class _CopyButtonState extends State<_CopyButton> {
     return Hoverable(
       onTap: _copy,
       builder: (context, hovering) => Icon(
-        _copied ? Icons.check : Icons.content_copy,
+        _copied ? Hgi.tick02 : Hgi.copy01,
         size: 11,
         color: _copied
             ? AppColors.success

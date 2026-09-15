@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import 'common.dart';
 import 'context_menu.dart';
 
@@ -174,7 +175,7 @@ class RefreshDropdown extends StatelessWidget {
       entries: [
         for (final (label, opt) in options)
           CmItem(
-            icon: opt == interval ? Icons.check : Icons.access_time,
+            icon: opt == interval ? Hgi.tick02 : Hgi.clock01,
             label: opt == null ? 'Manual (off)' : 'Every $label',
             onTap: () => onSetInterval(opt),
           ),
@@ -221,7 +222,7 @@ class RefreshDropdown extends StatelessWidget {
                           color: AppColors.accent,
                         ),
                       )
-                    : Icon(Icons.refresh, size: 13, color: fg),
+                    : Icon(Hgi.refresh, size: 13, color: fg),
               );
             },
           ),
@@ -266,7 +267,7 @@ class RefreshDropdown extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 3),
-                    Icon(Icons.expand_more, size: 11, color: hoverFg),
+                    Icon(Hgi.arrowDown01, size: 11, color: hoverFg),
                   ],
                 ),
               );

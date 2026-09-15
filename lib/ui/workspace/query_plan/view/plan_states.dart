@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../theme/app_theme.dart';
+import '../../../../theme/hugeicons.dart';
 import '../../../widgets/common.dart';
 
 class PlanSpinner extends StatelessWidget {
@@ -36,7 +37,7 @@ class PlanSuggestion extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.account_tree_outlined,
+              Hgi.hierarchySquare01,
               size: 30,
               color: AppColors.textMuted,
             ),
@@ -62,7 +63,7 @@ class PlanSuggestion extends StatelessWidget {
             const SizedBox(height: 14),
             AppButton(
               label: 'Run EXPLAIN',
-              icon: Icons.account_tree_outlined,
+              icon: Hgi.hierarchySquare01,
               primary: true,
               onPressed: onRun,
             ),
@@ -88,7 +89,7 @@ class PlanError extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.error_outline, size: 14, color: AppColors.error),
+              Icon(Hgi.alertCircle, size: 14, color: AppColors.error),
               const SizedBox(width: 6),
               Text(
                 'EXPLAIN failed',
@@ -109,7 +110,7 @@ class PlanError extends StatelessWidget {
             const SizedBox(height: 12),
             AppButton(
               label: 'Run again',
-              icon: Icons.refresh,
+              icon: Hgi.refresh,
               onPressed: onRetry,
             ),
           ],
@@ -137,7 +138,7 @@ class PlanStaleBanner extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            Icons.warning_amber_outlined,
+            Hgi.alert02,
             size: 12,
             color: AppColors.warning,
           ),
@@ -150,7 +151,7 @@ class PlanStaleBanner extends StatelessWidget {
           ),
           AppButton(
             label: 'Re-run EXPLAIN',
-            icon: Icons.refresh,
+            icon: Hgi.refresh,
             onPressed: onRerun,
           ),
         ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../theme/app_theme.dart';
+import '../../../../theme/hugeicons.dart';
 import '../model/advice.dart';
 
 /// The stack of advice cards above the node tree. When [items] is empty
@@ -57,10 +58,10 @@ class _AdviceCard extends StatelessWidget {
       AdviceSeverity.good => AppColors.success,
     };
     final icon = switch (advice.severity) {
-      AdviceSeverity.critical => Icons.error_outline,
-      AdviceSeverity.warn => Icons.warning_amber_outlined,
-      AdviceSeverity.info => Icons.lightbulb_outline,
-      AdviceSeverity.good => Icons.check_circle_outline,
+      AdviceSeverity.critical => Hgi.alertCircle,
+      AdviceSeverity.warn => Hgi.alert02,
+      AdviceSeverity.info => Hgi.idea01,
+      AdviceSeverity.good => Hgi.checkmarkCircle02,
     };
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),

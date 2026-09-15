@@ -7,6 +7,7 @@ import 'package:flutter_highlight/flutter_highlight.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
 import '../widgets/common.dart';
+import '../../theme/hugeicons.dart';
 
 /// Inspector-style review surface for pending row mutations. Built on
 /// [showGeneralDialog] so the backdrop is ours: a real Gaussian blur of
@@ -335,13 +336,13 @@ class _Header extends StatelessWidget {
                 ),
               ),
               _HeaderIcon(
-                icon: Icons.content_copy,
+                icon: Hgi.copy01,
                 tooltip: 'Copy all statements',
                 onTap: onCopyAll,
               ),
               const SizedBox(width: 2),
               _HeaderIcon(
-                icon: Icons.close_rounded,
+                icon: Hgi.cancel01,
                 tooltip: 'Close (Esc)',
                 onTap: onClose,
               ),
@@ -524,7 +525,7 @@ class _EmptyBody extends StatelessWidget {
       color: AppColors.bg,
       padding: const EdgeInsets.symmetric(vertical: 56),
       child: const EmptyState(
-        icon: Icons.check_circle_outline,
+        icon: Hgi.checkmarkCircle02,
         title: 'No pending changes',
         message:
             'Cell edits, deletes, and inserts will show up here for review '
@@ -840,7 +841,7 @@ class _CodeCopyButton extends StatelessWidget {
             borderRadius: Radii.brSm,
           ),
           child: Icon(
-            Icons.content_copy,
+            Hgi.copy01,
             size: 12,
             color: hovering ? AppColors.textPrimary : AppColors.textSecondary,
           ),
@@ -877,7 +878,7 @@ class _Footer extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            Icons.shield_outlined,
+            Hgi.shield01,
             size: 13,
             color: AppColors.textMuted,
           ),
@@ -945,7 +946,7 @@ class _ApplyButton extends StatelessWidget {
                         strokeWidth: 1.6,
                         color: Colors.white,
                       )
-                    : const Icon(Icons.check, size: 14, color: Colors.white),
+                    : const Icon(Hgi.tick02, size: 14, color: Colors.white),
               ),
               const SizedBox(width: 7),
               Text(

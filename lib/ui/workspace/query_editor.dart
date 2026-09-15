@@ -21,6 +21,7 @@ import '../widgets/value_selector.dart';
 import 'query_messages_view.dart';
 import 'query_plan/view/query_plan_view.dart';
 import 'results_grid/results_grid.dart';
+import '../../theme/hugeicons.dart';
 
 /// Syntax-highlighted SQL editor over the result grid.
 ///
@@ -162,7 +163,7 @@ class _QueryEditorState extends State<QueryEditor> {
       case QueryResultsView.results:
         if (tab.result == null) {
           return const EmptyState(
-            icon: Icons.terminal,
+            icon: Hgi.terminal,
             title: 'Run a query',
             message:
                 'Write SQL above and press ⌘↵ (or click ▶ in the gutter '
@@ -259,7 +260,7 @@ class _QueryEditorState extends State<QueryEditor> {
           if (isRunning) {
             return LineIcon(
               icon: Icon(
-                Icons.stop_rounded,
+                Hgi.stop,
                 size: 14,
                 color: AppColors.error,
               ),
@@ -269,7 +270,7 @@ class _QueryEditorState extends State<QueryEditor> {
           }
           return LineIcon(
             icon: Icon(
-              Icons.play_arrow_rounded,
+              Hgi.play,
               size: 14,
               color: AppColors.success,
             ),
@@ -433,14 +434,14 @@ class _Toolbar extends StatelessWidget {
         children: [
           _QtPrimaryButton(
             label: tab.running ? 'Running…' : 'Run statement',
-            icon: Icons.play_arrow,
+            icon: Hgi.play,
             kbd: const ['⌘', '↵'],
             onPressed: onRunStatement,
           ),
           const SizedBox(width: 4),
           _QtBorderButton(
             label: 'Run all',
-            icon: Icons.bolt_outlined,
+            icon: Hgi.flash,
             kbd: const ['⌘', '⇧', '↵'],
             onPressed: onRunAll,
           ),

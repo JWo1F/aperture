@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../state/app_globals.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../app_shell/confirm_discard.dart';
 import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
@@ -167,7 +168,7 @@ class _NewTabButton extends StatelessWidget {
               ),
             ),
             child: Icon(
-              Icons.add_rounded,
+              Hgi.add01,
               size: 14,
               color: hovering ? AppColors.textPrimary : AppColors.textMuted,
             ),
@@ -220,7 +221,7 @@ void _showTabMenu(
     globalPosition: position,
     entries: [
       CmItem(
-        icon: Icons.close,
+        icon: Hgi.cancel01,
         label: 'Close',
         shortcut: '⌘W',
         onTap: () => _closeGuarded(
@@ -231,7 +232,7 @@ void _showTabMenu(
         ),
       ),
       CmItem(
-        icon: Icons.layers_clear_outlined,
+        icon: Hgi.cancelSquare,
         label: 'Close others',
         enabled: tabs.length > 1,
         onTap: () => _closeGuarded(
@@ -242,7 +243,7 @@ void _showTabMenu(
         ),
       ),
       CmItem(
-        icon: Icons.last_page,
+        icon: Hgi.arrowRightDouble,
         label: 'Close tabs to the right',
         enabled: canCloseRight,
         onTap: () => _closeGuarded(
@@ -254,7 +255,7 @@ void _showTabMenu(
       ),
       const CmDivider(),
       CmItem(
-        icon: Icons.delete_sweep_outlined,
+        icon: Hgi.deleteThrow,
         label: 'Close all',
         enabled: tabs.isNotEmpty,
         danger: true,
@@ -437,7 +438,7 @@ class _CloseButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
         ),
         child: Icon(
-          Icons.close_rounded,
+          Hgi.cancel01,
           size: 11,
           color: visible
               ? (hovering ? AppColors.textPrimary : AppColors.textMuted)

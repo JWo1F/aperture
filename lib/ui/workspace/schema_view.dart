@@ -6,6 +6,7 @@ import '../../state/app_globals.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
 
 /// Renders a [SchemaTab] in the design's "article" style: centered title,
@@ -50,7 +51,7 @@ class _Toolbar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.data_object, size: 13, color: AppColors.accent),
+          Icon(Hgi.braces, size: 13, color: AppColors.accent),
           const SizedBox(width: 7),
           RichText(
             text: TextSpan(
@@ -86,7 +87,7 @@ class _Toolbar extends StatelessWidget {
           ),
           const Spacer(),
           IconAction(
-            icon: Icons.refresh,
+            icon: Hgi.refresh,
             tooltip: 'Reload',
             onPressed: tab.loading
                 ? null
@@ -94,7 +95,7 @@ class _Toolbar extends StatelessWidget {
             busy: tab.loading,
           ),
           IconAction(
-            icon: Icons.copy,
+            icon: Hgi.copy01,
             tooltip: 'Copy DDL',
             onPressed: tab.ddl == null ? null : _copy,
           ),
@@ -125,13 +126,13 @@ class _Body extends StatelessWidget {
     }
     if (tab.error != null) {
       return EmptyState(
-        icon: Icons.error_outline,
+        icon: Hgi.alertCircle,
         title: 'Could not load schema',
         message: tab.error,
       );
     }
     if (tab.ddl == null) {
-      return const EmptyState(icon: Icons.code, title: 'No DDL');
+      return const EmptyState(icon: Hgi.sourceCode, title: 'No DDL');
     }
 
     final base = AppTheme.mono(

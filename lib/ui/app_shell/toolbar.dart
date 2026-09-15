@@ -7,6 +7,7 @@ import '../../state/app_globals.dart';
 import '../../state/session_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../command_palette/command_palette.dart';
 import '../widgets/common.dart';
 import '../widgets/pagebar.dart';
@@ -186,18 +187,18 @@ class _ToolbarState extends State<Toolbar> {
             Row(
               children: [
                 TbIcon(
-                  icon: Icons.view_sidebar_outlined,
+                  icon: Hgi.sidebarLeft,
                   tooltip: 'Toggle sidebar',
                   onPressed: store.toggleSidebar,
                 ),
                 const TbRail(),
                 TbIcon(
-                  icon: Icons.arrow_back,
+                  icon: Hgi.arrowLeft01,
                   tooltip: 'Back  ⌘[',
                   onPressed: canGoBack ? appState.historyBack : null,
                 ),
                 TbIcon(
-                  icon: Icons.arrow_forward,
+                  icon: Hgi.arrowRight01,
                   tooltip: 'Forward  ⌘]',
                   onPressed: canGoForward ? appState.historyForward : null,
                 ),
@@ -205,7 +206,7 @@ class _ToolbarState extends State<Toolbar> {
                 const TbGroupRail(),
                 const SizedBox(width: 8),
                 TbIcon(
-                  icon: Icons.home_outlined,
+                  icon: Hgi.home01,
                   tooltip: 'Close connection and go home',
                   onPressed: atHome ? null : appState.disconnect,
                 ),
@@ -213,7 +214,7 @@ class _ToolbarState extends State<Toolbar> {
                 const TbGroupRail(),
                 const SizedBox(width: 8),
                 TbIcon(
-                  icon: Icons.ios_share,
+                  icon: Hgi.share01,
                   tooltip: 'Export…',
                   onPressed: canExport
                       ? () => openExportForActiveTab(context, tabs.activeTab)
@@ -237,16 +238,16 @@ class _ToolbarState extends State<Toolbar> {
                   )
                 else
                   TbIcon(
-                    icon: Icons.search,
+                    icon: Hgi.search01,
                     tooltip: 'Search  ⌘K',
                     onPressed: () => showCommandPalette(context),
                   ),
                 const TbRail(),
                 TbIcon(
                   icon: switch (themeMode) {
-                    AppThemeMode.dark => Icons.dark_mode_outlined,
-                    AppThemeMode.light => Icons.light_mode_outlined,
-                    AppThemeMode.auto => Icons.brightness_auto_outlined,
+                    AppThemeMode.dark => Hgi.moon02,
+                    AppThemeMode.light => Hgi.sun03,
+                    AppThemeMode.auto => Hgi.contrast,
                   },
                   tooltip:
                       'Theme: ${_modeLabel(themeMode)} · '
@@ -254,7 +255,7 @@ class _ToolbarState extends State<Toolbar> {
                   onPressed: store.cycleThemeMode,
                 ),
                 TbIcon(
-                  icon: Icons.folder_outlined,
+                  icon: Hgi.folder01,
                   tooltip: 'Reveal config folder in Finder',
                   onPressed: revealConfigFolder,
                 ),
@@ -371,13 +372,13 @@ class _TbPendingChip extends StatelessWidget {
         ),
         const SizedBox(width: 2),
         _PendingAction(
-          icon: Icons.check,
+          icon: Hgi.tick02,
           tooltip: 'Apply pending edits',
           busy: busy,
           onTap: hasPending && !busy ? () => applyEditsForTab(tab) : null,
         ),
         _PendingAction(
-          icon: Icons.close,
+          icon: Hgi.cancel01,
           tooltip: 'Discard pending edits',
           onTap: hasPending && !busy
               ? () => appState.tabsController.resetTableEdits(tab)

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../theme/app_theme.dart';
+import '../../../../theme/hugeicons.dart';
 import '../analysis/advice_engine.dart';
 import '../glossary/node_descriptions.dart';
 import '../model/plan_node.dart';
@@ -122,7 +123,7 @@ class _RelationshipKicker extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.arrow_upward, size: 10, color: AppColors.textMuted),
+        Icon(Hgi.arrowUp01, size: 10, color: AppColors.textMuted),
         const SizedBox(width: 4),
         Flexible(
           child: RichText(
@@ -430,7 +431,7 @@ class _MismatchChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.warning_amber_outlined, size: 10, color: color),
+            Icon(Hgi.alert02, size: 10, color: color),
             const SizedBox(width: 3),
             Text(
               label,

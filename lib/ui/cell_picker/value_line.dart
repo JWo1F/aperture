@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
 import 'formatters.dart';
@@ -330,7 +331,7 @@ class _TzChip extends StatelessWidget {
           CmItem(
             label: tz,
             shortcut: lbl,
-            icon: tz == value ? Icons.check : null,
+            icon: tz == value ? Hgi.tick02 : null,
             onTap: () => onChange(tz),
           ),
       ],
@@ -358,7 +359,7 @@ class _TzChip extends StatelessWidget {
                 style: AppTheme.mono(size: 14, color: AppColors.accent),
               ),
               const SizedBox(width: 3),
-              Icon(Icons.expand_more, size: 10, color: AppColors.text4),
+              Icon(Hgi.arrowDown01, size: 10, color: AppColors.text4),
             ],
           ),
         ),

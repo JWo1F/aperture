@@ -4,6 +4,7 @@ import '../../models/connection_config.dart';
 import '../../state/app_globals.dart';
 import '../../state/session_controller.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
 
@@ -40,8 +41,8 @@ class ConnHero extends StatelessWidget {
     final menuEnabled = connected || session.status == ConnectionStatus.lost;
     final tint = AppColors.connectionTint(conn?.color);
     final engineIcon = conn?.engine == DbEngine.sqlite
-        ? Icons.insert_drive_file_rounded
-        : Icons.dns_rounded;
+        ? Hgi.file01
+        : Hgi.serverStack01;
 
     final title = switch (session.status) {
       ConnectionStatus.connected => conn?.database ?? 'connected',
@@ -170,7 +171,7 @@ class ConnHero extends StatelessWidget {
                 ),
                 if (menuEnabled)
                   Icon(
-                    Icons.unfold_more_rounded,
+                    Hgi.expand,
                     size: 14,
                     color: highlight
                         ? AppColors.textSecondary
@@ -199,14 +200,14 @@ void openConnMenu(BuildContext context, Offset position) {
     globalPosition: position,
     entries: [
       CmItem(
-        icon: Icons.refresh,
+        icon: Hgi.refresh,
         label: loading ? 'Refreshing schema…' : 'Refresh schema',
         enabled: !loading,
         onTap: appState.refreshCatalog,
       ),
       const CmDivider(),
       CmItem(
-        icon: Icons.power_settings_new,
+        icon: Hgi.power,
         label: 'Disconnect',
         danger: true,
         onTap: appState.disconnect,
@@ -250,7 +251,7 @@ class SidebarSearchBar extends StatelessWidget {
             child: Row(
               children: [
                 Icon(
-                  Icons.search_rounded,
+                  Hgi.search01,
                   size: 13,
                   color: focused
                       ? AppColors.textSecondary
@@ -289,7 +290,7 @@ class SidebarSearchBar extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(2),
                       child: Icon(
-                        Icons.close_rounded,
+                        Hgi.cancel01,
                         size: 12,
                         color: AppColors.textMuted,
                       ),

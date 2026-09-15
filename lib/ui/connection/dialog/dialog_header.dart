@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/connection_config.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 
 /// Connection-dialog header: a tinted glyph that previews the chosen
@@ -46,8 +47,8 @@ class ConnectionDialogHeader extends StatelessWidget {
             alignment: Alignment.center,
             child: Icon(
               engine == DbEngine.sqlite
-                  ? Icons.insert_drive_file_rounded
-                  : Icons.dns_rounded,
+                  ? Hgi.file01
+                  : Hgi.serverStack01,
               size: 17,
               color: tint,
             ),
@@ -81,7 +82,7 @@ class ConnectionDialogHeader extends StatelessWidget {
           ),
           const Spacer(),
           IconAction(
-            icon: Icons.close_rounded,
+            icon: Hgi.cancel01,
             tooltip: 'Close',
             onPressed: onClose,
           ),
