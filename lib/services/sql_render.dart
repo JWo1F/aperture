@@ -76,21 +76,31 @@ class ClauseSyntaxException implements Exception {
 }
 
 /// Validates that [snippet] — a user-typed clausebar fragment — won't
-/// terminate the surrounding query and introduce a second statement.
+/// terminate the surrounding query.
 ///
 /// Empty / whitespace-only input is allowed; the corresponding clause is
 /// omitted by [whereClause] / [orderClause] / the projection helpers. For
 /// non-empty input we embed the snippet into a probe statement shaped like
-/// the real query and feed it through [parseSqlStatements]; a result of
-/// more than one statement means a top-level `;` (or a `;` followed by a
-/// comment) inside the snippet closed the probe early, so we reject.
+/// the real query and append a sentinel clause. Anything that ends the
+/// probe's own statement — a stacked `DROP`, or a bare trailing `;` —
+/// leaves the sentinel in a second statement, so we reject.
+///
+/// The sentinel matters. Checking only for "more than one statement"
+/// missed a trailing `;` on its own, because the empty fragment after it
+/// is dropped by [parseSqlStatements]. SQLite's `prepare` compiles the
+/// first statement and discards the rest of the string in silence, so a
+/// filter of `1=1;` took the page query's LIMIT, OFFSET and ORDER BY with
+/// it and fetched the entire relation into one page.
+///
+/// The sentinel goes on its own line so a snippet ending in a `--`
+/// comment cannot swallow it and read as harmless.
 void validateClauseSnippet(String snippet, {required ClauseKind kind}) {
   final trimmed = snippet.trim();
   if (trimmed.isEmpty) return;
   final probe = switch (kind) {
-    ClauseKind.filter => 'SELECT 1 FROM t WHERE $trimmed',
-    ClauseKind.orderBy => 'SELECT 1 FROM t ORDER BY $trimmed',
-    ClauseKind.selectList => 'SELECT $trimmed FROM t',
+    ClauseKind.filter => 'SELECT 1 FROM t WHERE $trimmed\nLIMIT 1',
+    ClauseKind.orderBy => 'SELECT 1 FROM t ORDER BY $trimmed\nLIMIT 1',
+    ClauseKind.selectList => 'SELECT $trimmed FROM t\nLIMIT 1',
   };
   if (parseSqlStatements(probe).length > 1) {
     throw ClauseSyntaxException(kind: kind, snippet: trimmed);

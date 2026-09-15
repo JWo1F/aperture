@@ -171,7 +171,7 @@ List<SqlStatement> parseSqlStatements(String sql) {
       i++;
       final raw = sql.substring(currentStart, i);
       final trimmed = raw.trim();
-      if (trimmed.isNotEmpty && trimmed != ';') {
+      if (_containsSql(trimmed)) {
         out.add(
           SqlStatement(
             text: trimmed,
@@ -198,7 +198,7 @@ List<SqlStatement> parseSqlStatements(String sql) {
   if (currentStart < length) {
     final raw = sql.substring(currentStart);
     final trimmed = raw.trim();
-    if (trimmed.isNotEmpty) {
+    if (_containsSql(trimmed)) {
       out.add(
         SqlStatement(
           text: trimmed,
@@ -211,6 +211,46 @@ List<SqlStatement> parseSqlStatements(String sql) {
   }
 
   return out;
+}
+
+/// True when [fragment] holds something an engine would actually execute,
+/// rather than only whitespace, comments and semicolons.
+///
+/// A script ending `-- done` used to yield that comment as a final
+/// statement. The run-all loop executes every entry, and SQLite's
+/// `prepare` throws `Must contain an SQL statement` on a bare comment — so
+/// a perfectly good script reported itself as having failed.
+bool _containsSql(String fragment) {
+  var i = 0;
+  while (i < fragment.length) {
+    final c = fragment.codeUnitAt(i);
+    if (_isBlank(c) || c == 0x3B) {
+      i++;
+      continue;
+    }
+    if (c == 0x2D &&
+        i + 1 < fragment.length &&
+        fragment.codeUnitAt(i + 1) == 0x2D) {
+      while (i < fragment.length && fragment.codeUnitAt(i) != 0x0A) {
+        i++;
+      }
+      continue;
+    }
+    if (c == 0x2F &&
+        i + 1 < fragment.length &&
+        fragment.codeUnitAt(i + 1) == 0x2A) {
+      i += 2;
+      while (i + 1 < fragment.length &&
+          !(fragment.codeUnitAt(i) == 0x2A &&
+              fragment.codeUnitAt(i + 1) == 0x2F)) {
+        i++;
+      }
+      i = i + 1 < fragment.length ? i + 2 : fragment.length;
+      continue;
+    }
+    return true;
+  }
+  return false;
 }
 
 /// Returns the statement that contains [offset], or null if [offset] sits in

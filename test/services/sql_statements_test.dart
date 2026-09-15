@@ -2,6 +2,53 @@ import 'package:aperture/services/sql_statements.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('parseSqlStatements — comment-only tails', () {
+    test('a trailing line comment is not a statement', () {
+      // The run-all loop executes each entry, and SQLite's prepare()
+      // throws "Must contain an SQL statement" on a bare comment — so a
+      // script ending `-- done` reported itself as failed after it had
+      // actually succeeded.
+      final stmts = parseSqlStatements('SELECT 1; -- done');
+      expect(stmts, hasLength(1));
+      expect(stmts.single.text, 'SELECT 1;');
+    });
+
+    test('a trailing block comment is not a statement', () {
+      final stmts = parseSqlStatements('SELECT 1;\n/* done */\n');
+      expect(stmts, hasLength(1));
+    });
+
+    test('a leading comment stays attached to its statement', () {
+      final stmts = parseSqlStatements('-- why\nSELECT 1;');
+      expect(stmts, hasLength(1));
+      expect(stmts.single.text, '-- why\nSELECT 1;');
+    });
+
+    test('a script of nothing but comments yields nothing', () {
+      expect(parseSqlStatements('-- a\n/* b */\n'), isEmpty);
+    });
+
+    test('a comment between statements does not split them apart', () {
+      final stmts = parseSqlStatements('SELECT 1; -- mid\nSELECT 2;');
+      expect(stmts, hasLength(2));
+      // The comment rides along with the statement it precedes, which is
+      // where the user put it.
+      expect(stmts.last.text, contains('SELECT 2;'));
+    });
+
+    test('a real trailing statement with no semicolon survives', () {
+      final stmts = parseSqlStatements('SELECT 1; SELECT 2');
+      expect(stmts, hasLength(2));
+      expect(stmts.last.text, 'SELECT 2');
+    });
+
+    test('a semicolon inside a trailing comment is not a separator', () {
+      final stmts = parseSqlStatements('SELECT 1 -- a; b');
+      expect(stmts, hasLength(1));
+      expect(stmts.single.text, 'SELECT 1 -- a; b');
+    });
+  });
+
   group('parseSqlStatements', () {
     test('splits on top-level semicolons', () {
       final stmts = parseSqlStatements('SELECT 1; SELECT 2');

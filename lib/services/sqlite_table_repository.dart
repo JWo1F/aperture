@@ -9,9 +9,10 @@ import 'table_repository.dart';
 
 /// SQLite per-relation operations: paging, exporting, DDL, cell editing.
 ///
-/// Row identity is the implicit integer `rowid`. Views and `WITHOUT ROWID`
-/// tables have no `rowid`; for those, [fetchPage] returns a null `rowIds`
-/// and the grid treats the page as read-only.
+/// Row identity is the implicit integer rowid, addressed as `_rowid_` so a
+/// user column named `rowid` can't shadow it. Views and `WITHOUT ROWID`
+/// tables have none; for those, [fetchPage] returns a null `rowIds` and the
+/// grid treats the page as read-only.
 class SqliteTableRepository implements TableRepository {
   SqliteTableRepository(this._db);
 
@@ -58,7 +59,7 @@ class SqliteTableRepository implements TableRepository {
       if (table.kind == DbRelationKind.table) {
         try {
           final rs = _db.select(
-            'SELECT rowid AS __rowid, $projection '
+            'SELECT _rowid_ AS __rowid, $projection '
             'FROM ${table.qualifiedName}$tail',
           );
           watch.stop();
@@ -88,14 +89,17 @@ class SqliteTableRepository implements TableRepository {
   /// Shapes [rs] into a page. Returns null when [withRowId] was requested
   /// but the leading identity column isn't an integer.
   ///
-  /// `SELECT rowid` normally yields SQLite's implicit integer identity, but
-  /// a table may legally declare a column of its own by that name
-  /// (`CREATE TABLE t(rowid TEXT)`), and then the query hands back that
-  /// column's user data instead. The edit builder inlines the identity
-  /// token straight into `WHERE rowid = …` rather than binding it, so a
-  /// non-integer here is arbitrary user text heading for the statement
-  /// body. Such a relation has no identity we can address: the caller
-  /// re-shapes it as a read-only page.
+  /// Identity is read as `_rowid_`, not `rowid`. A table may legally
+  /// declare a column called `rowid` (`CREATE TABLE t(rowid TEXT)`), and
+  /// `SELECT rowid` then returns that column's user data; `_rowid_` is the
+  /// same pseudo-column under a name almost nothing shadows, and the edit
+  /// predicate uses it too so both halves agree.
+  ///
+  /// The type check is the backstop for a table that shadows `_rowid_` as
+  /// well. The edit builder inlines the identity token into the statement
+  /// rather than binding it, so a non-integer here is arbitrary user text
+  /// heading for the SQL body. Such a relation has no identity we can
+  /// address: the caller re-shapes it as a read-only page.
   QueryResult? _shapePage(
     ResultSet rs,
     Duration elapsed, {
@@ -255,27 +259,39 @@ class SqliteTableRepository implements TableRepository {
       conn.execute('COMMIT');
       return EditResult.success(totalCount);
     } on StaleRowException catch (e) {
-      _safeRollback(conn);
-      return EditResult.failure(
-        appliedCount: applied,
-        totalCount: totalCount,
-        error: e.toString(),
-      );
+      return _rolledBack(conn, applied, totalCount, e.toString());
     } on SqliteException catch (e) {
-      _safeRollback(conn);
-      return EditResult.failure(
-        appliedCount: applied,
-        totalCount: totalCount,
-        error: e.message,
-      );
+      return _rolledBack(conn, applied, totalCount, e.message);
     } catch (e) {
-      _safeRollback(conn);
-      return EditResult.failure(
-        appliedCount: applied,
-        totalCount: totalCount,
-        error: e.toString(),
-      );
+      return _rolledBack(conn, applied, totalCount, e.toString());
     }
+  }
+
+  /// Rolls back and reports what the rollback achieved.
+  ///
+  /// `appliedCount` is only meaningful when the rollback did NOT recover:
+  /// a successful ROLLBACK means nothing was committed, whatever the loop
+  /// managed before it threw. Reporting the loop's progress regardless made
+  /// every mid-batch stale row look like a partial apply, and
+  /// `TabsController` reacts to `partial` by reloading the page — which
+  /// drops the row-indexed pending edits, so a recoverable conflict threw
+  /// away the user's other, still-valid edits and told them 3 of 5
+  /// statements had landed.
+  static EditResult _rolledBack(
+    Database conn,
+    int applied,
+    int totalCount,
+    String error,
+  ) {
+    final recovered = _safeRollback(conn);
+    return EditResult.failure(
+      appliedCount: recovered ? 0 : applied,
+      totalCount: totalCount,
+      error: recovered
+          ? error
+          : '$error\n\nThe rollback did not complete — refresh to see what '
+                'the database actually holds before retrying.',
+    );
   }
 
   /// Rolls back the open transaction without ever letting a rollback
@@ -289,7 +305,10 @@ class SqliteTableRepository implements TableRepository {
   /// We swallow the rollback error, then re-check `autocommit` and try
   /// one more best-effort `ROLLBACK` if the connection is still inside a
   /// transaction.
-  static void _safeRollback(Database conn) {
+  ///
+  /// Returns true when the connection ended up outside a transaction, i.e.
+  /// nothing from the batch remains committed.
+  static bool _safeRollback(Database conn) {
     try {
       conn.execute('ROLLBACK');
     } catch (_) {
@@ -300,6 +319,7 @@ class SqliteTableRepository implements TableRepository {
         conn.execute('ROLLBACK');
       } catch (_) {}
     }
+    return conn.autocommit;
   }
 
   static bool _isMissingRowId(SqliteException e) =>
@@ -313,7 +333,7 @@ List<String> buildSqliteEditStatements(DbTable table, EditBatch batch) =>
     buildEditStatements(table, batch, _sqlitePolicy);
 
 final EditPolicy _sqlitePolicy = EditPolicy(
-  rowIdPredicate: (rowId) => 'WHERE rowid = $rowId',
+  rowIdPredicate: (rowId) => 'WHERE _rowid_ = $rowId',
   insertOmitsDefaultColumns: true,
   updateDropsDefaultAssignments: true,
 );

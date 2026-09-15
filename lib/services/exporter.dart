@@ -47,23 +47,40 @@ abstract class ExportFormat {
     CancelToken? cancel,
   });
 
-  /// Stream the export to [file], deleting it on cancel. Defaults to
-  /// piping [writeStream] into a file-opened sink.
+  /// Streams the export to [file].
+  ///
+  /// A file that doesn't exist is a clearer outcome than one that does but
+  /// is short, so the partial output is removed on *any* failure, not just
+  /// on cancel. A truncated CSV sitting at the path the user chose is
+  /// indistinguishable from a complete one.
   Future<void> writeFile(
     File file,
     QueryResult result, {
     CancelToken? cancel,
   }) async {
     final sink = file.openWrite();
+    var failed = false;
     try {
       await writeStream(sink, result, cancel: cancel);
       await sink.flush();
-    } on ExportCancelledException {
-      await sink.close();
-      if (await file.exists()) await file.delete();
+    } catch (_) {
+      failed = true;
       rethrow;
     } finally {
-      await sink.close();
+      // Close before deleting: the handle still holds buffered bytes, and
+      // on a cancel we want them dropped rather than flushed.
+      try {
+        await sink.close();
+      } catch (_) {
+        failed = true;
+      }
+      if (failed && await file.exists()) {
+        try {
+          await file.delete();
+        } catch (_) {
+          // Nothing useful to do — the original failure is what matters.
+        }
+      }
     }
   }
 

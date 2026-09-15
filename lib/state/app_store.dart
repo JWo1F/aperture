@@ -453,9 +453,26 @@ class AppStore extends ChangeNotifier {
   Future<bool> unlockPassphrase(String passphrase) async {
     final meta = _security;
     if (meta == null) return false;
-    final salt = base64Decode(meta['salt'] as String);
-    final verifier = base64Decode(meta['verifier'] as String);
-    final key = derivePassphraseKey(passphrase, salt);
+    final Uint8List salt;
+    final Uint8List verifier;
+    final int iterations;
+    try {
+      salt = base64Decode(meta['salt'] as String);
+      verifier = base64Decode(meta['verifier'] as String);
+      // Derive with the cost this vault was WRITTEN at, not the current
+      // constant. The value has always been persisted; reading it back is
+      // what makes raising `passphraseIterations` a safe change instead of
+      // one that silently locks the user out of their own passwords.
+      iterations = switch (meta['iterations']) {
+        final int n when n > 0 => n,
+        _ => passphraseIterations,
+      };
+    } catch (_) {
+      // A security block that won't parse can't be unlocked; saying so is
+      // better than throwing out of the unlock modal.
+      return false;
+    }
+    final key = derivePassphraseKey(passphrase, salt, iterations: iterations);
     try {
       final plain = aesGcmDecrypt(key, verifier);
       if (utf8.decode(plain) != _passphraseSentinel) return false;

@@ -57,11 +57,11 @@ class PostgresTableRepository implements TableRepository {
   /// exists (relation never analyzed, a view, or genuinely empty) — callers
   /// fall back to an exact `count(*)`.
   Future<int?> _estimatedRowCount(DbTable table) async {
-    final literal = table.qualifiedName.replaceAll("'", "''");
+    final literal = literalSql(table.qualifiedName);
     try {
       final result = await _db.execute(
-        "SELECT reltuples::bigint FROM pg_class "
-        "WHERE oid = '$literal'::regclass",
+        'SELECT reltuples::bigint FROM pg_class '
+        'WHERE oid = $literal::regclass',
         timeout: _ddlQueryTimeout,
       );
       final estimate = result.first.first as int?;
@@ -185,7 +185,12 @@ class PostgresTableRepository implements TableRepository {
   /// `CREATE INDEX` statements.
   @override
   Future<String> loadDdl(DbTable table) async {
-    final regclass = "'${qualify(table.schema, table.name)}'::regclass";
+    // `quoteIdent` escapes `"`, not `'`, and this wraps its output in a
+    // string literal — so a relation named `o'brien` closed the literal
+    // early in all four DDL queries. Double the quotes as well, the way
+    // `_estimatedRowCount` already does.
+    final regclass = '${literalSql(qualify(table.schema, table.name))}'
+        '::regclass';
 
     // pg_catalog columns of type `name` (OID 19) have no built-in codec in
     // the postgres driver, so they come back as UndecodedBytes — explicit

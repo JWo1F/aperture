@@ -65,6 +65,51 @@ void main() {
     });
   });
 
+  group('validateClauseSnippet — a bare trailing semicolon', () {
+    test('a filter ending in ; is rejected', () {
+      // SQLite's prepare compiles the first statement and discards the
+      // tail without complaint, so `1=1;` silently dropped the LIMIT,
+      // OFFSET and ORDER BY that follow it — fetching a whole table into
+      // one page. Postgres errors instead, which made it look like engine
+      // flakiness.
+      expect(
+        () => validateClauseSnippet('1=1;', kind: ClauseKind.filter),
+        throwsA(isA<ClauseSyntaxException>()),
+      );
+    });
+
+    test('order by and select list too', () {
+      expect(
+        () => validateClauseSnippet('name;', kind: ClauseKind.orderBy),
+        throwsA(isA<ClauseSyntaxException>()),
+      );
+      expect(
+        () => validateClauseSnippet('id;', kind: ClauseKind.selectList),
+        throwsA(isA<ClauseSyntaxException>()),
+      );
+    });
+
+    test('a semicolon inside a string literal is still fine', () {
+      expect(
+        () => validateClauseSnippet(
+          "title = 'a;b'",
+          kind: ClauseKind.filter,
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('a semicolon inside a comment is still fine', () {
+      expect(
+        () => validateClauseSnippet(
+          '1=1 /* a;b */',
+          kind: ClauseKind.filter,
+        ),
+        returnsNormally,
+      );
+    });
+  });
+
   group('validateClauseSnippet', () {
     test('empty filter passes', () {
       expect(

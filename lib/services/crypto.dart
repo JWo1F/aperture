@@ -15,8 +15,18 @@ Uint8List randomBytes(int n) {
   return Uint8List.fromList(List.generate(n, (_) => rng.nextInt(256)));
 }
 
-Uint8List derivePassphraseKey(String passphrase, Uint8List salt) {
-  final params = Pbkdf2Parameters(salt, passphraseIterations, passphraseKeyBytes);
+/// Derives the vault key from [passphrase] and [salt].
+///
+/// [iterations] defaults to the current cost but is a parameter because the
+/// value is recorded alongside each vault: raising the constant must not
+/// make existing vaults undecryptable, so unlocking derives with whatever
+/// the vault was written at.
+Uint8List derivePassphraseKey(
+  String passphrase,
+  Uint8List salt, {
+  int iterations = passphraseIterations,
+}) {
+  final params = Pbkdf2Parameters(salt, iterations, passphraseKeyBytes);
   final derivator = PBKDF2KeyDerivator(HMac(SHA256Digest(), 64))..init(params);
   return derivator.process(Uint8List.fromList(utf8.encode(passphrase)));
 }

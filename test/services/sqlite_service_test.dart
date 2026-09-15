@@ -32,7 +32,7 @@ void main() {
       expect(stmts, hasLength(1));
       expect(stmts.first, contains('UPDATE "main"."events" SET'));
       expect(stmts.first, contains('"name" = \'Alice\''));
-      expect(stmts.first, endsWith('WHERE rowid = 7'));
+      expect(stmts.first, endsWith('WHERE _rowid_ = 7'));
     });
 
     test('renders NULL for a null literal and doubles inner quotes', () {
@@ -58,7 +58,7 @@ void main() {
       );
       expect(stmts, hasLength(2));
       expect(stmts.first, contains('DELETE FROM "main"."events"'));
-      expect(stmts.first, endsWith('WHERE rowid = 3'));
+      expect(stmts.first, endsWith('WHERE _rowid_ = 3'));
     });
 
     test('omits DEFAULT columns from an INSERT so the row gets a fresh key', () {
@@ -186,25 +186,55 @@ void main() {
       await tmp.delete(recursive: true);
     });
 
-    test('a table with its own rowid column is not editable', () async {
+    test('a declared rowid column does not shadow row identity', () async {
       svc.conn.execute('CREATE TABLE odd (rowid TEXT, note TEXT);');
       svc.conn.execute("INSERT INTO odd VALUES ('a; DROP TABLE books', 'x');");
+      final odd = DbTable(
+        oid: 9,
+        schema: 'main',
+        name: 'odd',
+        kind: DbRelationKind.table,
+      );
+
+      final page = await svc.fetchTablePage(odd, limit: 10, offset: 0);
+
+      // Identity comes from `_rowid_`, which the declared column cannot
+      // shadow, so the table stays editable and the token is the real
+      // integer rowid — not the user's text heading for the SQL body.
+      expect(page.rowIds, ['1']);
+      expect(page.columns, ['rowid', 'note']);
+      expect(page.rows.single.first, 'a; DROP TABLE books');
+
+      // And an edit lands on the right row.
+      final applied = await svc.applyTableEdits(
+        odd,
+        EditBatch(
+          updatesByCtid: {
+            '1': {'note': const CellLiteral('edited')},
+          },
+        ),
+      );
+      expect(applied.ok, isTrue);
+      final after = await svc.runQuery('SELECT note FROM odd');
+      expect(after.rows.single.single, 'edited');
+    });
+
+    test('a table shadowing _rowid_ too falls back to read-only', () async {
+      svc.conn.execute('CREATE TABLE odder (_rowid_ TEXT, note TEXT);');
+      svc.conn.execute("INSERT INTO odder VALUES ('not an int', 'x');");
 
       final page = await svc.fetchTablePage(
         DbTable(
-          oid: 9,
+          oid: 10,
           schema: 'main',
-          name: 'odd',
+          name: 'odder',
           kind: DbRelationKind.table,
         ),
         limit: 10,
         offset: 0,
       );
 
-      // `SELECT rowid` hands back the declared column here, and the edit
-      // builder inlines the identity token into the statement text.
       expect(page.rowIds, isNull);
-      expect(page.columns, ['rowid', 'note']);
     });
 
     test('connect fails clearly for a missing file', () async {
@@ -395,17 +425,15 @@ void main() {
       expect(result.ok, isFalse);
       expect(result.error, contains('Row no longer matches'));
       expect(result.totalCount, 1);
-      // SQLite reports the stale UPDATE as "attempted" — the statement
-      // executed (changed 0 rows) before the stale-row check threw.
-      expect(result.appliedCount, 1);
-      expect(result.partial, isFalse,
-          reason:
-              'one-statement batch cannot be partial; it is fully rolled back');
+      // A successful ROLLBACK means nothing was committed, whatever the
+      // loop got through first. Reporting the loop's progress instead made
+      // a recoverable conflict look like a partial apply.
+      expect(result.appliedCount, 0);
+      expect(result.partial, isFalse);
     });
 
     test(
-      'applyTableEdits reports partial progress for a multi-statement batch '
-      'that fails on the second update',
+      'applyTableEdits reports nothing applied when the rollback recovers',
       () async {
         final schemas = await svc.introspector.loadSchemas();
         final books =
@@ -422,10 +450,13 @@ void main() {
           ),
         );
         expect(result.ok, isFalse);
-        expect(result.appliedCount, 1,
-            reason: 'first UPDATE returned; second threw');
         expect(result.totalCount, 2);
-        expect(result.partial, isTrue);
+        // The first UPDATE did run, but ROLLBACK undid it, so claiming
+        // "1 of 2 applied" would be false — and `partial` makes
+        // TabsController reload the page, dropping the row-indexed edits
+        // the user still needs for a retry.
+        expect(result.appliedCount, 0);
+        expect(result.partial, isFalse);
         // ROLLBACK reverted the first UPDATE — the on-disk state is unchanged.
         final after = await svc.runQuery(
           'SELECT title FROM books WHERE id = 1',
