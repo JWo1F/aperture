@@ -28,10 +28,10 @@ shims; if you need to change a contract, change every caller.
 
 ## Build / test / verify loop
 
-Flutter binaries are at `~/flutter/flutter/bin`. Prefix every command:
+Flutter binaries are at `~/flutter/bin`. Prefix every command:
 
 ```bash
-export PATH="/Users/jwo1f/flutter/flutter/bin:$PATH" && flutter <cmd>
+export PATH="/Users/jwo1f/flutter/bin:$PATH" && flutter <cmd>
 ```
 
 After every meaningful change, in this order:
@@ -80,7 +80,7 @@ pubspec bump for that commit). Then `--amend --no-edit` is acceptable.
 
 | Concern | Choice |
 |---|---|
-| State | `provider` + `ChangeNotifier`. Controllers are first-class providers. |
+| State | `ChangeNotifier` + a process-global `appState`. No `provider`. |
 | Postgres | `postgres: ^3.5.0` (extended query mode) |
 | SQLite | `sqlite3: ^2.4.0` + `sqlite3_flutter_libs` |
 | SQL grammar | `highlight` / `flutter_highlight` (read-only); custom `CodeEditor` (editable) |
@@ -99,34 +99,43 @@ relaunch. Entitlements: `macos/Runner/{Debug,Release}.entitlements`.
 
 ### State layer (`lib/state/`)
 
-`AppState` is a thin orchestrator (~280 lines). It owns ten focused
-`ChangeNotifier` controllers and coordinates only cross-controller work:
+`AppState` is a thin orchestrator (~310 lines) and is deliberately **not**
+a `ChangeNotifier` — it has no observable state of its own. It owns the
+focused notifiers below and coordinates only cross-controller work:
 
 ```
 AppState  (orchestration: connect, disconnect, reconnect, refreshCatalog,
           updateConnection, clearQueryMessages, historyBack/Forward,
-          findRowInTable, followForeignKey, passphrase coordination)
-  ├── PreferencesController
-  ├── MasterPassphrase
-  ├── ConnectionRegistry
+          findRowInTable, followForeignKey, passphrase coordination,
+          reportUncaught)
+  ├── AppStore          (everything persisted: preferences, connections
+  │                      and their per-connection bags, passphrase meta)
   ├── EventLog
   ├── SessionController
   ├── CatalogController
   ├── NavigationHistory
   ├── WorkspaceUi
-  ├── PerConnectionStore
+  ├── ToastController
   └── TabsController
 ```
 
-`lib/main.dart` provides every controller individually via
-`MultiProvider` (`.value` providers; `AppState` owns disposal).
-**Widgets watch the specific controller they depend on, NOT `AppState`.**
-A widget that needs methods from two controllers reads both — don't
-capture an `AppState` reference for convenience.
+There is **no `provider` package**. Every controller lives for the whole
+process, so the element tree had no scoping work to do: widgets reach
+them through the global `appState` (`lib/state/app_globals.dart`), set
+once in `main()` after `AppStore.load()`.
 
-`context.read<AppState>()` is only for invoking orchestration methods
-(`appState.connect(...)`, `appState.findRowInTable(...)`). It's NOT
-for reading data — read the owning controller directly.
+Rebuild subscription comes from `ListenableBuilder` and `Selector`
+(`lib/ui/widgets/value_selector.dart` — ours, not provider's). **Watch
+the narrowest slice you can:** `AppStore` fires one notification for
+every mutation it holds, so a widget that reads only `sidebarVisible`
+must gate on it via `Selector` rather than rebuilding on every column
+resize. `Listenable.merge([...])` plus a record-valued selector is the
+pattern for a widget that depends on several controllers (see
+`AppShell.build`).
+
+Derivations that need two controllers but belong to neither are pure
+top-level functions — see `lib/state/connection_views.dart`, which
+resolves `AppStore`'s qualified-key bags against the live catalog.
 
 ### Per-tab state ownership
 
@@ -141,6 +150,19 @@ mutate a tab from outside — add a mutator method to the tab instead.
 a tab's collections directly. Auto-refresh timers live on the tab;
 `tab.dispose()` cancels them.
 
+**`edits` and `deletedRows` are keyed by row INDEX into `result.rows`,
+so `beginPageLoad` drops both.** Anything that replaces the rows
+invalidates every index addressing them — a surviving delete index
+resolves against the *new* page's `rowIds` on the next Apply and removes
+whatever row landed in that slot, and `affectedRows == 1` can't catch it
+because that row exists. If you add another row-indexed collection,
+clear it there too. Pending `inserts` survive deliberately: they carry
+column names and values, and `buildSlots` re-anchors a stale `afterRow`.
+
+Anything that can throw between `beginApply()` and `endApply()` must be
+inside the `try/finally` — a leaked `applying` flag makes every later
+Apply a silent no-op for the rest of the tab's life.
+
 ### Catalog loading
 
 All three flows (`connect` / `reconnect` / `refreshCatalog`) go through
@@ -152,18 +174,25 @@ surfaced in the sidebar's schemas section.
 
 ### Persistence
 
-All writes to `connections.json` go through
-`ConnectionStore.saveDebounced(...)` (100 ms debounce). The store sits
-on `AtomicJsonFile`, which serializes overlapping writes via an
-internal chain and exposes `drain()` for shutdown.
+Everything persisted lives in ONE file, `store.json`, written by
+`AppStore`. Every mutator ends in `_changed()`, which marks dirty and
+(re)schedules a single coalesced 500 ms write. The store sits on
+`AtomicJsonFile`, which writes temp-then-rename, serializes overlapping
+writes through an internal chain, exposes `drain()` for shutdown, and
+preserves a file it can't decode as `<name>.bak.<ts>`.
 
-`AppState.flush()` → `ConnectionRegistry.flush()` →
-`ConnectionStore.flush()` is wired into
-`AppLifecycleListener.onExitRequested` in `main.dart`. Pending writes
-are durable on quit.
+`AppState.flush()` → `AppStore.flush()` is wired into
+`AppLifecycleListener.onExitRequested` in `main.dart`, which is also
+where the pending-edit quit guard lives (every quit route — ⌘Q, the app
+menu, the Dock, logout — converges there, so do NOT re-add a ⌘Q key
+handler). Pending writes are durable on quit.
 
-**Never use `unawaited(_store.save(...))`** or any direct file write —
-the debounced funnel is the only path.
+**Never write a persisted field outside an `AppStore` mutator** and
+never touch the file directly — `_changed()` is the only path.
+
+`AppStore.load()` runs before `runApp`, so it must not throw: each
+section is read under `_readSection` and a section that won't parse is
+dropped rather than taking the window down with it.
 
 ### Service layer (`lib/services/`)
 
@@ -171,10 +200,14 @@ Shared cross-engine helpers — do not duplicate:
 
 | Module | Surface |
 |---|---|
-| `sql_render.dart` | `whereClause`, `orderClause`, `literalSql`, `renderAssignment`, `validateClauseSnippet`, `ClauseSyntaxException`, `ClauseKind` |
+| `sql_render.dart` | `whereClause`, `orderClause`, `literalSql`, `renderAssignment`, `buildEditStatements`, `EditPolicy`, `validateClauseSnippet`, `ClauseSyntaxException`, `ClauseKind` |
+| `sql_identifier.dart` | `quoteIdent`, `qualify` — the ONLY way to embed an identifier |
 | `db_service.dart` | `versionTag`, `timedEdit` |
 | `driver_decoder.dart` | `decodeDriverRow` |
-| `sql_statements.dart` | `parseSqlStatements` |
+| `sql_statements.dart` | `parseSqlStatements`, `statementAtOffset` |
+| `safe_query.dart` | `applyDefaultLimit` — caps bare `SELECT`s at 10k |
+| `atomic_json.dart` | `AtomicJsonFile` — temp+rename, chained writes, `drain()` |
+| `crypto.dart` | PBKDF2-SHA256 + AES-GCM for the master passphrase |
 
 Backend triad: `DbService` / `Introspector` / `TableRepository` — each
 implemented by `Postgres*` and `Sqlite*`. The interface is clean;
@@ -225,9 +258,9 @@ allowed for cohesive presentational widgets like `plan_node_card.dart`):
 
 | Surface | Module |
 |---|---|
-| Sidebar | `lib/ui/sidebar/` — 12 files; composition root in `sidebar.dart` |
+| Sidebar | `lib/ui/sidebar/` — 11 files; composition root in `sidebar.dart` |
 | Query plan view | `lib/ui/workspace/query_plan/` — layered: `model/`, `parsing/`, `analysis/`, `glossary/`, `view/` |
-| Results grid | `lib/ui/workspace/results_grid/` — 14 files |
+| Results grid | `lib/ui/workspace/results_grid/` — 20 files |
 | Code editor | `lib/ui/widgets/code_editor/` — layered: `controller`, `indent` (pure), `metrics`, `suggestions/`, `view` |
 
 `lib/ui/widgets/code_editor.dart` is a 1-line barrel re-export; existing
@@ -263,6 +296,21 @@ If you need a color the palette doesn't have, add a field to `Palette`
 (BOTH dark + light values) and a getter on `AppColors`. Inlining a
 `Color(0x…)` literal is a CLAUDE.md violation.
 
+**Never store an `AppColors` value in a top-level or `static final`.**
+Those resolve once per process, so the colour pins whichever palette was
+active at first paint and never follows a dark ⇄ light swap. Use a
+getter (`apertureCodeStyles`, the `_k*` records in `cell_picker/kinds.dart`)
+or read `AppColors` at the call site. The exception is
+`results_grid/grid_metrics.dart`, whose styles are `final` for their
+*metrics* on the hot path — every call site supplies a live colour, and
+the baked one must not be read.
+
+The theme toggle re-keys `AppShell` (`ValueKey(brightness)` in
+`main.dart`), which remounts the whole tree — that is what makes a
+static `AppColors` work at all, and it also resets grid scroll offsets
+and editor undo history. Don't rely on widget `State` surviving a theme
+switch.
+
 After any UI change, sanity-check BOTH themes — toggle via the toolbar
 button or the ⌘K palette ("Switch to light/dark theme").
 
@@ -281,6 +329,14 @@ the time/timetz body is just the optional `TzInput`.
 for Map/List so nested `DateTime` round-trips correctly through display
 ↔ edit. The shape must stay aligned with
 `lib/ui/cell_picker/editor_state.dart`.
+
+**`formatCellValue` is a DISPLAY formatter — it elides binary at 16
+bytes.** Anything that hands the value onward rather than painting it
+(file export, clipboard copy) must use `exactCellValue`, or it passes
+off the head of a blob as the whole value. `equalityFragment` still has
+this bug for binary: a bytea literal is spelled differently by the two
+engines and it has no engine context, so "filter by this value" on a
+binary column builds a filter that matches nothing.
 
 ### Code editor
 
@@ -332,10 +388,16 @@ at the leaf so only the geometry-dependent subtrees rebuild. The
 Compare snapshots with `operator==` — do NOT re-derive per-field
 change detection.
 
-Clause changes go through the atomic
-`TabsController.loadTablePage(tab, page, clauses: ...)`: clauses swap
-together with new rows on success. A failing fetch leaves prior
-clauses + prior rows visible — the view never desyncs from the data.
+History playback goes through the atomic
+`TabsController.loadTablePage(tab, page, clauses: ...)`: the clause
+triple swaps together with the new rows on success, and a failing fetch
+leaves the prior clauses + prior rows visible.
+
+The clausebar's own path does NOT use it — `setTableFilter` /
+`setTableOrder` / `setTableSelect` mutate the tab eagerly so the bar
+echoes what the user typed, which means a failing fetch shows the new
+clause above the old rows. Routing those through `clauses:` is the fix
+if that desync ever matters; don't assume it's already the case.
 
 ### Search pools
 
@@ -391,6 +453,17 @@ doesn't reallocate items.
   `pubspec.yaml`. Do them sequentially.
 - **`flutter analyze` info-level lints block a commit** for this
   project. Treat them as errors.
+- **`flutter build macos` needs full Xcode**, not just Command Line
+  Tools. Where only CLT is installed, `analyze` + `test` is the whole
+  loop available — say so rather than claiming a build passed.
+- **The keepalive must never log.** `SessionController` probes every 30s
+  via `DbService.ping()`, which deliberately bypasses `QueryLogger`;
+  routing it through `runQuery` again would refill the event log's
+  500-entry ring buffer with `SELECT 1` in an afternoon.
+- **A `ChangeNotifier` here has no disposed-guard.** Several controllers
+  `notifyListeners()` after an `await` (`_fetchServerVersion`,
+  `_runKeepalivePing` → `markLost`); a future landing after `dispose()`
+  throws. Add a guard when you touch one of those paths.
 - **`AnimatedContainer` cross-fades color through pure black when one
   end is `Colors.transparent`.** `Color.lerp(transparent, X, t)` walks
   through `Color(00, 00, 00, t·alpha)` — visible as a dark flash on a
@@ -398,9 +471,44 @@ doesn't reallocate items.
   the off state so the lerp stays inside the target hue. `TbIcon` and
   the toolbar pending actions both follow this rule.
 
+## Known gaps
+
+Real, deliberately unfixed. Don't rediscover them as new findings.
+
+- **`KbdChip` has three private near-copies** (`_QtInlineKbd` in
+  `query_editor.dart`, `_TbKbd` in `toolbar_widgets.dart`, `_InlineKbd`
+  in `pending_edits_modal.dart`). Each needs a slightly different size;
+  the shared primitive should take `parts` + a size + an `onAccent` flag.
+- **Postgres's unfiltered row count is a `reltuples` estimate** served
+  as exact (`PostgresTableRepository.countRows`), and `pageCount` is
+  derived from it — a low estimate hides the last pages of real rows.
+  Needs an "≈" in the pagebar or an exact count behind it.
+- **Copy/paste of a NULL cell round-trips as the string `'NULL'`** —
+  `_cellTextAt` renders it that way and `_pasteCell` wraps everything in
+  `CellLiteral`. Needs a sentinel or an empty-string convention.
+- **SQLite never sets `PRAGMA foreign_keys = ON`**, so `ON DELETE
+  CASCADE` doesn't fire on a delete from the grid. Matches the `sqlite3`
+  CLI default; a deliberate choice to revisit, not an oversight.
+- **`connect()` clears tabs and history before resolving credentials**,
+  so a wrong passphrase or a missing `op` binary costs the user their
+  open tabs for a connection that never opened.
+- **Identity is still positional for pending mutations.** Keying `edits`
+  and `deletedRows` by `rowId` instead of row index would let them
+  survive a page change instead of being dropped.
+- **`macos/Runner/Configs/AppInfo.xcconfig` still says
+  `com.example.dbv`** and a `com.example` copyright. The bundle id keys
+  the Application Support directory, so changing it relocates
+  `store.json` and orphans saved connections — do it deliberately, with
+  a migration, not as a drive-by.
+
 ## Memory pointers
 
-User memories under
-`~/.claude/projects/-Users-jwo1f-work-jwo1f-dbv-dbv/memory/` — font
-preferences, theme aesthetic, commit style, UI-redesign discipline.
-Read these on a fresh session.
+Font preferences, theme aesthetic, commit style and UI-redesign
+discipline are under
+`~/.claude/projects/-Users-jwo1f-work-jwo1f-dbv-dbv/memory/`. Read these
+on a fresh session.
+
+That path is keyed to where the repo used to live. The project has since
+moved to `~/work/jwo1f/aperture/dbv`, whose own memory directory
+(`-Users-jwo1f-work-jwo1f-aperture`) is empty — so a session started
+here loads none of them.
