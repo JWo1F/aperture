@@ -94,7 +94,7 @@ class _ToolbarState extends State<Toolbar> {
     final history = appState.history;
     final session = appState.session;
     return Selector<
-      (bool, bool, AppBrightness, String?, bool, ConnectionStatus)
+      (bool, bool, AppThemeMode, String?, bool, ConnectionStatus)
     >(
       listenable: Listenable.merge([tabs, history, store, session]),
       selector: () {
@@ -102,20 +102,20 @@ class _ToolbarState extends State<Toolbar> {
         return (
           history.canGoBack,
           history.canGoForward,
-          store.brightness,
+          store.themeMode,
           tab?.id,
           exportableResult(tab) != null,
           session.status,
         );
       },
       builder: (context, value) {
-        final (canGoBack, canGoForward, brightness, _, canExport, status) =
+        final (canGoBack, canGoForward, themeMode, _, canExport, status) =
             value;
         return _buildToolbar(
           context: context,
           canGoBack: canGoBack,
           canGoForward: canGoForward,
-          brightness: brightness,
+          themeMode: themeMode,
           canExport: canExport,
           status: status,
         );
@@ -127,7 +127,7 @@ class _ToolbarState extends State<Toolbar> {
     required BuildContext context,
     required bool canGoBack,
     required bool canGoForward,
-    required AppBrightness brightness,
+    required AppThemeMode themeMode,
     required bool canExport,
     required ConnectionStatus status,
   }) {
@@ -243,11 +243,15 @@ class _ToolbarState extends State<Toolbar> {
                   ),
                 const TbRail(),
                 TbIcon(
-                  icon: brightness == AppBrightness.dark
-                      ? Icons.dark_mode_outlined
-                      : Icons.light_mode_outlined,
-                  tooltip: 'Toggle theme',
-                  onPressed: store.toggleBrightness,
+                  icon: switch (themeMode) {
+                    AppThemeMode.dark => Icons.dark_mode_outlined,
+                    AppThemeMode.light => Icons.light_mode_outlined,
+                    AppThemeMode.auto => Icons.brightness_auto_outlined,
+                  },
+                  tooltip:
+                      'Theme: ${_modeLabel(themeMode)} · '
+                      'click for ${themeMode.next.name}',
+                  onPressed: store.cycleThemeMode,
                 ),
                 TbIcon(
                   icon: Icons.folder_outlined,
@@ -262,6 +266,9 @@ class _ToolbarState extends State<Toolbar> {
     );
   }
 }
+
+String _modeLabel(AppThemeMode mode) =>
+    mode == AppThemeMode.auto ? 'auto (follows macOS)' : mode.name;
 
 /// Tab-specific actions in the toolbar: pending-edit chip (TableTab only)
 /// plus the manual + auto refresh controls (TableTab and QueryTab).

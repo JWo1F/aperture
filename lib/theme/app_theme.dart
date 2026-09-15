@@ -6,6 +6,23 @@ import 'package:google_fonts/google_fonts.dart';
 /// and hairline borders; only the surface tones invert.
 enum AppBrightness { dark, light }
 
+/// What the user asked for, as opposed to what is painted: [auto] resolves
+/// against the OS appearance, the other two pin a palette. Only
+/// [AppBrightness] reaches a [Palette]; this is the persisted preference.
+enum AppThemeMode {
+  dark,
+  light,
+  auto;
+
+  /// Order the toolbar button and its tooltip both walk — kept here so the
+  /// two can't disagree about where the next click lands.
+  AppThemeMode get next => switch (this) {
+    AppThemeMode.dark => AppThemeMode.light,
+    AppThemeMode.light => AppThemeMode.auto,
+    AppThemeMode.auto => AppThemeMode.dark,
+  };
+}
+
 /// Immutable color set. The active palette is swapped on the [AppColors]
 /// shim at runtime, so widget call-sites can keep writing `AppColors.bg`
 /// without threading a theme object through every constructor.

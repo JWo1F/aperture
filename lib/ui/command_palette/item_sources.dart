@@ -26,99 +26,140 @@ class PaletteItemSource {
     final out = <PaletteItem>[];
 
     if (connected) {
-      out.add(PaletteItem(
-        kind: PaletteKind.command,
-        title: 'New query',
-        subtitle: 'Open a blank SQL editor tab',
-        icon: Icons.terminal_rounded,
-        tokens: 'sql editor scratch run',
-        run: tabs.newQueryTab,
-      ));
+      out.add(
+        PaletteItem(
+          kind: PaletteKind.command,
+          title: 'New query',
+          subtitle: 'Open a blank SQL editor tab',
+          icon: Icons.terminal_rounded,
+          tokens: 'sql editor scratch run',
+          run: tabs.newQueryTab,
+        ),
+      );
       final active = tabs.activeTab;
       if (active is TableTab) {
-        out.add(PaletteItem(
-          kind: PaletteKind.command,
-          title: 'Refresh this table',
-          subtitle: 'Re-fetch the current page of ${active.table.name}',
-          icon: Icons.sync_rounded,
-          tokens: 'reload requery',
-          run: () => tabs.refreshTable(active),
-        ));
+        out.add(
+          PaletteItem(
+            kind: PaletteKind.command,
+            title: 'Refresh this table',
+            subtitle: 'Re-fetch the current page of ${active.table.name}',
+            icon: Icons.sync_rounded,
+            tokens: 'reload requery',
+            run: () => tabs.refreshTable(active),
+          ),
+        );
       }
-      out.add(PaletteItem(
-        kind: PaletteKind.command,
-        title: 'Refresh catalog',
-        subtitle: 'Re-introspect schemas, tables and types',
-        icon: Icons.refresh_rounded,
-        tokens: 'reload schema introspect',
-        run: appState.refreshCatalog,
-      ));
-      if (history.canGoBack) {
-        out.add(PaletteItem(
+      out.add(
+        PaletteItem(
           kind: PaletteKind.command,
-          title: 'Go back',
-          subtitle: 'Step back through tab and filter history  ⌘[',
-          icon: Icons.arrow_back_rounded,
-          tokens: 'history previous navigate',
-          run: appState.historyBack,
-        ));
+          title: 'Refresh catalog',
+          subtitle: 'Re-introspect schemas, tables and types',
+          icon: Icons.refresh_rounded,
+          tokens: 'reload schema introspect',
+          run: appState.refreshCatalog,
+        ),
+      );
+      if (history.canGoBack) {
+        out.add(
+          PaletteItem(
+            kind: PaletteKind.command,
+            title: 'Go back',
+            subtitle: 'Step back through tab and filter history  ⌘[',
+            icon: Icons.arrow_back_rounded,
+            tokens: 'history previous navigate',
+            run: appState.historyBack,
+          ),
+        );
       }
       if (history.canGoForward) {
-        out.add(PaletteItem(
-          kind: PaletteKind.command,
-          title: 'Go forward',
-          subtitle: 'Step forward through history  ⌘]',
-          icon: Icons.arrow_forward_rounded,
-          tokens: 'history next navigate',
-          run: appState.historyForward,
-        ));
+        out.add(
+          PaletteItem(
+            kind: PaletteKind.command,
+            title: 'Go forward',
+            subtitle: 'Step forward through history  ⌘]',
+            icon: Icons.arrow_forward_rounded,
+            tokens: 'history next navigate',
+            run: appState.historyForward,
+          ),
+        );
       }
     }
 
-    out.add(PaletteItem(
-      kind: PaletteKind.command,
-      title: 'Toggle sidebar',
-      subtitle: 'Show or hide the schema browser',
-      icon: Icons.view_sidebar_outlined,
-      tokens: 'panel tree tables hide',
-      run: store.toggleSidebar,
-    ));
-    out.add(PaletteItem(
-      kind: PaletteKind.command,
-      title: 'Activity log',
-      subtitle: 'Show or hide the SQL event log  ⌘L',
-      icon: Icons.receipt_long_outlined,
-      tokens: 'events console history queries',
-      run: eventLog.toggleVisible,
-    ));
-    final dark = store.brightness == AppBrightness.dark;
-    out.add(PaletteItem(
-      kind: PaletteKind.command,
-      title: dark ? 'Switch to light theme' : 'Switch to dark theme',
-      subtitle: 'Flip the workspace between Aperture dark and light',
-      icon: dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-      tokens: 'appearance dark light mode color',
-      run: store.toggleBrightness,
-    ));
+    out.add(
+      PaletteItem(
+        kind: PaletteKind.command,
+        title: 'Toggle sidebar',
+        subtitle: 'Show or hide the schema browser',
+        icon: Icons.view_sidebar_outlined,
+        tokens: 'panel tree tables hide',
+        run: store.toggleSidebar,
+      ),
+    );
+    out.add(
+      PaletteItem(
+        kind: PaletteKind.command,
+        title: 'Activity log',
+        subtitle: 'Show or hide the SQL event log  ⌘L',
+        icon: Icons.receipt_long_outlined,
+        tokens: 'events console history queries',
+        run: eventLog.toggleVisible,
+      ),
+    );
+    for (final (mode, title, subtitle, icon) in const [
+      (
+        AppThemeMode.dark,
+        'Dark theme',
+        'Pin the workspace to Aperture dark',
+        Icons.dark_mode_outlined,
+      ),
+      (
+        AppThemeMode.light,
+        'Light theme',
+        'Pin the workspace to Aperture light',
+        Icons.light_mode_outlined,
+      ),
+      (
+        AppThemeMode.auto,
+        'Auto theme',
+        'Follow the macOS appearance',
+        Icons.brightness_auto_outlined,
+      ),
+    ]) {
+      out.add(
+        PaletteItem(
+          kind: PaletteKind.command,
+          title: title,
+          subtitle: subtitle,
+          icon: icon,
+          accent: store.themeMode == mode,
+          tokens: 'appearance theme dark light auto system mode color',
+          run: () => store.setThemeMode(mode),
+        ),
+      );
+    }
 
     if (connected) {
-      out.add(PaletteItem(
-        kind: PaletteKind.command,
-        title: 'Disconnect',
-        subtitle: session.activeConnection?.summary ?? 'Close the session',
-        icon: Icons.power_settings_new_rounded,
-        tokens: 'close session logout end',
-        run: appState.disconnect,
-      ));
+      out.add(
+        PaletteItem(
+          kind: PaletteKind.command,
+          title: 'Disconnect',
+          subtitle: session.activeConnection?.summary ?? 'Close the session',
+          icon: Icons.power_settings_new_rounded,
+          tokens: 'close session logout end',
+          run: appState.disconnect,
+        ),
+      );
     }
-    out.add(PaletteItem(
-      kind: PaletteKind.command,
-      title: 'About Aperture',
-      subtitle: 'Version, keyboard shortcuts and credits',
-      icon: Icons.info_outline_rounded,
-      tokens: 'help shortcuts version',
-      run: () => showAboutAperture(context),
-    ));
+    out.add(
+      PaletteItem(
+        kind: PaletteKind.command,
+        title: 'About Aperture',
+        subtitle: 'Version, keyboard shortcuts and credits',
+        icon: Icons.info_outline_rounded,
+        tokens: 'help shortcuts version',
+        run: () => showAboutAperture(context),
+      ),
+    );
     return out;
   }
 
@@ -134,22 +175,23 @@ class PaletteItemSource {
         TableTab() => ('Table view', Icons.grid_on_rounded),
         SchemaTab() => ('Schema', Icons.schema_outlined),
       };
-      out.add(PaletteItem(
-        kind: PaletteKind.openTab,
-        title: tab.title,
-        subtitle: isActive ? '$label · in view now' : label,
-        icon: icon,
-        accent: isActive,
-        run: () => tabs.selectTab(i),
-      ));
+      out.add(
+        PaletteItem(
+          kind: PaletteKind.openTab,
+          title: tab.title,
+          subtitle: isActive ? '$label · in view now' : label,
+          icon: icon,
+          accent: isActive,
+          run: () => tabs.selectTab(i),
+        ),
+      );
     }
     return out;
   }
 
   List<PaletteItem> savedQueries() {
     final tabs = appState.tabsController;
-    final saved =
-        appState.session.activeConnection?.savedQueries ?? const [];
+    final saved = appState.session.activeConnection?.savedQueries ?? const [];
     return [
       for (final q in saved)
         PaletteItem(
@@ -194,11 +236,13 @@ class PaletteItemSource {
     final out = <PaletteItem>[];
     for (final s in appState.catalog.schemas) {
       for (final t in s.tables) {
-        out.add(tableItem(
-          t,
-          PaletteKind.table,
-          t.isView ? '${t.schema} · view' : t.schema,
-        ));
+        out.add(
+          tableItem(
+            t,
+            PaletteKind.table,
+            t.isView ? '${t.schema} · view' : t.schema,
+          ),
+        );
       }
     }
     return out;

@@ -6,6 +6,7 @@ import 'package:aperture/models/db_object.dart';
 import 'package:aperture/models/query_message.dart';
 import 'package:aperture/services/atomic_json.dart';
 import 'package:aperture/state/app_store.dart';
+import 'package:aperture/theme/app_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
@@ -95,10 +96,7 @@ void main() {
 
   test('flush forces a pending debounced write', () async {
     final fake = _CountingAtomicJsonFile('store.json');
-    final store = makeStore(
-      file: fake,
-      debounce: const Duration(seconds: 5),
-    );
+    final store = makeStore(file: fake, debounce: const Duration(seconds: 5));
     await store.load();
     store.addConnection(_conn('pending'));
     expect(fake.writes, 0);
@@ -164,29 +162,31 @@ void main() {
     await store.flush();
   });
 
-  test('master passphrase round-trip: setup, encrypt, lock, unlock, decrypt',
-      () async {
-    final a = makeStore();
-    await a.load();
-    expect(await a.setupPassphrase('hunter22'), isTrue);
-    expect(a.isPassphraseConfigured, isTrue);
-    expect(a.isPassphraseUnlocked, isTrue);
-    final cipher = a.encryptWithPassphrase('shh');
-    a.lockPassphrase();
-    expect(a.isPassphraseUnlocked, isFalse);
-    expect(await a.unlockPassphrase('hunter22'), isTrue);
-    expect(a.decryptWithPassphrase(cipher), 'shh');
-    await a.flush();
+  test(
+    'master passphrase round-trip: setup, encrypt, lock, unlock, decrypt',
+    () async {
+      final a = makeStore();
+      await a.load();
+      expect(await a.setupPassphrase('hunter22'), isTrue);
+      expect(a.isPassphraseConfigured, isTrue);
+      expect(a.isPassphraseUnlocked, isTrue);
+      final cipher = a.encryptWithPassphrase('shh');
+      a.lockPassphrase();
+      expect(a.isPassphraseUnlocked, isFalse);
+      expect(await a.unlockPassphrase('hunter22'), isTrue);
+      expect(a.decryptWithPassphrase(cipher), 'shh');
+      await a.flush();
 
-    // Passphrase metadata persists across boot.
-    final b = makeStore();
-    await b.load();
-    expect(b.isPassphraseConfigured, isTrue);
-    expect(b.isPassphraseUnlocked, isFalse);
-    expect(await b.unlockPassphrase('wrong'), isFalse);
-    expect(await b.unlockPassphrase('hunter22'), isTrue);
-    expect(b.decryptWithPassphrase(cipher), 'shh');
-  });
+      // Passphrase metadata persists across boot.
+      final b = makeStore();
+      await b.load();
+      expect(b.isPassphraseConfigured, isTrue);
+      expect(b.isPassphraseUnlocked, isFalse);
+      expect(await b.unlockPassphrase('wrong'), isFalse);
+      expect(await b.unlockPassphrase('hunter22'), isTrue);
+      expect(b.decryptWithPassphrase(cipher), 'shh');
+    },
+  );
 
   test('runtime password never bleeds back into the store', () async {
     final fake = _CountingAtomicJsonFile('store.json');
@@ -203,45 +203,140 @@ void main() {
     store.addConnection(cfg);
     await store.flush();
     final json = jsonEncode(fake.lastPayload);
-    expect(json.contains('actual-password'), isFalse,
-        reason: 'runtime plaintext must never reach disk');
+    expect(
+      json.contains('actual-password'),
+      isFalse,
+      reason: 'runtime plaintext must never reach disk',
+    );
     expect(json.contains(cipher), isTrue, reason: 'cipher must persist');
-    expect(store.connectionById('c')!.runtimePassword, isEmpty,
-        reason: 'in-memory copy must also have runtimePassword stripped');
+    expect(
+      store.connectionById('c')!.runtimePassword,
+      isEmpty,
+      reason: 'in-memory copy must also have runtimePassword stripped',
+    );
   });
 
   test('credential round-trip preserves the sealed variant', () async {
     final a = makeStore();
     await a.load();
-    a.addConnection(ConnectionConfig(
-      id: 'p',
-      name: 'plain',
-      credential: const PlainCredential('pw'),
-    ));
-    a.addConnection(ConnectionConfig(
-      id: 'e',
-      name: 'enc',
-      credential: const EncryptedCredential('abc='),
-    ));
-    a.addConnection(ConnectionConfig(
-      id: 'o',
-      name: 'op',
-      credential: const OnePasswordCredential('op://Vault/Item/password'),
-    ));
+    a.addConnection(
+      ConnectionConfig(
+        id: 'p',
+        name: 'plain',
+        credential: const PlainCredential('pw'),
+      ),
+    );
+    a.addConnection(
+      ConnectionConfig(
+        id: 'e',
+        name: 'enc',
+        credential: const EncryptedCredential('abc='),
+      ),
+    );
+    a.addConnection(
+      ConnectionConfig(
+        id: 'o',
+        name: 'op',
+        credential: const OnePasswordCredential('op://Vault/Item/password'),
+      ),
+    );
     await a.flush();
 
     final b = makeStore();
     await b.load();
     expect(b.connectionById('p')!.credential, isA<PlainCredential>());
-    expect((b.connectionById('p')!.credential as PlainCredential).password,
-        'pw');
+    expect(
+      (b.connectionById('p')!.credential as PlainCredential).password,
+      'pw',
+    );
     expect(b.connectionById('e')!.credential, isA<EncryptedCredential>());
-    expect((b.connectionById('e')!.credential as EncryptedCredential).cipher,
-        'abc=');
+    expect(
+      (b.connectionById('e')!.credential as EncryptedCredential).cipher,
+      'abc=',
+    );
     expect(b.connectionById('o')!.credential, isA<OnePasswordCredential>());
     expect(
       (b.connectionById('o')!.credential as OnePasswordCredential).secretRef,
       'op://Vault/Item/password',
+    );
+  });
+
+  group('theme mode', () {
+    // AppColors is process-global; a test that leaves the light palette
+    // pinned would decide the next one's colours.
+    tearDown(() => AppColors.setPalette(darkPalette));
+
+    test('auto resolves against the system and follows a flip', () async {
+      final store = makeStore();
+      store.setSystemBrightness(AppBrightness.light);
+      await store.load();
+      store.setThemeMode(AppThemeMode.auto);
+      expect(store.brightness, AppBrightness.light);
+      expect(AppColors.palette, lightPalette);
+
+      var ticks = 0;
+      store.addListener(() => ticks++);
+      store.setSystemBrightness(AppBrightness.dark);
+
+      expect(store.brightness, AppBrightness.dark);
+      expect(AppColors.palette, darkPalette);
+      expect(ticks, 1, reason: 'the whole tree has to repaint');
+    });
+
+    test('a pinned mode ignores the system', () async {
+      final store = makeStore();
+      await store.load();
+      store.setThemeMode(AppThemeMode.light);
+      var ticks = 0;
+      store.addListener(() => ticks++);
+
+      store.setSystemBrightness(AppBrightness.dark);
+
+      expect(store.brightness, AppBrightness.light);
+      expect(AppColors.palette, lightPalette);
+      expect(ticks, 0);
+    });
+
+    test('the cycle visits every mode and returns', () async {
+      final store = makeStore();
+      await store.load();
+      expect(store.themeMode, AppThemeMode.dark);
+      store.cycleThemeMode();
+      expect(store.themeMode, AppThemeMode.light);
+      store.cycleThemeMode();
+      expect(store.themeMode, AppThemeMode.auto);
+      store.cycleThemeMode();
+      expect(store.themeMode, AppThemeMode.dark);
+    });
+
+    test('the mode survives a save/load round-trip', () async {
+      final a = makeStore();
+      await a.load();
+      a.setThemeMode(AppThemeMode.auto);
+      await a.flush();
+
+      final b = makeStore();
+      b.setSystemBrightness(AppBrightness.light);
+      await b.load();
+      expect(b.themeMode, AppThemeMode.auto);
+      expect(b.brightness, AppBrightness.light);
+      expect(AppColors.palette, lightPalette);
+    });
+
+    test(
+      'a store written before auto existed still reads its palette',
+      () async {
+        await File('${dir.path}/store.json').writeAsString(
+          jsonEncode({
+            'version': 1,
+            'preferences': {'brightness': 'light'},
+          }),
+        );
+        final store = makeStore();
+        await store.load();
+        expect(store.themeMode, AppThemeMode.light);
+        expect(AppColors.palette, lightPalette);
+      },
     );
   });
 }

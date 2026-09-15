@@ -83,14 +83,28 @@ class AppStore extends ChangeNotifier {
   static const double queryResultsFractionMax = 0.85;
   static const double queryResultsFractionDefault = 0.6;
 
-  AppBrightness _brightness = AppBrightness.dark;
+  AppThemeMode _themeMode = AppThemeMode.dark;
+
+  /// The OS appearance, pushed in from the root widget. Only read when the
+  /// mode is [AppThemeMode.auto], and never persisted — it belongs to
+  /// macOS, not to us.
+  AppBrightness _systemBrightness = AppBrightness.dark;
   bool _sidebarVisible = true;
   double _sidebarWidth = sidebarWidthDefault;
   double _logPanelWidth = logPanelWidthDefault;
   double _queryResultsFraction = queryResultsFractionDefault;
   Map<String, double>? _windowFramePersisted;
 
-  AppBrightness get brightness => _brightness;
+  AppThemeMode get themeMode => _themeMode;
+
+  /// The palette that is actually painted, with [AppThemeMode.auto]
+  /// resolved. Everything downstream of the theme — `AppTheme.build`, the
+  /// root shell's re-key — reads this, not the mode.
+  AppBrightness get brightness => switch (_themeMode) {
+    AppThemeMode.dark => AppBrightness.dark,
+    AppThemeMode.light => AppBrightness.light,
+    AppThemeMode.auto => _systemBrightness,
+  };
   bool get sidebarVisible => _sidebarVisible;
   double get sidebarWidth => _sidebarWidth;
   double get logPanelWidth => _logPanelWidth;
@@ -151,13 +165,17 @@ class AppStore extends ChangeNotifier {
   Future<void> load() async {
     final decoded = await _file.load();
     if (decoded is Map<String, dynamic>) {
-      _readSection('preferences', () => _readPreferences(decoded['preferences']));
-      _readSection('connections', () => _readConnections(decoded['connections']));
+      _readSection(
+        'preferences',
+        () => _readPreferences(decoded['preferences']),
+      );
+      _readSection(
+        'connections',
+        () => _readConnections(decoded['connections']),
+      );
       _readSection('security', () => _readSecurity(decoded['security']));
     }
-    AppColors.setPalette(
-      _brightness == AppBrightness.dark ? darkPalette : lightPalette,
-    );
+    _applyPalette();
     if (_windowFramePersisted != null) {
       // Restoring the native window frame is async but doesn't gate UI
       // hydration — kick it off after the listeners run.
@@ -181,20 +199,29 @@ class AppStore extends ChangeNotifier {
 
   // ---- preference setters --------------------------------------------
 
-  void setBrightness(AppBrightness value) {
-    if (_brightness == value) return;
-    _brightness = value;
-    AppColors.setPalette(
-      value == AppBrightness.dark ? darkPalette : lightPalette,
-    );
+  void setThemeMode(AppThemeMode value) {
+    if (_themeMode == value) return;
+    _themeMode = value;
+    _applyPalette();
     _changed();
   }
 
-  void toggleBrightness() {
-    setBrightness(
-      _brightness == AppBrightness.dark
-          ? AppBrightness.light
-          : AppBrightness.dark,
+  void cycleThemeMode() => setThemeMode(_themeMode.next);
+
+  /// The OS flipped appearance (sunset, or the user toggling it in System
+  /// Settings). Nothing is persisted — the mode already says whether we
+  /// care — but under [AppThemeMode.auto] the whole tree has to repaint.
+  void setSystemBrightness(AppBrightness value) {
+    if (_systemBrightness == value) return;
+    _systemBrightness = value;
+    if (_themeMode != AppThemeMode.auto) return;
+    _applyPalette();
+    notifyListeners();
+  }
+
+  void _applyPalette() {
+    AppColors.setPalette(
+      brightness == AppBrightness.dark ? darkPalette : lightPalette,
     );
   }
 
@@ -286,11 +313,7 @@ class AppStore extends ChangeNotifier {
 
   /// Persisted recent-tables list for the connection, oldest entries
   /// dropped past [limit].
-  void trackRecentTable(
-    String connectionId,
-    DbTable table, {
-    int limit = 12,
-  }) {
+  void trackRecentTable(String connectionId, DbTable table, {int limit = 12}) {
     _mutateConnection(connectionId, (c) {
       final key = table.qualifiedKey;
       final keys = List<String>.of(c.recentTables)..remove(key);
@@ -611,7 +634,7 @@ class AppStore extends ChangeNotifier {
   Map<String, dynamic> _toJson() => {
     'version': 1,
     'preferences': {
-      'brightness': _brightness.name,
+      'brightness': _themeMode.name,
       'sidebarVisible': _sidebarVisible,
       'sidebarWidth': _sidebarWidth,
       'logPanelWidth': _logPanelWidth,
@@ -637,11 +660,11 @@ class AppStore extends ChangeNotifier {
 
   void _readPreferences(Object? raw) {
     if (raw is! Map) return;
-    final brightnessName = raw['brightness'];
-    if (brightnessName is String) {
-      for (final b in AppBrightness.values) {
-        if (b.name == brightnessName) {
-          _brightness = b;
+    final modeName = raw['brightness'];
+    if (modeName is String) {
+      for (final m in AppThemeMode.values) {
+        if (m.name == modeName) {
+          _themeMode = m;
           break;
         }
       }

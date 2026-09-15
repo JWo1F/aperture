@@ -17,11 +17,19 @@ Future<void> main() async {
   await WindowManipulator.enableFullSizeContentView();
   await WindowManipulator.hideTitle();
   final state = AppState();
+  // Seeded before the store loads so a persisted `auto` resolves against
+  // the real OS appearance on the very first paint.
+  state.store.setSystemBrightness(_systemBrightness());
   await state.load();
   appState = state;
   _installErrorHandlers(state);
   runApp(const ApertureApp());
 }
+
+AppBrightness _systemBrightness() =>
+    PlatformDispatcher.instance.platformBrightness == Brightness.dark
+    ? AppBrightness.dark
+    : AppBrightness.light;
 
 /// Route failures that escape a framework callback or an unawaited future
 /// into the activity log. Flutter's default handler prints to the debug
@@ -46,7 +54,7 @@ class ApertureApp extends StatefulWidget {
   State<ApertureApp> createState() => _ApertureAppState();
 }
 
-class _ApertureAppState extends State<ApertureApp> {
+class _ApertureAppState extends State<ApertureApp> with WidgetsBindingObserver {
   late final AppLifecycleListener _lifecycle;
 
   /// The dialog in [_onExitRequested] needs a context below [MaterialApp]'s
@@ -57,6 +65,14 @@ class _ApertureAppState extends State<ApertureApp> {
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// macOS flipped appearance. The store decides whether that matters —
+  /// under any mode but `auto` it is recorded and nothing repaints.
+  @override
+  void didChangePlatformBrightness() {
+    appState.store.setSystemBrightness(_systemBrightness());
   }
 
   Future<AppExitResponse> _onExitRequested() async {
@@ -78,6 +94,7 @@ class _ApertureAppState extends State<ApertureApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _lifecycle.dispose();
     appState.dispose();
     super.dispose();
