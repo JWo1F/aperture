@@ -7,8 +7,12 @@
 // The application's name. By default this is also the title of the Flutter window.
 PRODUCT_NAME = Aperture
 
-// The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.dbv
+// The application's bundle identifier.
+//
+// This also keys ~/Library/Application Support/<id>, where store.json
+// lives — changing it again strands the saved connections, per-connection
+// bags and master-passphrase metadata under the previous id.
+PRODUCT_BUNDLE_IDENTIFIER = com.jwo1f.aperture
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 jwo1f. All rights reserved.
