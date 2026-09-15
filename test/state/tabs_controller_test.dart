@@ -45,7 +45,7 @@ void main() {
           (3, 'Solaris', 300),
           (4, 'Dune', 500);
       ''')
-      ..dispose();
+      ..close();
 
     app = AppState(store: AppStore(file: AtomicJsonFile('store.json')));
     final config = ConnectionConfig(

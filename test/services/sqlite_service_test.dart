@@ -168,7 +168,7 @@ void main() {
         INSERT INTO books (id, title, author_id)
           VALUES (1, 'A Wizard of Earthsea', 1), (2, 'Ficciones', 2);
       ''');
-      seed.dispose();
+      seed.close();
 
       svc = SqliteService(
         ConnectionConfig(
@@ -508,7 +508,7 @@ void main() {
       final path = '${tmp.path}/reused.sqlite';
       final seed = sqlite3.open(path);
       seed.execute('CREATE TABLE leftover (id INTEGER);');
-      seed.dispose();
+      seed.close();
 
       SqliteService.createDatabaseFile(path);
 
@@ -516,7 +516,7 @@ void main() {
       final tables = reopened.select(
         "SELECT name FROM sqlite_master WHERE type = 'table'",
       );
-      reopened.dispose();
+      reopened.close();
       expect(tables, isEmpty);
     });
   });

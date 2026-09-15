@@ -17,7 +17,7 @@ void main() {
     if (!File(p).existsSync()) {
       sqlite3.open(p)
         ..execute('CREATE TABLE t (id INTEGER PRIMARY KEY);')
-        ..dispose();
+        ..close();
     }
     return ConnectionConfig(
       id: name,

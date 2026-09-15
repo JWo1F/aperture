@@ -41,7 +41,7 @@ class SqliteService implements DbService {
     if (file.existsSync()) file.deleteSync();
     sqlite3.open(path)
       ..execute('PRAGMA user_version = 0;')
-      ..dispose();
+      ..close();
   }
 
   Database? _db;
@@ -77,7 +77,7 @@ class SqliteService implements DbService {
 
   @override
   Future<void> close() async {
-    _db?.dispose();
+    _db?.close();
     _db = null;
     _repository = null;
     _introspector = null;

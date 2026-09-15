@@ -73,7 +73,7 @@ void main() {
     final path = '${tmp.path}/gone.db';
     sqlite3.open(path)
       ..execute('CREATE TABLE t (id INTEGER PRIMARY KEY);')
-      ..dispose();
+      ..close();
     final config = ConnectionConfig(
       id: 'gone',
       name: 'gone',
@@ -100,7 +100,7 @@ void main() {
     for (final p in [a, b]) {
       sqlite3.open(p)
         ..execute('CREATE TABLE t (id INTEGER PRIMARY KEY);')
-        ..dispose();
+        ..close();
     }
     final config = ConnectionConfig(
       id: 'sw',

@@ -16,7 +16,7 @@ void main() {
       final dbPath = '${tmp.path}/ping.db';
       sqlite3.open(dbPath)
         ..execute('CREATE TABLE t (id INTEGER PRIMARY KEY);')
-        ..dispose();
+        ..close();
 
       logged = <String>[];
       svc = SqliteService(
