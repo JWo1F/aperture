@@ -7,7 +7,6 @@ import '../../state/app_globals.dart';
 import '../../state/connection_views.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/hugeicons.dart';
-import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
 import '../widgets/table_glyph.dart';
 import 'highlighted_text.dart';
@@ -72,8 +71,7 @@ class SchemaTableRow extends StatelessWidget {
       onTap: () => appState.tabsController.openTable(table),
       onSecondaryTapDown: (d) =>
           openTableMenu(context, table, d.globalPosition),
-      childrenBuilder: (hovering) {
-        final showStar = hovering || isFav;
+      childrenBuilder: (_) {
         return [
           DetailChevron(
             expanded: expanded,
@@ -110,14 +108,6 @@ class SchemaTableRow extends StatelessWidget {
               ),
             ),
           ],
-          if (showStar)
-            StarToggle(
-              filled: isFav,
-              onTap: () {
-                final id = appState.session.activeConnection?.id;
-                if (id != null) appState.store.toggleFavorite(id, table);
-              },
-            ),
         ];
       },
     );
@@ -143,33 +133,6 @@ class SchemaTableRow extends StatelessWidget {
           color: active ? tint : AppColors.info,
         );
     }
-  }
-}
-
-class StarToggle extends StatelessWidget {
-  const StarToggle({super.key, required this.filled, required this.onTap});
-
-  final bool filled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Hoverable(
-      onTap: onTap,
-      builder: (context, hovering) {
-        final color = filled
-            ? AppColors.warn
-            : (hovering ? AppColors.textSecondary : AppColors.text4);
-        return Padding(
-          padding: const EdgeInsets.all(2),
-          child: Icon(
-            Hgi.star,
-            size: 13,
-            color: color,
-          ),
-        );
-      },
-    );
   }
 }
 
