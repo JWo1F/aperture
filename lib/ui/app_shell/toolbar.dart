@@ -4,13 +4,13 @@ import 'package:macos_window_utils/macos/ns_window_delegate.dart';
 import 'package:macos_window_utils/macos_window_utils.dart';
 
 import '../../state/app_globals.dart';
+import '../../state/session_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../command_palette/command_palette.dart';
 import '../widgets/common.dart';
 import '../widgets/pagebar.dart';
 import '../widgets/value_selector.dart';
-import 'connection_pill.dart';
 import 'toolbar_actions.dart';
 import 'toolbar_widgets.dart';
 
@@ -20,7 +20,7 @@ const _windowChannel = MethodChannel('aperture/window');
 /// buttons, which are drawn by the OS on top of our Flutter content.
 const double _trafficLightInset = 78;
 
-/// Top toolbar: window-drag surface, navigation + connection controls on
+/// Top toolbar: window-drag surface, navigation + session controls on
 /// the left, ⌘K search and theme/config affordances on the right.
 class Toolbar extends StatefulWidget {
   const Toolbar({super.key});
@@ -92,8 +92,11 @@ class _ToolbarState extends State<Toolbar> {
     final store = appState.store;
     final tabs = appState.tabsController;
     final history = appState.history;
-    return Selector<(bool, bool, AppBrightness, String?, bool)>(
-      listenable: Listenable.merge([tabs, history, store]),
+    final session = appState.session;
+    return Selector<
+      (bool, bool, AppBrightness, String?, bool, ConnectionStatus)
+    >(
+      listenable: Listenable.merge([tabs, history, store, session]),
       selector: () {
         final tab = tabs.activeTab;
         return (
@@ -102,16 +105,19 @@ class _ToolbarState extends State<Toolbar> {
           store.brightness,
           tab?.id,
           exportableResult(tab) != null,
+          session.status,
         );
       },
       builder: (context, value) {
-        final (canGoBack, canGoForward, brightness, _, canExport) = value;
+        final (canGoBack, canGoForward, brightness, _, canExport, status) =
+            value;
         return _buildToolbar(
           context: context,
           canGoBack: canGoBack,
           canGoForward: canGoForward,
           brightness: brightness,
           canExport: canExport,
+          status: status,
         );
       },
     );
@@ -123,6 +129,7 @@ class _ToolbarState extends State<Toolbar> {
     required bool canGoForward,
     required AppBrightness brightness,
     required bool canExport,
+    required ConnectionStatus status,
   }) {
     final store = appState.store;
     final tabs = appState.tabsController;
@@ -137,6 +144,11 @@ class _ToolbarState extends State<Toolbar> {
       >= 940 => 150.0,
       _ => 0.0,
     };
+    // `error` and `disconnected` are the two states the welcome panel is
+    // already showing, so the home button has nowhere left to go.
+    final atHome =
+        status == ConnectionStatus.disconnected ||
+        status == ConnectionStatus.error;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanStart: (_) => _windowChannel.invokeMethod('startDrag'),
@@ -191,8 +203,12 @@ class _ToolbarState extends State<Toolbar> {
                 ),
                 const SizedBox(width: 8),
                 const TbGroupRail(),
-                const SizedBox(width: 10),
-                const ConnectionPill(),
+                const SizedBox(width: 8),
+                TbIcon(
+                  icon: Icons.home_outlined,
+                  tooltip: 'Close connection and go home',
+                  onPressed: atHome ? null : appState.disconnect,
+                ),
                 const SizedBox(width: 8),
                 const TbGroupRail(),
                 const SizedBox(width: 8),
@@ -217,9 +233,7 @@ class _ToolbarState extends State<Toolbar> {
                 if (searchWidth > 0)
                   SizedBox(
                     width: searchWidth,
-                    child: TbSearch(
-                      onTap: () => showCommandPalette(context),
-                    ),
+                    child: TbSearch(onTap: () => showCommandPalette(context)),
                   )
                 else
                   TbIcon(
@@ -353,9 +367,7 @@ class _TbPendingChip extends StatelessWidget {
           icon: Icons.check,
           tooltip: 'Apply pending edits',
           busy: busy,
-          onTap: hasPending && !busy
-              ? () => applyEditsForTab(tab)
-              : null,
+          onTap: hasPending && !busy ? () => applyEditsForTab(tab) : null,
         ),
         _PendingAction(
           icon: Icons.close,
