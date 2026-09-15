@@ -491,16 +491,36 @@ Real, deliberately unfixed. Don't rediscover them as new findings.
 - **SQLite never sets `PRAGMA foreign_keys = ON`**, so `ON DELETE
   CASCADE` doesn't fire on a delete from the grid. Matches the `sqlite3`
   CLI default; a deliberate choice to revisit, not an oversight.
-- **`connect()` clears tabs and history before resolving credentials**,
-  so a wrong passphrase or a missing `op` binary costs the user their
-  open tabs for a connection that never opened.
-- **Identity is still positional for pending mutations.** Keying `edits`
-  and `deletedRows` by `rowId` instead of row index would let them
-  survive a page change instead of being dropped.
+- **Identity is positional for pending mutations.** `edits` and
+  `deletedRows` are keyed by row index, so a page load drops them (see
+  §Per-tab state ownership). Keying by `rowId` would let them survive
+  instead — a product decision, not a bug.
 - **`equalityFragment` truncates binary**, so "filter by this value" on a
   bytea / BLOB column builds a filter matching nothing. Fixing it needs a
   bytea literal, which Postgres and SQLite spell differently, and the
   function has no engine context.
+- **A reused `ctid` defeats the affected-row guard.** The guard catches a
+  row that moved or vanished, not a line pointer that a `VACUUM FULL` /
+  `CLUSTER` / `pg_repack` handed to a different row — that UPDATE hits
+  exactly one row, the wrong one. Narrow unless the user runs repack
+  jobs; the fix is to include the row's old values in the predicate, or
+  use the primary key when the catalog has one.
+- **The grid builds every column of every visible row.** The horizontal
+  scroller is a `SingleChildScrollView`, so columns can't virtualize: an
+  80-column catalog table rebuilds ~25 × 80 cells per resize tick. The
+  format cache spares the string work, not the text layout. Structural.
+- **`snapshotInserts()` is a shallow copy.** Its doc promises the caller
+  a non-aliasing list, but the `PendingInsert.values` maps inside it are
+  the live ones. Nothing writes through them today, and all the SQL is
+  rendered before the first await, so the window is a microtask.
+- **Nothing is keyboard-focusable.** Every button is `Hoverable`
+  (`MouseRegion` + `GestureDetector`) with no `Focus` or `Semantics`, so
+  Tab traversal and VoiceOver reach nothing. Deliberate for a one-user
+  tool driven by explicit shortcuts.
+- **The sidebar rebuilds on any tab notification.** Keystrokes no longer
+  reach it (`QueryTab.sql` doesn't notify), but a cell edit still
+  re-derives the favourites and frequent lists and re-allocates a row
+  widget per table. Its `ListenableBuilder` wants to be a `Selector`.
 
 ## Naming
 

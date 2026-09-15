@@ -19,12 +19,14 @@ class PostgresTableRepository implements TableRepository {
 
   final PostgresService _db;
 
-  /// Expands the user-supplied SELECT list into a projection clause. `*` and
-  /// empty become `*` (qualified to `t.*` when the table is aliased);
-  /// anything else is trusted as-is.
-  String _projection(String selectList, {bool aliased = true}) {
+  /// Expands the user-supplied SELECT list into a projection clause. `*`
+  /// and empty become `*`, qualified with [alias] when the relation is
+  /// aliased; anything else is trusted as-is.
+  String _projection(String selectList, {String? alias}) {
     final trimmed = selectList.trim();
-    if (trimmed.isEmpty || trimmed == '*') return aliased ? 't.*' : '*';
+    if (trimmed.isEmpty || trimmed == '*') {
+      return alias == null ? '*' : '$alias.*';
+    }
     return trimmed;
   }
 
@@ -91,11 +93,17 @@ class PostgresTableRepository implements TableRepository {
     validateClauseSnippet(selectList, kind: ClauseKind.selectList);
     final order = orderClause(orderBy);
     final withCtid = table.kind == DbRelationKind.table;
-    final projection = _projection(selectList, aliased: withCtid);
-    final ctidPrefix = withCtid ? 't.ctid::text AS __ctid, ' : '';
-    final fromClause = withCtid
-        ? 'FROM ${table.qualifiedName} AS t'
-        : 'FROM ${table.qualifiedName}';
+    // Aliased to the relation's own name, not to `t`. The alias exists so
+    // `ctid` can be qualified, but a bare `t` also *replaced* the name, so
+    // a clausebar filter written as `events.status = 'x'` failed on the
+    // page fetch while working on the row count and the export, which
+    // don't alias. Aliasing to `events` keeps both spellings valid.
+    final alias = withCtid ? quoteIdent(table.name) : null;
+    final projection = _projection(selectList, alias: alias);
+    final ctidPrefix = alias == null ? '' : '$alias.ctid::text AS __ctid, ';
+    final fromClause = alias == null
+        ? 'FROM ${table.qualifiedName}'
+        : 'FROM ${table.qualifiedName} AS $alias';
     try {
       final result = await _db.execute(
         'SELECT $ctidPrefix$projection '
@@ -163,7 +171,7 @@ class PostgresTableRepository implements TableRepository {
     validateClauseSnippet(selectList, kind: ClauseKind.selectList);
     final order = orderClause(orderBy);
     final watch = Stopwatch()..start();
-    final projection = _projection(selectList, aliased: false);
+    final projection = _projection(selectList);
     final result = await _db.execute(
       'SELECT $projection FROM ${table.qualifiedName}'
       '${whereClause(filter)}$order',
