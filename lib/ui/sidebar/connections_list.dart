@@ -80,7 +80,7 @@ class AllConnectionsList extends StatelessWidget {
           child: list.isEmpty
               ? Padding(
                   padding: const EdgeInsets.all(20),
-                  child: Column(
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
@@ -88,23 +88,30 @@ class AllConnectionsList extends StatelessWidget {
                         size: 20,
                         color: AppColors.textMuted,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'No connections',
-                        style: AppTheme.ui(
-                          size: 13,
-                          color: AppColors.textSecondary,
-                          weight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Add a PostgreSQL connection to get started.',
-                        style: AppTheme.ui(
-                          size: 11.5,
-                          color: AppColors.textMuted,
-                          weight: FontWeight.w400,
-                          letterSpacing: 0,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'No connections',
+                              style: AppTheme.ui(
+                                size: 13,
+                                color: AppColors.textSecondary,
+                                weight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Add a PostgreSQL connection to get started.',
+                              style: AppTheme.ui(
+                                size: 11.5,
+                                color: AppColors.textMuted,
+                                weight: FontWeight.w400,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
