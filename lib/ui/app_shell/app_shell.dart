@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,7 +9,6 @@ import '../command_palette/command_palette.dart';
 import '../connection/master_passphrase_setup.dart';
 import '../log/log_panel.dart';
 import '../sidebar/sidebar.dart';
-import '../widgets/common.dart';
 import '../widgets/value_selector.dart';
 import '../workspace/workspace.dart';
 import 'connection_lost_banner.dart';
@@ -79,52 +76,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       appState.historyForward();
       return true;
     }
-    if (event.logicalKey == LogicalKeyboardKey.keyQ) {
-      // Only intercept when we'd actually warn the user.
-      final pending = appState.tabsController.unappliedEditCount;
-      if (pending > 0) {
-        unawaited(_confirmQuit(pending));
-        return true;
-      }
-    }
+    // ⌘Q is deliberately NOT intercepted: AppKit's terminate reaches
+    // `AppLifecycleListener.onExitRequested`, which guards the pending-edit
+    // discard for every quit route at once. Handling the keystroke here
+    // would leave the app menu and the Dock unguarded.
     return false;
-  }
-
-  Future<void> _confirmQuit(int pending) async {
-    final keepEditing = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text(
-          'Quit Aperture?',
-          style: AppTheme.ui(
-            size: 14,
-            weight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        content: Text(
-          'You have $pending pending edit${pending == 1 ? '' : 's'}. '
-          "Quitting now discards them — they aren't on the server yet.",
-          style: AppTheme.ui(color: AppColors.textSecondary),
-        ),
-        actions: [
-          AppButton(
-            label: 'Keep editing',
-            onPressed: () => Navigator.of(ctx).pop(true),
-          ),
-          AppButton(
-            label: 'Quit anyway',
-            danger: true,
-            onPressed: () => Navigator.of(ctx).pop(false),
-          ),
-        ],
-      ),
-    );
-    if (keepEditing == false) {
-      // User confirmed quit — hand control back to AppKit's terminate.
-      await SystemNavigator.pop();
-    }
   }
 
   @override

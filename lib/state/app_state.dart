@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../models/connection_config.dart';
 import '../models/db_object.dart';
+import '../models/log_event.dart';
 import '../models/value_format.dart';
 import 'app_store.dart';
 import 'catalog_controller.dart';
@@ -266,6 +267,33 @@ class AppState {
   /// Drain the AppStore's pending debounced write so a quit while a
   /// mutation is still buffered doesn't lose it.
   Future<void> flush() => store.flush();
+
+  // --- Uncaught failures ----------------------------------------------
+
+  String? _lastUncaught;
+
+  /// Record a failure that escaped a framework callback or an unawaited
+  /// future. Without this the only trace is a debug-console print, which
+  /// nobody is watching in a release build.
+  ///
+  /// Every failure lands in the event log, which is bounded. Only a *new*
+  /// message also raises a toast: error toasts are sticky, and something
+  /// throwing once per frame would otherwise bury the UI under an unbounded
+  /// stack of identical cards.
+  void reportUncaught(Object error, StackTrace? stack) {
+    final message = error.toString();
+    eventLog.add(
+      LogEvent(
+        timestamp: DateTime.now(),
+        kind: LogEventKind.error,
+        connectionName: session.activeConnection?.name,
+        error: stack == null ? message : '$message\n$stack',
+      ),
+    );
+    if (message == _lastUncaught) return;
+    _lastUncaught = message;
+    toasts.error(message, title: 'Unexpected error');
+  }
 
   void dispose() {
     store.removeListener(_syncSessionFromStore);
