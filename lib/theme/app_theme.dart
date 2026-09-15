@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// "Aperture" — Linear-style restraint with macOS-native polish, available
-/// in dark (default) and light variants. Both lean on the same indigo accent
-/// and hairline borders; only the surface tones invert.
+/// in dark and light variants. Both lean on the same indigo accent and
+/// hairline borders; only the surface tones invert.
 enum AppBrightness { dark, light }
 
-/// What the user asked for, as opposed to what is painted: [auto] resolves
-/// against the OS appearance, the other two pin a palette. Only
-/// [AppBrightness] reaches a [Palette]; this is the persisted preference.
+/// What the user asked for, as opposed to what is painted: [auto] — the
+/// default — resolves against the OS appearance, the other two pin a
+/// palette. Only [AppBrightness] reaches a [Palette]; this is the
+/// persisted preference.
 enum AppThemeMode {
   dark,
   light,

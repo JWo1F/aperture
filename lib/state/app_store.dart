@@ -83,7 +83,7 @@ class AppStore extends ChangeNotifier {
   static const double queryResultsFractionMax = 0.85;
   static const double queryResultsFractionDefault = 0.6;
 
-  AppThemeMode _themeMode = AppThemeMode.dark;
+  AppThemeMode _themeMode = AppThemeMode.auto;
 
   /// The OS appearance, pushed in from the root widget. Only read when the
   /// mode is [AppThemeMode.auto], and never persisted — it belongs to

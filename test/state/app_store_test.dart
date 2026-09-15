@@ -300,26 +300,35 @@ void main() {
     test('the cycle visits every mode and returns', () async {
       final store = makeStore();
       await store.load();
+      expect(store.themeMode, AppThemeMode.auto);
+      store.cycleThemeMode();
       expect(store.themeMode, AppThemeMode.dark);
       store.cycleThemeMode();
       expect(store.themeMode, AppThemeMode.light);
       store.cycleThemeMode();
       expect(store.themeMode, AppThemeMode.auto);
-      store.cycleThemeMode();
-      expect(store.themeMode, AppThemeMode.dark);
     });
 
     test('the mode survives a save/load round-trip', () async {
       final a = makeStore();
       await a.load();
-      a.setThemeMode(AppThemeMode.auto);
+      a.setThemeMode(AppThemeMode.light);
       await a.flush();
 
       final b = makeStore();
-      b.setSystemBrightness(AppBrightness.light);
+      b.setSystemBrightness(AppBrightness.dark);
       await b.load();
-      expect(b.themeMode, AppThemeMode.auto);
+      expect(b.themeMode, AppThemeMode.light);
       expect(b.brightness, AppBrightness.light);
+      expect(AppColors.palette, lightPalette);
+    });
+
+    test('a store with no preference follows the system', () async {
+      final store = makeStore();
+      store.setSystemBrightness(AppBrightness.light);
+      await store.load();
+      expect(store.themeMode, AppThemeMode.auto);
+      expect(store.brightness, AppBrightness.light);
       expect(AppColors.palette, lightPalette);
     });
 
