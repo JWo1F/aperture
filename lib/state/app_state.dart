@@ -80,9 +80,10 @@ class AppState {
   }
 
   Future<void> connect(ConnectionConfig config) async {
-    tabsController.clear();
-    history.clear();
-
+    // Resolve the credential BEFORE touching the workspace. This step can
+    // fail on its own — a locked vault, a missing `op` binary, a connection
+    // saved without a password — and none of those are a reason to throw
+    // away the tabs and history of the session that is still live.
     var resolved = config;
     final credential = await _resolveCredentialWithUnlock(resolved);
     switch (credential) {
@@ -95,6 +96,11 @@ class AppState {
       case CredentialOk(password: final p):
         resolved = resolved.copyWith(runtimePassword: p);
     }
+
+    // Past here the old connection is closed either way, so its tabs go
+    // with it whether or not the new one opens.
+    tabsController.clear();
+    history.clear();
 
     final ok = await session.connect(resolved);
     if (!ok) return;

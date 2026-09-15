@@ -36,6 +36,11 @@ class SessionController extends ChangeNotifier {
   Timer? _keepaliveTimer;
   bool _keepalivePending = false;
 
+  /// A keepalive ping or a version probe can resolve after the app has torn
+  /// the controller down, and `notifyListeners()` on a disposed
+  /// `ChangeNotifier` throws.
+  bool _disposed = false;
+
   DbService? get service => _service;
 
   ConnectionConfig? get activeConnection => _activeConnection;
@@ -238,6 +243,7 @@ class SessionController extends ChangeNotifier {
   /// service but preserves the active-connection config so the user can
   /// click "Reconnect" without losing their workspace.
   Future<void> markLost(Object cause) async {
+    if (_disposed) return;
     if (_status == ConnectionStatus.lost ||
         _status == ConnectionStatus.disconnected) {
       return;
@@ -265,6 +271,10 @@ class SessionController extends ChangeNotifier {
     final svc = _service;
     if (svc == null || !svc.isConnected) return;
     final tag = await svc.fetchVersionTag();
+    // The probe outlives the connection that asked for it: a disconnect or
+    // a switch to another database mid-flight would otherwise stamp the old
+    // server's version on the new session's header.
+    if (_disposed || !identical(_service, svc)) return;
     if (tag == null || tag.isEmpty) return;
     _serverVersion = tag;
     notifyListeners();
@@ -299,6 +309,7 @@ class SessionController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _cancelKeepalive();
     _service?.close();
     super.dispose();
