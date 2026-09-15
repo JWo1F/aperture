@@ -61,7 +61,7 @@ class GridKeyboard {
     if (pending is CellDefault) return 'DEFAULT';
     final slot = slots[row];
     if (slot.isInsert) return 'NULL';
-    return formatCellValue(widget.result.rows[slot.sourceIdx][column]) ??
+    return exactCellValue(widget.result.rows[slot.sourceIdx][column]) ??
         'NULL';
   }
 

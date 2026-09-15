@@ -12,7 +12,7 @@ import '../services/sql_identifier.dart';
 String? formatCellValue(Object? value) {
   if (value == null) return null;
 
-  if (value is Uint8List) return _hexPreview(value);
+  if (value is Uint8List) return _hex(value, cap: _previewBytes);
 
   // ISO-8601 (with offset for UTC, naive otherwise) matches the form the
   // cell editor parses back via DateTime.tryParse in editor_state.dart, so
@@ -35,12 +35,26 @@ Object? _encodeForJson(Object? value) {
   return value.toString();
 }
 
-String _hexPreview(Uint8List bytes) {
-  final preview = bytes
-      .take(16)
-      .map((b) => b.toRadixString(16).padLeft(2, '0'))
-      .join();
-  return '\\x$preview${bytes.length > 16 ? '…' : ''}';
+/// Exact text for a cell value, for consumers that hand the value onward
+/// rather than paint it: file export, clipboard copy.
+///
+/// Identical to [formatCellValue] except for binary, where the display form
+/// is an elided 16-byte preview. Writing that preview into a CSV or onto the
+/// clipboard would pass off the first 16 bytes of a blob as the whole thing.
+String? exactCellValue(Object? value) {
+  if (value is Uint8List) return _hex(value, cap: null);
+  return formatCellValue(value);
+}
+
+/// How many bytes of a binary value the grid paints before eliding. A cell
+/// is one ellipsized line; the full blob can be megabytes.
+const int _previewBytes = 16;
+
+String _hex(Uint8List bytes, {required int? cap}) {
+  final shown = cap == null ? bytes : bytes.take(cap);
+  final hex = shown.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  final elided = cap != null && bytes.length > cap;
+  return '\\x$hex${elided ? '…' : ''}';
 }
 
 /// Renders `"column" = value` (or `!=`, `IS NULL`, `IS NOT NULL`) suitable

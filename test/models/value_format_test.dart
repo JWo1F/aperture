@@ -32,6 +32,33 @@ void main() {
       expect(formatted.endsWith('…'), isTrue);
     });
 
+    test('the exact form keeps every byte of a long Uint8List', () {
+      final bytes = Uint8List.fromList(List<int>.generate(40, (i) => i));
+      final exact = exactCellValue(bytes)!;
+      // Export and clipboard read through this: an elided preview would
+      // hand out 16 bytes of a 40-byte blob and call it the value.
+      expect(exact.endsWith('…'), isFalse);
+      expect(exact, r'\x000102030405060708090a0b0c0d0e0f'
+          '101112131415161718191a1b1c1d1e1f'
+          '2021222324252627');
+    });
+
+    test('the exact form matches the display form for everything else', () {
+      for (final v in <Object?>[
+        null,
+        'plain',
+        42,
+        1.5,
+        true,
+        BigInt.two,
+        DateTime(2026, 5, 23),
+        {'a': 1},
+        [1, 2],
+      ]) {
+        expect(exactCellValue(v), formatCellValue(v), reason: '$v');
+      }
+    });
+
     test('DateTime (local) renders as naive ISO-8601 (no Z)', () {
       final dt = DateTime(2026, 5, 23, 14, 32, 10, 123);
       expect(formatCellValue(dt), dt.toIso8601String());

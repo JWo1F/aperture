@@ -67,7 +67,7 @@ abstract class ExportFormat {
     }
   }
 
-  String cellText(Object? raw) => formatCellValue(raw) ?? '';
+  String cellText(Object? raw) => exactCellValue(raw) ?? '';
 
   void checkCancelled(CancelToken? token) {
     if (token?.isCancelled == true) throw const ExportCancelledException();
