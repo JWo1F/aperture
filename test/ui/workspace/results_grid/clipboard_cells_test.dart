@@ -1,5 +1,5 @@
-import 'package:dbv/models/cell_edit.dart';
-import 'package:dbv/ui/workspace/results_grid/clipboard_cells.dart';
+import 'package:aperture/models/cell_edit.dart';
+import 'package:aperture/ui/workspace/results_grid/clipboard_cells.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

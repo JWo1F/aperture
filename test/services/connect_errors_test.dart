@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:dbv/models/connection_config.dart';
-import 'package:dbv/services/connect_errors.dart';
+import 'package:aperture/models/connection_config.dart';
+import 'package:aperture/services/connect_errors.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

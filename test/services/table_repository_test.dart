@@ -1,6 +1,6 @@
-import 'package:dbv/models/cell_edit.dart';
-import 'package:dbv/models/db_object.dart';
-import 'package:dbv/services/postgres_table_repository.dart';
+import 'package:aperture/models/cell_edit.dart';
+import 'package:aperture/models/db_object.dart';
+import 'package:aperture/services/postgres_table_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

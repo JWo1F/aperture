@@ -41,7 +41,7 @@ class AtomicJsonFile {
     } catch (e, st) {
       developer.log(
         'corrupt JSON in $filename — preserving as .bak',
-        name: 'dbv.store',
+        name: 'aperture.store',
         error: e,
         stackTrace: st,
       );
@@ -51,7 +51,7 @@ class AtomicJsonFile {
       } catch (renameErr, renameSt) {
         developer.log(
           'failed to preserve corrupt $filename',
-          name: 'dbv.store',
+          name: 'aperture.store',
           error: renameErr,
           stackTrace: renameSt,
         );

@@ -73,9 +73,11 @@ class HeaderStrip extends StatelessWidget {
                     : () => onSortColumn!(columns[i]),
                 onResize: (delta) {
                   widths.resize(i, delta);
-                  final w = widths[i];
-                  savedWidths?[columns[i]] = w;
-                  onWidthChanged?.call(columns[i], w);
+                  // Reporting the width is the only way out of here.
+                  // Assigning into `savedWidths` instead would throw — it
+                  // is the tab's `UnmodifiableMapView` — and take this
+                  // callback down with it.
+                  onWidthChanged?.call(columns[i], widths[i]);
                 },
               ),
           ],

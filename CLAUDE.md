@@ -92,7 +92,7 @@ pubspec bump for that commit). Then `--amend --no-edit` is acceptable.
 **Sandbox is OFF** — the app must reopen arbitrary SQLite paths after
 relaunch. Entitlements: `macos/Runner/{Debug,Release}.entitlements`.
 
-`MainFlutterWindow.swift` registers a `dbv/window` method channel for
+`MainFlutterWindow.swift` registers an `aperture/window` method channel for
 `startDrag` (toolbar pan) and `toggleZoom` (double-click).
 
 ## Architecture map
@@ -483,9 +483,11 @@ Real, deliberately unfixed. Don't rediscover them as new findings.
   as exact (`PostgresTableRepository.countRows`), and `pageCount` is
   derived from it — a low estimate hides the last pages of real rows.
   Needs an "≈" in the pagebar or an exact count behind it.
-- **Copy/paste of a NULL cell round-trips as the string `'NULL'`** —
-  `_cellTextAt` renders it that way and `_pasteCell` wraps everything in
-  `CellLiteral`. Needs a sentinel or an empty-string convention.
+- **The clipboard's cell vocabulary is two bare tokens.** `NULL` and
+  `DEFAULT` round-trip through `clipboard_cells.dart`, matched exactly
+  and case-sensitively, so the literal text `NULL` can't be pasted into
+  a text column — use the cell editor. An empty cell stays an empty
+  string.
 - **SQLite never sets `PRAGMA foreign_keys = ON`**, so `ON DELETE
   CASCADE` doesn't fire on a delete from the grid. Matches the `sqlite3`
   CLI default; a deliberate choice to revisit, not an oversight.
@@ -495,20 +497,34 @@ Real, deliberately unfixed. Don't rediscover them as new findings.
 - **Identity is still positional for pending mutations.** Keying `edits`
   and `deletedRows` by `rowId` instead of row index would let them
   survive a page change instead of being dropped.
-- **`macos/Runner/Configs/AppInfo.xcconfig` still says
-  `com.example.dbv`** and a `com.example` copyright. The bundle id keys
-  the Application Support directory, so changing it relocates
-  `store.json` and orphans saved connections — do it deliberately, with
-  a migration, not as a drive-by.
+- **`equalityFragment` truncates binary**, so "filter by this value" on a
+  bytea / BLOB column builds a filter matching nothing. Fixing it needs a
+  bytea literal, which Postgres and SQLite spell differently, and the
+  function has no engine context.
+
+## Naming
+
+The project is `aperture` throughout: the Dart package, the bundle
+identifier `com.jwo1f.aperture`, the `aperture/window` method channel,
+the `aperture.store` / `aperture.window` log names. Nothing should say
+`dbv` any more — if you find one, it's a leftover, not a convention.
+
+Two of those are load-bearing and cannot be renamed casually:
+
+- **`PRODUCT_BUNDLE_IDENTIFIER`** keys
+  `~/Library/Application Support/<id>`, where `store.json` lives.
+  Changing it points the app at an empty directory and orphans the saved
+  connections.
+- **`_passphraseSentinel`** is the plaintext sealed into each vault's
+  `verifier`. Changing it makes every vault sealed under the old value
+  fail to unlock, reported as a wrong passphrase, unrecoverably.
 
 ## Memory pointers
 
 Font preferences, theme aesthetic, commit style and UI-redesign
 discipline are under
-`~/.claude/projects/-Users-jwo1f-work-jwo1f-dbv-dbv/memory/`. Read these
-on a fresh session.
-
-That path is keyed to where the repo used to live. The project has since
-moved to `~/work/jwo1f/aperture/dbv`, whose own memory directory
-(`-Users-jwo1f-work-jwo1f-aperture`) is empty — so a session started
-here loads none of them.
+`~/.claude/projects/-Users-jwo1f-work-jwo1f-dbv-dbv/memory/` — a path
+keyed to where the repo used to live. The project is now at
+`~/work/jwo1f/aperture`, whose own memory directory
+(`-Users-jwo1f-work-jwo1f-aperture`) is empty, so a session started here
+loads none of them. Read the old path explicitly on a fresh session.

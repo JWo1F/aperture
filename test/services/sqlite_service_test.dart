@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:dbv/models/cell_edit.dart';
-import 'package:dbv/models/connection_config.dart';
-import 'package:dbv/models/db_object.dart';
-import 'package:dbv/services/sqlite_service.dart';
-import 'package:dbv/services/sqlite_table_repository.dart';
+import 'package:aperture/models/cell_edit.dart';
+import 'package:aperture/models/connection_config.dart';
+import 'package:aperture/models/db_object.dart';
+import 'package:aperture/services/sqlite_service.dart';
+import 'package:aperture/services/sqlite_table_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -153,7 +153,7 @@ void main() {
     late SqliteService svc;
 
     setUp(() async {
-      tmp = await Directory.systemTemp.createTemp('dbv_sqlite_test');
+      tmp = await Directory.systemTemp.createTemp('aperture_sqlite_test');
       final dbPath = '${tmp.path}/library.db';
       final seed = sqlite3.open(dbPath);
       seed.execute('''
@@ -447,7 +447,7 @@ void main() {
     late Directory tmp;
 
     setUp(() async {
-      tmp = await Directory.systemTemp.createTemp('dbv_sqlite_create');
+      tmp = await Directory.systemTemp.createTemp('aperture_sqlite_create');
     });
 
     tearDown(() async {

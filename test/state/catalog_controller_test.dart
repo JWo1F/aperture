@@ -1,6 +1,6 @@
-import 'package:dbv/models/db_object.dart';
-import 'package:dbv/services/db_service.dart';
-import 'package:dbv/state/catalog_controller.dart';
+import 'package:aperture/models/db_object.dart';
+import 'package:aperture/services/db_service.dart';
+import 'package:aperture/state/catalog_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

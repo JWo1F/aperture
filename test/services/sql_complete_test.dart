@@ -1,7 +1,7 @@
-import 'package:dbv/models/db_catalog.dart';
-import 'package:dbv/models/db_object.dart';
-import 'package:dbv/services/sql_complete.dart';
-import 'package:dbv/ui/widgets/code_editor.dart';
+import 'package:aperture/models/db_catalog.dart';
+import 'package:aperture/models/db_object.dart';
+import 'package:aperture/services/sql_complete.dart';
+import 'package:aperture/ui/widgets/code_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 DbTable _t(int oid, String schema, String name) =>

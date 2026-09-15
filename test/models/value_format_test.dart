@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:dbv/models/value_format.dart';
+import 'package:aperture/models/value_format.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

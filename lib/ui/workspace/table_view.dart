@@ -81,6 +81,11 @@ class TableView extends StatelessWidget {
                             onAddRow: (row) => tabs.addRow(tab, row),
                             widths: tab.columnWidths,
                             onWidthChanged: (col, w) {
+                              // Two homes, both needed: the tab's own map
+                              // re-seeds `ColumnWidths` when the next page
+                              // swaps the result in, and the store is what
+                              // survives a relaunch.
+                              tab.setColumnWidth(col, w);
                               final id = session.activeConnection?.id;
                               if (id != null) {
                                 store.setColumnWidth(id, tab.table, col, w);

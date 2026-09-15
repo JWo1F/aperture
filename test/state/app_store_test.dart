@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:dbv/models/connection_config.dart';
-import 'package:dbv/models/db_object.dart';
-import 'package:dbv/models/query_message.dart';
-import 'package:dbv/services/atomic_json.dart';
-import 'package:dbv/state/app_store.dart';
+import 'package:aperture/models/connection_config.dart';
+import 'package:aperture/models/db_object.dart';
+import 'package:aperture/models/query_message.dart';
+import 'package:aperture/services/atomic_json.dart';
+import 'package:aperture/state/app_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 

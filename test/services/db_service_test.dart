@@ -1,5 +1,5 @@
-import 'package:dbv/models/cell_edit.dart';
-import 'package:dbv/services/db_service.dart';
+import 'package:aperture/models/cell_edit.dart';
+import 'package:aperture/services/db_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

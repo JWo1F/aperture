@@ -1,8 +1,19 @@
-import 'package:dbv/state/navigation_history.dart';
-import 'package:dbv/state/workspace_tab.dart';
+import 'package:aperture/models/db_object.dart';
+import 'package:aperture/state/navigation_history.dart';
+import 'package:aperture/state/workspace_tab.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 QueryTab _tab(String id) => QueryTab(id, name: id, sql: '');
+
+TableTab _tableTab(String id) => TableTab(
+  id,
+  DbTable(
+    oid: DbTable.unknownOid,
+    schema: 'public',
+    name: id,
+    kind: DbRelationKind.table,
+  ),
+);
 
 void main() {
   group('NavigationHistory', () {
@@ -44,13 +55,63 @@ void main() {
       expect(landed, 'a');
     });
 
-    test('pushTab captures filter/select/order/page for a TableTab', () {
+    test('pushFocus dedups an identical consecutive snapshot', () {
       final h = NavigationHistory();
       final tab = _tab('t');
       h.pushFocus(tab);
-      // Pushing the same focus snapshot twice is dedup'd.
       h.pushFocus(tab);
       expect(h.canGoBack, isFalse);
+    });
+
+    test('pushTab captures filter/select/order/page for a TableTab', () {
+      final h = NavigationHistory();
+      final tab = _tableTab('t');
+      tab.setFilter('id > 10');
+      tab.setSelectList('id, name');
+      tab.setOrderBy('name DESC');
+      tab.beginPageLoad(page: 3);
+
+      h.pushTab(tab);
+      // Something to walk back FROM — `back` steps to the entry before
+      // the current one.
+      h.pushFocus(_tab('other'));
+
+      NavSnapshot? seen;
+      h.back((snap) {
+        seen = snap;
+        return true;
+      });
+      expect(seen, isNotNull);
+      expect(seen!.tabId, 't');
+      expect(seen!.filter, 'id > 10');
+      expect(seen!.selectList, 'id, name');
+      expect(seen!.orderBy, 'name DESC');
+      expect(seen!.page, 3);
+      expect(seen!.hasTableState, isTrue);
+    });
+
+    test('pushTab on a non-table tab records focus only', () {
+      final h = NavigationHistory();
+      h.pushTab(_tab('q'));
+      h.pushFocus(_tab('other'));
+
+      NavSnapshot? seen;
+      h.back((snap) {
+        seen = snap;
+        return true;
+      });
+      expect(seen!.hasTableState, isFalse);
+      expect(seen!.page, isNull);
+    });
+
+    test('a page change alone is still a distinct snapshot', () {
+      final h = NavigationHistory();
+      final tab = _tableTab('t');
+      h.pushTab(tab);
+      tab.beginPageLoad(page: 1);
+      h.pushTab(tab);
+      // Paging is navigation: ⌘[ has to be able to walk back through it.
+      expect(h.canGoBack, isTrue);
     });
 
     test('withSuppression blocks push', () {

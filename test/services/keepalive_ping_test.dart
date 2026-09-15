@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:dbv/models/connection_config.dart';
-import 'package:dbv/services/sqlite_service.dart';
+import 'package:aperture/models/connection_config.dart';
+import 'package:aperture/services/sqlite_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -12,7 +12,7 @@ void main() {
     late List<String> logged;
 
     setUp(() async {
-      tmp = await Directory.systemTemp.createTemp('dbv_ping_test');
+      tmp = await Directory.systemTemp.createTemp('aperture_ping_test');
       final dbPath = '${tmp.path}/ping.db';
       sqlite3.open(dbPath)
         ..execute('CREATE TABLE t (id INTEGER PRIMARY KEY);')

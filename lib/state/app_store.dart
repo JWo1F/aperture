@@ -108,7 +108,11 @@ class AppStore extends ChangeNotifier {
 
   // ---- master passphrase --------------------------------------------
 
-  static const String _passphraseSentinel = 'dbv-vault-ok';
+  /// The plaintext [setupPassphrase] seals into the stored `verifier` and
+  /// [unlockPassphrase] compares the decrypted bytes against. Changing it
+  /// invalidates every vault sealed under the old value — they fail with
+  /// the wrong-passphrase message and cannot be recovered.
+  static const String _passphraseSentinel = 'aperture-vault-ok';
 
   Map<String, dynamic>? _security;
   Uint8List? _passphraseKey;
@@ -568,7 +572,7 @@ class AppStore extends ChangeNotifier {
     } catch (e, st) {
       developer.log(
         'failed to save store.json',
-        name: 'dbv.store',
+        name: 'aperture.store',
         error: e,
         stackTrace: st,
       );
@@ -595,7 +599,7 @@ class AppStore extends ChangeNotifier {
     } catch (e, st) {
       developer.log(
         'failed to read $name from store.json',
-        name: 'dbv.store',
+        name: 'aperture.store',
         error: e,
         stackTrace: st,
       );
@@ -652,7 +656,7 @@ class AppStore extends ChangeNotifier {
       } catch (e, st) {
         developer.log(
           'failed to parse connection entry',
-          name: 'dbv.store',
+          name: 'aperture.store',
           error: e,
           stackTrace: st,
         );

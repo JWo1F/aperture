@@ -12,7 +12,7 @@ class MainFlutterWindow: NSWindow {
     MainFlutterWindowManipulator.start(mainFlutterWindow: self)
 
     let messenger = macOSWindowUtilsViewController.flutterViewController.engine.binaryMessenger
-    let channel = FlutterMethodChannel(name: "dbv/window", binaryMessenger: messenger)
+    let channel = FlutterMethodChannel(name: "aperture/window", binaryMessenger: messenger)
     channel.setMethodCallHandler { [weak self] call, result in
       guard let window = self else { result(nil); return }
       switch call.method {

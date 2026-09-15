@@ -14,7 +14,7 @@ import 'connection_pill.dart';
 import 'toolbar_actions.dart';
 import 'toolbar_widgets.dart';
 
-const _windowChannel = MethodChannel('dbv/window');
+const _windowChannel = MethodChannel('aperture/window');
 
 /// Width reserved on the left of the top toolbar for the macOS traffic-light
 /// buttons, which are drawn by the OS on top of our Flutter content.

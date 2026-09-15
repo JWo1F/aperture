@@ -1,8 +1,8 @@
-import 'package:dbv/ui/workspace/query_plan/analysis/advice_engine.dart';
-import 'package:dbv/ui/workspace/query_plan/analysis/advice_rules.dart';
-import 'package:dbv/ui/workspace/query_plan/model/advice.dart';
-import 'package:dbv/ui/workspace/query_plan/model/plan_node.dart';
-import 'package:dbv/ui/workspace/query_plan/parsing/plan_parser.dart';
+import 'package:aperture/ui/workspace/query_plan/analysis/advice_engine.dart';
+import 'package:aperture/ui/workspace/query_plan/analysis/advice_rules.dart';
+import 'package:aperture/ui/workspace/query_plan/model/advice.dart';
+import 'package:aperture/ui/workspace/query_plan/model/plan_node.dart';
+import 'package:aperture/ui/workspace/query_plan/parsing/plan_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Tiny builder for synthetic plan-node maps. Keeps tests focused on the

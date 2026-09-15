@@ -3,7 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/services.dart';
 
-/// Native macOS window-frame plumbing routed through `dbv/window`.
+/// Native macOS window-frame plumbing routed through `aperture/window`.
 ///
 /// The Swift side translates between AppKit's bottom-left-origin frame
 /// and our preference shape. Off-screen restorations (e.g. after the
@@ -11,7 +11,7 @@ import 'package:flutter/services.dart';
 /// and the window stays at its default position.
 class WindowFrame {
   WindowFrame({MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel('dbv/window');
+    : _channel = channel ?? const MethodChannel('aperture/window');
 
   final MethodChannel _channel;
 
@@ -31,7 +31,7 @@ class WindowFrame {
     } catch (e, st) {
       developer.log(
         'getWindowFrame failed',
-        name: 'dbv.window',
+        name: 'aperture.window',
         error: e,
         stackTrace: st,
       );
@@ -47,7 +47,7 @@ class WindowFrame {
     } catch (e, st) {
       developer.log(
         'setWindowFrame failed',
-        name: 'dbv.window',
+        name: 'aperture.window',
         error: e,
         stackTrace: st,
       );

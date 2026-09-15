@@ -1,6 +1,6 @@
-import 'package:dbv/models/connection_config.dart';
-import 'package:dbv/models/saved_query.dart';
-import 'package:dbv/ui/connection/dialog/connection_form_model.dart';
+import 'package:aperture/models/connection_config.dart';
+import 'package:aperture/models/saved_query.dart';
+import 'package:aperture/ui/connection/dialog/connection_form_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

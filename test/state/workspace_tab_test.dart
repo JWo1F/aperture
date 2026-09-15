@@ -1,6 +1,6 @@
-import 'package:dbv/models/db_object.dart';
-import 'package:dbv/models/query_result.dart';
-import 'package:dbv/state/workspace_tab.dart';
+import 'package:aperture/models/db_object.dart';
+import 'package:aperture/models/query_result.dart';
+import 'package:aperture/state/workspace_tab.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 DbTable _table() => DbTable(
@@ -18,6 +18,38 @@ QueryResult _page(List<String> rowIds) => QueryResult.rows(
 );
 
 void main() {
+  group('TableTab column widths', () {
+    test('the public view refuses writes, so callers must use the mutator', () {
+      final tab = TableTab('w1', _table());
+      // The grid header once assigned straight into this view on every
+      // resize tick; it threw, and the persist callback on the next line
+      // never ran, so no width ever reached the store.
+      expect(
+        () => tab.columnWidths['id'] = 120,
+        throwsUnsupportedError,
+      );
+    });
+
+    test('setColumnWidth records and survives a page load', () {
+      final tab = TableTab('w2', _table());
+      tab.setColumnWidth('id', 120);
+      tab.setColumnWidth('name', 240);
+      expect(tab.columnWidths, {'id': 120.0, 'name': 240.0});
+
+      // A new page must not lose the widths — they are keyed by column
+      // name, not row position.
+      tab.beginPageLoad(page: 1);
+      expect(tab.columnWidths, {'id': 120.0, 'name': 240.0});
+    });
+
+    test('mergeSavedWidths seeds without clobbering a live resize', () {
+      final tab = TableTab('w3', _table());
+      tab.setColumnWidth('id', 120);
+      tab.mergeSavedWidths({'name': 200});
+      expect(tab.columnWidths, {'id': 120.0, 'name': 200.0});
+    });
+  });
+
   group('TableTab pending state across a page load', () {
     test('a fresh page drops every row-indexed pending mutation', () {
       final tab = TableTab('t1', _table());
