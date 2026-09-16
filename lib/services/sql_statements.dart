@@ -256,6 +256,48 @@ bool _containsSql(String fragment) {
   return false;
 }
 
+/// The leading keyword of [sql], uppercased — `SELECT`, `INSERT`, `WITH`,
+/// `CREATE`, … — or null when the fragment carries no executable word.
+///
+/// Leading whitespace, line comments, block comments and open parens are
+/// skipped so a commented-out header or a parenthesised `(SELECT …)` still
+/// reports the verb the engine will see. This is a label for the toolbar,
+/// not a parse: `WITH` reports as `WITH` rather than resolving to the
+/// statement its CTE feeds.
+String? statementKind(String sql) {
+  var i = 0;
+  while (i < sql.length) {
+    final c = sql.codeUnitAt(i);
+    if (_isBlank(c) || c == 0x28) {
+      i++;
+      continue;
+    }
+    if (c == 0x2D && i + 1 < sql.length && sql.codeUnitAt(i + 1) == 0x2D) {
+      while (i < sql.length && sql.codeUnitAt(i) != 0x0A) {
+        i++;
+      }
+      continue;
+    }
+    if (c == 0x2F && i + 1 < sql.length && sql.codeUnitAt(i + 1) == 0x2A) {
+      i += 2;
+      while (i + 1 < sql.length &&
+          !(sql.codeUnitAt(i) == 0x2A && sql.codeUnitAt(i + 1) == 0x2F)) {
+        i++;
+      }
+      i = i + 1 < sql.length ? i + 2 : sql.length;
+      continue;
+    }
+    break;
+  }
+
+  final start = i;
+  while (i < sql.length && _isIdentChar(sql.codeUnitAt(i))) {
+    i++;
+  }
+  if (i == start) return null;
+  return sql.substring(start, i).toUpperCase();
+}
+
 /// Returns the statement that contains [offset], or null if [offset] sits in
 /// the whitespace/comments between statements.
 SqlStatement? statementAtOffset(List<SqlStatement> stmts, int offset) {

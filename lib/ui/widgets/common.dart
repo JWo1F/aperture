@@ -79,24 +79,73 @@ class _HoverableState extends State<Hoverable> {
 
 /// Tiny key-cap-style chip used to render keyboard shortcut hints inline
 /// next to buttons.
+///
+/// The `onAccent` variant swaps the outlined chip for a translucent white
+/// one so the glyph stays legible when the chip sits on a saturated accent
+/// or error fill.
 class KbdChip extends StatelessWidget {
-  const KbdChip(this.text, {super.key});
+  const KbdChip(this.text, {super.key, this.size = 10, this.onAccent = false});
 
   final String text;
+  final double size;
+  final bool onAccent;
 
   @override
   Widget build(BuildContext context) {
+    final box = size + 6;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      height: box,
+      constraints: BoxConstraints(minWidth: box),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
+        color: onAccent
+            ? Colors.white.withValues(alpha: 0.16)
+            : AppColors.surfaceAlt,
         borderRadius: Radii.brSm,
-        border: Border.all(color: AppColors.border),
+        border: onAccent ? null : Border.all(color: AppColors.border),
       ),
       child: Text(
         text,
-        style: AppTheme.mono(size: 10, color: AppColors.textMuted),
+        textAlign: TextAlign.center,
+        // height: 1.0 collapses the mono font's 1.4 line box so the glyph
+        // sits centred instead of riding the cap's top edge.
+        style: AppTheme.mono(
+          size: size,
+          color: onAccent
+              ? Colors.white.withValues(alpha: 0.92)
+              : AppColors.textMuted,
+          weight: FontWeight.w500,
+        ).copyWith(height: 1.0),
       ),
+    );
+  }
+}
+
+/// A multi-key shortcut rendered as one [KbdChip] per glyph — `['⌘', '⇧',
+/// '↵']`.
+class KbdCluster extends StatelessWidget {
+  const KbdCluster(
+    this.parts, {
+    super.key,
+    this.size = 10,
+    this.onAccent = false,
+  });
+
+  final List<String> parts;
+  final double size;
+  final bool onAccent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < parts.length; i++) ...[
+          if (i > 0) const SizedBox(width: 3),
+          KbdChip(parts[i], size: size, onAccent: onAccent),
+        ],
+      ],
     );
   }
 }

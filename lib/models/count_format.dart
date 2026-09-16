@@ -55,3 +55,24 @@ String compactBytes(int bytes) {
   }
   return '${(bytes / tb).toStringAsFixed(1)}TB';
 }
+
+/// Elapsed time for a running query, sized so the string stays short and
+/// the digit count stays stable while the counter climbs: `0.4s`, `12.7s`,
+/// `1m 04s`, `1h 04m`.
+///
+/// Sub-minute values carry one decimal because a query that finishes in
+/// under a second is the common case and `0s` would read as instant. The
+/// decimal floors rather than rounds: a counter must never claim more time
+/// than has passed, and rounding put `59.999s` on screen as `60.0s`.
+String formatRunElapsed(Duration d) {
+  final ms = d.inMilliseconds < 0 ? 0 : d.inMilliseconds;
+  if (ms < 60000) return '${(ms ~/ 100) / 10}s';
+  if (ms < 3600000) {
+    final m = ms ~/ 60000;
+    final s = (ms % 60000) ~/ 1000;
+    return '${m}m ${s.toString().padLeft(2, '0')}s';
+  }
+  final h = ms ~/ 3600000;
+  final m = (ms % 3600000) ~/ 60000;
+  return '${h}h ${m.toString().padLeft(2, '0')}m';
+}

@@ -21,16 +21,22 @@ typedef LineIconBuilder = LineIcon? Function(int line);
 
 /// Soft accent band stretched across lines [startLine]..[endLine] (inclusive,
 /// 0-based) — used by the SQL editor to highlight the active statement.
+///
+/// [spine] paints a solid 2px rule down the band's left edge, flush against
+/// the gutter hairline. The wash alone reads as ambient tint at low alpha;
+/// the spine is what makes the block's extent unambiguous.
 class LineBand {
   const LineBand({
     required this.startLine,
     required this.endLine,
     required this.color,
+    this.spine,
   });
 
   final int startLine;
   final int endLine;
   final Color color;
+  final Color? spine;
 }
 
 /// A small, self-contained code editor. Owns the gutter, line numbers, line
@@ -552,6 +558,9 @@ class _CodeEditorState extends State<CodeEditor> {
               colors: [band.color, Colors.transparent],
               stops: const [0.0, 0.8],
             ),
+            border: band.spine == null
+                ? null
+                : Border(left: BorderSide(color: band.spine!, width: 2)),
           ),
         ),
       ),

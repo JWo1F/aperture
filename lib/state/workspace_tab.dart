@@ -104,6 +104,7 @@ class QueryTab extends WorkspaceTab {
   QueryResult? _result;
   bool _running = false;
   String? _runningSql;
+  DateTime? _runStartedAt;
   bool _cancelRequested = false;
   DateTime? _lastRefreshedAt;
   String? _lastRunSql;
@@ -169,6 +170,12 @@ class QueryTab extends WorkspaceTab {
   /// hops down through the script as the loop advances.
   String? get runningSql => _runningSql;
 
+  /// Wall-clock instant the in-flight statement was sent, or null when
+  /// idle. The elapsed counter in the toolbar and status bar derives from
+  /// this rather than from a widget-local stopwatch, so the count keeps
+  /// running across a tab switch instead of restarting from zero.
+  DateTime? get runStartedAt => _runStartedAt;
+
   /// True after [requestCancel]; the run-all loop reads it between
   /// statements to break early. Cleared on the next [beginRun].
   bool get cancelRequested => _cancelRequested;
@@ -189,6 +196,7 @@ class QueryTab extends WorkspaceTab {
     if (_running) return;
     _running = true;
     _runningSql = sql;
+    _runStartedAt = DateTime.now();
     _cancelRequested = false;
     notifyListeners();
   }
@@ -226,6 +234,20 @@ class QueryTab extends WorkspaceTab {
     }
     _running = false;
     _runningSql = null;
+    _runStartedAt = null;
+    notifyListeners();
+  }
+
+  /// Drop the grid and the plan that describes it, keeping [lastRunSql]
+  /// so refresh and Explain stay reachable on an emptied tab.
+  void clearResult() {
+    if (_result == null && _planJson == null && _planError == null) return;
+    _result = null;
+    _lastRefreshedAt = null;
+    _planJson = null;
+    _planError = null;
+    _planLoading = false;
+    _planSourceSql = null;
     notifyListeners();
   }
 

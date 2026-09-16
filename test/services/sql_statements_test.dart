@@ -2,6 +2,7 @@ import 'package:aperture/services/sql_statements.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  _statementKindTests();
   group('parseSqlStatements — comment-only tails', () {
     test('a trailing line comment is not a statement', () {
       // The run-all loop executes each entry, and SQLite's prepare()
@@ -190,6 +191,42 @@ SELECT 2
       const sql = 'SELECT 1';
       final stmts = parseSqlStatements(sql);
       expect(statementAtOffset(stmts, 8)?.text, 'SELECT 1');
+    });
+  });
+}
+
+void _statementKindTests() {
+  group('statementKind', () {
+    test('reports the leading keyword uppercased', () {
+      expect(statementKind('select 1'), 'SELECT');
+      expect(statementKind('INSERT INTO t VALUES (1)'), 'INSERT');
+      expect(statementKind('  update t set a = 1'), 'UPDATE');
+    });
+
+    test('skips leading line and block comments', () {
+      expect(statementKind('-- pick everyone\nSELECT * FROM users'), 'SELECT');
+      expect(statementKind('/* header */ delete from t'), 'DELETE');
+      expect(statementKind('/* a */\n-- b\n  CREATE TABLE t ()'), 'CREATE');
+    });
+
+    test('sees through a leading open paren', () {
+      expect(statementKind('(SELECT 1) UNION (SELECT 2)'), 'SELECT');
+    });
+
+    test('reports WITH for a CTE rather than resolving the inner verb', () {
+      expect(statementKind('WITH x AS (SELECT 1) SELECT * FROM x'), 'WITH');
+    });
+
+    test('returns null when nothing executable is present', () {
+      expect(statementKind(''), isNull);
+      expect(statementKind('   \n\t '), isNull);
+      expect(statementKind('-- only a comment'), isNull);
+      expect(statementKind('/* only a block */'), isNull);
+    });
+
+    test('stops at the first non-identifier character', () {
+      expect(statementKind('SELECT*FROM t'), 'SELECT');
+      expect(statementKind('vacuum;'), 'VACUUM');
     });
   });
 }

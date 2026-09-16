@@ -8,7 +8,7 @@ import '../app_shell/confirm_discard.dart';
 import '../widgets/common.dart';
 import '../widgets/context_menu.dart';
 import '../widgets/value_selector.dart';
-import 'query_editor.dart';
+import 'query/query_editor.dart';
 import 'schema_view.dart';
 import 'table_view.dart';
 import 'workspace_home.dart';
