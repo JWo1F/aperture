@@ -36,7 +36,7 @@ class ConnectionFormModel extends ChangeNotifier {
     );
     filePath = TextEditingController(text: e?.filePath ?? '');
     _engine = e?.engine ?? DbEngine.postgres;
-    _sslMode = (e?.useSsl ?? false) ? 'require' : 'disable';
+    _tls = e?.tls ?? TlsMode.off;
     _color = e?.color != null ? Color(e!.color!) : kConnectionColors.first;
     _readOnly = e?.readOnly ?? false;
     _credentialMode = ec != null ? _modeOf(ec) : CredentialMode.password;
@@ -76,11 +76,11 @@ class ConnectionFormModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  late String _sslMode;
-  String get sslMode => _sslMode;
-  set sslMode(String v) {
-    if (v == _sslMode) return;
-    _sslMode = v;
+  late TlsMode _tls;
+  TlsMode get tls => _tls;
+  set tls(TlsMode v) {
+    if (v == _tls) return;
+    _tls = v;
     notifyListeners();
   }
 
@@ -144,7 +144,8 @@ class ConnectionFormModel extends ChangeNotifier {
   /// [ConnectionConfig.queryMessages], [ConnectionConfig.lastConnectedAt])
   /// survives via [ConnectionConfig.copyWith].
   ConnectionConfig buildConfig() {
-    final base = existing ??
+    final base =
+        existing ??
         ConnectionConfig(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
           name: '',
@@ -174,7 +175,7 @@ class ConnectionFormModel extends ChangeNotifier {
       database: db,
       username: username.text.trim(),
       credential: _buildCredential(),
-      useSsl: _sslMode != 'disable',
+      tls: _tls,
       color: _color.toARGB32(),
       readOnly: _readOnly,
     );

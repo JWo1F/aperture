@@ -59,7 +59,7 @@ void main() {
       expect(base.sameTarget(base.copyWith(port: 5433)), isFalse);
       expect(base.sameTarget(base.copyWith(database: 'app_test')), isFalse);
       expect(base.sameTarget(base.copyWith(username: 'readonly')), isFalse);
-      expect(base.sameTarget(base.copyWith(useSsl: true)), isFalse);
+      expect(base.sameTarget(base.copyWith(tls: TlsMode.require)), isFalse);
       expect(base.sameTarget(base.copyWith(engine: DbEngine.sqlite)), isFalse);
       expect(base.sameTarget(base.copyWith(filePath: '/tmp/a.db')), isFalse);
     });

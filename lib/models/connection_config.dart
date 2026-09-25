@@ -20,6 +20,20 @@ class CommandCredential extends Credential {
   final String command;
 }
 
+/// How a Postgres connection uses TLS — exactly the modes the driver
+/// implements.
+enum TlsMode {
+  /// Plain TCP; the password crosses the network readable.
+  off,
+
+  /// Encrypted, accepting any server certificate.
+  require,
+
+  /// Encrypted, and the certificate must chain to a root macOS trusts and
+  /// match the host name.
+  verify,
+}
+
 /// Which database engine a connection targets.
 enum DbEngine {
   postgres,
@@ -43,7 +57,7 @@ class ConnectionConfig {
     this.credential = const PasswordCredential(''),
     this.runtimePassword = '',
     this.filePath = '',
-    this.useSsl = false,
+    this.tls = TlsMode.off,
     this.readOnly = false,
     this.color,
     this.lastConnectedAt,
@@ -83,7 +97,7 @@ class ConnectionConfig {
   /// present in the settings store.
   final String runtimePassword;
 
-  final bool useSsl;
+  final TlsMode tls;
 
   /// When true, the workspace blocks cell edits and DDL/UPDATE/DELETE
   /// gestures. The flag is purely client-side — it does not change the
@@ -105,7 +119,7 @@ class ConnectionConfig {
       database == other.database &&
       username == other.username &&
       filePath == other.filePath &&
-      useSsl == other.useSsl &&
+      tls == other.tls &&
       readOnly == other.readOnly;
 
   /// User-chosen identity color, stored as a 0xAARRGGBB int. Tints the
@@ -156,7 +170,7 @@ class ConnectionConfig {
     Credential? credential,
     String? runtimePassword,
     String? filePath,
-    bool? useSsl,
+    TlsMode? tls,
     bool? readOnly,
     Object? color = _unset,
     DateTime? lastConnectedAt,
@@ -178,7 +192,7 @@ class ConnectionConfig {
       credential: credential ?? this.credential,
       runtimePassword: runtimePassword ?? this.runtimePassword,
       filePath: filePath ?? this.filePath,
-      useSsl: useSsl ?? this.useSsl,
+      tls: tls ?? this.tls,
       readOnly: readOnly ?? this.readOnly,
       color: identical(color, _unset) ? this.color : color as int?,
       lastConnectedAt: lastConnectedAt ?? this.lastConnectedAt,

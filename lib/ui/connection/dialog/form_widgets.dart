@@ -5,7 +5,6 @@ import '../../../models/connection_config.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
-import 'connection_form_model.dart';
 
 /// Inter caption rendered above a form control.
 TextStyle get fieldLabelStyle => AppTheme.ui(
@@ -188,70 +187,10 @@ class _BoxedTextInputState extends State<BoxedTextInput> {
   }
 }
 
-/// Read-only boxed control that opens a menu on tap — visually matches
-/// [BoxedTextInput] so the SSL row sits flush with the text fields.
-class BoxedSelect extends StatelessWidget {
-  const BoxedSelect({
-    super.key,
-    required this.icon,
-    required this.iconColor,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Hoverable(
-      onTap: onTap,
-      builder: (_, hovering) => Container(
-        height: 36,
-        padding: const EdgeInsets.symmetric(horizontal: 11),
-        decoration: BoxDecoration(
-          color: AppColors.bg,
-          borderRadius: Radii.brSm,
-          border: Border.all(
-            color: hovering ? AppColors.borderStrong : AppColors.border,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 14, color: iconColor),
-            const SizedBox(width: 9),
-            Text(
-              label,
-              style: AppTheme.ui(
-                size: 12.5,
-                weight: FontWeight.w500,
-                color: AppColors.textPrimary,
-                letterSpacing: 0,
-              ),
-            ),
-            const Spacer(),
-            Icon(
-              Hgi.expand,
-              size: 15,
-              color: hovering ? AppColors.textSecondary : AppColors.textMuted,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// Small icon-only affordance that lives inside a [BoxedTextInput] (the
 /// show/hide-password eye).
 class GhostIconButton extends StatelessWidget {
-  const GhostIconButton({
-    super.key,
-    required this.icon,
-    required this.onTap,
-  });
+  const GhostIconButton({super.key, required this.icon, required this.onTap});
 
   final IconData icon;
   final VoidCallback onTap;
@@ -328,11 +267,7 @@ class InlineAction extends StatelessWidget {
 
 /// Full-width two-up selector for the database engine.
 class EngineToggle extends StatelessWidget {
-  const EngineToggle({
-    super.key,
-    required this.value,
-    required this.onChanged,
-  });
+  const EngineToggle({super.key, required this.value, required this.onChanged});
 
   final DbEngine value;
   final ValueChanged<DbEngine> onChanged;
@@ -350,20 +285,10 @@ class EngineToggle extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: _segment(
-              DbEngine.postgres,
-              Hgi.serverStack01,
-              'PostgreSQL',
-            ),
+            child: _segment(DbEngine.postgres, Hgi.serverStack01, 'PostgreSQL'),
           ),
           const SizedBox(width: 3),
-          Expanded(
-            child: _segment(
-              DbEngine.sqlite,
-              Hgi.file01,
-              'SQLite',
-            ),
-          ),
+          Expanded(child: _segment(DbEngine.sqlite, Hgi.file01, 'SQLite')),
         ],
       ),
     );
@@ -397,9 +322,7 @@ class EngineToggle extends StatelessWidget {
               size: 14,
               color: selected
                   ? AppColors.accent
-                  : (hovering
-                        ? AppColors.textSecondary
-                        : AppColors.textMuted),
+                  : (hovering ? AppColors.textSecondary : AppColors.textMuted),
             ),
             const SizedBox(width: 8),
             Text(
@@ -422,16 +345,19 @@ class EngineToggle extends StatelessWidget {
   }
 }
 
-/// Two-up segmented control for where a connection's password comes from.
-class CredentialModeToggle extends StatelessWidget {
-  const CredentialModeToggle({
+/// Compact segmented control. The selection moves instantly — no
+/// cross-fade between segments.
+class SegmentedChoice<T> extends StatelessWidget {
+  const SegmentedChoice({
     super.key,
     required this.value,
+    required this.options,
     required this.onChanged,
   });
 
-  final CredentialMode value;
-  final ValueChanged<CredentialMode> onChanged;
+  final T value;
+  final List<(T, String)> options;
+  final ValueChanged<T> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -446,25 +372,25 @@ class CredentialModeToggle extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _segment(CredentialMode.password, 'Password'),
-          _segment(CredentialMode.command, 'Command'),
+          for (final (option, label) in options) _segment(option, label),
         ],
       ),
     );
   }
 
-  Widget _segment(CredentialMode mode, String label) {
-    final selected = mode == value;
+  Widget _segment(T option, String label) {
+    final selected = option == value;
     return Hoverable(
-      onTap: () => onChanged(mode),
-      builder: (_, hovering) => AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
+      onTap: () => onChanged(option),
+      builder: (_, hovering) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 9),
         height: 20,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected
               ? AppColors.accent
+              : hovering
+              ? AppColors.surfaceHover
               : AppColors.accent.withValues(alpha: 0),
           borderRadius: BorderRadius.circular(4),
         ),
@@ -507,9 +433,7 @@ class ColorSwatchButton extends StatelessWidget {
         width: 26,
         height: 26,
         decoration: BoxDecoration(
-          color: color.withValues(
-            alpha: selected ? 1 : (hovering ? 0.9 : 0.8),
-          ),
+          color: color.withValues(alpha: selected ? 1 : (hovering ? 0.9 : 0.8)),
           shape: BoxShape.circle,
           border: Border.all(
             color: selected
@@ -537,11 +461,7 @@ class ColorSwatchButton extends StatelessWidget {
 
 /// Pill-shaped on/off switch.
 class PillToggle extends StatelessWidget {
-  const PillToggle({
-    super.key,
-    required this.value,
-    required this.onChanged,
-  });
+  const PillToggle({super.key, required this.value, required this.onChanged});
 
   final bool value;
   final ValueChanged<bool> onChanged;

@@ -5,7 +5,6 @@ import '../../../models/connection_config.dart';
 import '../../../services/password_command.dart';
 import '../../../services/sqlite_service.dart';
 import '../../../theme/app_theme.dart';
-import '../../../theme/hugeicons.dart';
 import 'connection_form_model.dart';
 import 'connection_test.dart';
 import 'dialog_body.dart';
@@ -28,15 +27,6 @@ Future<ConnectionConfig?> showConnectionDialog(
     builder: (_) => _ConnectionDialog(existing: existing),
   );
 }
-
-const List<String> _sslModes = [
-  'disable',
-  'allow',
-  'prefer',
-  'require',
-  'verify-ca',
-  'verify-full',
-];
 
 const _sqliteTypeGroup = XTypeGroup(
   label: 'SQLite database',
@@ -83,9 +73,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
   }
 
   Future<void> _pickFile() async {
-    final file = await openFile(
-      acceptedTypeGroups: const [_sqliteTypeGroup],
-    );
+    final file = await openFile(acceptedTypeGroups: const [_sqliteTypeGroup]);
     if (file != null && mounted) _model.filePath.text = file.path;
   }
 
@@ -108,55 +96,6 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
       return;
     }
     _model.filePath.text = location.path;
-  }
-
-  Future<void> _openSslMenu() async {
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final picked = await showMenu<String>(
-      context: context,
-      color: AppColors.surfaceAlt,
-      elevation: 8,
-      shape: RoundedRectangleBorder(
-        borderRadius: Radii.brSm,
-        side: BorderSide(color: AppColors.borderStrong),
-      ),
-      position: RelativeRect.fromLTRB(
-        box.size.width / 2 - 100,
-        box.size.height / 2,
-        box.size.width / 2 + 100,
-        box.size.height / 2 + 200,
-      ),
-      items: [
-        for (final m in _sslModes)
-          PopupMenuItem<String>(
-            value: m,
-            height: 32,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                Icon(
-                  m == _model.sslMode ? Hgi.tick02 : Hgi.circle,
-                  size: m == _model.sslMode ? 14 : 4,
-                  color: m == _model.sslMode
-                      ? AppColors.accent
-                      : AppColors.textMuted,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  m,
-                  style: AppTheme.ui(
-                    size: 12.5,
-                    color: AppColors.textPrimary,
-                    weight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-    if (picked != null && mounted) _model.sslMode = picked;
   }
 
   @override
@@ -200,7 +139,6 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
                         model: _model,
                         onPickFile: _pickFile,
                         onCreateFile: _createFile,
-                        onOpenSslMenu: _openSslMenu,
                       ),
                     ),
                   ),
@@ -208,8 +146,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
                     result: _testResult,
                     isEdit: _model.isEdit,
                     onTest:
-                        _model.valid &&
-                            _testResult.status != TestStatus.busy
+                        _model.valid && _testResult.status != TestStatus.busy
                         ? _testConnection
                         : null,
                     onSubmit: _model.valid ? _submit : null,

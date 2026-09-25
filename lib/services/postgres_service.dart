@@ -106,7 +106,11 @@ class PostgresService implements DbService {
         password: config.runtimePassword,
       ),
       settings: ConnectionSettings(
-        sslMode: config.useSsl ? SslMode.require : SslMode.disable,
+        sslMode: switch (config.tls) {
+          TlsMode.off => SslMode.disable,
+          TlsMode.require => SslMode.require,
+          TlsMode.verify => SslMode.verifyFull,
+        },
         connectTimeout: const Duration(seconds: 10),
         applicationName: 'aperture',
       ),

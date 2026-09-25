@@ -6,6 +6,7 @@ import 'package:aperture/models/query_message.dart';
 import 'package:aperture/models/saved_query.dart';
 import 'package:aperture/services/store_database.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 void main() {
   late Directory dir;
@@ -31,7 +32,7 @@ void main() {
     database: 'app',
     username: 'alice',
     credential: const CommandCredential("op read 'op://V/I/password'"),
-    useSsl: true,
+    tls: TlsMode.verify,
     readOnly: true,
     color: 0xFF3B82F6,
     lastConnectedAt: DateTime.fromMillisecondsSinceEpoch(1_760_000_000_000),
@@ -95,7 +96,7 @@ void main() {
     expect(c.name, 'Production');
     expect(c.host, 'db.internal');
     expect(c.port, 6432);
-    expect(c.useSsl, isTrue);
+    expect(c.tls, TlsMode.verify);
     expect(c.readOnly, isTrue);
     expect(c.color, 0xFF3B82F6);
     expect(c.lastConnectedAt, connection.lastConnectedAt);
@@ -168,6 +169,22 @@ void main() {
       throwsA(isA<WrongPassphraseException>()),
     );
     expect(openStore('new').load().connections, hasLength(1));
+  });
+
+  test('a version-1 store keeps its SSL choice as a TLS mode', () {
+    openStore().save(StoreSnapshot(preferences: {}, connections: [sqlite]));
+    // Wind the file back to how version 1 laid it out.
+    final raw = sqlite3.open(path)
+      ..execute("PRAGMA cipher = 'sqlcipher'")
+      ..execute('PRAGMA legacy = 4')
+      ..execute("PRAGMA key = 'correct horse'")
+      ..execute('ALTER TABLE connections RENAME COLUMN tls_mode TO use_ssl')
+      ..execute('UPDATE connections SET use_ssl = 1')
+      ..execute('PRAGMA user_version = 1');
+    raw.close();
+
+    final c = openStore().load().connections.single;
+    expect(c.tls, TlsMode.require);
   });
 
   test('erase removes the store', () {

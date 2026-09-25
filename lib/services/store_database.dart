@@ -98,11 +98,22 @@ class StoreDatabase {
 
   // ---- schema -------------------------------------------------------
 
-  static const int _schemaVersion = 1;
+  static const int _schemaVersion = 2;
 
   void _migrate() {
     final version = _db.select('PRAGMA user_version').single.columnAt(0);
     if (version == _schemaVersion) return;
+    if (version == 1) {
+      // The boolean `use_ssl` becomes a [TlsMode] index; its 0 / 1 are
+      // already `off` / `require`.
+      _db.execute('''
+        BEGIN;
+        ALTER TABLE connections RENAME COLUMN use_ssl TO tls_mode;
+        PRAGMA user_version = $_schemaVersion;
+        COMMIT;
+      ''');
+      return;
+    }
     if (version != 0) {
       throw StateError(
         'store.sqlite has schema version $version; this build knows '
@@ -127,7 +138,7 @@ class StoreDatabase {
         file_path         TEXT NOT NULL,
         credential_kind   TEXT NOT NULL,
         credential_value  TEXT NOT NULL,
-        use_ssl           INTEGER NOT NULL,
+        tls_mode          INTEGER NOT NULL,
         read_only         INTEGER NOT NULL,
         color             INTEGER,
         last_connected_at INTEGER
@@ -258,7 +269,7 @@ class StoreDatabase {
             r['credential_kind'] as String,
             r['credential_value'] as String,
           ),
-          useSsl: r['use_ssl'] == 1,
+          tls: TlsMode.values[r['tls_mode'] as int],
           readOnly: r['read_only'] == 1,
           color: r['color'] as int?,
           lastConnectedAt: _maybeTime(r['last_connected_at'] as int?),
@@ -351,7 +362,7 @@ class StoreDatabase {
               PasswordCredential(password: final p) => ['password', p],
               CommandCredential(command: final c) => ['command', c],
             },
-            cs[i].useSsl ? 1 : 0,
+            cs[i].tls.index,
             cs[i].readOnly ? 1 : 0,
             cs[i].color,
             cs[i].lastConnectedAt?.millisecondsSinceEpoch,

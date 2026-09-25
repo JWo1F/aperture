@@ -15,21 +15,19 @@ const String _credentialCommandHelp =
 
 /// The scrollable form body of the connection dialog. Reads and mutates a
 /// [ConnectionFormModel]; file-picking and the SSL menu are delegated back
-/// to the owning dialog through the [onPickFile], [onCreateFile] and
-/// [onOpenSslMenu] callbacks since they need the dialog's render context.
+/// to the owning dialog through the [onPickFile] and [onCreateFile]
+/// callbacks since they need the dialog's render context.
 class ConnectionDialogBody extends StatelessWidget {
   const ConnectionDialogBody({
     super.key,
     required this.model,
     required this.onPickFile,
     required this.onCreateFile,
-    required this.onOpenSslMenu,
   });
 
   final ConnectionFormModel model;
   final VoidCallback onPickFile;
   final VoidCallback onCreateFile;
-  final VoidCallback onOpenSslMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -37,10 +35,7 @@ class ConnectionDialogBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        EngineToggle(
-          value: model.engine,
-          onChanged: (v) => model.engine = v,
-        ),
+        EngineToggle(value: model.engine, onChanged: (v) => model.engine = v),
         const SizedBox(height: 18),
         LabeledField(
           label: 'Display name',
@@ -68,7 +63,7 @@ class ConnectionDialogBody extends StatelessWidget {
           const SizedBox(height: 14),
           _passwordField(),
           const SizedBox(height: 14),
-          _sslField(),
+          _tlsField(),
         ],
         const SizedBox(height: 18),
         const DividerLabel(label: 'Appearance & access'),
@@ -117,11 +112,7 @@ class ConnectionDialogBody extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            InlineAction(
-              icon: Hgi.add01,
-              label: 'New',
-              onTap: onCreateFile,
-            ),
+            InlineAction(icon: Hgi.add01, label: 'New', onTap: onCreateFile),
             const SizedBox(width: 4),
             InlineAction(
               icon: Hgi.folderOpen,
@@ -164,9 +155,13 @@ class ConnectionDialogBody extends StatelessWidget {
               style: fieldLabelStyle,
             ),
             const Spacer(),
-            CredentialModeToggle(
+            SegmentedChoice<CredentialMode>(
               value: model.credentialMode,
               onChanged: (v) => model.credentialMode = v,
+              options: const [
+                (CredentialMode.password, 'Password'),
+                (CredentialMode.command, 'Command'),
+              ],
             ),
           ],
         ),
@@ -181,16 +176,48 @@ class ConnectionDialogBody extends StatelessWidget {
     );
   }
 
-  Widget _sslField() {
-    final secure = model.sslMode != 'disable';
-    return LabeledField(
-      label: 'SSL mode',
-      child: BoxedSelect(
-        icon: secure ? Hgi.lock : Hgi.lockOpen,
-        iconColor: secure ? AppColors.accent : AppColors.textMuted,
-        label: model.sslMode,
-        onTap: onOpenSslMenu,
-      ),
+  Widget _tlsField() {
+    final hint = switch (model.tls) {
+      TlsMode.off =>
+        'Not encrypted: the password crosses the network readable.',
+      TlsMode.require => 'Encrypted, but any server certificate is accepted.',
+      TlsMode.verify =>
+        'Encrypted, and the certificate must be trusted by macOS and match '
+            'the host.',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('SSL / TLS', style: fieldLabelStyle),
+            const Spacer(),
+            SegmentedChoice<TlsMode>(
+              value: model.tls,
+              onChanged: (v) => model.tls = v,
+              options: const [
+                (TlsMode.off, 'Off'),
+                (TlsMode.require, 'Require'),
+                (TlsMode.verify, 'Verify'),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Icon(
+              model.tls == TlsMode.off ? Hgi.lockOpen : Hgi.lock,
+              size: 12,
+              color: model.tls == TlsMode.off
+                  ? AppColors.warning
+                  : AppColors.success,
+            ),
+            const SizedBox(width: 6),
+            Expanded(child: Text(hint, style: fieldHintStyle)),
+          ],
+        ),
+      ],
     );
   }
 
