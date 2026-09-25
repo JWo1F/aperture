@@ -7,6 +7,7 @@ import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/hugeicons.dart';
 import '../about/about_dialog.dart';
+import '../widgets/table_glyph.dart';
 import 'item_model.dart';
 
 /// Builds the palette's pool of searchable items from the live controllers.
@@ -227,7 +228,8 @@ class PaletteItemSource {
       kind: kind,
       title: t.name,
       subtitle: subtitle,
-      icon: t.isView ? Hgi.view : Hgi.table02,
+      icon: t.isView ? Hgi.view : null,
+      glyph: t.isView ? null : (color) => TableGlyph(size: 14, color: color),
       tokens: '${t.schema} ${t.qualifiedName}',
       run: () => appState.tabsController.openTable(t),
     );

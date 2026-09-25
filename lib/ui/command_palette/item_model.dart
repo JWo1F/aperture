@@ -60,16 +60,24 @@ class PaletteItem {
     required this.kind,
     required this.title,
     required this.subtitle,
-    required this.icon,
     required this.run,
+    this.icon,
+    this.glyph,
     this.tokens = '',
     this.accent = false,
-  });
+  }) : assert(
+         (icon == null) != (glyph == null),
+         'Provide exactly one of icon or glyph',
+       );
 
   final PaletteKind kind;
   final String title;
   final String subtitle;
-  final IconData icon;
+  final IconData? icon;
+
+  /// A painted mark in place of [icon], for shapes the icon font lacks —
+  /// the table glyph the sidebar uses. Receives the tile's current colour.
+  final Widget Function(Color color)? glyph;
   final VoidCallback run;
 
   /// Extra hidden text folded into the search index — host names, fully

@@ -66,10 +66,9 @@ class PaletteResultRow extends StatelessWidget {
                         : AppColors.border,
                   ),
                 ),
-                child: Icon(
-                  item.icon,
-                  size: 15,
-                  color: tileAccent ? AppColors.accent : AppColors.textSecondary,
+                child: _tileMark(
+                  item,
+                  tileAccent ? AppColors.accent : AppColors.textSecondary,
                 ),
               ),
               const SizedBox(width: 11),
@@ -192,4 +191,10 @@ class _KindChip extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _tileMark(PaletteItem item, Color color) {
+  final glyph = item.glyph;
+  if (glyph != null) return glyph(color);
+  return Icon(item.icon, size: 15, color: color);
 }
