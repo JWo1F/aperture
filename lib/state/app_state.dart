@@ -17,12 +17,6 @@ import 'workspace_ui.dart';
 
 export 'session_controller.dart' show ConnectionStatus;
 
-/// Callback the UI installs to handle the case where a connect attempt
-/// needs the master passphrase but the session is locked. Should open
-/// the unlock modal, await the user's response, and resolve to true on
-/// successful unlock.
-typedef PassphraseUnlockRequest = Future<bool> Function();
-
 /// Callback the UI installs to confirm an action that would discard staged
 /// cell edits. Resolves true to go ahead. [action] completes the sentence
 /// "…discards them".
@@ -84,11 +78,7 @@ class AppState {
   final WorkspaceUi ui = WorkspaceUi();
   final ToastController toasts = ToastController();
 
-  /// Set by the UI at startup. AppState calls this when a connect
-  /// attempt needs the master passphrase but the session is locked.
-  PassphraseUnlockRequest? onPassphraseNeeded;
-
-  /// Set by the UI at startup. Consulted before anything that tears the
+    /// Set by the UI at startup. Consulted before anything that tears the
   /// workspace down with staged edits in it.
   DiscardEditsRequest? onConfirmDiscardEdits;
 
@@ -198,17 +188,14 @@ class AppState {
       return;
     }
     // Resolve the credential BEFORE touching the workspace. This step can
-    // fail on its own — a locked vault, a missing `op` binary, a connection
-    // saved without a password — and none of those are a reason to throw
-    // away the tabs and history of the session that is still live.
+    // fail on its own — a password command that errors or times out — and
+    // that is no reason to throw away the tabs and history of the session
+    // that is still live.
     var resolved = config;
-    final credential = await _resolveCredentialWithUnlock(resolved);
+    final credential = await store.readCredential(resolved);
     switch (credential) {
       case CredentialError(message: final m):
         session.setError(m);
-        return;
-      case CredentialNeedsPassphrase():
-        session.setError('Master passphrase required.');
         return;
       case CredentialOk(password: final p):
         resolved = resolved.copyWith(runtimePassword: p);
@@ -235,25 +222,6 @@ class AppState {
         stored.copyWith(runtimePassword: resolved.runtimePassword),
       );
     }
-  }
-
-  /// Resolves the password for [config], pumping the UI through the
-  /// unlock modal if the credential source is encrypted and the master
-  /// passphrase is locked.
-  Future<CredentialResult> _resolveCredentialWithUnlock(
-    ConnectionConfig config,
-  ) async {
-    final first = await store.readCredential(config);
-    if (first is! CredentialNeedsPassphrase) return first;
-    final ask = onPassphraseNeeded;
-    if (ask == null) {
-      return const CredentialError(
-        'Master passphrase required but no UI is wired to prompt for it.',
-      );
-    }
-    final unlocked = await ask();
-    if (!unlocked) return first;
-    return store.readCredential(config);
   }
 
   Future<void> disconnect() async {
@@ -287,13 +255,10 @@ class AppState {
     // open, column resize, favorite toggle), and the listener pushes that
     // stripped snapshot into the session. Without re-resolution we'd send
     // an empty password and the server would reject the reconnect.
-    final credential = await _resolveCredentialWithUnlock(active);
+    final credential = await store.readCredential(active);
     switch (credential) {
       case CredentialError(message: final m):
         _surfaceReconnectError(m);
-        return;
-      case CredentialNeedsPassphrase():
-        _surfaceReconnectError('Master passphrase required.');
         return;
       case CredentialOk(password: final p):
         session.setActiveConnection(active.copyWith(runtimePassword: p));

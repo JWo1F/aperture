@@ -8,11 +8,10 @@ import '../../widgets/common.dart';
 import 'connection_form_model.dart';
 import 'form_widgets.dart';
 
-const String _credentialPlainHelp = 'Saved as plain text in store.json.';
-const String _credentialEncryptedHelp =
-    'Encrypted with your master passphrase (AES-GCM).';
-const String _credentialOnePasswordHelp =
-    'Resolved from the 1Password CLI each time you connect.';
+const String _credentialPasswordHelp = "Saved with Aperture's settings.";
+const String _credentialCommandHelp =
+    'Runs in your login shell on every connect; what it prints is the '
+    'password.';
 
 /// The scrollable form body of the connection dialog. Reads and mutates a
 /// [ConnectionFormModel]; file-picking and the SSL menu are delegated back
@@ -136,30 +135,20 @@ class ConnectionDialogBody extends StatelessWidget {
   }
 
   Widget _passwordField() {
-    final isOnePassword = model.credentialMode == CredentialMode.onePassword;
-    final helper = switch (model.credentialMode) {
-      CredentialMode.plain => _credentialPlainHelp,
-      CredentialMode.encrypted => _credentialEncryptedHelp,
-      CredentialMode.onePassword => _credentialOnePasswordHelp,
-    };
-    final keepHint = model.credentialMode == CredentialMode.encrypted &&
-        model.hasExistingCipher;
-
+    final isCommand = model.credentialMode == CredentialMode.command;
     final Widget input;
-    if (isOnePassword) {
+    if (isCommand) {
       input = BoxedTextInput(
-        controller: model.opSecretRef,
-        hint: 'op://Vault/Item/password',
+        controller: model.command,
+        hint: "op read 'op://Vault/Item/password'",
       );
     } else {
       input = BoxedTextInput(
         controller: model.password,
         obscure: !model.showPassword,
-        hint: keepHint ? 'Leave blank to keep current' : 'Password',
+        hint: 'Password',
         trailing: GhostIconButton(
-          icon: model.showPassword
-              ? Hgi.viewOff
-              : Hgi.view,
+          icon: model.showPassword ? Hgi.viewOff : Hgi.view,
           onTap: () => model.showPassword = !model.showPassword,
         ),
       );
@@ -171,7 +160,7 @@ class ConnectionDialogBody extends StatelessWidget {
         Row(
           children: [
             Text(
-              isOnePassword ? '1Password secret' : 'Password',
+              isCommand ? 'Password command' : 'Password',
               style: fieldLabelStyle,
             ),
             const Spacer(),
@@ -184,7 +173,10 @@ class ConnectionDialogBody extends StatelessWidget {
         const SizedBox(height: 7),
         input,
         const SizedBox(height: 6),
-        Text(helper, style: fieldHintStyle),
+        Text(
+          isCommand ? _credentialCommandHelp : _credentialPasswordHelp,
+          style: fieldHintStyle,
+        ),
       ],
     );
   }

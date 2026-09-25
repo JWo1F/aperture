@@ -419,7 +419,7 @@ class EngineToggle extends StatelessWidget {
   }
 }
 
-/// Three-up segmented control for where a connection's password is stored.
+/// Two-up segmented control for where a connection's password comes from.
 class CredentialModeToggle extends StatelessWidget {
   const CredentialModeToggle({
     super.key,
@@ -443,9 +443,8 @@ class CredentialModeToggle extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _segment(CredentialMode.plain, 'Plain'),
-          _segment(CredentialMode.encrypted, 'Encrypted'),
-          _segment(CredentialMode.onePassword, '1Password'),
+          _segment(CredentialMode.password, 'Password'),
+          _segment(CredentialMode.command, 'Command'),
         ],
       ),
     );

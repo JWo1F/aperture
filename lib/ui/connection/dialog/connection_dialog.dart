@@ -2,22 +2,15 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/connection_config.dart';
-import '../../../services/one_password_client.dart';
+import '../../../services/password_command.dart';
 import '../../../services/sqlite_service.dart';
-import '../../../state/app_globals.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
-import '../master_passphrase_setup.dart';
 import 'connection_form_model.dart';
 import 'connection_test.dart';
 import 'dialog_body.dart';
 import 'dialog_footer.dart';
 import 'dialog_header.dart';
-
-String _existingCipher(ConnectionConfig? existing) {
-  final ec = existing?.credential;
-  return ec is EncryptedCredential ? ec.cipher : '';
-}
 
 /// Modal form for creating or editing a saved connection. Resolves to the
 /// resulting [ConnectionConfig], or null if dismissed.
@@ -61,7 +54,7 @@ class _ConnectionDialog extends StatefulWidget {
 
 class _ConnectionDialogState extends State<_ConnectionDialog> {
   late final ConnectionFormModel _model;
-  final OnePasswordClient _op = OnePasswordClient();
+  final PasswordCommand _command = PasswordCommand();
   TestResult _testResult = const TestResult.idle();
 
   @override
@@ -76,36 +69,15 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  void _submit() {
     if (!_model.valid) return;
-    if (_model.credentialMode == CredentialMode.encrypted) {
-      final store = appState.store;
-      // First-time encrypted save: make sure a master passphrase is set
-      // up. The setup modal both creates the verifier and leaves the
-      // session unlocked, so we can encrypt immediately afterwards.
-      if (!store.isPassphraseConfigured) {
-        final ok = await showMasterPassphraseSetup(context);
-        if (!ok) return;
-      } else if (!store.isPassphraseUnlocked) {
-        final ok = await showMasterPassphraseUnlock(context);
-        if (!ok) return;
-      }
-      // A typed password is encrypted now; an empty field keeps whatever
-      // cipher the connection already had.
-      final cipher = _model.password.text.isNotEmpty
-          ? store.encryptWithPassphrase(_model.password.text)
-          : _existingCipher(widget.existing);
-      if (!mounted) return;
-      Navigator.of(context).pop(_model.buildConfig(overrideCipher: cipher));
-      return;
-    }
     Navigator.of(context).pop(_model.buildConfig());
   }
 
   Future<void> _testConnection() async {
     if (!_model.valid || _testResult.status == TestStatus.busy) return;
     setState(() => _testResult = const TestResult.busy());
-    final result = await runConnectionTest(_model.buildConfig(), _op);
+    final result = await runConnectionTest(_model.buildConfig(), _command);
     if (!mounted) return;
     setState(() => _testResult = result);
   }

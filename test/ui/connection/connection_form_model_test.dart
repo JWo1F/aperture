@@ -12,7 +12,7 @@ void main() {
       port: 5432,
       database: 'app',
       username: 'alice',
-      credential: const PlainCredential('old-pw'),
+      credential: const PasswordCredential('old-pw'),
       favoriteTables: {'public.users'},
       savedQueries: [
         SavedQuery(
@@ -36,8 +36,8 @@ void main() {
     final updated = model.buildConfig();
 
     // Password changed.
-    expect(updated.credential, isA<PlainCredential>());
-    expect((updated.credential as PlainCredential).password, 'new-pw');
+    expect(updated.credential, isA<PasswordCredential>());
+    expect((updated.credential as PasswordCredential).password, 'new-pw');
     // Identity preserved.
     expect(updated.id, 'c1');
     expect(updated.host, 'prod.example.com');

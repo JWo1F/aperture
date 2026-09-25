@@ -1,9 +1,7 @@
 import 'query_message.dart';
 import 'saved_query.dart';
 
-/// How a connection's password is stored on disk and resolved at connect
-/// time. The sealed hierarchy makes illegal states unrepresentable —
-/// every variant carries exactly the field it needs.
+/// Where a connection's password comes from at connect time.
 sealed class Credential {
   const Credential();
 
@@ -12,50 +10,35 @@ sealed class Credential {
 
   Map<String, dynamic> toJson();
 
-  /// Round-trip from `connections.json`. Unknown kinds (including the
-  /// legacy `keychain` source) fall back to an empty plain credential
-  /// — the user re-enters the password on next edit.
   factory Credential.fromJson(Object? raw) {
-    if (raw is! Map) return const PlainCredential('');
-    final kind = raw['kind'];
-    return switch (kind) {
-      'encrypted' => EncryptedCredential((raw['cipher'] as String?) ?? ''),
-      'onePassword' => OnePasswordCredential((raw['ref'] as String?) ?? ''),
-      _ => PlainCredential((raw['password'] as String?) ?? ''),
+    if (raw is! Map) return const PasswordCredential('');
+    return switch (raw['kind']) {
+      'command' => CommandCredential((raw['command'] as String?) ?? ''),
+      _ => PasswordCredential((raw['password'] as String?) ?? ''),
     };
   }
 }
 
-/// Password is stored verbatim in the JSON file.
-class PlainCredential extends Credential {
-  const PlainCredential(this.password);
+/// The password itself, kept with the rest of the settings.
+class PasswordCredential extends Credential {
+  const PasswordCredential(this.password);
   final String password;
   @override
-  String get kind => 'plain';
+  String get kind => 'password';
   @override
   Map<String, dynamic> toJson() => {'kind': kind, 'password': password};
 }
 
-/// Password is stored as AES-GCM ciphertext, gated by the app-level master
-/// passphrase. [cipher] is base64 `nonce || ciphertext || tag`.
-class EncryptedCredential extends Credential {
-  const EncryptedCredential(this.cipher);
-  final String cipher;
+/// A shell command whose output is the password, run on every connect —
+/// `op read 'op://Vault/Item/password'`, `security find-generic-password
+/// -w -s db`, `pass show db`.
+class CommandCredential extends Credential {
+  const CommandCredential(this.command);
+  final String command;
   @override
-  String get kind => 'encrypted';
+  String get kind => 'command';
   @override
-  Map<String, dynamic> toJson() => {'kind': kind, 'cipher': cipher};
-}
-
-/// Password is resolved on demand via the `op` CLI from [secretRef]
-/// (`op://Vault/Item/password`-style reference).
-class OnePasswordCredential extends Credential {
-  const OnePasswordCredential(this.secretRef);
-  final String secretRef;
-  @override
-  String get kind => 'onePassword';
-  @override
-  Map<String, dynamic> toJson() => {'kind': kind, 'ref': secretRef};
+  Map<String, dynamic> toJson() => {'kind': kind, 'command': command};
 }
 
 /// Which database engine a connection targets.
@@ -78,7 +61,7 @@ class ConnectionConfig {
     this.port = 5432,
     this.database = '',
     this.username = '',
-    this.credential = const PlainCredential(''),
+    this.credential = const PasswordCredential(''),
     this.runtimePassword = '',
     this.filePath = '',
     this.useSsl = false,

@@ -76,7 +76,6 @@ void main() {
     await store.load();
     expect(store.connections, isEmpty);
     expect(store.sidebarVisible, isTrue);
-    expect(store.isPassphraseConfigured, isFalse);
   });
 
   test('mutations coalesce: a burst within the window writes once', () async {
@@ -162,42 +161,14 @@ void main() {
     await store.flush();
   });
 
-  test(
-    'master passphrase round-trip: setup, encrypt, lock, unlock, decrypt',
-    () async {
-      final a = makeStore();
-      await a.load();
-      expect(await a.setupPassphrase('hunter22'), isTrue);
-      expect(a.isPassphraseConfigured, isTrue);
-      expect(a.isPassphraseUnlocked, isTrue);
-      final cipher = a.encryptWithPassphrase('shh');
-      a.lockPassphrase();
-      expect(a.isPassphraseUnlocked, isFalse);
-      expect(await a.unlockPassphrase('hunter22'), isTrue);
-      expect(a.decryptWithPassphrase(cipher), 'shh');
-      await a.flush();
-
-      // Passphrase metadata persists across boot.
-      final b = makeStore();
-      await b.load();
-      expect(b.isPassphraseConfigured, isTrue);
-      expect(b.isPassphraseUnlocked, isFalse);
-      expect(await b.unlockPassphrase('wrong'), isFalse);
-      expect(await b.unlockPassphrase('hunter22'), isTrue);
-      expect(b.decryptWithPassphrase(cipher), 'shh');
-    },
-  );
-
   test('runtime password never bleeds back into the store', () async {
     final fake = _CountingAtomicJsonFile('store.json');
     final store = makeStore(file: fake);
     await store.load();
-    await store.setupPassphrase('hunter22');
-    final cipher = store.encryptWithPassphrase('actual-password');
     final cfg = ConnectionConfig(
       id: 'c',
       name: 'x',
-      credential: EncryptedCredential(cipher),
+      credential: const CommandCredential('op read x'),
       runtimePassword: 'actual-password',
     );
     store.addConnection(cfg);
@@ -208,7 +179,7 @@ void main() {
       isFalse,
       reason: 'runtime plaintext must never reach disk',
     );
-    expect(json.contains(cipher), isTrue, reason: 'cipher must persist');
+    expect(json.contains('op read x'), isTrue, reason: 'command must persist');
     expect(
       store.connectionById('c')!.runtimePassword,
       isEmpty,
@@ -222,42 +193,28 @@ void main() {
     a.addConnection(
       ConnectionConfig(
         id: 'p',
-        name: 'plain',
-        credential: const PlainCredential('pw'),
+        name: 'password',
+        credential: const PasswordCredential('pw'),
       ),
     );
     a.addConnection(
       ConnectionConfig(
-        id: 'e',
-        name: 'enc',
-        credential: const EncryptedCredential('abc='),
-      ),
-    );
-    a.addConnection(
-      ConnectionConfig(
-        id: 'o',
-        name: 'op',
-        credential: const OnePasswordCredential('op://Vault/Item/password'),
+        id: 'c',
+        name: 'command',
+        credential: const CommandCredential("op read 'op://V/I/password'"),
       ),
     );
     await a.flush();
 
     final b = makeStore();
     await b.load();
-    expect(b.connectionById('p')!.credential, isA<PlainCredential>());
     expect(
-      (b.connectionById('p')!.credential as PlainCredential).password,
+      (b.connectionById('p')!.credential as PasswordCredential).password,
       'pw',
     );
-    expect(b.connectionById('e')!.credential, isA<EncryptedCredential>());
     expect(
-      (b.connectionById('e')!.credential as EncryptedCredential).cipher,
-      'abc=',
-    );
-    expect(b.connectionById('o')!.credential, isA<OnePasswordCredential>());
-    expect(
-      (b.connectionById('o')!.credential as OnePasswordCredential).secretRef,
-      'op://Vault/Item/password',
+      (b.connectionById('c')!.credential as CommandCredential).command,
+      "op read 'op://V/I/password'",
     );
   });
 

@@ -8,7 +8,7 @@ import '../widgets/common.dart';
 
 /// Build/version is wired in here rather than read from pubspec at runtime
 /// so the About dialog stays a zero-dependency widget. Bump on release.
-const _version = '1.30.2';
+const _version = '1.31.0';
 const _author = 'Aleksandr Ivashkin';
 const _copyrightYear = 2026;
 
@@ -196,7 +196,7 @@ class _FeatureGrid extends StatelessWidget {
     (Hgi.chartRelationship, 'Query plans', 'EXPLAIN as a tree, with advice'),
     (Hgi.command, 'Keyboard first', '⌘K palette, ⌘[ ⌘] history'),
     (Hgi.databaseExport, 'Export', 'Results and tables to CSV or Markdown'),
-    (Hgi.lockKey, 'Safe credentials', 'Master passphrase or 1Password'),
+    (Hgi.lockKey, 'Credentials', 'Stored, or fetched by any command'),
   ];
 
   @override

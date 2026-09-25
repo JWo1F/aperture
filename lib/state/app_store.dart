@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
@@ -9,8 +8,7 @@ import '../models/db_object.dart';
 import '../models/query_message.dart';
 import '../models/saved_query.dart';
 import '../services/atomic_json.dart';
-import '../services/crypto.dart';
-import '../services/one_password_client.dart';
+import '../services/password_command.dart';
 import '../services/window_frame.dart';
 import '../theme/app_theme.dart';
 
@@ -24,10 +22,6 @@ class CredentialOk extends CredentialResult {
   final String password;
 }
 
-class CredentialNeedsPassphrase extends CredentialResult {
-  const CredentialNeedsPassphrase();
-}
-
 class CredentialError extends CredentialResult {
   const CredentialError(this.message);
   final String message;
@@ -36,8 +30,7 @@ class CredentialError extends CredentialResult {
 /// Single source of truth for everything the app persists across launches.
 ///
 /// One [ChangeNotifier] holding preferences, the saved-connection list (with
-/// every per-connection bag nested inside it), and the master-passphrase
-/// metadata. Every mutator updates the in-memory state, notifies listeners,
+/// every per-connection bag nested inside it). Every mutator updates the in-memory state, notifies listeners,
 /// and schedules a single coalesced 500 ms write to `store.json`.
 ///
 /// Widgets that care about a narrow slice should use `context.select` to
@@ -46,12 +39,12 @@ class CredentialError extends CredentialResult {
 class AppStore extends ChangeNotifier {
   AppStore({
     AtomicJsonFile? file,
-    OnePasswordClient? onePassword,
+    PasswordCommand? passwordCommand,
     WindowFrame? window,
     this.onSaveFailed,
     this.saveDebounce = const Duration(milliseconds: 500),
   }) : _file = file ?? AtomicJsonFile('store.json'),
-       _op = onePassword ?? OnePasswordClient(),
+       _command = passwordCommand ?? PasswordCommand(),
        _window = window ?? WindowFrame();
 
   /// Called when a write to `store.json` fails.
@@ -65,7 +58,7 @@ class AppStore extends ChangeNotifier {
   void Function(Object error)? onSaveFailed;
 
   final AtomicJsonFile _file;
-  final OnePasswordClient _op;
+  final PasswordCommand _command;
   final WindowFrame _window;
   final Duration saveDebounce;
 
@@ -131,29 +124,6 @@ class AppStore extends ChangeNotifier {
     return null;
   }
 
-  // ---- master passphrase --------------------------------------------
-
-  /// The plaintext [setupPassphrase] seals into the stored `verifier` and
-  /// [unlockPassphrase] compares the decrypted bytes against. Changing it
-  /// invalidates every vault sealed under the old value — they fail with
-  /// the wrong-passphrase message and cannot be recovered.
-  static const String _passphraseSentinel = 'aperture-vault-ok';
-
-  Map<String, dynamic>? _security;
-  Uint8List? _passphraseKey;
-
-  /// True once [load] has finished — the security file may or may not
-  /// have contained a passphrase setup.
-  bool get isPassphraseLoaded => _loaded;
-
-  /// True if the user has already set up a master passphrase.
-  bool get isPassphraseConfigured => _security != null;
-
-  /// True if the derived key is in memory and ready to encrypt/decrypt.
-  bool get isPassphraseUnlocked => _passphraseKey != null;
-
-  bool _loaded = false;
-
   // ---- load / save lifecycle ----------------------------------------
 
   /// One-time hydration from `store.json`. Failures fall back to defaults
@@ -173,7 +143,6 @@ class AppStore extends ChangeNotifier {
         'connections',
         () => _readConnections(decoded['connections']),
       );
-      _readSection('security', () => _readSecurity(decoded['security']));
     }
     _applyPalette();
     if (_windowFramePersisted != null) {
@@ -181,7 +150,6 @@ class AppStore extends ChangeNotifier {
       // hydration — kick it off after the listeners run.
       unawaited(_window.write(_windowFramePersisted!));
     }
-    _loaded = true;
     notifyListeners();
   }
 
@@ -448,132 +416,26 @@ class AppStore extends ChangeNotifier {
     return connectionById(connectionId)?.queryMessages[tabId] ?? const [];
   }
 
-  // ---- master passphrase --------------------------------------------
-
-  /// First-time setup. Generates a salt, derives the key, encrypts the
-  /// sentinel, persists the verifier, and leaves the session unlocked.
-  /// Returns false if a passphrase is already configured.
-  Future<bool> setupPassphrase(String passphrase) async {
-    if (passphrase.isEmpty) return false;
-    if (_security != null) return false;
-    final salt = randomBytes(passphraseSaltBytes);
-    final key = derivePassphraseKey(passphrase, salt);
-    final verifier = aesGcmEncrypt(key, utf8.encode(_passphraseSentinel));
-    _security = <String, dynamic>{
-      'version': 1,
-      'kdf': 'pbkdf2-sha256',
-      'iterations': passphraseIterations,
-      'salt': base64Encode(salt),
-      'verifier': base64Encode(verifier),
-    };
-    _passphraseKey = key;
-    _changed();
-    return true;
-  }
-
-  /// Tries to unlock the session with [passphrase]. Returns true on
-  /// success and leaves the key in memory.
-  Future<bool> unlockPassphrase(String passphrase) async {
-    final meta = _security;
-    if (meta == null) return false;
-    final Uint8List salt;
-    final Uint8List verifier;
-    final int iterations;
-    try {
-      salt = base64Decode(meta['salt'] as String);
-      verifier = base64Decode(meta['verifier'] as String);
-      // Derive with the cost this vault was WRITTEN at, not the current
-      // constant. The value has always been persisted; reading it back is
-      // what makes raising `passphraseIterations` a safe change instead of
-      // one that silently locks the user out of their own passwords.
-      iterations = switch (meta['iterations']) {
-        final int n when n > 0 => n,
-        _ => passphraseIterations,
-      };
-    } catch (_) {
-      // A security block that won't parse can't be unlocked; saying so is
-      // better than throwing out of the unlock modal.
-      return false;
-    }
-    final key = derivePassphraseKey(passphrase, salt, iterations: iterations);
-    try {
-      final plain = aesGcmDecrypt(key, verifier);
-      if (utf8.decode(plain) != _passphraseSentinel) return false;
-    } catch (_) {
-      return false;
-    }
-    _passphraseKey = key;
-    notifyListeners();
-    return true;
-  }
-
-  void lockPassphrase() {
-    if (_passphraseKey == null) return;
-    _passphraseKey = null;
-    notifyListeners();
-  }
-
-  /// Returns base64-encoded `nonce || ciphertext || tag`. Throws
-  /// [StateError] if the session is locked.
-  String encryptWithPassphrase(String plaintext) {
-    final key = _passphraseKey;
-    if (key == null) throw StateError('master passphrase is locked');
-    return base64Encode(aesGcmEncrypt(key, utf8.encode(plaintext)));
-  }
-
-  /// Decrypts a base64 blob produced by [encryptWithPassphrase]. Returns
-  /// null on any decryption failure (wrong key, tampered ciphertext).
-  String? decryptWithPassphrase(String cipher) {
-    final key = _passphraseKey;
-    if (key == null) throw StateError('master passphrase is locked');
-    try {
-      return utf8.decode(aesGcmDecrypt(key, base64Decode(cipher)));
-    } catch (_) {
-      return null;
-    }
-  }
-
   // ---- credential resolution ----------------------------------------
 
-  /// Resolves the password for [config] by dispatching on its
-  /// [Credential] variant: inline for plain, AES-GCM decrypt for
-  /// encrypted, `op read` for 1Password.
+  /// Resolves the password for [config]: inline for a stored password,
+  /// by running the command for a command credential.
   Future<CredentialResult> readCredential(ConnectionConfig config) async {
     final credential = config.credential;
     switch (credential) {
-      case PlainCredential():
+      case PasswordCredential():
         return CredentialOk(credential.password);
-      case EncryptedCredential():
-        if (credential.cipher.isEmpty) {
+      case CommandCredential():
+        if (credential.command.trim().isEmpty) {
           return const CredentialError(
-            'No stored password for this connection — edit it to set one.',
+            'No password command set for this connection — edit it to add '
+            'one.',
           );
         }
-        if (!isPassphraseUnlocked) return const CredentialNeedsPassphrase();
-        final plain = decryptWithPassphrase(credential.cipher);
-        if (plain == null) {
-          return const CredentialError(
-            'Could not decrypt the saved password. The master passphrase '
-            'may be wrong, or the stored ciphertext was tampered with.',
-          );
-        }
-        return CredentialOk(plain);
-      case OnePasswordCredential():
-        if (credential.secretRef.isEmpty) {
-          return const CredentialError(
-            'No 1Password secret reference set for this connection.',
-          );
-        }
-        final r = await _op.read(credential.secretRef);
-        return switch (r) {
-          OpSuccess(value: final v) => CredentialOk(v),
-          OpMissing() => const CredentialError(
-            'The 1Password CLI (`op`) is not installed. '
-            'Install it with `brew install 1password-cli` and enable '
-            'the desktop app integration.',
-          ),
-          OpFailure(message: final m) => CredentialError(
-            '1Password lookup failed: $m',
+        return switch (await _command.run(credential.command)) {
+          CommandOk(password: final p) => CredentialOk(p),
+          CommandFailure(message: final m) => CredentialError(
+            'Password command failed: $m',
           ),
         };
     }
@@ -585,9 +447,9 @@ class AppStore extends ChangeNotifier {
   bool _dirty = false;
 
   /// Wipe the transient [ConnectionConfig.runtimePassword] before the
-  /// config lands in `_connections`. Plain credentials keep their stored
-  /// password inside the [PlainCredential] itself — that's the only
-  /// password field that ever reaches disk.
+  /// config lands in `_connections`. A stored password lives inside its
+  /// [PasswordCredential] — that's the only password field that ever
+  /// reaches disk.
   ConnectionConfig _stripRuntimePassword(ConnectionConfig config) {
     if (config.runtimePassword.isEmpty) return config;
     return config.copyWith(runtimePassword: '');
@@ -641,7 +503,6 @@ class AppStore extends ChangeNotifier {
       'queryResultsFraction': _queryResultsFraction,
       if (_windowFramePersisted != null) 'windowFrame': _windowFramePersisted,
     },
-    if (_security != null) 'security': _security,
     'connections': [for (final c in _connections) c.toJson()],
   };
 
@@ -713,12 +574,6 @@ class AppStore extends ChangeNotifier {
           stackTrace: st,
         );
       }
-    }
-  }
-
-  void _readSecurity(Object? raw) {
-    if (raw is Map<String, dynamic>) {
-      _security = Map<String, dynamic>.of(raw);
     }
   }
 

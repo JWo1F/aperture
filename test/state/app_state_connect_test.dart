@@ -48,7 +48,7 @@ void main() {
       expect(base.sameTarget(base.copyWith(color: 0xFF00FF00)), isTrue);
       expect(
         base.sameTarget(
-          base.copyWith(credential: const EncryptedCredential('x')),
+          base.copyWith(credential: const CommandCredential('x')),
         ),
         isTrue,
       );
@@ -128,13 +128,13 @@ void main() {
     expect(state.tabsController.tabs, hasLength(2));
 
     // Resolving the credential is a pre-flight step, and it can fail for
-    // reasons that have nothing to do with the database: a locked vault, a
-    // missing `op` binary, a connection saved with no password at all.
+    // reasons that have nothing to do with the database: a password command
+    // that errors, times out, or was never filled in.
     await state.connect(
       ConnectionConfig(
         id: 'c1',
         name: 'never opens',
-        credential: const EncryptedCredential(''),
+        credential: const CommandCredential(''),
       ),
     );
 

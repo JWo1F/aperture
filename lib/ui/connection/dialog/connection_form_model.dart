@@ -4,15 +4,14 @@ import '../../../models/connection_config.dart';
 import '../../../theme/app_theme.dart';
 
 /// Which credential variant the user has selected in the dialog. Stored
-/// as a UI-only enum because the form's three credential text controllers
-/// live across all three modes — the [Credential] sealed type only gets
-/// constructed at submit time.
-enum CredentialMode { plain, encrypted, onePassword }
+/// as a UI-only enum because both credential text controllers live across
+/// both modes — switching back and forth keeps what was typed — and the
+/// [Credential] sealed type only gets constructed at submit time.
+enum CredentialMode { password, command }
 
 CredentialMode _modeOf(Credential c) => switch (c) {
-  PlainCredential() => CredentialMode.plain,
-  EncryptedCredential() => CredentialMode.encrypted,
-  OnePasswordCredential() => CredentialMode.onePassword,
+  PasswordCredential() => CredentialMode.password,
+  CommandCredential() => CredentialMode.command,
 };
 
 /// Mutable, dialog-scoped form state for the connection dialog. Owns the
@@ -30,17 +29,17 @@ class ConnectionFormModel extends ChangeNotifier {
     database = TextEditingController(text: e?.database ?? '');
     username = TextEditingController(text: e?.username ?? 'postgres');
     password = TextEditingController(
-      text: ec is PlainCredential ? ec.password : '',
+      text: ec is PasswordCredential ? ec.password : '',
     );
-    opSecretRef = TextEditingController(
-      text: ec is OnePasswordCredential ? ec.secretRef : '',
+    command = TextEditingController(
+      text: ec is CommandCredential ? ec.command : '',
     );
     filePath = TextEditingController(text: e?.filePath ?? '');
     _engine = e?.engine ?? DbEngine.postgres;
     _sslMode = (e?.useSsl ?? false) ? 'require' : 'disable';
     _color = e?.color != null ? Color(e!.color!) : kConnectionColors.first;
     _readOnly = e?.readOnly ?? false;
-    _credentialMode = ec != null ? _modeOf(ec) : CredentialMode.plain;
+    _credentialMode = ec != null ? _modeOf(ec) : CredentialMode.password;
     for (final c in _controllers) {
       c.addListener(notifyListeners);
     }
@@ -55,7 +54,7 @@ class ConnectionFormModel extends ChangeNotifier {
   late final TextEditingController database;
   late final TextEditingController username;
   late final TextEditingController password;
-  late final TextEditingController opSecretRef;
+  late final TextEditingController command;
   late final TextEditingController filePath;
 
   List<TextEditingController> get _controllers => [
@@ -65,7 +64,7 @@ class ConnectionFormModel extends ChangeNotifier {
     database,
     username,
     password,
-    opSecretRef,
+    command,
     filePath,
   ];
 
@@ -119,13 +118,6 @@ class ConnectionFormModel extends ChangeNotifier {
 
   bool get isEdit => existing != null;
 
-  /// True when the existing credential carries an AES-GCM ciphertext —
-  /// drives the "Leave blank to keep current" hint on the password field.
-  bool get hasExistingCipher {
-    final ec = existing?.credential;
-    return ec is EncryptedCredential && ec.cipher.isNotEmpty;
-  }
-
   /// Whether the current field values are enough to build a usable config.
   bool get valid {
     if (_engine == DbEngine.sqlite) {
@@ -137,15 +129,13 @@ class ConnectionFormModel extends ChangeNotifier {
         username.text.trim().isNotEmpty &&
         int.tryParse(port.text.trim()) != null;
     if (!base) return false;
-    if (_credentialMode == CredentialMode.onePassword) {
-      return opSecretRef.text.trim().startsWith('op://');
+    if (_credentialMode == CredentialMode.command) {
+      return command.text.trim().isNotEmpty;
     }
     return true;
   }
 
-  /// Materializes the form into a [ConnectionConfig]. [overrideCipher] is
-  /// supplied by the encrypted save path once the plaintext password has
-  /// been encrypted against the master passphrase.
+  /// Materializes the form into a [ConnectionConfig].
   ///
   /// On edit, only the form-driven fields are replaced — every
   /// per-connection bag ([ConnectionConfig.favoriteTables],
@@ -153,7 +143,7 @@ class ConnectionFormModel extends ChangeNotifier {
   /// [ConnectionConfig.tableUseCounts], [ConnectionConfig.columnWidths],
   /// [ConnectionConfig.queryMessages], [ConnectionConfig.lastConnectedAt])
   /// survives via [ConnectionConfig.copyWith].
-  ConnectionConfig buildConfig({String? overrideCipher}) {
+  ConnectionConfig buildConfig() {
     final base = existing ??
         ConnectionConfig(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -183,32 +173,17 @@ class ConnectionFormModel extends ChangeNotifier {
       port: int.parse(port.text.trim()),
       database: db,
       username: username.text.trim(),
-      credential: _buildCredential(overrideCipher: overrideCipher),
+      credential: _buildCredential(),
       useSsl: _sslMode != 'disable',
       color: _color.toARGB32(),
       readOnly: _readOnly,
     );
   }
 
-  Credential _buildCredential({String? overrideCipher}) {
-    switch (_credentialMode) {
-      case CredentialMode.plain:
-        return PlainCredential(password.text);
-      case CredentialMode.encrypted:
-        // A typed password (encrypted by the caller via [overrideCipher])
-        // wins. Otherwise keep whatever ciphertext the connection already
-        // had — empty cipher is surfaced as "set a password" later.
-        final cipher = overrideCipher ?? _existingCipher;
-        return EncryptedCredential(cipher);
-      case CredentialMode.onePassword:
-        return OnePasswordCredential(opSecretRef.text.trim());
-    }
-  }
-
-  String get _existingCipher {
-    final ec = existing?.credential;
-    return ec is EncryptedCredential ? ec.cipher : '';
-  }
+  Credential _buildCredential() => switch (_credentialMode) {
+    CredentialMode.password => PasswordCredential(password.text),
+    CredentialMode.command => CommandCredential(command.text.trim()),
+  };
 
   @override
   void dispose() {

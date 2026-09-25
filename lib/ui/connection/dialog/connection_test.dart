@@ -1,6 +1,6 @@
 import '../../../models/connection_config.dart';
 import '../../../services/db_service.dart';
-import '../../../services/one_password_client.dart';
+import '../../../services/password_command.dart';
 
 /// Lifecycle of the dialog's "Test connection" probe.
 enum TestStatus { idle, busy, ok, fail }
@@ -25,34 +25,26 @@ class TestResult {
 }
 
 /// Opens a throwaway connection described by [cfg] and reports how it went.
-/// For 1Password-backed configs the secret is resolved through [op] first;
-/// the resolved password lives only for the probe and is never persisted.
+/// A command credential is run through [command] first; the resolved
+/// password lives only for the probe and is never persisted.
 Future<TestResult> runConnectionTest(
   ConnectionConfig cfg,
-  OnePasswordClient op,
+  PasswordCommand command,
 ) async {
-  final credential = cfg.credential;
   final String runtimePassword;
-  if (credential is OnePasswordCredential) {
-    final r = await op.read(credential.secretRef);
-    switch (r) {
-      case OpSuccess(value: final v):
-        runtimePassword = v;
-      case OpMissing():
-        return const TestResult(
-          status: TestStatus.fail,
-          message: 'op CLI not installed (brew install 1password-cli)',
-        );
-      case OpFailure(message: final m):
-        return TestResult(status: TestStatus.fail, message: '1Password: $m');
-    }
-  } else if (credential is PlainCredential) {
-    runtimePassword = credential.password;
-  } else {
-    // Encrypted: the dialog cannot decrypt mid-edit (the master passphrase
-    // flow lives at submit-time), so a test against an encrypted credential
-    // tries the empty password and surfaces the driver's auth failure.
-    runtimePassword = '';
+  switch (cfg.credential) {
+    case PasswordCredential(password: final p):
+      runtimePassword = p;
+    case CommandCredential(command: final c):
+      switch (await command.run(c)) {
+        case CommandOk(password: final p):
+          runtimePassword = p;
+        case CommandFailure(message: final m):
+          return TestResult(
+            status: TestStatus.fail,
+            message: 'Password command: $m',
+          );
+      }
   }
   final svc = createDbService(cfg.copyWith(runtimePassword: runtimePassword));
   final watch = Stopwatch()..start();
