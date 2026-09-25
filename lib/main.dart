@@ -110,8 +110,20 @@ class _ApertureAppState extends State<ApertureApp> with WidgetsBindingObserver {
         navigatorKey: _navigator,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.build(brightness),
+        scrollBehavior: const _DesktopScrollBehavior(),
         home: AppShell(key: ValueKey(brightness)),
       ),
     );
   }
+}
+
+/// Clamps every scroll view at its edges. Flutter gives macOS iOS-style
+/// elastic overscroll by default, which on a page or dialog barely taller
+/// than its viewport reads as the content jumping back.
+class _DesktopScrollBehavior extends MaterialScrollBehavior {
+  const _DesktopScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) =>
+      const ClampingScrollPhysics();
 }

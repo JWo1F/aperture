@@ -8,7 +8,7 @@ import '../widgets/common.dart';
 
 /// Build/version is wired in here rather than read from pubspec at runtime
 /// so the About dialog stays a zero-dependency widget. Bump on release.
-const _version = '1.30.1';
+const _version = '1.30.2';
 const _author = 'Aleksandr Ivashkin';
 const _copyrightYear = 2026;
 
@@ -42,7 +42,6 @@ class _AboutDialog extends StatelessWidget {
             // footer with Done stays pinned.
             const Flexible(
               child: SingleChildScrollView(
-                physics: ClampingScrollPhysics(),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [

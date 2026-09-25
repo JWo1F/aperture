@@ -69,12 +69,7 @@ class _WorkspaceHomeState extends State<WorkspaceHome> {
 
     return ColoredBox(
       color: AppColors.bg,
-      // The platform default on macOS is iOS-style elastic overscroll, which
-      // on a page barely taller than the window reads as the content
-      // snapping back. The desktop scroll behavior already supplies the
-      // scrollbar.
       child: SingleChildScrollView(
-        physics: const ClampingScrollPhysics(),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1240),

@@ -90,9 +90,6 @@ class _WelcomePanelState extends State<WelcomePanel> {
     return ColoredBox(
       color: AppColors.bg,
       child: SingleChildScrollView(
-        // Clamped like the workspace home: elastic overscroll on a page
-        // barely taller than the window reads as the content snapping back.
-        physics: const ClampingScrollPhysics(),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 960),
