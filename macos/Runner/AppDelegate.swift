@@ -13,8 +13,11 @@ class AppDelegate: FlutterAppDelegate {
 
   /// The app menu's "About Aperture" opens AppKit's stock panel; point it
   /// at the Flutter About dialog instead.
+  ///
+  /// No `super` call: FlutterAppDelegate doesn't implement this method, so
+  /// forwarding raises an unrecognized-selector exception that AppKit
+  /// swallows at launch — silently skipping everything after it.
   override func applicationDidFinishLaunching(_ notification: Notification) {
-    super.applicationDidFinishLaunching(notification)
     let about = #selector(NSApplication.orderFrontStandardAboutPanel(_:))
     for item in NSApp.mainMenu?.items.first?.submenu?.items ?? [] where item.action == about {
       item.target = self
