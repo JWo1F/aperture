@@ -85,6 +85,7 @@ pubspec bump for that commit). Then `--amend --no-edit` is acceptable.
 | SQLite | `sqlite3: ^3.6.0`, built as SQLite3MultipleCiphers (`hooks: user_defines: sqlite3: source: sqlite3mc`) |
 | SQL grammar | `highlight` / `flutter_highlight` (read-only); custom `CodeEditor` (editable) |
 | Window chrome | `macos_window_utils` |
+| Fonts | Inter + JetBrains Mono bundled under `assets/fonts/` (`AppTheme.uiFamily` / `monoFamily`); never fetched at runtime |
 | Persistence | encrypted `store.sqlite` under Application Support (`path_provider`) |
 | File save | `file_selector` |
 | Secrets | login Keychain via the `aperture/keychain` channel; password commands via the login shell |

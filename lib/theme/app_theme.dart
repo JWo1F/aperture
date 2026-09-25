@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// "Aperture" — Linear-style restraint with macOS-native polish, available
 /// in dark and light variants. Both lean on the same indigo accent and
@@ -453,12 +452,17 @@ class Radii {
 class AppTheme {
   const AppTheme._();
 
+  /// Font families bundled in `pubspec.yaml`.
+  static const String uiFamily = 'Inter';
+  static const String monoFamily = 'JetBrains Mono';
+
   static ThemeData build(AppBrightness brightness) {
     final base = brightness == AppBrightness.dark
         ? ThemeData.dark(useMaterial3: true)
         : ThemeData.light(useMaterial3: true);
 
-    final textTheme = GoogleFonts.interTextTheme(base.textTheme).apply(
+    final textTheme = base.textTheme.apply(
+      fontFamily: uiFamily,
       bodyColor: AppColors.textPrimary,
       displayColor: AppColors.textPrimary,
     );
@@ -506,7 +510,8 @@ class AppTheme {
     Color? color,
     FontWeight weight = FontWeight.w400,
   }) {
-    return GoogleFonts.jetBrainsMono(
+    return TextStyle(
+      fontFamily: monoFamily,
       fontSize: size,
       color: color ?? AppColors.textPrimary,
       fontWeight: weight,
@@ -521,7 +526,8 @@ class AppTheme {
     FontWeight weight = FontWeight.w500,
     double letterSpacing = -0.3,
   }) {
-    return GoogleFonts.inter(
+    return TextStyle(
+      fontFamily: uiFamily,
       fontSize: size,
       color: color ?? AppColors.textPrimary,
       fontWeight: weight,
@@ -532,7 +538,8 @@ class AppTheme {
 
   /// Tiny uppercase eyebrow for section headers.
   static TextStyle eyebrow({Color? color}) {
-    return GoogleFonts.inter(
+    return TextStyle(
+      fontFamily: uiFamily,
       fontSize: 10,
       color: color ?? AppColors.textMuted,
       fontWeight: FontWeight.w600,

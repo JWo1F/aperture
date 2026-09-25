@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.33.0+112
+version: 1.33.1+113
 
 environment:
   sdk: ^3.12.0
@@ -37,7 +37,6 @@ dependencies:
 
   postgres: ^3.5.12
   sqlite3: ^3.6.0
-  google_fonts: ^8.2.1
   path_provider: ^2.1.6
   file_selector: ^1.1.0
   macos_window_utils: ^1.9.1
@@ -83,6 +82,7 @@ flutter:
   # from macos/Runner/Assets.xcassets — replace both when the icon changes.
   assets:
     - assets/brand/app_icon.png
+    - assets/fonts/OFL.txt
 
   # HugeIcons stroke-rounded — the app's only icon font. Glyph constants are
   # generated into lib/theme/hugeicons.dart by tool/gen_hugeicons.py; the two
@@ -91,6 +91,29 @@ flutter:
     - family: hugeicons
       fonts:
         - asset: assets/fonts/hgi-stroke-rounded.ttf
+    # Inter 4.001 and JetBrains Mono 2.211, the weights the UI uses. Italic
+    # is synthesized. Both are SIL OFL 1.1 — assets/fonts/OFL.txt ships
+    # with them.
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/JetBrainsMono-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/JetBrainsMono-Bold.ttf
+          weight: 700
 
 # SQLite3MultipleCiphers instead of upstream SQLite: the same engine plus
 # at-rest encryption (`PRAGMA key`), which seals the settings store. Files

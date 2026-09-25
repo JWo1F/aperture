@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../theme/app_theme.dart';
 import 'popup_state.dart';
@@ -136,7 +135,8 @@ class _AutocompletePopupState extends State<AutocompletePopup> {
                               s.label,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.jetBrainsMono(
+                              style: TextStyle(
+                                fontFamily: AppTheme.monoFamily,
                                 fontSize: fontSize,
                                 color: active
                                     ? AppColors.textPrimary
@@ -201,7 +201,8 @@ class KindChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: GoogleFonts.jetBrainsMono(
+        style: TextStyle(
+          fontFamily: AppTheme.monoFamily,
           fontSize: 9.5,
           height: 1,
           fontWeight: FontWeight.w600,

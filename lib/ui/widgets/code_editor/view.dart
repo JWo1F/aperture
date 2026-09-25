@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../theme/app_theme.dart';
 import 'indent.dart' as indent;
@@ -131,7 +130,8 @@ class _CodeEditorState extends State<CodeEditor> {
 
   late final PopupOverlay _popup;
 
-  TextStyle get _bodyStyle => GoogleFonts.jetBrainsMono(
+  TextStyle get _bodyStyle => TextStyle(
+    fontFamily: AppTheme.monoFamily,
     fontSize: widget.fontSize,
     height: widget.lineHeight,
     color: widget.textColor ?? AppColors.textPrimary,
@@ -570,9 +570,10 @@ class _CodeEditorState extends State<CodeEditor> {
   Widget _buildGutter(int lines, Color bg) {
     // Resolved once per build rather than once per line. This runs inside
     // the controller's ListenableBuilder, so on a few-hundred-line script
-    // it was a GoogleFonts lookup and a TextStyle allocation per line per
+    // it was a TextStyle allocation per line per
     // keystroke.
-    final numberStyle = GoogleFonts.jetBrainsMono(
+    final numberStyle = TextStyle(
+      fontFamily: AppTheme.monoFamily,
       fontSize: widget.fontSize,
       height: widget.lineHeight,
       color: AppColors.text4,

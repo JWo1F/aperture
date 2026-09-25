@@ -27,7 +27,7 @@ const double kGridBottomGutter = 12;
 /// pick up belongs to whichever palette was active at first paint. Both are
 /// used for their *metrics* only; every call site supplies a live
 /// [AppColors] colour, because the grid repaints thousands of cells a frame
-/// and rebuilding a GoogleFonts style per cell is not worth the theme
+/// and rebuilding a TextStyle per cell is not worth the theme
 /// fidelity. Do not read the baked colour.
 final TextStyle gridCellStyle = AppTheme.mono(size: 11.5);
 
