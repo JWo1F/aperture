@@ -3,6 +3,9 @@ import FlutterMacOS
 import macos_window_utils
 
 class MainFlutterWindow: NSWindow {
+  /// App-level requests from the native menu to Flutter (`showAbout`).
+  var appChannel: FlutterMethodChannel?
+
   override func awakeFromNib() {
     let windowFrame = self.frame
     let macOSWindowUtilsViewController = MacOSWindowUtilsViewController()
@@ -53,6 +56,8 @@ class MainFlutterWindow: NSWindow {
         result(FlutterMethodNotImplemented)
       }
     }
+
+    appChannel = FlutterMethodChannel(name: "aperture/app", binaryMessenger: messenger)
 
     let keychain = FlutterMethodChannel(name: "aperture/keychain", binaryMessenger: messenger)
     keychain.setMethodCallHandler { call, result in

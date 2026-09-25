@@ -1,11 +1,13 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:macos_window_utils/macos_window_utils.dart';
 
 import 'state/app_globals.dart';
 import 'state/app_state.dart';
 import 'theme/app_theme.dart';
+import 'ui/about/about_dialog.dart';
 import 'ui/app_shell/app_shell.dart';
 import 'ui/app_shell/confirm_discard.dart';
 import 'ui/unlock/unlock_screen.dart';
@@ -64,11 +66,22 @@ class _ApertureAppState extends State<ApertureApp> with WidgetsBindingObserver {
   /// navigator; this State sits above it.
   final GlobalKey<NavigatorState> _navigator = GlobalKey<NavigatorState>();
 
+  /// Requests from the native app menu (`AppDelegate.swift`).
+  static const _appChannel = MethodChannel('aperture/app');
+
   @override
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
     WidgetsBinding.instance.addObserver(this);
+    _appChannel.setMethodCallHandler(_onAppMenu);
+  }
+
+  Future<void> _onAppMenu(MethodCall call) async {
+    final context = _navigator.currentContext;
+    if (call.method == 'showAbout' && context != null) {
+      await showAboutAperture(context);
+    }
   }
 
   /// macOS flipped appearance. The store decides whether that matters —
@@ -97,6 +110,7 @@ class _ApertureAppState extends State<ApertureApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _appChannel.setMethodCallHandler(null);
     WidgetsBinding.instance.removeObserver(this);
     _lifecycle.dispose();
     appState.dispose();
