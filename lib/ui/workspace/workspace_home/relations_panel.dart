@@ -5,6 +5,7 @@ import '../../../models/db_object.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
+import '../../widgets/filter_field.dart';
 import '../../widgets/table_glyph.dart';
 import 'panel.dart';
 
@@ -126,7 +127,10 @@ class _RelationsPanelState extends State<RelationsPanel> {
             _SchemaChip(name: widget.schema!, onClear: widget.onClearSchema),
             const SizedBox(width: 8),
           ],
-          SizedBox(width: 200, child: _FilterField(controller: _filter)),
+          SizedBox(
+            width: 200,
+            child: FilterField(controller: _filter, hint: 'Filter relations…'),
+          ),
         ],
       ),
       child: Column(
@@ -402,81 +406,6 @@ class _SchemaChip extends StatelessWidget {
             Icon(Hgi.cancel01, size: 11, color: AppColors.textSecondary),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _FilterField extends StatefulWidget {
-  const _FilterField({required this.controller});
-
-  final TextEditingController controller;
-
-  @override
-  State<_FilterField> createState() => _FilterFieldState();
-}
-
-class _FilterFieldState extends State<_FilterField> {
-  final _focus = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _focus.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final focused = _focus.hasFocus;
-    final hasText = widget.controller.text.isNotEmpty;
-    final textStyle = AppTheme.ui(
-      size: 12,
-      color: AppColors.textPrimary,
-      weight: FontWeight.w400,
-      letterSpacing: 0,
-    );
-    return Container(
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 7),
-      decoration: BoxDecoration(
-        color: focused ? AppColors.bg : AppColors.surfaceAlt,
-        borderRadius: Radii.brSm,
-        border: Border.all(
-          color: focused ? AppColors.accentRing : AppColors.border,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(Hgi.search01, size: 12, color: AppColors.textMuted),
-          const SizedBox(width: 6),
-          Expanded(
-            child: TextField(
-              controller: widget.controller,
-              focusNode: _focus,
-              cursorColor: AppColors.accent,
-              cursorWidth: 1.4,
-              cursorHeight: 13,
-              style: textStyle,
-              decoration: InputDecoration(
-                isCollapsed: true,
-                border: InputBorder.none,
-                hintText: 'Filter relations…',
-                hintStyle: textStyle.copyWith(color: AppColors.textMuted),
-              ),
-            ),
-          ),
-          if (hasText)
-            GestureDetector(
-              onTap: widget.controller.clear,
-              child: Icon(Hgi.cancel01, size: 11, color: AppColors.textMuted),
-            ),
-        ],
       ),
     );
   }

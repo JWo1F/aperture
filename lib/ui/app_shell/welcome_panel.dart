@@ -1,24 +1,45 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../models/connection_config.dart';
-import '../../models/time_ago.dart';
 import '../../state/app_globals.dart';
 import '../../state/session_controller.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/hugeicons.dart';
 import '../about/about_dialog.dart';
+import '../command_palette/command_palette.dart';
 import '../connection/connection_dialog.dart';
-import '../widgets/common.dart';
+import '../widgets/filter_field.dart';
+import 'welcome/connection_cards.dart';
+import 'welcome/hero.dart';
+import 'welcome/states.dart';
 
-/// Shown in place of the workspace until a live connection exists. Surfaces
-/// the most recently used connections as quick-launch cards.
-class WelcomePanel extends StatelessWidget {
+/// Shown in place of the workspace until a live connection exists: the
+/// brand header, the last-used connection as a one-click resume, and every
+/// other saved connection as a card grid. Static — nothing on it animates
+/// except the connect spinner.
+class WelcomePanel extends StatefulWidget {
   const WelcomePanel({super.key});
 
-  Future<void> _newConnection(BuildContext context) =>
-      createConnectionFlow(context);
+  @override
+  State<WelcomePanel> createState() => _WelcomePanelState();
+}
+
+class _WelcomePanelState extends State<WelcomePanel> {
+  /// The grid grows a filter above this many cards.
+  static const _filterThreshold = 6;
+
+  final _filter = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _filter.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _filter.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,502 +56,213 @@ class WelcomePanel extends StatelessWidget {
   Widget _build(BuildContext context) {
     final session = appState.session;
     final catalog = appState.catalog;
-    final store = appState.store;
     final status = session.status;
     final connecting = status == ConnectionStatus.connecting;
     // The same loader covers the network handshake and the post-connect
     // wait for phase 0. The shell keeps the welcome panel mounted across
     // both gaps so the workspace doesn't pop in with empty data.
-    final preparing = connecting ||
+    final preparing =
+        connecting ||
         (status == ConnectionStatus.connected &&
             !catalog.hasSchemas &&
             catalog.lastError == null);
-    final recents = store.recentConnections;
-    final hasAny = store.connections.isNotEmpty;
-    final connName = session.activeConnection?.name;
 
-    return Container(
+    final ordered = _byRecency(appState.store.connections);
+    final resume = ordered.isNotEmpty && ordered.first.lastConnectedAt != null
+        ? ordered.first
+        : null;
+    final others = resume == null ? ordered : ordered.sublist(1);
+    final query = _filter.text.trim().toLowerCase();
+    final shown = query.isEmpty
+        ? others
+        : [
+            for (final c in others)
+              if (c.name.toLowerCase().contains(query) ||
+                  c.summary.toLowerCase().contains(query))
+                c,
+          ];
+
+    void newConnection() => createConnectionFlow(context);
+    void edit(ConnectionConfig c) => editConnectionFlow(context, c);
+
+    return ColoredBox(
       color: AppColors.bg,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 880),
-          child: Padding(
-            padding: const EdgeInsets.all(Insets.xl),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _BrandHero(),
-                const SizedBox(height: Insets.xl),
-                if (preparing)
-                  _PreparingBlock(
-                    connecting: connecting,
-                    connectionName: connName,
-                  )
-                else if (recents.isNotEmpty)
-                  _RecentsBlock(
-                    recents: recents,
-                    onConnect: appState.connect,
-                    onNew: () => _newConnection(context),
-                  )
-                else
-                  _EmptyBlock(
-                    hasAny: hasAny,
-                    onNew: () => _newConnection(context),
-                  ),
-                if (session.status == ConnectionStatus.error &&
-                    session.error != null) ...[
-                  const SizedBox(height: Insets.xl),
-                  _ErrorBox(message: session.error!),
-                ],
-                const SizedBox(height: Insets.xl),
-                Hoverable(
-                  onTap: () => showAboutAperture(context),
-                  builder: (context, hovering) => Text(
-                    'About Aperture',
-                    style: AppTheme.mono(
-                      size: 10.5,
-                      color: hovering
-                          ? AppColors.textSecondary
-                          : AppColors.textMuted,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BrandHero extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        SizedBox(
-          width: 56,
-          height: 56,
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: Radii.brMd,
-              border: Border.all(color: AppColors.border),
-            ),
-            padding: const EdgeInsets.all(14),
-            child: CustomPaint(
-              painter: _ApertureIrisPainter(
-                accent: AppColors.accent,
-                dim: AppColors.textMuted,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Text(
-          'Aperture',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'a postgres viewer',
-          style: AppTheme.ui(
-            size: 11,
-            color: AppColors.textMuted,
-            letterSpacing: 1.2,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _RecentsBlock extends StatelessWidget {
-  const _RecentsBlock({
-    required this.recents,
-    required this.onConnect,
-    required this.onNew,
-  });
-
-  final List<ConnectionConfig> recents;
-  final void Function(ConnectionConfig) onConnect;
-  final VoidCallback onNew;
-
-  Future<void> _editConnection(
-    BuildContext context,
-    ConnectionConfig config,
-  ) =>
-      editConnectionFlow(context, config);
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('RECENT', style: AppTheme.eyebrow()),
-            const SizedBox(width: 6),
-            Container(
-              width: 4,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.textMuted,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '${recents.length}',
-              style: AppTheme.eyebrow(color: AppColors.textMuted),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          alignment: WrapAlignment.center,
-          children: [
-            for (final c in recents)
-              _RecentCard(
-                config: c,
-                onTap: () => onConnect(c),
-                onEdit: () => _editConnection(context, c),
-              ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        _NewConnectionLink(onTap: onNew),
-      ],
-    );
-  }
-}
-
-class _RecentCard extends StatelessWidget {
-  const _RecentCard({
-    required this.config,
-    required this.onTap,
-    required this.onEdit,
-  });
-
-  final ConnectionConfig config;
-  final VoidCallback onTap;
-  final VoidCallback onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    final ts = config.lastConnectedAt;
-    final tint = AppColors.connectionTint(config.color);
-    return Hoverable(
-      onTap: onTap,
-      builder: (context, hovering) => AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        width: 260,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: hovering ? AppColors.surfaceHover : AppColors.surface,
-          borderRadius: Radii.brMd,
-          border: Border.all(
-            color: hovering ? tint.withValues(alpha: 0.7) : AppColors.border,
-          ),
-          boxShadow: hovering
-              ? [
-                  BoxShadow(
-                    color: tint.withValues(alpha: 0.22),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: tint,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    config.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTheme.ui(
-                      size: 13,
-                      weight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-                if (hovering)
-                  Hoverable(
-                    cursor: SystemMouseCursors.click,
-                    onTap: onEdit,
-                    builder: (context, _) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Icon(
-                        Hgi.edit02,
-                        size: 13,
-                        color: AppColors.textMuted,
+      child: SingleChildScrollView(
+        // Clamped like the workspace home: elastic overscroll on a page
+        // barely taller than the window reads as the content snapping back.
+        physics: const ClampingScrollPhysics(),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 960),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(36, 56, 36, 40),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final columns = width >= 820 ? 3 : (width >= 520 ? 2 : 1);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      WelcomeHero(
+                        onSearch: () => showCommandPalette(context),
+                        onNew: newConnection,
+                        stacked: width < 640,
                       ),
-                    ),
-                  )
-                else if (ts != null)
-                  Text(
-                    timeAgo(ts),
-                    style: AppTheme.mono(size: 10, color: AppColors.textMuted),
-                  ),
-              ],
+                      const SizedBox(height: 36),
+                      if (status == ConnectionStatus.error &&
+                          session.error != null) ...[
+                        WelcomeError(message: session.error!),
+                        const SizedBox(height: 16),
+                      ],
+                      if (preparing)
+                        WelcomePreparing(
+                          connecting: connecting,
+                          connectionName: session.activeConnection?.name,
+                        )
+                      else if (ordered.isEmpty)
+                        WelcomeEmpty(onNew: newConnection)
+                      else ...[
+                        if (resume != null) ...[
+                          ResumeCard(
+                            config: resume,
+                            onConnect: () => appState.connect(resume),
+                            onEdit: () => edit(resume),
+                            compact: width < 560,
+                          ),
+                          const SizedBox(height: 28),
+                        ],
+                        if (others.isNotEmpty) ...[
+                          _GridHeader(
+                            title: resume == null
+                                ? 'Connections'
+                                : 'Other connections',
+                            count: others.length,
+                            filter: others.length > _filterThreshold
+                                ? _filter
+                                : null,
+                          ),
+                          const SizedBox(height: 12),
+                          _Grid(
+                            columns: columns,
+                            children: [
+                              for (final c in shown)
+                                ConnectionCard(
+                                  config: c,
+                                  onConnect: () => appState.connect(c),
+                                  onEdit: () => edit(c),
+                                ),
+                            ],
+                          ),
+                          if (shown.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Text(
+                                'No connection matches the filter.',
+                                style: AppTheme.ui(
+                                  size: 12,
+                                  weight: FontWeight.w400,
+                                  color: AppColors.textMuted,
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ],
+                      const SizedBox(height: 40),
+                      WelcomeFooter(onAbout: () => showAboutAperture(context)),
+                    ],
+                  );
+                },
+              ),
             ),
-            const SizedBox(height: 10),
-            Text(
-              config.summary,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTheme.mono(size: 11, color: AppColors.textSecondary),
-            ),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+
+  /// Most recently used first; never-opened connections after them by name.
+  static List<ConnectionConfig> _byRecency(List<ConnectionConfig> all) =>
+      [...all]..sort((a, b) {
+        final at = a.lastConnectedAt, bt = b.lastConnectedAt;
+        if (at == null && bt == null) {
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        }
+        if (at == null) return 1;
+        if (bt == null) return -1;
+        return bt.compareTo(at);
+      });
+}
+
+class _GridHeader extends StatelessWidget {
+  const _GridHeader({
+    required this.title,
+    required this.count,
+    required this.filter,
+  });
+
+  final String title;
+  final int count;
+  final TextEditingController? filter;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = filter;
+    return SizedBox(
+      height: 26,
+      child: Row(
+        children: [
+          Text(title.toUpperCase(), style: AppTheme.eyebrow()),
+          const SizedBox(width: 8),
+          Text(
+            '$count',
+            style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+          ),
+          const Spacer(),
+          if (controller != null)
+            SizedBox(
+              width: 220,
+              child: FilterField(
+                controller: controller,
+                hint: 'Filter connections…',
+              ),
+            ),
+        ],
       ),
     );
   }
 }
 
-class _NewConnectionLink extends StatelessWidget {
-  const _NewConnectionLink({required this.onTap});
+/// Equal-width rows of [columns] cells.
+class _Grid extends StatelessWidget {
+  const _Grid({required this.columns, required this.children});
 
-  final VoidCallback onTap;
+  final int columns;
+  final List<Widget> children;
 
-  @override
-  Widget build(BuildContext context) {
-    return Hoverable(
-      onTap: onTap,
-      builder: (context, hovering) {
-        final fg = hovering ? AppColors.accentHover : AppColors.accent;
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Hgi.add01, size: 13, color: fg),
-            const SizedBox(width: 6),
-            Text(
-              'New connection',
-              style: AppTheme.ui(size: 12, color: fg, weight: FontWeight.w500),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _EmptyBlock extends StatelessWidget {
-  const _EmptyBlock({required this.hasAny, required this.onNew});
-
-  final bool hasAny;
-  final VoidCallback onNew;
+  static const _gap = 12.0;
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          hasAny
-              ? 'Pick a saved connection from the sidebar, or add a new one.'
-              : 'Add a PostgreSQL connection to start browsing.',
-          textAlign: TextAlign.center,
-          style: AppTheme.ui(
-            size: 12.5,
-            color: AppColors.textMuted,
-            weight: FontWeight.w400,
-          ),
-        ),
-        const SizedBox(height: Insets.lg),
-        AppButton(
-          label: 'New Connection',
-          icon: Hgi.addSquare,
-          primary: true,
-          onPressed: onNew,
-        ),
-      ],
-    );
-  }
-}
-
-/// Centered spinner + caption shown while a connection is opening and its
-/// first schema fetch lands. Two captions, one per gap, so the user can
-/// tell whether the network round-trip or the catalog read is the slow
-/// part. Connection name appears underneath when known so the user can
-/// see *which* database is being opened.
-class _PreparingBlock extends StatelessWidget {
-  const _PreparingBlock({
-    required this.connecting,
-    required this.connectionName,
-  });
-
-  final bool connecting;
-  final String? connectionName;
-
-  @override
-  Widget build(BuildContext context) {
-    final name = connectionName;
-    return Column(
-      children: [
-        SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppColors.accent,
-          ),
-        ),
-        const SizedBox(height: 14),
-        Text(
-          connecting ? 'Connecting…' : 'Loading schemas…',
-          style: AppTheme.ui(
-            size: 12.5,
-            color: AppColors.textSecondary,
-            weight: FontWeight.w500,
-          ),
-        ),
-        if (name != null && name.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(
-            name,
-            style: AppTheme.mono(
-              size: 11,
-              color: AppColors.textMuted,
-            ),
+        for (var i = 0; i < children.length; i += columns) ...[
+          if (i > 0) const SizedBox(height: _gap),
+          Row(
+            children: [
+              for (var j = 0; j < columns; j++) ...[
+                if (j > 0) const SizedBox(width: _gap),
+                Expanded(
+                  child: i + j < children.length
+                      ? children[i + j]
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ],
           ),
         ],
       ],
     );
   }
-}
-
-class _ErrorBox extends StatelessWidget {
-  const _ErrorBox({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 520),
-      child: Container(
-        padding: const EdgeInsets.all(Insets.md),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: Radii.brSm,
-          border: Border.all(color: AppColors.error),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Hgi.alertCircle, size: 15, color: AppColors.error),
-            const SizedBox(width: Insets.sm),
-            Flexible(
-              child: Text(
-                message,
-                style: AppTheme.mono(
-                  size: 11.5,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Hex-framed iris glyph for the welcome screen's brand hero — three
-/// shutter blades converging on the centre, drawn cheaply enough to stay
-/// readable at small sizes.
-class _ApertureIrisPainter extends CustomPainter {
-  _ApertureIrisPainter({required this.accent, required this.dim});
-
-  final Color accent;
-  final Color dim;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final stroke = Paint()
-      ..color = accent
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..isAntiAlias = true;
-
-    final dimStroke = Paint()
-      ..color = dim.withValues(alpha: 0.55)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..isAntiAlias = true;
-
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final r = size.width / 2 - 1.5;
-
-    // Outer hex perimeter — six hairlines, dim.
-    final hex = Path();
-    for (int i = 0; i < 6; i++) {
-      final a = (i * 60 - 90) * math.pi / 180;
-      final x = cx + r * math.cos(a);
-      final y = cy + r * math.sin(a);
-      if (i == 0) {
-        hex.moveTo(x, y);
-      } else {
-        hex.lineTo(x, y);
-      }
-    }
-    hex.close();
-    canvas.drawPath(hex, dimStroke);
-
-    // Three iris blades — short chords from hex vertices to a small offset
-    // around the centre, creating a triangular shutter look without painting
-    // every blade (keeps it readable at 18px).
-    Offset vertex(int i) {
-      final a = (i * 60 - 90) * math.pi / 180;
-      return Offset(cx + r * math.cos(a), cy + r * math.sin(a));
-    }
-
-    final blade1 = Path()
-      ..moveTo(vertex(0).dx, vertex(0).dy)
-      ..lineTo(cx + 1.5, cy + 1.5)
-      ..lineTo(vertex(2).dx, vertex(2).dy);
-    final blade2 = Path()
-      ..moveTo(vertex(2).dx, vertex(2).dy)
-      ..lineTo(cx - 1.5, cy + 1.5)
-      ..lineTo(vertex(4).dx, vertex(4).dy);
-    final blade3 = Path()
-      ..moveTo(vertex(4).dx, vertex(4).dy)
-      ..lineTo(cx, cy - 2)
-      ..lineTo(vertex(0).dx, vertex(0).dy);
-
-    canvas.drawPath(blade1, stroke);
-    canvas.drawPath(blade2, stroke);
-    canvas.drawPath(blade3, stroke);
-  }
-
-  @override
-  bool shouldRepaint(_ApertureIrisPainter old) =>
-      old.accent != accent || old.dim != dim;
 }

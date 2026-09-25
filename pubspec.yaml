@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.28.1+101
+version: 1.29.0+102
 
 environment:
   sdk: ^3.12.0
@@ -79,6 +79,11 @@ flutter:
 
   # For details regarding adding assets from package dependencies, see
   # https://flutter.dev/to/asset-from-package
+
+  # The macOS app icon at 256 px, shown as the welcome screen's logo. Copied
+  # from macos/Runner/Assets.xcassets — replace both when the icon changes.
+  assets:
+    - assets/brand/app_icon.png
 
   # HugeIcons stroke-rounded — the app's only icon font. Glyph constants are
   # generated into lib/theme/hugeicons.dart by tool/gen_hugeicons.py; the two
