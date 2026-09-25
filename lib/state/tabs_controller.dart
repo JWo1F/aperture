@@ -7,6 +7,7 @@ import '../models/db_object.dart';
 import '../models/order_term.dart';
 import '../models/query_result.dart';
 import '../models/saved_query.dart';
+import '../models/schema_object.dart';
 import '../models/value_format.dart';
 import '../services/db_service.dart';
 import '../services/postgres_service.dart';
@@ -154,8 +155,8 @@ class TabsController extends ChangeNotifier {
 
   void selectTab(int index) => _select(index);
 
-  void newQueryTab({String? name, String sql = ''}) {
-    final tab = QueryTab(_nextId(), name: name ?? _nextQueryName(), sql: sql);
+  void newQueryTab() {
+    final tab = QueryTab(_nextId(), name: _nextQueryName());
     _attachTab(tab);
     _tabs.add(tab);
     _select(_tabs.length - 1);
@@ -283,35 +284,40 @@ class TabsController extends ChangeNotifier {
 
   // --- Schema tabs ----------------------------------------------------
 
-  Future<void> openSchema(DbTable table) async {
+  /// Opens [object]'s page, reusing its tab when one is open. [view]
+  /// switches an existing tab too; left null, a new tab opens relations on
+  /// their info page and everything else on its DDL.
+  Future<void> openObject(SchemaObject object, {ObjectView? view}) async {
     final existing = _tabs.indexWhere(
-      (t) => t is SchemaTab && t.table.qualifiedName == table.qualifiedName,
+      (t) => t is SchemaTab && t.object.key == object.key,
     );
     if (existing != -1) {
+      if (view != null) (_tabs[existing] as SchemaTab).setView(view);
       _select(existing);
       return;
     }
-    final tab = SchemaTab(_nextId(), table);
+    final tab = SchemaTab(_nextId(), object, view: view);
     _attachTab(tab);
     _tabs.add(tab);
     _select(_tabs.length - 1);
-
-    final service = _requireService('open schema');
-    if (service == null) return;
-    tab.beginDdlLoad();
-    try {
-      tab.completeDdlLoad(await service.loadTableDdl(table));
-    } catch (e) {
-      tab.failDdlLoad(e);
-    }
+    await reloadObjectDdl(tab);
   }
 
-  Future<void> reloadSchema(SchemaTab tab) async {
-    final service = _requireService('reload schema');
+  Future<void> reloadObjectDdl(SchemaTab tab) async {
+    final service = _requireService('load the definition');
     if (service == null) return;
     tab.beginDdlLoad();
     try {
-      tab.completeDdlLoad(await service.loadTableDdl(tab.table));
+      final introspector = service.introspector;
+      tab.completeDdlLoad(
+        await switch (tab.object) {
+          RelationObject(table: final t) => service.loadTableDdl(t),
+          RoutineObject(routine: final r) => introspector.loadRoutineDdl(r),
+          SequenceObject(sequence: final q) => introspector.loadSequenceDdl(q),
+          EnumObject(type: final e) => introspector.loadEnumDdl(e),
+          DomainObject(domain: final d) => introspector.loadDomainDdl(d),
+        },
+      );
     } catch (e) {
       tab.failDdlLoad(e);
     }

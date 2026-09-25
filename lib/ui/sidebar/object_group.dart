@@ -87,7 +87,7 @@ class SchemaObjectGroup extends StatelessWidget {
 }
 
 /// A non-relation schema object: function, procedure, sequence or type.
-/// Clicking opens its `CREATE` statement in a new query tab.
+/// Clicking opens its `CREATE` statement in the object tab.
 class SchemaObjectRow extends StatelessWidget {
   const SchemaObjectRow({
     super.key,
@@ -162,7 +162,7 @@ class SchemaObjectRow extends StatelessWidget {
       context,
       globalPosition: position,
       entries: [
-        CmItem(icon: Hgi.braces, label: 'Show definition', onTap: onOpen),
+        CmItem(icon: Hgi.braces, label: 'Show DDL', onTap: onOpen),
         const CmDivider(),
         CmItem(icon: Hgi.tag01, label: 'Copy name', onTap: () => copy(name)),
         CmItem(

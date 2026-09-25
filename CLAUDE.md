@@ -283,6 +283,7 @@ allowed for cohesive presentational widgets like `plan_node_card.dart`):
 |---|---|
 | Sidebar | `lib/ui/sidebar/` — 11 files; composition root in `sidebar.dart` |
 | Query plan view | `lib/ui/workspace/query_plan/` — layered: `model/`, `parsing/`, `analysis/`, `glossary/`, `view/` |
+| Object tab | `SchemaTab` over a sealed `SchemaObject`; `schema_view.dart` + `lib/ui/workspace/object_view/` — Info (plain-language, relations only) and DDL |
 | Results grid | `lib/ui/workspace/results_grid/` — 20 files |
 | Code editor | `lib/ui/widgets/code_editor/` — layered: `controller`, `indent` (pure), `metrics`, `suggestions/`, `view` |
 

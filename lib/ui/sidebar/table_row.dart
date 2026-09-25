@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 
 import '../../models/count_format.dart';
 import '../../models/db_object.dart';
+import '../../models/schema_object.dart';
 import '../../state/app_globals.dart';
 import '../../state/connection_views.dart';
+import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/hugeicons.dart';
 import '../widgets/context_menu.dart';
@@ -160,9 +162,20 @@ void openTableMenu(BuildContext context, DbTable table, Offset position) {
         onTap: () => appState.tabsController.openTable(table),
       ),
       CmItem(
+        icon: Hgi.informationCircle,
+        label: 'Show info',
+        onTap: () => appState.tabsController.openObject(
+          RelationObject(table),
+          view: ObjectView.info,
+        ),
+      ),
+      CmItem(
         icon: Hgi.braces,
-        label: 'Show schema (CREATE TABLE)',
-        onTap: () => appState.tabsController.openSchema(table),
+        label: 'Show DDL',
+        onTap: () => appState.tabsController.openObject(
+          RelationObject(table),
+          view: ObjectView.ddl,
+        ),
       ),
       const CmDivider(),
       CmItem(

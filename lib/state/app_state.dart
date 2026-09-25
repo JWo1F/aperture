@@ -5,7 +5,6 @@ import '../models/connection_config.dart';
 import '../models/db_object.dart';
 import '../models/log_event.dart';
 import '../models/value_format.dart';
-import '../services/db_service.dart';
 import '../services/keychain.dart';
 import '../services/store_database.dart';
 import 'app_store.dart';
@@ -378,28 +377,6 @@ class AppState {
     if (schemas.length == 1) ui.expandSingleSchema(schemas.first.name);
     return schemas;
   }
-  // --- Schema object definitions --------------------------------------
-
-  /// Fetches a schema object's `CREATE` statement and opens it in a new query
-  /// tab named [name]. The result is dropped if the connection changed while
-  /// it was in flight — it would otherwise land in the next database's
-  /// workspace.
-  Future<void> openDefinition(
-    String name,
-    Future<String> Function(Introspector) load,
-  ) async {
-    final service = session.service;
-    if (service == null) return;
-    try {
-      final ddl = await load(service.introspector);
-      if (session.service != service) return;
-      tabsController.newQueryTab(name: name, sql: ddl);
-    } catch (e) {
-      if (session.service != service) return;
-      toasts.error('$e', title: "Couldn't load the definition of $name");
-    }
-  }
-
   // --- Query messages --------------------------------------------------
 
   void clearQueryMessages(QueryTab tab) {

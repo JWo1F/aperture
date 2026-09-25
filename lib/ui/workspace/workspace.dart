@@ -371,7 +371,7 @@ class _Tab extends StatelessWidget {
   }
 }
 
-/// The label. For SchemaTab, the trailing `· schema` is rendered in a
+/// The label. For SchemaTab, the trailing `info` / `ddl` is rendered in a
 /// muted tone so the table name stays primary. Font weight stays
 /// constant across states — color carries the active/hover signal so
 /// neighbouring tabs don't reflow when activation changes.
@@ -395,9 +395,9 @@ class _TabLabel extends StatelessWidget {
       return Text.rich(
         TextSpan(
           children: [
-            TextSpan(text: t.table.name, style: base),
+            TextSpan(text: t.object.name, style: base),
             TextSpan(
-              text: '  schema',
+              text: t.view == ObjectView.info ? '  info' : '  ddl',
               style: base.copyWith(color: color.withValues(alpha: 0.55)),
             ),
           ],

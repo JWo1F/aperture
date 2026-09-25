@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/db_object.dart';
+import '../../models/schema_object.dart';
 import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/hugeicons.dart';
@@ -215,7 +216,7 @@ class SchemaBlock extends StatelessWidget {
       detail: r.result == null
           ? '(${r.arguments})'
           : '(${r.arguments}) → ${r.result}',
-      onOpen: () => appState.openDefinition(r.name, (i) => i.loadRoutineDdl(r)),
+      onOpen: () => appState.tabsController.openObject(RoutineObject(r)),
     );
 
     final types = <(String, Widget)>[
@@ -230,8 +231,7 @@ class SchemaBlock extends StatelessWidget {
             qualifiedName: e.qualifiedName,
             query: query,
             detail: 'enum · ${e.labels.length}',
-            onOpen: () =>
-                appState.openDefinition(e.name, (i) => i.loadEnumDdl(e)),
+            onOpen: () => appState.tabsController.openObject(EnumObject(e)),
           ),
         ),
       for (final d in c.domains)
@@ -245,8 +245,7 @@ class SchemaBlock extends StatelessWidget {
             qualifiedName: d.qualifiedName,
             query: query,
             detail: d.baseType,
-            onOpen: () =>
-                appState.openDefinition(d.name, (i) => i.loadDomainDdl(d)),
+            onOpen: () => appState.tabsController.openObject(DomainObject(d)),
           ),
         ),
     ]..sort((a, b) => a.$1.compareTo(b.$1));
@@ -277,8 +276,7 @@ class SchemaBlock extends StatelessWidget {
               name: q.name,
               qualifiedName: q.qualifiedName,
               query: query,
-              onOpen: () =>
-                  appState.openDefinition(q.name, (i) => i.loadSequenceDdl(q)),
+              onOpen: () => appState.tabsController.openObject(SequenceObject(q)),
             ),
         ]),
       if (types.isNotEmpty)

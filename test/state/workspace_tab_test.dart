@@ -1,5 +1,6 @@
 import 'package:aperture/models/db_object.dart';
 import 'package:aperture/models/query_result.dart';
+import 'package:aperture/models/schema_object.dart';
 import 'package:aperture/state/workspace_tab.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,7 +13,9 @@ DbTable _table() => DbTable(
 
 QueryResult _page(List<String> rowIds) => QueryResult.rows(
   columns: const ['id'],
-  rows: [for (var i = 0; i < rowIds.length; i++) <Object?>[i]],
+  rows: [
+    for (var i = 0; i < rowIds.length; i++) <Object?>[i],
+  ],
   rowIds: rowIds,
   elapsed: Duration.zero,
 );
@@ -56,7 +59,7 @@ void main() {
     });
 
     test('a DDL fetch landing after close does not throw', () {
-      final tab = SchemaTab('d3', _table());
+      final tab = SchemaTab('d3', RelationObject(_table()));
       tab.beginDdlLoad();
       tab.dispose();
 
@@ -71,10 +74,7 @@ void main() {
       // The grid header once assigned straight into this view on every
       // resize tick; it threw, and the persist callback on the next line
       // never ran, so no width ever reached the store.
-      expect(
-        () => tab.columnWidths['id'] = 120,
-        throwsUnsupportedError,
-      );
+      expect(() => tab.columnWidths['id'] = 120, throwsUnsupportedError);
     });
 
     test('setColumnWidth records and survives a page load', () {
@@ -135,11 +135,30 @@ void main() {
       final stale = tab.beginPageLoad(page: 1);
       tab.beginPageLoad(page: 2);
 
-      expect(
-        tab.completePageLoad(stale, result: _page(['(0,9)'])),
-        isFalse,
-      );
+      expect(tab.completePageLoad(stale, result: _page(['(0,9)'])), isFalse);
       expect(tab.deletedRows, isEmpty);
+    });
+  });
+
+  group('SchemaTab views', () {
+    test('a relation opens on info and switches to DDL', () {
+      final tab = SchemaTab('s1', RelationObject(_table()));
+      expect(tab.view, ObjectView.info);
+      tab.setView(ObjectView.ddl);
+      expect(tab.view, ObjectView.ddl);
+      expect(tab.title, endsWith('ddl'));
+    });
+
+    test('a sequence has no info page to switch to', () {
+      final tab = SchemaTab(
+        's2',
+        SequenceObject(DbSequence(oid: 1, schema: 'public', name: 'seq')),
+        view: ObjectView.info,
+      );
+      expect(tab.view, ObjectView.ddl);
+      tab.setView(ObjectView.info);
+      expect(tab.view, ObjectView.ddl);
+      expect(tab.table, isNull);
     });
   });
 }

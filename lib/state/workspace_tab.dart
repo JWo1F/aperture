@@ -7,6 +7,7 @@ import '../models/cell_edit.dart';
 import '../models/db_object.dart';
 import '../models/query_message.dart';
 import '../models/query_result.dart';
+import '../models/schema_object.dart';
 import '../models/value_format.dart';
 
 export '../models/cell_edit.dart'
@@ -317,11 +318,36 @@ class QueryTab extends WorkspaceTab {
   String get title => _name;
 }
 
-/// Read-only view of a table's DDL (CREATE TABLE, indexes, FKs).
-class SchemaTab extends WorkspaceTab {
-  SchemaTab(super.id, this.table);
+/// Which face of a [SchemaTab] is showing.
+enum ObjectView { info, ddl }
 
-  final DbTable table;
+/// Read-only page for one schema object: a plain-language info page (for
+/// relations) and its `CREATE` statement.
+class SchemaTab extends WorkspaceTab {
+  SchemaTab(super.id, this.object, {ObjectView? view})
+    : _view = object is RelationObject
+          ? (view ?? ObjectView.info)
+          : ObjectView.ddl;
+
+  final SchemaObject object;
+
+  /// The relation, when the object is one.
+  DbTable? get table => switch (object) {
+    RelationObject(table: final t) => t,
+    _ => null,
+  };
+
+  /// Only relations have an info page.
+  bool get hasInfo => object is RelationObject;
+
+  ObjectView _view;
+  ObjectView get view => _view;
+
+  void setView(ObjectView view) {
+    if (view == _view || (view == ObjectView.info && !hasInfo)) return;
+    _view = view;
+    notifyListeners();
+  }
 
   String? _ddl;
   String? _error;
@@ -356,7 +382,8 @@ class SchemaTab extends WorkspaceTab {
   }
 
   @override
-  String get title => '${table.name} · schema';
+  String get title =>
+      '${object.name} · ${_view == ObjectView.info ? 'info' : 'ddl'}';
 }
 
 class TableTab extends WorkspaceTab {

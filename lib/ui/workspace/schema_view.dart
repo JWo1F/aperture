@@ -2,16 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:highlight/highlight.dart' show highlight;
 
+import '../../models/db_object.dart';
+import '../../models/schema_object.dart';
 import '../../state/app_globals.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
 import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
+import '../widgets/segmented_choice.dart';
+import '../widgets/table_glyph.dart';
+import 'object_view/article.dart';
+import 'object_view/info_body.dart';
 
-/// Renders a [SchemaTab] in the design's "article" style: centered title,
-/// muted relation subtitle, eyebrow section heading, and a surface DDL block
-/// with selectable, syntax-highlighted source.
+/// The object tab: a toolbar naming the object, and either its info page
+/// (relations only) or its highlighted `CREATE` statement.
 class SchemaView extends StatelessWidget {
   const SchemaView({super.key, required this.tab});
 
@@ -19,14 +24,32 @@ class SchemaView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final table = tab.table;
     return Column(
       children: [
         _Toolbar(tab: tab),
-        Expanded(child: _Body(tab: tab)),
+        Expanded(
+          child: tab.view == ObjectView.info && table != null
+              ? InfoBody(table: table)
+              : _DdlBody(tab: tab),
+        ),
       ],
     );
   }
 }
+
+Widget _objectIcon(SchemaObject object, Color color, double size) =>
+    switch (object) {
+      RelationObject() => TableGlyph(size: size, color: color),
+      RoutineObject(routine: final r) => Icon(
+        r.kind == DbRoutineKind.procedure ? Hgi.playSquare : Hgi.functionSquare,
+        size: size,
+        color: color,
+      ),
+      SequenceObject() => Icon(Hgi.sortingOne9, size: size, color: color),
+      EnumObject() => Icon(Hgi.listView, size: size, color: color),
+      DomainObject() => Icon(Hgi.shapes, size: size, color: color),
+    };
 
 class _Toolbar extends StatelessWidget {
   const _Toolbar({required this.tab});
@@ -42,6 +65,7 @@ class _Toolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final object = tab.object;
     return Container(
       height: 36,
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -51,22 +75,22 @@ class _Toolbar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Hgi.braces, size: 13, color: AppColors.accent),
-          const SizedBox(width: 7),
-          RichText(
-            text: TextSpan(
-              style: AppTheme.mono(size: 11.5, weight: FontWeight.w600),
-              children: [
-                TextSpan(
-                  text: '${tab.table.schema}.',
-                  style: AppTheme.mono(
-                    size: 11.5,
-                    color: AppColors.textMuted,
-                    weight: FontWeight.w400,
+          _objectIcon(object, AppColors.accent, 13),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '${object.schema}.',
+                    style: TextStyle(color: AppColors.textMuted),
                   ),
-                ),
-                TextSpan(text: tab.table.name),
-              ],
+                  TextSpan(text: object.name),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.mono(size: 11.5, weight: FontWeight.w600),
             ),
           ),
           const SizedBox(width: 8),
@@ -77,7 +101,7 @@ class _Toolbar extends StatelessWidget {
               borderRadius: Radii.brSm,
             ),
             child: Text(
-              'schema',
+              object.kindLabel,
               style: AppTheme.mono(
                 size: 10,
                 color: AppColors.accent,
@@ -86,12 +110,23 @@ class _Toolbar extends StatelessWidget {
             ),
           ),
           const Spacer(),
+          if (tab.hasInfo) ...[
+            SegmentedChoice<ObjectView>(
+              value: tab.view,
+              onChanged: tab.setView,
+              options: const [
+                (ObjectView.info, 'Info'),
+                (ObjectView.ddl, 'DDL'),
+              ],
+            ),
+            const SizedBox(width: 6),
+          ],
           IconAction(
             icon: Hgi.refresh,
-            tooltip: 'Reload',
+            tooltip: 'Reload DDL',
             onPressed: tab.loading
                 ? null
-                : () => appState.tabsController.reloadSchema(tab),
+                : () => appState.tabsController.reloadObjectDdl(tab),
             busy: tab.loading,
           ),
           IconAction(
@@ -105,8 +140,8 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
-class _Body extends StatelessWidget {
-  const _Body({required this.tab});
+class _DdlBody extends StatelessWidget {
+  const _DdlBody({required this.tab});
 
   final SchemaTab tab;
 
@@ -127,7 +162,7 @@ class _Body extends StatelessWidget {
     if (tab.error != null) {
       return EmptyState(
         icon: Hgi.alertCircle,
-        title: 'Could not load schema',
+        title: 'Could not load the DDL',
         message: tab.error,
       );
     }
@@ -142,88 +177,50 @@ class _Body extends StatelessWidget {
     final raw = tab.ddl!;
     final ddl = raw.endsWith('\n') ? raw.substring(0, raw.length - 1) : raw;
     final parsed = highlight.parse(ddl, language: 'pgsql');
+    final object = tab.object;
 
-    return Container(
-      color: AppColors.bg,
-      child: SingleChildScrollView(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 920),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(40, 28, 40, 60),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    tab.table.name,
-                    style: AppTheme.mono(
-                      size: 18,
-                      color: AppColors.textPrimary,
-                      weight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${tab.table.schema} · ${tab.table.isView ? 'view' : 'table'}',
-                    style: AppTheme.mono(
-                      size: 11.5,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  _SectionTitle(label: 'DDL'),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: Radii.brSm,
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: SelectableText.rich(
-                        TextSpan(
-                          children: highlightNodesToSpans(
-                            parsed.nodes,
-                            base,
-                            apertureCodeStyles,
-                          ),
-                        ),
-                        style: base,
-                      ),
-                    ),
-                  ),
-                ],
+    return Article(
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              object.name,
+              style: AppTheme.mono(
+                size: 18,
+                color: AppColors.textPrimary,
+                weight: FontWeight.w500,
               ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${object.schema} · ${object.kindLabel}',
+              style: AppTheme.mono(size: 11.5, color: AppColors.textMuted),
+            ),
+          ],
+        ),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: Radii.brSm,
+            border: Border.all(color: AppColors.border),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SelectableText.rich(
+              TextSpan(
+                children: highlightNodesToSpans(
+                  parsed.nodes,
+                  base,
+                  apertureCodeStyles,
+                ),
+              ),
+              style: base,
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: AppTheme.mono(
-            size: 10.5,
-            color: AppColors.textMuted,
-            weight: FontWeight.w600,
-          ).copyWith(letterSpacing: 0.08 * 10.5),
-        ),
-        const SizedBox(width: 8),
-        Expanded(child: Container(height: 1, color: AppColors.hairline)),
       ],
     );
   }

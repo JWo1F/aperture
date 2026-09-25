@@ -5,6 +5,7 @@ import '../../../models/connection_config.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
+import '../../widgets/segmented_choice.dart';
 import 'connection_form_model.dart';
 import 'form_widgets.dart';
 

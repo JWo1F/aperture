@@ -137,7 +137,7 @@ class SidebarBody extends StatelessWidget {
   String? _activeTableQualifiedName(TabsController tabs) {
     final tab = tabs.activeTab;
     if (tab is TableTab) return tab.table.qualifiedName;
-    if (tab is SchemaTab) return tab.table.qualifiedName;
+    if (tab is SchemaTab) return tab.table?.qualifiedName;
     return null;
   }
 

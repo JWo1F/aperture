@@ -189,7 +189,10 @@ class PaletteItemSource {
       final (label, icon) = switch (tab) {
         QueryTab() => ('SQL query', Hgi.terminal),
         TableTab() => ('Table view', Hgi.gridTable),
-        SchemaTab() => ('Schema', Hgi.structure01),
+        SchemaTab(view: final v) => (
+          v == ObjectView.info ? 'Info' : 'DDL',
+          Hgi.structure01,
+        ),
       };
       out.add(
         PaletteItem(
