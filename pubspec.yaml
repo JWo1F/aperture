@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.30.0+104
+version: 1.30.1+105
 
 environment:
   sdk: ^3.12.0
@@ -92,3 +92,12 @@ flutter:
     - family: hugeicons
       fonts:
         - asset: assets/fonts/hgi-stroke-rounded.ttf
+
+# SQLite3MultipleCiphers instead of upstream SQLite: the same engine plus
+# at-rest encryption (`PRAGMA key`), which seals the settings store. Files
+# opened without a key are read and written exactly as upstream would, so
+# browsing a user's own SQLite databases is unaffected.
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlite3mc
