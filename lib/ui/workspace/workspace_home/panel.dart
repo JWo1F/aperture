@@ -113,12 +113,19 @@ class HomePanelRow extends StatelessWidget {
 class HomePanelEmpty extends StatelessWidget {
   const HomePanelEmpty({
     super.key,
-    required this.icon,
     required this.message,
+    this.icon,
+    this.glyph,
     this.action,
-  });
+  }) : assert(
+         (icon == null) != (glyph == null),
+         'Provide exactly one of icon or glyph',
+       );
 
-  final IconData icon;
+  final IconData? icon;
+
+  /// A painted mark in place of [icon] — the shared table glyph.
+  final Widget Function(Color color, double size)? glyph;
   final String message;
   final Widget? action;
 
@@ -128,7 +135,8 @@ class HomePanelEmpty extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: AppColors.text4),
+          glyph?.call(AppColors.text4, 16) ??
+              Icon(icon, size: 16, color: AppColors.text4),
           const SizedBox(width: 10),
           Expanded(
             child: Text(

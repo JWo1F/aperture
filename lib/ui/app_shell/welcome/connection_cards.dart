@@ -5,6 +5,7 @@ import '../../../models/time_ago.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
+import '../../widgets/table_glyph.dart';
 
 IconData _engineIcon(ConnectionConfig c) =>
     c.engine == DbEngine.sqlite ? Hgi.fileDatabase : Hgi.database01;
@@ -37,10 +38,13 @@ class _Avatar extends StatelessWidget {
 }
 
 class _Chip extends StatelessWidget {
-  const _Chip(this.label, {this.icon});
+  const _Chip(this.label, {this.icon, this.glyph});
 
   final String label;
   final IconData? icon;
+
+  /// A painted mark in place of [icon] — the shared table glyph.
+  final Widget Function(Color color, double size)? glyph;
 
   @override
   Widget build(BuildContext context) {
@@ -55,8 +59,9 @@ class _Chip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: 11, color: AppColors.textMuted),
+          if (glyph != null || icon != null) ...[
+            glyph?.call(AppColors.textMuted, 11) ??
+                Icon(icon, size: 11, color: AppColors.textMuted),
             const SizedBox(width: 4),
           ],
           Flexible(
@@ -265,7 +270,8 @@ class ResumeCard extends StatelessWidget {
                         if (tables > 0)
                           _Chip(
                             '$tables recent ${tables == 1 ? 'table' : 'tables'}',
-                            icon: Hgi.table01,
+                            glyph: (color, size) =>
+                                TableGlyph(size: size, color: color),
                           ),
                         if (last != null)
                           _Chip(timeAgo(last), icon: Hgi.clock01),

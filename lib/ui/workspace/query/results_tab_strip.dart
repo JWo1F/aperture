@@ -5,6 +5,7 @@ import '../../../state/workspace_tab.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
+import '../../widgets/table_glyph.dart';
 
 /// Section selector between the editor and the results pane.
 ///
@@ -34,7 +35,7 @@ class ResultsTabStrip extends StatelessWidget {
         children: [
           const SizedBox(width: 6),
           _SectionTab(
-            icon: Hgi.table,
+            glyph: (color, size) => TableGlyph(size: size, color: color),
             label: 'Results',
             badge: rowCount == null ? null : compactCount(rowCount),
             active: tab.view == QueryResultsView.results,
@@ -61,14 +62,18 @@ class ResultsTabStrip extends StatelessWidget {
 
 class _SectionTab extends StatelessWidget {
   const _SectionTab({
-    required this.icon,
     required this.label,
     required this.active,
     required this.onTap,
+    this.icon,
+    this.glyph,
     this.badge,
   });
 
-  final IconData icon;
+  final IconData? icon;
+
+  /// A painted mark in place of [icon] — the shared table glyph.
+  final Widget Function(Color color, double size)? glyph;
   final String label;
   final bool active;
   final VoidCallback onTap;
@@ -104,7 +109,7 @@ class _SectionTab extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 11, color: fg),
+              glyph?.call(fg, 11) ?? Icon(icon, size: 11, color: fg),
               const SizedBox(width: 6),
               Text(
                 label.toUpperCase(),

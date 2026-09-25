@@ -39,8 +39,8 @@ class JumpBackPanel extends StatelessWidget {
       title: frequent ? 'Most visited' : 'Recent tables',
       count: tables.length,
       child: tables.isEmpty
-          ? const HomePanelEmpty(
-              icon: Hgi.table01,
+          ? HomePanelEmpty(
+              glyph: (color, size) => TableGlyph(size: size, color: color),
               message: 'Tables you open land here.',
             )
           : Column(
