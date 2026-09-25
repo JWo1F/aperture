@@ -1,6 +1,7 @@
 import '../models/db_object.dart';
 import 'introspector.dart';
 import 'postgres_service.dart';
+import 'sql_render.dart';
 
 /// Runs catalog-wide introspection queries against an open Postgres
 /// connection.
@@ -66,6 +67,7 @@ class PostgresIntrospector implements Introspector {
               comment: comment,
               rowEstimate: hasRowEstimate ? rowEst : null,
               sizeBytes: sizeBytes != null && sizeBytes > 0 ? sizeBytes : null,
+              partitioned: kind == 'p',
             ),
           );
     }
@@ -327,6 +329,153 @@ class PostgresIntrospector implements Introspector {
           notNull: row[3] as bool,
         ),
     ];
+  }
+
+  /// Functions (plain and window) and procedures. Aggregates are left out —
+  /// `pg_get_functiondef` can't render them — and so is everything an
+  /// extension installed, which would otherwise bury the user's own
+  /// routines under hundreds of pgcrypto / PostGIS entries.
+  @override
+  Future<List<DbRoutine>> loadAllRoutines() async {
+    final result = await _db.execute(
+      'SELECT p.oid::bigint, n.nspname::text, p.proname::text, '
+      '       p.prokind::text, '
+      '       pg_get_function_identity_arguments(p.oid), '
+      "       CASE WHEN p.prokind = 'p' THEN NULL "
+      '            ELSE pg_get_function_result(p.oid) END '
+      'FROM pg_proc p '
+      'JOIN pg_namespace n ON n.oid = p.pronamespace '
+      "WHERE p.prokind IN ('f', 'w', 'p') "
+      '  AND $_systemSchemaFilter '
+      '  AND NOT EXISTS ('
+      '    SELECT 1 FROM pg_depend d '
+      "    WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid "
+      "      AND d.deptype = 'e'"
+      '  ) '
+      'ORDER BY n.nspname, p.proname, 5',
+    );
+    return [
+      for (final row in result)
+        DbRoutine(
+          oid: row[0] as int,
+          schema: row[1] as String,
+          name: row[2] as String,
+          kind: row[3] == 'p'
+              ? DbRoutineKind.procedure
+              : DbRoutineKind.function,
+          arguments: row[4] as String? ?? '',
+          result: row[5] as String?,
+        ),
+    ];
+  }
+
+  /// Sequences that stand on their own. Identity-column sequences
+  /// (`deptype = 'i'`) and extension members are skipped; a `serial`
+  /// column's sequence (`deptype = 'a'`) stays, since it is a real,
+  /// separately-named object the user can call `nextval` on.
+  @override
+  Future<List<DbSequence>> loadAllSequences() async {
+    final result = await _db.execute(
+      'SELECT c.oid::bigint, n.nspname::text, c.relname::text '
+      'FROM pg_class c '
+      'JOIN pg_namespace n ON n.oid = c.relnamespace '
+      "WHERE c.relkind = 'S' "
+      '  AND $_systemSchemaFilter '
+      '  AND NOT EXISTS ('
+      '    SELECT 1 FROM pg_depend d '
+      "    WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid "
+      "      AND d.deptype IN ('i', 'e')"
+      '  ) '
+      'ORDER BY n.nspname, c.relname',
+    );
+    return [
+      for (final row in result)
+        DbSequence(
+          oid: row[0] as int,
+          schema: row[1] as String,
+          name: row[2] as String,
+        ),
+    ];
+  }
+
+  @override
+  Future<String> loadRoutineDdl(DbRoutine routine) async {
+    final result = await _db.execute(
+      'SELECT pg_get_functiondef(${routine.oid})',
+    );
+    final def = (result.first[0] as String).trimRight();
+    return '$def;\n';
+  }
+
+  @override
+  Future<String> loadSequenceDdl(DbSequence sequence) async {
+    final result = await _db.execute(
+      'SELECT format_type(s.seqtypid, NULL), s.seqincrement, s.seqmin, '
+      '       s.seqmax, s.seqstart, s.seqcache, s.seqcycle, '
+      "       CASE WHEN has_sequence_privilege(s.seqrelid, 'SELECT') "
+      '            THEN pg_sequence_last_value(s.seqrelid) END, '
+      "       (SELECT quote_ident(tn.nspname) || '.' "
+      "               || quote_ident(t.relname) || '.' "
+      '               || quote_ident(a.attname) '
+      '        FROM pg_depend d '
+      '        JOIN pg_class t ON t.oid = d.refobjid '
+      '        JOIN pg_namespace tn ON tn.oid = t.relnamespace '
+      '        JOIN pg_attribute a '
+      '          ON a.attrelid = d.refobjid AND a.attnum = d.refobjsubid '
+      "        WHERE d.classid = 'pg_class'::regclass "
+      '          AND d.objid = s.seqrelid '
+      "          AND d.refclassid = 'pg_class'::regclass "
+      "          AND d.deptype = 'a' LIMIT 1) "
+      'FROM pg_sequence s WHERE s.seqrelid = ${sequence.oid}',
+    );
+    final r = result.first;
+    final lastValue = r[7];
+    final ownedBy = r[8] as String?;
+    final lines = [
+      if (lastValue != null) '-- last value: $lastValue',
+      'CREATE SEQUENCE ${sequence.qualifiedName}',
+      '  AS ${r[0]}',
+      '  INCREMENT BY ${r[1]}',
+      '  MINVALUE ${r[2]}',
+      '  MAXVALUE ${r[3]}',
+      '  START WITH ${r[4]}',
+      '  CACHE ${r[5]}',
+      (r[6] as bool) ? '  CYCLE' : '  NO CYCLE',
+      if (ownedBy != null) '  OWNED BY $ownedBy',
+    ];
+    return '${lines.join('\n')};\n';
+  }
+
+  @override
+  Future<String> loadEnumDdl(DbEnum type) async {
+    final labels = [for (final l in type.labels) '  ${literalSql(l)}'];
+    return 'CREATE TYPE ${type.qualifiedName} AS ENUM (\n'
+        '${labels.join(',\n')}\n'
+        ');\n';
+  }
+
+  @override
+  Future<String> loadDomainDdl(DbDomain domain) async {
+    final result = await _db.execute(
+      'SELECT format_type(t.typbasetype, t.typtypmod), t.typdefault, '
+      '       t.typnotnull, '
+      "       (SELECT array_agg('CONSTRAINT ' || quote_ident(c.conname) "
+      "                         || ' ' || pg_get_constraintdef(c.oid) "
+      '                         ORDER BY c.conname) '
+      '        FROM pg_constraint c '
+      "        WHERE c.contypid = t.oid AND c.contype = 'c') "
+      'FROM pg_type t '
+      'WHERE t.oid = ${literalSql(domain.qualifiedName)}::regtype',
+    );
+    final r = result.first;
+    final def = r[1] as String?;
+    final lines = [
+      'CREATE DOMAIN ${domain.qualifiedName} AS ${r[0]}',
+      if (def != null) '  DEFAULT $def',
+      if (r[2] as bool) '  NOT NULL',
+      for (final c in _stringList(r[3])) '  $c',
+    ];
+    return '${lines.join('\n')};\n';
   }
 
   static DbRelationKind _kindFromRelkind(String k) {

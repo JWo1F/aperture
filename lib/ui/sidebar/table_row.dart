@@ -80,7 +80,7 @@ class SchemaTableRow extends StatelessWidget {
           SizedBox(
             width: 14,
             height: 14,
-            child: Center(child: _kindIcon(table.kind, active, tint)),
+            child: Center(child: _kindIcon(table, active, tint)),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -113,8 +113,15 @@ class SchemaTableRow extends StatelessWidget {
     );
   }
 
-  Widget _kindIcon(DbRelationKind kind, bool active, Color tint) {
-    switch (kind) {
+  Widget _kindIcon(DbTable table, bool active, Color tint) {
+    if (table.partitioned) {
+      return Icon(
+        Hgi.tableRowsSplit,
+        size: 12,
+        color: active ? tint : AppColors.textMuted,
+      );
+    }
+    switch (table.kind) {
       case DbRelationKind.table:
         return TableGlyph(
           size: 12,

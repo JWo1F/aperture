@@ -154,8 +154,8 @@ class TabsController extends ChangeNotifier {
 
   void selectTab(int index) => _select(index);
 
-  void newQueryTab() {
-    final tab = QueryTab(_nextId(), name: _nextQueryName());
+  void newQueryTab({String? name, String sql = ''}) {
+    final tab = QueryTab(_nextId(), name: name ?? _nextQueryName(), sql: sql);
     _attachTab(tab);
     _tabs.add(tab);
     _select(_tabs.length - 1);

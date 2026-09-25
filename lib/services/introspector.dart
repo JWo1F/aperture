@@ -34,4 +34,22 @@ abstract interface class Introspector {
 
   /// User-defined domain types. Empty for engines without domains.
   Future<List<DbDomain>> loadAllDomains();
+
+  /// User-defined functions and procedures, excluding extension members.
+  /// Empty for engines without stored routines.
+  Future<List<DbRoutine>> loadAllRoutines();
+
+  /// Standalone sequences. Empty for engines without sequences.
+  Future<List<DbSequence>> loadAllSequences();
+
+  /// `CREATE` statements for the schema objects above. Only reachable for
+  /// objects the matching loader returned, so an engine whose loader is
+  /// always empty never sees these calls.
+  Future<String> loadRoutineDdl(DbRoutine routine);
+
+  Future<String> loadSequenceDdl(DbSequence sequence);
+
+  Future<String> loadEnumDdl(DbEnum type);
+
+  Future<String> loadDomainDdl(DbDomain domain);
 }

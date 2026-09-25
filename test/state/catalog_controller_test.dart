@@ -87,6 +87,17 @@ class _EmptyIntrospector implements Introspector {
 
   @override
   Future<List<DbDomain>> loadAllDomains() async => [];
+
+  @override
+  Future<List<DbRoutine>> loadAllRoutines() async => [];
+
+  @override
+  Future<List<DbSequence>> loadAllSequences() async => [];
+
+  // The DDL loaders are only reached for objects the list loaders return.
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
 }
 
 class _Phase1ThrowingIntrospector implements Introspector {
@@ -115,6 +126,17 @@ class _Phase1ThrowingIntrospector implements Introspector {
 
   @override
   Future<List<DbDomain>> loadAllDomains() async => [];
+
+  @override
+  Future<List<DbRoutine>> loadAllRoutines() async => [];
+
+  @override
+  Future<List<DbSequence>> loadAllSequences() async => [];
+
+  // The DDL loaders are only reached for objects the list loaders return.
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
 }
 
 class _ThrowingIntrospector implements Introspector {
@@ -142,6 +164,17 @@ class _ThrowingIntrospector implements Introspector {
 
   @override
   Future<List<DbDomain>> loadAllDomains() async => [];
+
+  @override
+  Future<List<DbRoutine>> loadAllRoutines() async => [];
+
+  @override
+  Future<List<DbSequence>> loadAllSequences() async => [];
+
+  // The DDL loaders are only reached for objects the list loaders return.
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
 }
 
 class _FakeDbService implements DbService {

@@ -24,6 +24,7 @@ class DbTable {
     this.comment,
     this.rowEstimate,
     this.sizeBytes,
+    this.partitioned = false,
   });
 
   /// Sentinel oid used when a [DbTable] is constructed without going through
@@ -45,6 +46,11 @@ class DbTable {
   /// Total on-disk footprint in bytes, including indexes and TOAST. Null when
   /// the engine doesn't report it (SQLite) or the relation has no storage.
   final int? sizeBytes;
+
+  /// A declaratively partitioned parent (`relkind = 'p'`). Its [kind] stays
+  /// [DbRelationKind.table]: it reads and edits like one, and every kind
+  /// check that asks "is this a table?" means it too.
+  final bool partitioned;
 
   String get qualifiedName => qualify(schema, name);
 
@@ -190,6 +196,46 @@ class DbDomain {
   final String name;
   final String baseType;
   final bool notNull;
+
+  String get qualifiedName => qualify(schema, name);
+}
+
+enum DbRoutineKind { function, procedure }
+
+/// A user-defined function or procedure. Overloads share a [name] and differ
+/// by [arguments], so [oid] is the identity.
+class DbRoutine {
+  DbRoutine({
+    required this.oid,
+    required this.schema,
+    required this.name,
+    required this.kind,
+    required this.arguments,
+    this.result,
+  });
+
+  final int oid;
+  final String schema;
+  final String name;
+  final DbRoutineKind kind;
+
+  /// Identity argument list without parentheses, e.g. `a integer, b text`.
+  final String arguments;
+
+  /// Return type as Postgres prints it; null for procedures.
+  final String? result;
+
+  String get qualifiedName => qualify(schema, name);
+}
+
+/// A standalone sequence. Identity-column sequences are not listed — they
+/// belong to their column, not to the schema.
+class DbSequence {
+  DbSequence({required this.oid, required this.schema, required this.name});
+
+  final int oid;
+  final String schema;
+  final String name;
 
   String get qualifiedName => qualify(schema, name);
 }

@@ -5,6 +5,8 @@ import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/hugeicons.dart';
 import 'highlighted_text.dart';
+import 'object_group.dart';
+import 'schema_contents.dart';
 import 'table_row.dart';
 import 'tree_row.dart';
 
@@ -75,20 +77,20 @@ class SidebarSection extends StatelessWidget {
 class SchemaBlock extends StatelessWidget {
   const SchemaBlock({
     super.key,
-    required this.schema,
-    required this.tables,
+    required this.contents,
     required this.activeTableId,
     required this.favKeys,
     required this.forceExpanded,
     required this.query,
   });
 
-  final DbSchema schema;
-  final List<DbTable> tables;
+  final SchemaContents contents;
   final String? activeTableId;
   final Set<String> favKeys;
   final bool forceExpanded;
   final String query;
+
+  DbSchema get schema => contents.schema;
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +159,7 @@ class SchemaBlock extends StatelessWidget {
               ),
             ),
             Text(
-              '${tables.length}',
+              '${contents.count}',
               style: AppTheme.ui(
                 size: 10.5,
                 color: AppColors.text4,
@@ -167,17 +169,120 @@ class SchemaBlock extends StatelessWidget {
             ),
           ],
         ),
-        if (expanded)
-          for (final t in tables)
-            SchemaTableRow(
-              table: t,
-              active: t.qualifiedName == activeTableId,
-              isFav: favKeys.contains(t.qualifiedKey),
-              indent: 1,
-              query: query,
-              scope: 'tree',
-            ),
+        if (expanded) ..._groups(),
       ],
     );
+  }
+
+  List<Widget> _groups() {
+    final c = contents;
+    Widget group(
+      String key,
+      String label,
+      List<Widget> rows, {
+      bool expandedByDefault = false,
+    }) => SchemaObjectGroup(
+      id: 'group/${schema.name}/$key',
+      label: label,
+      count: rows.length,
+      indent: 1,
+      forceExpanded: forceExpanded,
+      expandedByDefault: expandedByDefault,
+      children: rows,
+    );
+
+    List<Widget> relations(List<DbTable> tables) => [
+      for (final t in tables)
+        SchemaTableRow(
+          table: t,
+          active: t.qualifiedName == activeTableId,
+          isFav: favKeys.contains(t.qualifiedKey),
+          indent: 2,
+          query: query,
+          scope: 'tree',
+        ),
+    ];
+
+    Widget routine(DbRoutine r) => SchemaObjectRow(
+      indent: 2,
+      icon: r.kind == DbRoutineKind.procedure
+          ? Hgi.playSquare
+          : Hgi.functionSquare,
+      iconColor: AppColors.sqlFunction,
+      name: r.name,
+      qualifiedName: r.qualifiedName,
+      query: query,
+      detail: r.result == null
+          ? '(${r.arguments})'
+          : '(${r.arguments}) → ${r.result}',
+      onOpen: () => appState.openDefinition(r.name, (i) => i.loadRoutineDdl(r)),
+    );
+
+    final types = <(String, Widget)>[
+      for (final e in c.enums)
+        (
+          e.name,
+          SchemaObjectRow(
+            indent: 2,
+            icon: Hgi.listView,
+            iconColor: AppColors.tStr,
+            name: e.name,
+            qualifiedName: e.qualifiedName,
+            query: query,
+            detail: 'enum · ${e.labels.length}',
+            onOpen: () =>
+                appState.openDefinition(e.name, (i) => i.loadEnumDdl(e)),
+          ),
+        ),
+      for (final d in c.domains)
+        (
+          d.name,
+          SchemaObjectRow(
+            indent: 2,
+            icon: Hgi.shapes,
+            iconColor: AppColors.tUuid,
+            name: d.name,
+            qualifiedName: d.qualifiedName,
+            query: query,
+            detail: d.baseType,
+            onOpen: () =>
+                appState.openDefinition(d.name, (i) => i.loadDomainDdl(d)),
+          ),
+        ),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+
+    return [
+      if (c.tables.isNotEmpty)
+        group('tables', 'tables', relations(c.tables), expandedByDefault: true),
+      if (c.partitioned.isNotEmpty)
+        group('partitioned', 'partitioned tables', relations(c.partitioned)),
+      if (c.views.isNotEmpty) group('views', 'views', relations(c.views)),
+      if (c.materializedViews.isNotEmpty)
+        group('matviews', 'materialized views', relations(c.materializedViews)),
+      if (c.functions.isNotEmpty)
+        group('functions', 'functions', [
+          for (final r in c.functions) routine(r),
+        ]),
+      if (c.procedures.isNotEmpty)
+        group('procedures', 'procedures', [
+          for (final r in c.procedures) routine(r),
+        ]),
+      if (c.sequences.isNotEmpty)
+        group('sequences', 'sequences', [
+          for (final q in c.sequences)
+            SchemaObjectRow(
+              indent: 2,
+              icon: Hgi.sortingOne9,
+              iconColor: AppColors.tNum,
+              name: q.name,
+              qualifiedName: q.qualifiedName,
+              query: query,
+              onOpen: () =>
+                  appState.openDefinition(q.name, (i) => i.loadSequenceDdl(q)),
+            ),
+        ]),
+      if (types.isNotEmpty)
+        group('types', 'types', [for (final t in types) t.$2]),
+    ];
   }
 }

@@ -261,6 +261,28 @@ class SqliteIntrospector implements Introspector {
   Future<List<DbDomain>> loadAllDomains() async => const [];
 
   /// Normalises a `PRAGMA foreign_key_list` action string. `NO ACTION` is
+  @override
+  Future<List<DbRoutine>> loadAllRoutines() async => const [];
+
+  @override
+  Future<List<DbSequence>> loadAllSequences() async => const [];
+
+  @override
+  Future<String> loadRoutineDdl(DbRoutine routine) =>
+      throw UnsupportedError('SQLite has no stored routines');
+
+  @override
+  Future<String> loadSequenceDdl(DbSequence sequence) =>
+      throw UnsupportedError('SQLite has no sequences');
+
+  @override
+  Future<String> loadEnumDdl(DbEnum type) =>
+      throw UnsupportedError('SQLite has no enum types');
+
+  @override
+  Future<String> loadDomainDdl(DbDomain domain) =>
+      throw UnsupportedError('SQLite has no domains');
+
   /// the default and is suppressed (matching the Postgres introspector,
   /// which returns null for it).
   static String? _fkAction(String? raw) {

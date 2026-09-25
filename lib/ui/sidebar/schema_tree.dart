@@ -8,6 +8,7 @@ import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/hugeicons.dart';
 import 'saved_query_row.dart';
+import 'schema_contents.dart';
 import 'sidebar_section.dart';
 import 'table_row.dart';
 
@@ -52,12 +53,7 @@ class SidebarBody extends StatelessWidget {
         ? savedAll.where((q) => q.name.toLowerCase().contains(query)).toList()
         : savedAll;
 
-    final visibleSchemas = catalog.schemas.map((s) {
-      final tables = filtering
-          ? s.tables.where(tableMatches).toList()
-          : s.tables;
-      return (schema: s, tables: tables);
-    }).where((e) => !filtering || e.tables.isNotEmpty).toList();
+    final visibleSchemas = groupSchemaContents(catalog.catalog, query);
 
     final totalTables = catalog.schemas.fold<int>(
       0,
@@ -129,10 +125,9 @@ class SidebarBody extends StatelessWidget {
             children: [
               if (catalogError != null)
                 _CatalogErrorNotice(error: catalogError),
-              for (final entry in visibleSchemas)
+              for (final contents in visibleSchemas)
                 SchemaBlock(
-                  schema: entry.schema,
-                  tables: entry.tables,
+                  contents: contents,
                   activeTableId: activeTableId,
                   favKeys: favKeys,
                   forceExpanded: filtering,

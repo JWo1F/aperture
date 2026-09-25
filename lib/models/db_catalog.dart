@@ -16,6 +16,8 @@ class DatabaseCatalog {
     required this.indexesByOid,
     required this.enums,
     required this.domains,
+    required this.routines,
+    required this.sequences,
     required this.phases,
   });
 
@@ -30,6 +32,8 @@ class DatabaseCatalog {
     indexesByOid: const {},
     enums: const [],
     domains: const [],
+    routines: const [],
+    sequences: const [],
     phases: const {},
   );
 
@@ -41,6 +45,8 @@ class DatabaseCatalog {
   final Map<int, List<DbIndex>> indexesByOid;
   final List<DbEnum> enums;
   final List<DbDomain> domains;
+  final List<DbRoutine> routines;
+  final List<DbSequence> sequences;
   final Set<CatalogPhase> phases;
 
   bool hasPhase(CatalogPhase phase) => phases.contains(phase);
@@ -135,6 +141,8 @@ class DatabaseCatalog {
     indexesByOid: indexesByOid,
     enums: enums,
     domains: domains,
+    routines: routines,
+    sequences: sequences,
     phases: {...phases, phase},
   );
 
@@ -147,6 +155,8 @@ class DatabaseCatalog {
     Map<int, List<DbIndex>>? indexesByOid,
     List<DbEnum>? enums,
     List<DbDomain>? domains,
+    List<DbRoutine>? routines,
+    List<DbSequence>? sequences,
     Set<CatalogPhase>? phases,
   }) => DatabaseCatalog(
     schemas: schemas ?? this.schemas,
@@ -157,6 +167,8 @@ class DatabaseCatalog {
     indexesByOid: indexesByOid ?? this.indexesByOid,
     enums: enums ?? this.enums,
     domains: domains ?? this.domains,
+    routines: routines ?? this.routines,
+    sequences: sequences ?? this.sequences,
     phases: phases ?? this.phases,
   );
 }
@@ -184,4 +196,10 @@ enum CatalogPhase {
 
   /// User-defined domain types.
   domains,
+
+  /// User-defined functions and procedures.
+  routines,
+
+  /// Standalone sequences.
+  sequences,
 }

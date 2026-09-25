@@ -11,30 +11,37 @@ class SidebarHighlightedText extends StatelessWidget {
     required this.text,
     required this.match,
     required this.style,
+    this.trailing,
   });
 
   final String text;
   final String match;
   final TextStyle style;
 
+  /// Appended in the same paragraph, so the ellipsis trims it before [text].
+  final InlineSpan? trailing;
+
   @override
   Widget build(BuildContext context) {
-    if (match.isEmpty) {
-      return Text(
-        text,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: style,
-      );
-    }
-    final lower = text.toLowerCase();
-    final idx = lower.indexOf(match);
+    final idx = match.isEmpty ? -1 : text.toLowerCase().indexOf(match);
     if (idx < 0) {
-      return Text(
-        text,
+      if (trailing == null) {
+        return Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+        );
+      }
+      return Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(text: text, style: style),
+            trailing!,
+          ],
+        ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: style,
       );
     }
     final before = text.substring(0, idx);
@@ -50,6 +57,7 @@ class SidebarHighlightedText extends StatelessWidget {
           TextSpan(text: before, style: style),
           TextSpan(text: hit, style: hitStyle),
           TextSpan(text: after, style: style),
+          ?trailing,
         ],
       ),
       maxLines: 1,

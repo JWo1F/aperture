@@ -95,9 +95,9 @@ class CatalogController extends ChangeNotifier {
     return schemas;
   }
 
-  /// Run phase 1 (columns/FKs/indexes/enums/domains) under [gen]. The five
-  /// sweeps run in parallel; any error leaves the catalog in its phase-0
-  /// state and surfaces on [lastError].
+  /// Run phase 1 (columns / FKs / keys / indexes / enums / domains /
+  /// routines / sequences) under [gen]. The sweeps run in parallel; any error
+  /// leaves the catalog in its phase-0 state and surfaces on [lastError].
   ///
   /// Every mutation of controller-owned state (loading flag, lastError,
   /// catalog) is guarded by a fresh generation check. A stale success must
@@ -118,6 +118,8 @@ class CatalogController extends ChangeNotifier {
         introspector.loadAllIndexes(),
         introspector.loadAllEnums(),
         introspector.loadAllDomains(),
+        introspector.loadAllRoutines(),
+        introspector.loadAllSequences(),
       ]);
       if (gen != _generation) return;
       _catalog = _catalog.copyWith(
@@ -127,6 +129,8 @@ class CatalogController extends ChangeNotifier {
         indexesByOid: results[3] as Map<int, List<DbIndex>>,
         enums: results[4] as List<DbEnum>,
         domains: results[5] as List<DbDomain>,
+        routines: results[6] as List<DbRoutine>,
+        sequences: results[7] as List<DbSequence>,
         phases: {
           ..._catalog.phases,
           CatalogPhase.columns,
@@ -135,6 +139,8 @@ class CatalogController extends ChangeNotifier {
           CatalogPhase.indexes,
           CatalogPhase.enums,
           CatalogPhase.domains,
+          CatalogPhase.routines,
+          CatalogPhase.sequences,
         },
       );
     } catch (e) {
