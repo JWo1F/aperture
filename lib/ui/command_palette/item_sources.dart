@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/db_object.dart';
 import '../../state/app_globals.dart';
+import '../../state/connection_views.dart';
 import '../../state/session_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
@@ -87,16 +88,18 @@ class PaletteItemSource {
       }
     }
 
-    out.add(
-      PaletteItem(
-        kind: PaletteKind.command,
-        title: 'Toggle sidebar',
-        subtitle: 'Show or hide the schema browser',
-        icon: Hgi.sidebarLeft,
-        tokens: 'panel tree tables hide',
-        run: store.toggleSidebar,
-      ),
-    );
+    if (workspaceVisible(appState.session, appState.catalog)) {
+      out.add(
+        PaletteItem(
+          kind: PaletteKind.command,
+          title: 'Toggle sidebar',
+          subtitle: 'Show or hide the schema browser',
+          icon: Hgi.sidebarLeft,
+          tokens: 'panel tree tables hide',
+          run: store.toggleSidebar,
+        ),
+      );
+    }
     out.add(
       PaletteItem(
         kind: PaletteKind.command,

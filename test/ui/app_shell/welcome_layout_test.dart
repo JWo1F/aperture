@@ -43,6 +43,7 @@ void main() {
                       config: c,
                       onConnect: () {},
                       onEdit: () {},
+                      onDelete: () {},
                       compact: width < 560,
                     ),
                     SizedBox(
@@ -51,6 +52,7 @@ void main() {
                         config: c,
                         onConnect: () {},
                         onEdit: () {},
+                        onDelete: () {},
                       ),
                     ),
                     const WelcomePreparing(

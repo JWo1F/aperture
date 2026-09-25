@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../state/app_globals.dart';
+import '../../state/connection_views.dart';
 import '../../state/session_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
@@ -155,15 +156,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         catalog.hasSchemas,
       ),
       builder: (context, value) {
-        final (status, sidebarVisible, logVisible, hasSchemas) = value;
+        final (status, sidebarVisible, logVisible, _) = value;
         final connected = status == ConnectionStatus.connected;
         final lost = status == ConnectionStatus.lost;
-        // Keep the welcome panel mounted through the connect → phase-0
-        // gap so the workspace home doesn't pop in with zero schemas and
-        // then snap to the populated layout once introspection lands.
-        // Lost connections fall through immediately — the catalog from
-        // the prior session is still meaningful UI.
-        final showWorkspace = (connected && hasSchemas) || lost;
+        final showWorkspace = workspaceVisible(appState.session, catalog);
 
         final body = CallbackShortcuts(
           bindings: {
@@ -214,7 +210,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                         // of the other. Cell-edit repaints in the grid no
                         // longer ripple back through the sidebar's
                         // compositor layer, and vice versa.
-                        if (sidebarVisible) ...[
+                        // The welcome screen lists every connection itself,
+                        // so the sidebar only accompanies the workspace.
+                        if (sidebarVisible && showWorkspace) ...[
                           const RepaintBoundary(child: Sidebar()),
                           const SidebarResizeHandle(),
                         ],

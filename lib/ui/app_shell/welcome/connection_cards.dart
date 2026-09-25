@@ -78,19 +78,29 @@ class _Chip extends StatelessWidget {
   }
 }
 
-class _EditButton extends StatelessWidget {
-  const _EditButton({required this.onTap, required this.visible});
+/// Hover-revealed card action (edit, delete).
+class _CardAction extends StatelessWidget {
+  const _CardAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    required this.visible,
+    this.danger = false,
+  });
 
+  final IconData icon;
+  final String tooltip;
   final VoidCallback onTap;
 
   /// Hidden until the card is hovered, but always laid out so the card
   /// doesn't reflow when it appears.
   final bool visible;
+  final bool danger;
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: 'Edit connection',
+      message: tooltip,
       child: Hoverable(
         onTap: onTap,
         builder: (context, hovering) => Container(
@@ -104,14 +114,52 @@ class _EditButton extends StatelessWidget {
             borderRadius: Radii.brSm,
           ),
           child: Icon(
-            Hgi.edit02,
+            icon,
             size: 14,
-            color: visible
-                ? (hovering ? AppColors.textPrimary : AppColors.textMuted)
-                : Colors.transparent,
+            color: !visible
+                ? Colors.transparent
+                : hovering
+                ? (danger ? AppColors.error : AppColors.textPrimary)
+                : AppColors.textMuted,
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Edit + delete, revealed on hover. Delete is immediate, as it is in the
+/// sidebar's connection list.
+class _CardActions extends StatelessWidget {
+  const _CardActions({
+    required this.onEdit,
+    required this.onDelete,
+    required this.visible,
+  });
+
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _CardAction(
+          icon: Hgi.edit02,
+          tooltip: 'Edit connection',
+          onTap: onEdit,
+          visible: visible,
+        ),
+        _CardAction(
+          icon: Hgi.delete02,
+          tooltip: 'Delete connection',
+          onTap: onDelete,
+          visible: visible,
+          danger: true,
+        ),
+      ],
     );
   }
 }
@@ -124,12 +172,14 @@ class ResumeCard extends StatelessWidget {
     required this.config,
     required this.onConnect,
     required this.onEdit,
+    required this.onDelete,
     required this.compact,
   });
 
   final ConnectionConfig config;
   final VoidCallback onConnect;
   final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   /// Drops the Connect button so the details keep their width; the whole
   /// card still connects on click.
@@ -225,7 +275,11 @@ class ResumeCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              _EditButton(onTap: onEdit, visible: hovering),
+              _CardActions(
+                onEdit: onEdit,
+                onDelete: onDelete,
+                visible: hovering,
+              ),
               if (!compact) ...[
                 const SizedBox(width: 6),
                 Container(
@@ -271,11 +325,13 @@ class ConnectionCard extends StatelessWidget {
     required this.config,
     required this.onConnect,
     required this.onEdit,
+    required this.onDelete,
   });
 
   final ConnectionConfig config;
   final VoidCallback onConnect;
   final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -327,7 +383,11 @@ class ConnectionCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                _EditButton(onTap: onEdit, visible: hovering),
+                _CardActions(
+                  onEdit: onEdit,
+                  onDelete: onDelete,
+                  visible: hovering,
+                ),
               ],
             ),
             const Spacer(),

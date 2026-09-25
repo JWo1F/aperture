@@ -4,6 +4,7 @@ import 'package:macos_window_utils/macos/ns_window_delegate.dart';
 import 'package:macos_window_utils/macos_window_utils.dart';
 
 import '../../state/app_globals.dart';
+import '../../state/connection_views.dart';
 import '../../state/session_controller.dart';
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
@@ -95,9 +96,15 @@ class _ToolbarState extends State<Toolbar> {
     final history = appState.history;
     final session = appState.session;
     return Selector<
-      (bool, bool, AppThemeMode, String?, bool, ConnectionStatus)
+      (bool, bool, AppThemeMode, String?, bool, ConnectionStatus, bool)
     >(
-      listenable: Listenable.merge([tabs, history, store, session]),
+      listenable: Listenable.merge([
+        tabs,
+        history,
+        store,
+        session,
+        appState.catalog,
+      ]),
       selector: () {
         final tab = tabs.activeTab;
         return (
@@ -107,11 +114,19 @@ class _ToolbarState extends State<Toolbar> {
           tab?.id,
           exportableResult(tab) != null,
           session.status,
+          workspaceVisible(session, appState.catalog),
         );
       },
       builder: (context, value) {
-        final (canGoBack, canGoForward, themeMode, _, canExport, status) =
-            value;
+        final (
+          canGoBack,
+          canGoForward,
+          themeMode,
+          _,
+          canExport,
+          status,
+          workspace,
+        ) = value;
         return _buildToolbar(
           context: context,
           canGoBack: canGoBack,
@@ -119,6 +134,7 @@ class _ToolbarState extends State<Toolbar> {
           themeMode: themeMode,
           canExport: canExport,
           status: status,
+          workspace: workspace,
         );
       },
     );
@@ -131,6 +147,7 @@ class _ToolbarState extends State<Toolbar> {
     required AppThemeMode themeMode,
     required bool canExport,
     required ConnectionStatus status,
+    required bool workspace,
   }) {
     final store = appState.store;
     final tabs = appState.tabsController;
@@ -189,7 +206,8 @@ class _ToolbarState extends State<Toolbar> {
                 TbIcon(
                   icon: Hgi.sidebarLeft,
                   tooltip: 'Toggle sidebar',
-                  onPressed: store.toggleSidebar,
+                  // The welcome screen never shows the sidebar.
+                  onPressed: workspace ? store.toggleSidebar : null,
                 ),
                 const TbRail(),
                 TbIcon(

@@ -12,9 +12,10 @@ import 'welcome/connection_cards.dart';
 import 'welcome/hero.dart';
 import 'welcome/states.dart';
 
-/// Shown in place of the workspace until a live connection exists: the
-/// brand header, the last-used connection as a one-click resume, and every
-/// other saved connection as a card grid. Static — nothing on it animates
+/// Shown in place of the workspace — and of the sidebar — until a live
+/// connection exists: the brand header, the last-used connection as a
+/// one-click resume, and every other saved connection as a card grid, each
+/// with the edit / delete the sidebar's connection list used to offer. Static — nothing on it animates
 /// except the connect spinner.
 class WelcomePanel extends StatefulWidget {
   const WelcomePanel({super.key});
@@ -84,6 +85,7 @@ class _WelcomePanelState extends State<WelcomePanel> {
 
     void newConnection() => createConnectionFlow(context);
     void edit(ConnectionConfig c) => editConnectionFlow(context, c);
+    void delete(ConnectionConfig c) => appState.store.removeConnection(c.id);
 
     return ColoredBox(
       color: AppColors.bg,
@@ -127,6 +129,7 @@ class _WelcomePanelState extends State<WelcomePanel> {
                             config: resume,
                             onConnect: () => appState.connect(resume),
                             onEdit: () => edit(resume),
+                            onDelete: () => delete(resume),
                             compact: width < 560,
                           ),
                           const SizedBox(height: 28),
@@ -150,6 +153,7 @@ class _WelcomePanelState extends State<WelcomePanel> {
                                   config: c,
                                   onConnect: () => appState.connect(c),
                                   onEdit: () => edit(c),
+                                  onDelete: () => delete(c),
                                 ),
                             ],
                           ),

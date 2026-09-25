@@ -1,6 +1,7 @@
 import '../models/connection_config.dart';
 import '../models/db_object.dart';
 import 'catalog_controller.dart';
+import 'session_controller.dart';
 
 /// Resolve the active connection's qualified-key bags into the [DbTable]
 /// objects from the currently-loaded catalog. Pure derivations so they
@@ -53,4 +54,14 @@ List<DbTable> frequentTablesView(
 bool isFavoriteTable(ConnectionConfig? conn, DbTable table) {
   final keys = conn?.favoriteTables ?? const <String>{};
   return keys.contains(table.qualifiedKey);
+}
+
+/// True when the shell shows the workspace rather than the welcome screen.
+/// The welcome screen stays up through the connect → phase-0 gap so the
+/// workspace doesn't pop in with zero schemas; a lost connection keeps the
+/// workspace, since the prior session's catalog is still meaningful.
+bool workspaceVisible(SessionController session, CatalogController catalog) {
+  final status = session.status;
+  return (status == ConnectionStatus.connected && catalog.hasSchemas) ||
+      status == ConnectionStatus.lost;
 }

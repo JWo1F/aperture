@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../state/app_globals.dart';
-import '../../state/session_controller.dart';
 import '../../theme/app_theme.dart';
 import 'conn_hero.dart';
-import 'connections_list.dart';
 import 'schema_tree.dart';
 import 'sidebar_footer.dart';
 
-/// Sidebar v4 — Inter-typeset, search-led, pin-forward.
+/// Sidebar v4 — Inter-typeset, search-led, pin-forward. Mounted only
+/// alongside the workspace (connected with schemas, or a lost connection
+/// keeping its prior catalog); before that the welcome screen stands alone.
 ///
 /// Layout (top → bottom):
 ///   1. Connection hero card — database name, server tag, click to open menu.
@@ -64,19 +64,6 @@ class _SidebarState extends State<Sidebar> {
     return ListenableBuilder(
       listenable: _sidebarListenable,
       builder: (context, _) {
-        final status = appState.session.status;
-        final catalog = appState.catalog;
-        final connecting = status == ConnectionStatus.connecting;
-        final connected = status == ConnectionStatus.connected;
-        // Loading covers two distinct gaps the user perceives as one wait:
-        // the TCP/auth handshake (status == connecting) and the post-connect
-        // window before phase 0 lands. Without this, the sidebar flips from
-        // the connections list to an empty schema tree with no signal that
-        // introspection is in flight.
-        final loadingCatalog =
-            connecting ||
-            (connected && !catalog.hasSchemas && catalog.lastError == null);
-
         return Container(
           width: appState.store.sidebarWidth,
           decoration: BoxDecoration(
@@ -92,65 +79,18 @@ class _SidebarState extends State<Sidebar> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const ConnHero(),
-              if (loadingCatalog)
-                const Expanded(child: _SidebarLoading())
-              else if (connected || status == ConnectionStatus.lost) ...[
-                // `lost` keeps the prior catalog visible so the user doesn't
-                // lose their place in the schema tree while reconnecting. The
-                // toolbar banner + footer dot signal that data may be stale.
-                SidebarSearchBar(
-                  controller: _searchCtrl,
-                  focusNode: _searchFocus,
-                ),
-                Expanded(
-                  child: SidebarBody(query: _query.trim().toLowerCase()),
-                ),
-              ] else
-                const Expanded(child: AllConnectionsList()),
+              SidebarSearchBar(
+                controller: _searchCtrl,
+                focusNode: _searchFocus,
+              ),
+              Expanded(
+                child: SidebarBody(query: _query.trim().toLowerCase()),
+              ),
               const SidebarFooter(),
             ],
           ),
         );
       },
-    );
-  }
-}
-
-/// Centered spinner shown while a connection is opening and its first
-/// schema fetch lands. The caption disambiguates the two gaps so the user
-/// can tell whether the network round-trip or the catalog read is what's
-/// taking time.
-class _SidebarLoading extends StatelessWidget {
-  const _SidebarLoading();
-
-  @override
-  Widget build(BuildContext context) {
-    final connecting =
-        appState.session.status == ConnectionStatus.connecting;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: AppColors.accent,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            connecting ? 'Connecting…' : 'Loading schemas…',
-            style: AppTheme.ui(
-              size: 11.5,
-              color: AppColors.textSecondary,
-              weight: FontWeight.w500,
-              letterSpacing: 0,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
