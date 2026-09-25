@@ -86,7 +86,11 @@ class AppStore extends ChangeNotifier {
   double _sidebarWidth = sidebarWidthDefault;
   double _logPanelWidth = logPanelWidthDefault;
   double _queryResultsFraction = queryResultsFractionDefault;
+  /// The last frame the window had outside full screen, and whether it was
+  /// in full screen. Kept apart so leaving full screen after a relaunch
+  /// returns to the frame the user actually chose.
   Map<String, double>? _windowFramePersisted;
+  bool _windowFullScreen = false;
 
   AppThemeMode get themeMode => _themeMode;
 
@@ -132,8 +136,7 @@ class AppStore extends ChangeNotifier {
       ..clear()
       ..addAll(snapshot.connections);
     _applyPalette();
-    final frame = _windowFramePersisted;
-    if (frame != null) unawaited(_window.write(frame));
+    unawaited(_restoreWindow());
     notifyListeners();
   }
 
@@ -215,12 +218,22 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Read the current native window frame and stash it for persistence on
-  /// the next save tick.
+  /// the next save tick. In full screen only the flag is recorded: the
+  /// frame then is the screen's.
   Future<void> captureWindowFrame() async {
-    final frame = await _window.read();
-    if (frame == null) return;
-    _windowFramePersisted = frame;
+    final state = await _window.read();
+    if (state == null) return;
+    _windowFullScreen = state.fullScreen;
+    if (!state.fullScreen) _windowFramePersisted = state.frame;
     _changed(notify: false);
+  }
+
+  /// Frame first, then full screen, so AppKit remembers the restored frame
+  /// as the one to return to when full screen is left.
+  Future<void> _restoreWindow() async {
+    final frame = _windowFramePersisted;
+    if (frame != null) await _window.write(frame);
+    if (_windowFullScreen) await _window.setFullScreen(true);
   }
 
   // ---- connection CRUD ----------------------------------------------
@@ -490,6 +503,7 @@ class AppStore extends ChangeNotifier {
   static const _logPanelWidthKey = 'logPanelWidth';
   static const _queryResultsFractionKey = 'queryResultsFraction';
   static const _windowKeys = ['x', 'y', 'w', 'h'];
+  static const _windowFullScreenKey = 'window.fullScreen';
 
   StoreSnapshot _snapshot() => StoreSnapshot(
     preferences: {
@@ -500,6 +514,7 @@ class AppStore extends ChangeNotifier {
       _queryResultsFractionKey: _queryResultsFraction,
       if (_windowFramePersisted case final frame?)
         for (final k in _windowKeys) 'window.$k': frame[k]!,
+      _windowFullScreenKey: _windowFullScreen ? 1 : 0,
     },
     connections: List.of(_connections),
   );
@@ -529,6 +544,7 @@ class AppStore extends ChangeNotifier {
     }
     final frame = {for (final k in _windowKeys) k: ?number('window.$k')};
     if (frame.length == _windowKeys.length) _windowFramePersisted = frame;
+    _windowFullScreen = raw[_windowFullScreenKey] == 1;
   }
 
   @override

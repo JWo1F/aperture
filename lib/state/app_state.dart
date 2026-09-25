@@ -474,7 +474,13 @@ class AppState {
 
   /// Drain the AppStore's pending debounced write so a quit while a
   /// mutation is still buffered doesn't lose it.
-  Future<void> flush() => store.flush();
+  /// The window frame is captured here too: moving the window without
+  /// resizing it fires no metrics change, so quitting right after a move
+  /// would otherwise save the frame from before it.
+  Future<void> flush() async {
+    await store.captureWindowFrame();
+    await store.flush();
+  }
 
   // --- Uncaught failures ----------------------------------------------
 

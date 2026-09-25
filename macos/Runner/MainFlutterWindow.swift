@@ -34,6 +34,7 @@ class MainFlutterWindow: NSWindow {
           "y": frame.origin.y,
           "w": frame.size.width,
           "h": frame.size.height,
+          "fullScreen": window.styleMask.contains(.fullScreen),
         ])
       case "setWindowFrame":
         if let args = call.arguments as? [String: Any],
@@ -50,6 +51,12 @@ class MainFlutterWindow: NSWindow {
           if onScreen {
             window.setFrame(target, display: true)
           }
+        }
+        result(nil)
+      case "setFullScreen":
+        let wanted = (call.arguments as? Bool) ?? false
+        if wanted != window.styleMask.contains(.fullScreen) {
+          window.toggleFullScreen(nil)
         }
         result(nil)
       default:
