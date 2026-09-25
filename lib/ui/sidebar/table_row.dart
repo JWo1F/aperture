@@ -30,7 +30,7 @@ class SchemaTableRow extends StatelessWidget {
   final int indent;
   final String query;
 
-  /// Section the row lives in (`pin` / `freq` / `tree`). Folded into the
+  /// Section the row lives in (`pin` / `tree`). Folded into the
   /// detail-tree node ids so the same table expanded in one section stays
   /// collapsed in the others.
   final String scope;

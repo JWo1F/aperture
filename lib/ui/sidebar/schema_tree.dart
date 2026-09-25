@@ -12,8 +12,7 @@ import 'schema_contents.dart';
 import 'sidebar_section.dart';
 import 'table_row.dart';
 
-/// Scrollable body of the connected sidebar: Pinned · Frequent · Queries ·
-/// Schemas, with substring filtering and force-expanded schemas when the
+/// Scrollable body of the connected sidebar: Pinned · Queries · Schemas, with substring filtering and force-expanded schemas when the
 /// user is typing in the search bar.
 class SidebarBody extends StatelessWidget {
   const SidebarBody({super.key, required this.query});
@@ -38,16 +37,6 @@ class SidebarBody extends StatelessWidget {
         t.schema.toLowerCase().contains(query);
 
     final favList = favorites.where(tableMatches).toList();
-    final frequent = filtering
-        ? <DbTable>[]
-        : frequentTablesView(
-            activeConn,
-            catalog,
-            limit: 5 + favKeys.length,
-          )
-              .where((t) => !favKeys.contains(t.qualifiedKey))
-              .take(5)
-              .toList();
     final savedAll = activeConn?.savedQueries ?? const [];
     final saved = filtering
         ? savedAll.where((q) => q.name.toLowerCase().contains(query)).toList()
@@ -63,7 +52,6 @@ class SidebarBody extends StatelessWidget {
     final catalogError = catalog.lastError;
 
     final empty = favList.isEmpty &&
-        frequent.isEmpty &&
         saved.isEmpty &&
         visibleSchemas.isEmpty;
 
@@ -87,22 +75,6 @@ class SidebarBody extends StatelessWidget {
                     indent: 0,
                     query: query,
                     scope: 'pin',
-                  ),
-              ],
-            ),
-          if (frequent.isNotEmpty)
-            SidebarSection(
-              label: 'Frequent',
-              badge: '${frequent.length}',
-              children: [
-                for (final t in frequent)
-                  SchemaTableRow(
-                    table: t,
-                    active: t.qualifiedName == activeTableId,
-                    isFav: favKeys.contains(t.qualifiedKey),
-                    indent: 0,
-                    query: query,
-                    scope: 'freq',
                   ),
               ],
             ),
