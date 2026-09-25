@@ -193,6 +193,7 @@ class PostgresTableRepository implements TableRepository {
   /// `CREATE INDEX` statements.
   @override
   Future<String> loadDdl(DbTable table) async {
+    if (table.isView) return _viewDdl(table);
     // `quoteIdent` escapes `"`, not `'`, and this wraps its output in a
     // string literal — so a relation named `o'brien` closed the literal
     // early in all four DDL queries. Double the quotes as well, the way
@@ -319,6 +320,65 @@ class PostgresTableRepository implements TableRepository {
       }
     }
 
+    return buf.toString();
+  }
+
+  /// `CREATE VIEW` / `CREATE MATERIALIZED VIEW` from the stored query, plus
+  /// a materialized view's indexes and whether it has been populated. The
+  /// table path above would rebuild a view as the table of its columns.
+  Future<String> _viewDdl(DbTable table) async {
+    final qualified = qualify(table.schema, table.name);
+    final regclass = '${literalSql(qualified)}::regclass';
+    final rows = await _db.execute(
+      'SELECT pg_get_viewdef($regclass, true), '
+      "obj_description($regclass, 'pg_class'), c.relispopulated "
+      'FROM pg_class c WHERE c.oid = $regclass',
+      timeout: _ddlQueryTimeout,
+    );
+    final row = rows.first;
+    final query = (row[0] as String).trim();
+    final body = query.endsWith(';')
+        ? query.substring(0, query.length - 1)
+        : query;
+    final comment = row[1] as String?;
+    final populated = row[2] as bool;
+    final materialized = table.kind == DbRelationKind.materializedView;
+
+    final buf = StringBuffer();
+    buf.writeln(
+      '-- ${materialized ? 'Materialized view' : 'View'}: $qualified',
+    );
+    buf.writeln();
+    if (materialized) {
+      buf.writeln('CREATE MATERIALIZED VIEW $qualified AS');
+      buf.writeln(body);
+      buf.writeln(populated ? 'WITH DATA;' : 'WITH NO DATA;');
+    } else {
+      buf.writeln('CREATE OR REPLACE VIEW $qualified AS');
+      buf.writeln('$body;');
+    }
+    if (comment != null) {
+      buf.writeln();
+      buf.writeln(
+        'COMMENT ON ${materialized ? 'MATERIALIZED VIEW' : 'VIEW'} '
+        "$qualified IS ${literalSql(comment)};",
+      );
+    }
+    if (materialized) {
+      final indexes = await _db.execute(
+        'SELECT indexdef FROM pg_indexes '
+        'WHERE schemaname = @schema AND tablename = @table ORDER BY indexname',
+        parameters: {'schema': table.schema, 'table': table.name},
+        timeout: _ddlQueryTimeout,
+      );
+      if (indexes.isNotEmpty) {
+        buf.writeln();
+        buf.writeln('-- Indexes');
+        for (final r in indexes) {
+          buf.writeln('${r[0] as String};');
+        }
+      }
+    }
     return buf.toString();
   }
 
