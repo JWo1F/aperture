@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/count_format.dart';
 import '../../../models/db_object.dart';
+import '../../../models/name_match.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
@@ -90,7 +91,9 @@ class _RelationsPanelState extends State<RelationsPanel> {
     final list = [
       for (final r in widget.relations)
         if ((widget.schema == null || r.schema == widget.schema) &&
-            (q.isEmpty || r.qualifiedKey.toLowerCase().contains(q)))
+            (q.isEmpty ||
+                r.qualifiedKey.toLowerCase().contains(q) ||
+                nameMatches(r.name, q)))
           r,
     ];
     int byName(DbTable a, DbTable b) =>

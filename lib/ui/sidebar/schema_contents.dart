@@ -1,5 +1,6 @@
 import '../../models/db_catalog.dart';
 import '../../models/db_object.dart';
+import '../../models/name_match.dart';
 
 /// One schema's objects, bucketed the way the tree shows them.
 class SchemaContents {
@@ -39,8 +40,8 @@ class SchemaContents {
       domains.length;
 }
 
-/// Buckets every schema's objects, keeping only those whose name or schema
-/// contains [query] (already lower-cased; empty keeps everything). A
+/// Buckets every schema's objects, keeping only those whose name [nameMatch]es
+/// [query] or whose schema contains it (already lower-cased; empty keeps everything). A
 /// filtered-out schema is dropped when nothing in it survives.
 ///
 /// Relations define the schema list, but a schema holding only functions or
@@ -52,7 +53,7 @@ List<SchemaContents> groupSchemaContents(
 ) {
   bool matches(String schema, String name) =>
       query.isEmpty ||
-      name.toLowerCase().contains(query) ||
+      nameMatches(name, query) ||
       schema.toLowerCase().contains(query);
 
   Map<String, List<T>> bySchema<T>(

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../models/name_match.dart';
 import '../../theme/app_theme.dart';
 
-/// Single-line text that bolds and accent-tints the first case-insensitive
-/// occurrence of [match]. Sidebar-local — the command palette has its own
+/// Single-line text that bolds and accent-tints the letters [nameMatch]
+/// finds for [match] — a substring, or the initials of an acronym match. Sidebar-local — the command palette has its own
 /// variant tuned to its own row metrics.
 class SidebarHighlightedText extends StatelessWidget {
   const SidebarHighlightedText({
@@ -23,43 +24,28 @@ class SidebarHighlightedText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final idx = match.isEmpty ? -1 : text.toLowerCase().indexOf(match);
-    if (idx < 0) {
-      if (trailing == null) {
-        return Text(
-          text,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: style,
-        );
-      }
-      return Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(text: text, style: style),
-            trailing!,
-          ],
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      );
-    }
-    final before = text.substring(0, idx);
-    final hit = text.substring(idx, idx + match.length);
-    final after = text.substring(idx + match.length);
+    final hits = match.isEmpty ? null : nameMatch(text, match)?.toSet();
     final hitStyle = style.copyWith(
       color: AppColors.accent,
       fontWeight: FontWeight.w700,
     );
+    final spans = <InlineSpan>[];
+    var runStart = 0;
+    for (var i = 1; i <= text.length; i++) {
+      final boundary =
+          i == text.length ||
+          (hits?.contains(i) ?? false) != (hits?.contains(runStart) ?? false);
+      if (!boundary) continue;
+      spans.add(
+        TextSpan(
+          text: text.substring(runStart, i),
+          style: (hits?.contains(runStart) ?? false) ? hitStyle : style,
+        ),
+      );
+      runStart = i;
+    }
     return Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(text: before, style: style),
-          TextSpan(text: hit, style: hitStyle),
-          TextSpan(text: after, style: style),
-          ?trailing,
-        ],
-      ),
+      TextSpan(children: [...spans, ?trailing]),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     );

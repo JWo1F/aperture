@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/db_object.dart';
+import '../../models/name_match.dart';
 import '../../state/app_globals.dart';
 import '../../state/connection_views.dart';
 import '../../state/tabs_controller.dart';
@@ -12,8 +13,9 @@ import 'schema_contents.dart';
 import 'sidebar_section.dart';
 import 'table_row.dart';
 
-/// Scrollable body of the connected sidebar: Pinned · Queries · Schemas, with substring filtering and force-expanded schemas when the
-/// user is typing in the search bar.
+/// Scrollable body of the connected sidebar: Pinned · Queries · Schemas,
+/// with [nameMatch] filtering and force-expanded schemas when the user is
+/// typing in the search bar.
 class SidebarBody extends StatelessWidget {
   const SidebarBody({super.key, required this.query});
 
@@ -33,13 +35,13 @@ class SidebarBody extends StatelessWidget {
 
     bool tableMatches(DbTable t) =>
         !filtering ||
-        t.name.toLowerCase().contains(query) ||
+        nameMatches(t.name, query) ||
         t.schema.toLowerCase().contains(query);
 
     final favList = favorites.where(tableMatches).toList();
     final savedAll = activeConn?.savedQueries ?? const [];
     final saved = filtering
-        ? savedAll.where((q) => q.name.toLowerCase().contains(query)).toList()
+        ? savedAll.where((q) => nameMatches(q.name, query)).toList()
         : savedAll;
 
     final visibleSchemas = groupSchemaContents(catalog.catalog, query);

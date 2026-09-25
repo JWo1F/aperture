@@ -86,4 +86,21 @@ void main() {
     );
     expect(groupSchemaContents(_catalog(), 'nothing'), isEmpty);
   });
+
+  test('word initials find snake and kebab case names', () {
+    final catalog = DatabaseCatalog.empty.copyWith(
+      schemas: [
+        DbSchema(
+          name: 'public',
+          tables: [
+            _rel(1, 'public', 'alice_bob', DbRelationKind.table),
+            _rel(2, 'public', 'alice-bob', DbRelationKind.table),
+            _rel(3, 'public', 'albatross', DbRelationKind.table),
+          ],
+        ),
+      ],
+    );
+    final hits = groupSchemaContents(catalog, 'ab').single.tables;
+    expect(hits.map((t) => t.name), ['alice_bob', 'alice-bob']);
+  });
 }
