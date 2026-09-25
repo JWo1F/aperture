@@ -82,18 +82,22 @@ pubspec bump for that commit). Then `--amend --no-edit` is acceptable.
 |---|---|
 | State | `ChangeNotifier` + a process-global `appState`. No `provider`. |
 | Postgres | `postgres: ^3.5.0` (extended query mode) |
-| SQLite | `sqlite3: ^2.4.0` + `sqlite3_flutter_libs` |
+| SQLite | `sqlite3: ^3.6.0`, built as SQLite3MultipleCiphers (`hooks: user_defines: sqlite3: source: sqlite3mc`) |
 | SQL grammar | `highlight` / `flutter_highlight` (read-only); custom `CodeEditor` (editable) |
 | Window chrome | `macos_window_utils` |
-| Persistence | `path_provider` → JSON under Application Support |
+| Persistence | encrypted `store.sqlite` under Application Support (`path_provider`) |
 | File save | `file_selector` |
-| Crypto | `pointycastle` (master-passphrase only) |
+| Secrets | login Keychain via the `aperture/keychain` channel; password commands via the login shell |
 
 **Sandbox is OFF** — the app must reopen arbitrary SQLite paths after
 relaunch. Entitlements: `macos/Runner/{Debug,Release}.entitlements`.
 
 `MainFlutterWindow.swift` registers an `aperture/window` method channel for
-`startDrag` (toolbar pan) and `toggleZoom` (double-click).
+`startDrag` (toolbar pan), `toggleZoom` (double-click) and the window
+frame, and an `aperture/keychain` channel (`read` / `write` / `delete`
+generic-password items under service `com.jwo1f.aperture`). Ad-hoc-signed
+debug builds change signature every build, so macOS asks once per build
+before handing the Keychain item over.
 
 ## Architecture map
 
@@ -106,10 +110,10 @@ focused notifiers below and coordinates only cross-controller work:
 ```
 AppState  (orchestration: connect, disconnect, reconnect, refreshCatalog,
           updateConnection, clearQueryMessages, historyBack/Forward,
-          findRowInTable, followForeignKey, passphrase coordination,
-          reportUncaught)
+          findRowInTable, followForeignKey, store unlock / Keychain /
+          passphrase change, reportUncaught)
   ├── AppStore          (everything persisted: preferences, connections
-  │                      and their per-connection bags, passphrase meta)
+  │                      and their per-connection bags)
   ├── EventLog
   ├── SessionController
   ├── CatalogController
@@ -122,7 +126,8 @@ AppState  (orchestration: connect, disconnect, reconnect, refreshCatalog,
 There is **no `provider` package**. Every controller lives for the whole
 process, so the element tree had no scoping work to do: widgets reach
 them through the global `appState` (`lib/state/app_globals.dart`), set
-once in `main()` after `AppStore.load()`.
+once in `main()` — before the store is unlocked, so `appState.store` may
+still be closed (`isOpen == false`) when a widget first reads it.
 
 Rebuild subscription comes from `ListenableBuilder` and `Selector`
 (`lib/ui/widgets/value_selector.dart` — ours, not provider's). **Watch
@@ -174,12 +179,27 @@ surfaced in the sidebar's schemas section.
 
 ### Persistence
 
-Everything persisted lives in ONE file, `store.json`, written by
-`AppStore`. Every mutator ends in `_changed()`, which marks dirty and
-(re)schedules a single coalesced 500 ms write. The store sits on
-`AtomicJsonFile`, which writes temp-then-rename, serializes overlapping
-writes through an internal chain, exposes `drain()` for shutdown, and
-preserves a file it can't decode as `<name>.bak.<ts>`.
+Everything persisted lives in ONE encrypted SQLite file,
+`store.sqlite`, behind `StoreDatabase` (`lib/services/store_database.dart`).
+It is keyed with SQLite3MultipleCiphers in SQLCipher-4 mode
+(`PRAGMA cipher = 'sqlcipher'; PRAGMA legacy = 4; PRAGMA key = …`), so a
+wrong passphrase fails on the first read and any SQLCipher 4 tool opens the
+file. The schema is normalized — `connections`, `saved_queries`,
+`query_messages`, `favorite_tables`, `recent_tables`, `table_use_counts`,
+`column_widths`, `preferences` — versioned by `PRAGMA user_version`.
+
+The store is sealed until unlocked. `main()` tries the passphrase
+remembered in the login Keychain before the first frame; otherwise
+`ApertureApp` shows `UnlockScreen` (create-passphrase on first run, unlock
+after, "Forgot" erases the file) instead of `AppShell` until
+`AppStore.isOpen`. There is no recovery: a lost passphrase means erasing.
+`AppState` owns unlock, Keychain and passphrase change (`rekey`).
+
+`AppStore` keeps the whole model in memory. Every mutator ends in
+`_changed()`, which marks dirty and (re)schedules a single coalesced
+500 ms write; the write is a full snapshot replaced in one transaction, so
+a crash leaves the old state or the new one. Before `open` writes are
+no-ops.
 
 `AppState.flush()` → `AppStore.flush()` is wired into
 `AppLifecycleListener.onExitRequested` in `main.dart`, which is also
@@ -190,9 +210,10 @@ handler). Pending writes are durable on quit.
 **Never write a persisted field outside an `AppStore` mutator** and
 never touch the file directly — `_changed()` is the only path.
 
-`AppStore.load()` runs before `runApp`, so it must not throw: each
-section is read under `_readSection` and a section that won't parse is
-dropped rather than taking the window down with it.
+A connection's password is a `PasswordCredential` (stored in the sealed
+store) or a `CommandCredential` — a shell command run through the login
+shell (`$SHELL -l -c`) on every connect whose stdout, minus the final
+newline, is the password (`PasswordCommand`).
 
 ### Service layer (`lib/services/`)
 
@@ -206,8 +227,9 @@ Shared cross-engine helpers — do not duplicate:
 | `driver_decoder.dart` | `decodeDriverRow` |
 | `sql_statements.dart` | `parseSqlStatements`, `statementAtOffset` |
 | `safe_query.dart` | `applyDefaultLimit` — caps bare `SELECT`s at 10k |
-| `atomic_json.dart` | `AtomicJsonFile` — temp+rename, chained writes, `drain()` |
-| `crypto.dart` | PBKDF2-SHA256 + AES-GCM for the master passphrase |
+| `store_database.dart` | `StoreDatabase` — the encrypted settings file, `StoreSnapshot` |
+| `password_command.dart` | `PasswordCommand` — runs a command credential |
+| `keychain.dart` | `Keychain` — the remembered store passphrase |
 
 Backend triad: `DbService` / `Introspector` / `TableRepository` — each
 implemented by `Postgres*` and `Sqlite*`. The interface is clean;
@@ -532,12 +554,12 @@ the `aperture.store` / `aperture.window` log names. Nothing should say
 Two of those are load-bearing and cannot be renamed casually:
 
 - **`PRODUCT_BUNDLE_IDENTIFIER`** keys
-  `~/Library/Application Support/<id>`, where `store.json` lives.
+  `~/Library/Application Support/<id>`, where `store.sqlite` lives.
   Changing it points the app at an empty directory and orphans the saved
   connections.
-- **`_passphraseSentinel`** is the plaintext sealed into each vault's
-  `verifier`. Changing it makes every vault sealed under the old value
-  fail to unlock, reported as a wrong passphrase, unrecoverably.
+- **The cipher pragmas in `StoreDatabase._applyKey`** (`cipher =
+  'sqlcipher'`, `legacy = 4`). Changing either makes every existing store
+  fail to open, reported as a wrong passphrase, unrecoverably.
 
 ## Memory pointers
 

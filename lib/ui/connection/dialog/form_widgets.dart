@@ -92,6 +92,7 @@ class BoxedTextInput extends StatefulWidget {
     this.inputFormatters,
     this.autofocus = false,
     this.trailing,
+    this.onSubmitted,
   });
 
   final TextEditingController controller;
@@ -100,6 +101,7 @@ class BoxedTextInput extends StatefulWidget {
   final List<TextInputFormatter>? inputFormatters;
   final bool autofocus;
   final Widget? trailing;
+  final ValueChanged<String>? onSubmitted;
 
   @override
   State<BoxedTextInput> createState() => _BoxedTextInputState();
@@ -156,6 +158,7 @@ class _BoxedTextInputState extends State<BoxedTextInput> {
               obscureText: widget.obscure,
               obscuringCharacter: '•',
               inputFormatters: widget.inputFormatters,
+              onSubmitted: widget.onSubmitted,
               cursorColor: AppColors.accent,
               cursorWidth: 1.5,
               cursorHeight: 14,

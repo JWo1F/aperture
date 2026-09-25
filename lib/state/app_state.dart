@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import '../models/connection_config.dart';
 import '../models/db_object.dart';
 import '../models/log_event.dart';
 import '../models/value_format.dart';
 import '../services/db_service.dart';
+import '../services/keychain.dart';
+import '../services/store_database.dart';
 import 'app_store.dart';
 import 'catalog_controller.dart';
 import 'event_log.dart';
@@ -40,10 +43,96 @@ typedef DiscardEditsRequest =
 /// of its own — widgets only `read` it to invoke methods. Any reactive
 /// data lives on the individual controllers, each provided separately.
 class AppState {
-  AppState({AppStore? store})
-    : store = store ?? AppStore() {
+  /// [storePath] points the settings store somewhere other than
+  /// Application Support — tests use a temp file.
+  AppState({AppStore? store, Keychain? keychain, String? storePath})
+    : store = store ?? AppStore(),
+      keychain = keychain ?? Keychain(),
+      _storePathOverride = storePath {
     this.store.addListener(_syncSessionFromStore);
     this.store.onSaveFailed = _reportSaveFailure;
+  }
+
+  // --- Settings store --------------------------------------------------
+
+  final Keychain keychain;
+
+  final String? _storePathOverride;
+  String? _storePath;
+
+  Future<String> _path() async =>
+      _storePath ??= _storePathOverride ?? await StoreDatabase.defaultPath();
+
+  /// True when a sealed store is on disk to unlock, false when the first
+  /// passphrase still has to be chosen.
+  Future<bool> storeExists() async => StoreDatabase.exists(await _path());
+
+  /// Opens the store with a passphrase remembered in the Keychain. False
+  /// when there is none, or it no longer opens the store — a passphrase
+  /// changed on another machine, a store erased and recreated — in which
+  /// case the stale item is removed so the next launch doesn't retry it.
+  Future<bool> unlockFromKeychain() async {
+    final path = await _path();
+    if (!StoreDatabase.exists(path)) return false;
+    final passphrase = await keychain.readPassphrase();
+    if (passphrase == null) return false;
+    try {
+      store.open(StoreDatabase.open(path, passphrase));
+      return true;
+    } on WrongPassphraseException {
+      await keychain.deletePassphrase();
+      return false;
+    } catch (e, st) {
+      // This runs before `runApp`: a throw here is a window that never
+      // opens. The unlock screen reports the same failure when the user
+      // unlocks by hand.
+      developer.log(
+        'could not open the store from the Keychain',
+        name: 'aperture.store',
+        error: e,
+        stackTrace: st,
+      );
+      return false;
+    }
+  }
+
+  /// Opens the store under [passphrase], creating it when none exists yet.
+  /// Throws [WrongPassphraseException]. [remember] stores the passphrase in
+  /// the Keychain or removes a previously stored one.
+  Future<void> unlockStore(String passphrase, {required bool remember}) async {
+    store.open(StoreDatabase.open(await _path(), passphrase));
+    if (remember) {
+      await keychain.writePassphrase(passphrase);
+    } else {
+      await keychain.deletePassphrase();
+    }
+  }
+
+  /// Deletes the store and any remembered passphrase: the way out of a
+  /// forgotten one. Only reachable while the store is still locked.
+  Future<void> eraseStore() async {
+    StoreDatabase.erase(await _path());
+    await keychain.deletePassphrase();
+  }
+
+  Future<bool> isPassphraseRemembered() async =>
+      await keychain.readPassphrase() != null;
+
+  /// Re-encrypts the open store under [next] after checking [current]
+  /// opens it. Throws [WrongPassphraseException] when it doesn't.
+  Future<void> changeStorePassphrase(
+    String current,
+    String next, {
+    required bool remember,
+  }) async {
+    StoreDatabase.open(await _path(), current).close();
+    await store.flush();
+    store.changePassphrase(next);
+    if (remember) {
+      await keychain.writePassphrase(next);
+    } else {
+      await keychain.deletePassphrase();
+    }
   }
 
   /// A failed write means nothing the user does this session will be there
@@ -58,7 +147,7 @@ class AppState {
       LogEvent(
         timestamp: DateTime.now(),
         kind: LogEventKind.error,
-        error: 'Could not save store.json: $error',
+        error: 'Could not save the settings store: $error',
       ),
     );
     if (_reportedSaveFailure) return;
@@ -78,7 +167,7 @@ class AppState {
   final WorkspaceUi ui = WorkspaceUi();
   final ToastController toasts = ToastController();
 
-    /// Set by the UI at startup. Consulted before anything that tears the
+  /// Set by the UI at startup. Consulted before anything that tears the
   /// workspace down with staged edits in it.
   DiscardEditsRequest? onConfirmDiscardEdits;
 
@@ -163,9 +252,6 @@ class AppState {
     );
     unawaited(reconnect());
   }
-
-  /// Single async load on startup. Reads `store.json` into [store].
-  Future<void> load() => store.load();
 
   // --- Orchestration ---------------------------------------------------
 
@@ -313,7 +399,6 @@ class AppState {
       toasts.error('$e', title: "Couldn't load the definition of $name");
     }
   }
-
 
   // --- Query messages --------------------------------------------------
 

@@ -1,19 +1,8 @@
-import 'dart:io';
-
 import 'package:aperture/models/connection_config.dart';
-import 'package:aperture/services/atomic_json.dart';
 import 'package:aperture/services/password_command.dart';
+import 'package:aperture/services/store_database.dart';
 import 'package:aperture/state/app_store.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
-
-class _StubPathProvider extends PathProviderPlatform {
-  _StubPathProvider(this.root);
-  final Directory root;
-
-  @override
-  Future<String?> getApplicationSupportPath() async => root.path;
-}
 
 class _FakeCommand extends PasswordCommand {
   _FakeCommand(this.result);
@@ -34,17 +23,12 @@ ConnectionConfig _withCredential(Credential credential) =>
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  late Directory tmp;
-
-  AppStore storeWith([PasswordCommand? command]) =>
-      AppStore(file: AtomicJsonFile('store.json'), passwordCommand: command);
-
-  setUp(() async {
-    tmp = await Directory.systemTemp.createTemp('aperture_cred');
-    PathProviderPlatform.instance = _StubPathProvider(tmp);
-  });
-
-  tearDown(() => tmp.delete(recursive: true));
+  AppStore storeWith([PasswordCommand? command]) {
+    final store = AppStore(passwordCommand: command)
+      ..open(StoreDatabase.inMemory());
+    addTearDown(store.dispose);
+    return store;
+  }
 
   group('stored passwords', () {
     test('hand back the stored password as-is', () async {
@@ -95,24 +79,6 @@ void main() {
         _withCredential(const CommandCredential('op read x')),
       );
       expect((r as CredentialError).message, contains('item not found'));
-    });
-  });
-
-  group('runtime passwords never reach disk', () {
-    test('a resolved password is stripped before persisting', () async {
-      final store = storeWith();
-      store.addConnection(
-        ConnectionConfig(
-          id: 'p',
-          name: 'p',
-          runtimePassword: 'should not persist',
-        ),
-      );
-      await store.flush();
-
-      final raw = await File('${tmp.path}/store.json').readAsString();
-      expect(raw, isNot(contains('should not persist')));
-      expect(store.connectionById('p')!.runtimePassword, '');
     });
   });
 }

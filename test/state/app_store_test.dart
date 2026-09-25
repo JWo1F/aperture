@@ -1,33 +1,24 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:aperture/models/connection_config.dart';
 import 'package:aperture/models/db_object.dart';
 import 'package:aperture/models/query_message.dart';
-import 'package:aperture/services/atomic_json.dart';
+import 'package:aperture/services/store_database.dart';
 import 'package:aperture/state/app_store.dart';
 import 'package:aperture/theme/app_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:sqlite3/sqlite3.dart';
 
-class _StubPathProvider extends PathProviderPlatform {
-  _StubPathProvider(this.root);
-  final Directory root;
-
-  @override
-  Future<String?> getApplicationSupportPath() async => root.path;
-}
-
-class _CountingAtomicJsonFile extends AtomicJsonFile {
-  _CountingAtomicJsonFile(super.filename);
+class _CountingStore extends StoreDatabase {
+  _CountingStore() : super(sqlite3.openInMemory());
   int writes = 0;
-  Object? lastPayload;
+  StoreSnapshot? last;
 
   @override
-  Future<void> save(Object data) {
+  void save(StoreSnapshot snapshot) {
     writes++;
-    lastPayload = data;
-    return super.save(data);
+    last = snapshot;
+    super.save(snapshot);
   }
 }
 
@@ -46,10 +37,11 @@ DbTable _table(String schema, String name) {
 
 void main() {
   late Directory dir;
+  late String path;
 
   setUp(() async {
     dir = await Directory.systemTemp.createTemp('app_store_test');
-    PathProviderPlatform.instance = _StubPathProvider(dir);
+    path = '${dir.path}/store.sqlite';
   });
 
   tearDown(() async {
@@ -57,31 +49,36 @@ void main() {
   });
 
   // Dispose every AppStore we create — a leftover 500ms debounce timer
-  // from one test will otherwise fire mid-flight in the next test and
-  // overwrite its store.json (the path_provider stub is global).
-  AppStore makeStore({
-    AtomicJsonFile? file,
-    Duration debounce = const Duration(milliseconds: 30),
-  }) {
-    final store = AppStore(
-      file: file ?? AtomicJsonFile('store.json'),
-      saveDebounce: debounce,
-    );
+  // from one test would otherwise fire mid-flight in the next.
+  AppStore makeStore({Duration debounce = const Duration(milliseconds: 30)}) {
+    final store = AppStore(saveDebounce: debounce);
     addTearDown(store.dispose);
     return store;
   }
 
-  test('load on a missing file lands on defaults without throwing', () async {
+  /// Opens [store] on the test's encrypted file, or on [db].
+  void open(AppStore store, [StoreDatabase? db]) =>
+      store.open(db ?? StoreDatabase.open(path, 'pw'));
+
+  test('before open the store holds defaults and writes nothing', () async {
     final store = makeStore();
-    await store.load();
+    expect(store.isOpen, isFalse);
+    store.setSidebarWidth(300);
+    await store.flush();
+    expect(File(path).existsSync(), isFalse);
+  });
+
+  test('a new store opens on defaults', () async {
+    final store = makeStore();
+    open(store);
     expect(store.connections, isEmpty);
     expect(store.sidebarVisible, isTrue);
   });
 
   test('mutations coalesce: a burst within the window writes once', () async {
-    final fake = _CountingAtomicJsonFile('store.json');
-    final store = makeStore(file: fake);
-    await store.load();
+    final fake = _CountingStore();
+    final store = makeStore();
+    open(store, fake);
     for (var i = 0; i < 20; i++) {
       store.addConnection(_conn('c$i'));
     }
@@ -89,14 +86,13 @@ void main() {
 
     await store.flush();
     expect(fake.writes, 1, reason: '20 mutations must collapse to 1 write');
-    final list = (fake.lastPayload as Map)['connections'] as List;
-    expect(list, hasLength(20));
+    expect(fake.last!.connections, hasLength(20));
   });
 
   test('flush forces a pending debounced write', () async {
-    final fake = _CountingAtomicJsonFile('store.json');
-    final store = makeStore(file: fake, debounce: const Duration(seconds: 5));
-    await store.load();
+    final fake = _CountingStore();
+    final store = makeStore(debounce: const Duration(seconds: 5));
+    open(store, fake);
     store.addConnection(_conn('pending'));
     expect(fake.writes, 0);
     await store.flush();
@@ -105,13 +101,13 @@ void main() {
 
   test('connections survive a save/load round-trip', () async {
     final a = makeStore();
-    await a.load();
+    open(a);
     a.addConnection(_conn('a', name: 'A'));
     a.setSidebarWidth(320);
     await a.flush();
 
     final b = makeStore();
-    await b.load();
+    open(b);
     expect(b.connections, hasLength(1));
     expect(b.connections.first.id, 'a');
     expect(b.connections.first.name, 'A');
@@ -120,7 +116,7 @@ void main() {
 
   test('per-connection mutators write through to the connection bag', () async {
     final store = makeStore();
-    await store.load();
+    open(store);
     store.addConnection(_conn('c'));
     final tableA = _table('public', 'a');
     final tableB = _table('public', 'b');
@@ -162,9 +158,8 @@ void main() {
   });
 
   test('runtime password never bleeds back into the store', () async {
-    final fake = _CountingAtomicJsonFile('store.json');
-    final store = makeStore(file: fake);
-    await store.load();
+    final store = makeStore();
+    open(store);
     final cfg = ConnectionConfig(
       id: 'c',
       name: 'x',
@@ -173,13 +168,19 @@ void main() {
     );
     store.addConnection(cfg);
     await store.flush();
-    final json = jsonEncode(fake.lastPayload);
+    final reopened = StoreDatabase.open(path, 'pw');
+    addTearDown(reopened.close);
+    final saved = reopened.load().connections.single;
     expect(
-      json.contains('actual-password'),
-      isFalse,
+      saved.runtimePassword,
+      isEmpty,
       reason: 'runtime plaintext must never reach disk',
     );
-    expect(json.contains('op read x'), isTrue, reason: 'command must persist');
+    expect(
+      (saved.credential as CommandCredential).command,
+      'op read x',
+      reason: 'command must persist',
+    );
     expect(
       store.connectionById('c')!.runtimePassword,
       isEmpty,
@@ -189,7 +190,7 @@ void main() {
 
   test('credential round-trip preserves the sealed variant', () async {
     final a = makeStore();
-    await a.load();
+    open(a);
     a.addConnection(
       ConnectionConfig(
         id: 'p',
@@ -207,7 +208,7 @@ void main() {
     await a.flush();
 
     final b = makeStore();
-    await b.load();
+    open(b);
     expect(
       (b.connectionById('p')!.credential as PasswordCredential).password,
       'pw',
@@ -226,7 +227,7 @@ void main() {
     test('auto resolves against the system and follows a flip', () async {
       final store = makeStore();
       store.setSystemBrightness(AppBrightness.light);
-      await store.load();
+      open(store);
       store.setThemeMode(AppThemeMode.auto);
       expect(store.brightness, AppBrightness.light);
       expect(AppColors.palette, lightPalette);
@@ -242,7 +243,7 @@ void main() {
 
     test('a pinned mode ignores the system', () async {
       final store = makeStore();
-      await store.load();
+      open(store);
       store.setThemeMode(AppThemeMode.light);
       var ticks = 0;
       store.addListener(() => ticks++);
@@ -256,7 +257,7 @@ void main() {
 
     test('the cycle visits every mode and returns', () async {
       final store = makeStore();
-      await store.load();
+      open(store);
       expect(store.themeMode, AppThemeMode.auto);
       store.cycleThemeMode();
       expect(store.themeMode, AppThemeMode.dark);
@@ -268,13 +269,13 @@ void main() {
 
     test('the mode survives a save/load round-trip', () async {
       final a = makeStore();
-      await a.load();
+      open(a);
       a.setThemeMode(AppThemeMode.light);
       await a.flush();
 
       final b = makeStore();
       b.setSystemBrightness(AppBrightness.dark);
-      await b.load();
+      open(b);
       expect(b.themeMode, AppThemeMode.light);
       expect(b.brightness, AppBrightness.light);
       expect(AppColors.palette, lightPalette);
@@ -283,26 +284,10 @@ void main() {
     test('a store with no preference follows the system', () async {
       final store = makeStore();
       store.setSystemBrightness(AppBrightness.light);
-      await store.load();
+      open(store);
       expect(store.themeMode, AppThemeMode.auto);
       expect(store.brightness, AppBrightness.light);
       expect(AppColors.palette, lightPalette);
     });
-
-    test(
-      'a store written before auto existed still reads its palette',
-      () async {
-        await File('${dir.path}/store.json').writeAsString(
-          jsonEncode({
-            'version': 1,
-            'preferences': {'brightness': 'light'},
-          }),
-        );
-        final store = makeStore();
-        await store.load();
-        expect(store.themeMode, AppThemeMode.light);
-        expect(AppColors.palette, lightPalette);
-      },
-    );
   });
 }

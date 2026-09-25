@@ -8,6 +8,7 @@ import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/hugeicons.dart';
 import '../about/about_dialog.dart';
+import '../unlock/change_passphrase_dialog.dart';
 import '../widgets/table_glyph.dart';
 import 'item_model.dart';
 
@@ -155,6 +156,16 @@ class PaletteItemSource {
         ),
       );
     }
+    out.add(
+      PaletteItem(
+        kind: PaletteKind.command,
+        title: 'Change settings passphrase',
+        subtitle: 'Re-encrypt connections, passwords and queries',
+        icon: Hgi.lockKey,
+        tokens: 'password security encrypt keychain master unlock',
+        run: () => showChangePassphraseDialog(context),
+      ),
+    );
     out.add(
       PaletteItem(
         kind: PaletteKind.command,

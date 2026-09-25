@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:aperture/models/connection_config.dart';
 import 'package:aperture/models/db_object.dart';
-import 'package:aperture/services/atomic_json.dart';
+import 'package:aperture/services/store_database.dart';
 import 'package:aperture/state/app_state.dart';
 import 'package:aperture/state/app_store.dart';
 import 'package:aperture/state/workspace_tab.dart';
@@ -47,7 +47,7 @@ void main() {
       ''')
       ..close();
 
-    app = AppState(store: AppStore(file: AtomicJsonFile('store.json')));
+    app = AppState(store: AppStore()..open(StoreDatabase.inMemory()));
     final config = ConnectionConfig(
       id: 'lib',
       name: 'library',

@@ -54,8 +54,77 @@ class MainFlutterWindow: NSWindow {
       }
     }
 
+    let keychain = FlutterMethodChannel(name: "aperture/keychain", binaryMessenger: messenger)
+    keychain.setMethodCallHandler { call, result in
+      guard let args = call.arguments as? [String: Any],
+            let account = args["account"] as? String else {
+        result(FlutterError(code: "args", message: "account is required", details: nil))
+        return
+      }
+      switch call.method {
+      case "read":
+        result(Keychain.read(account: account))
+      case "write":
+        guard let secret = args["secret"] as? String else {
+          result(FlutterError(code: "args", message: "secret is required", details: nil))
+          return
+        }
+        let status = Keychain.write(account: account, secret: secret)
+        result(status == errSecSuccess
+          ? nil
+          : FlutterError(code: "keychain", message: Keychain.describe(status), details: nil))
+      case "delete":
+        Keychain.delete(account: account)
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
     RegisterGeneratedPlugins(registry: macOSWindowUtilsViewController.flutterViewController)
 
     super.awakeFromNib()
+  }
+}
+
+/// Generic-password items in the login keychain, all under one service so
+/// Keychain Access lists them together.
+enum Keychain {
+  static let service = "com.jwo1f.aperture"
+
+  private static func query(account: String) -> [String: Any] {
+    [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+      kSecAttrAccount as String: account,
+    ]
+  }
+
+  static func read(account: String) -> String? {
+    var q = query(account: account)
+    q[kSecReturnData as String] = true
+    q[kSecMatchLimit as String] = kSecMatchLimitOne
+    var item: CFTypeRef?
+    guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess,
+          let data = item as? Data else { return nil }
+    return String(data: data, encoding: .utf8)
+  }
+
+  /// Replaces any existing item rather than updating it, so the new item
+  /// carries this build's access list.
+  static func write(account: String, secret: String) -> OSStatus {
+    delete(account: account)
+    var q = query(account: account)
+    q[kSecValueData as String] = Data(secret.utf8)
+    q[kSecAttrLabel as String] = "Aperture settings passphrase"
+    return SecItemAdd(q as CFDictionary, nil)
+  }
+
+  static func delete(account: String) {
+    SecItemDelete(query(account: account) as CFDictionary)
+  }
+
+  static func describe(_ status: OSStatus) -> String {
+    (SecCopyErrorMessageString(status, nil) as String?) ?? "OSStatus \(status)"
   }
 }

@@ -10,8 +10,8 @@ import '../../state/workspace_tab.dart';
 import '../edits/pending_edits_modal.dart';
 import '../export/export_dialog.dart';
 
-/// Reveals the app's Application Support directory — home of
-/// connections.json and the rest of the persisted config — in Finder. The
+/// Reveals the app's Application Support directory — home of the encrypted
+/// settings store — in Finder. The
 /// app is unsandboxed, so a plain `open` needs no security-scoped bookmark.
 Future<void> revealConfigFolder() async {
   final dir = await getApplicationSupportDirectory();

@@ -85,7 +85,7 @@ class SessionController extends ChangeNotifier {
   /// Returns true on success.
   ///
   /// Guarded by an attempt token. Resolving a credential can take seconds
-  /// — a 1Password lookup spawns `op` and may wait on Touch ID — and
+  /// — a password command may wait on a Touch ID prompt — and
   /// nothing stops the user clicking a second connection meanwhile. Two
   /// overlapping attempts used to interleave: the slower one's failure
   /// overwrote the faster one's success, nulling `_service` while its

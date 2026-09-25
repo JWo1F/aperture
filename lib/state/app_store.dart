@@ -7,8 +7,8 @@ import '../models/connection_config.dart';
 import '../models/db_object.dart';
 import '../models/query_message.dart';
 import '../models/saved_query.dart';
-import '../services/atomic_json.dart';
 import '../services/password_command.dart';
+import '../services/store_database.dart';
 import '../services/window_frame.dart';
 import '../theme/app_theme.dart';
 
@@ -29,25 +29,25 @@ class CredentialError extends CredentialResult {
 
 /// Single source of truth for everything the app persists across launches.
 ///
-/// One [ChangeNotifier] holding preferences, the saved-connection list (with
-/// every per-connection bag nested inside it). Every mutator updates the in-memory state, notifies listeners,
-/// and schedules a single coalesced 500 ms write to `store.json`.
+/// One [ChangeNotifier] holding preferences and the saved-connection list
+/// (with every per-connection bag nested inside it). Nothing is readable
+/// until [open] hands it the unlocked [StoreDatabase]; from then on every
+/// mutator updates the in-memory state, notifies listeners, and schedules a
+/// single coalesced 500 ms snapshot write.
 ///
 /// Widgets that care about a narrow slice should use `context.select` to
 /// avoid rebuilding on unrelated changes — every mutation fires the same
 /// notifier.
 class AppStore extends ChangeNotifier {
   AppStore({
-    AtomicJsonFile? file,
     PasswordCommand? passwordCommand,
     WindowFrame? window,
     this.onSaveFailed,
     this.saveDebounce = const Duration(milliseconds: 500),
-  }) : _file = file ?? AtomicJsonFile('store.json'),
-       _command = passwordCommand ?? PasswordCommand(),
+  }) : _command = passwordCommand ?? PasswordCommand(),
        _window = window ?? WindowFrame();
 
-  /// Called when a write to `store.json` fails.
+  /// Called when a write to the store fails.
   ///
   /// Everything the app remembers between launches goes through this one
   /// file. A full disk or a read-only support directory makes every save
@@ -57,7 +57,7 @@ class AppStore extends ChangeNotifier {
   /// event log and a toast.
   void Function(Object error)? onSaveFailed;
 
-  final AtomicJsonFile _file;
+  StoreDatabase? _db;
   final PasswordCommand _command;
   final WindowFrame _window;
   final Duration saveDebounce;
@@ -109,14 +109,6 @@ class AppStore extends ChangeNotifier {
 
   List<ConnectionConfig> get connections => List.unmodifiable(_connections);
 
-  /// Top-3 most recently used, freshest first. Drives the welcome cards.
-  List<ConnectionConfig> get recentConnections {
-    final stamped =
-        _connections.where((c) => c.lastConnectedAt != null).toList()
-          ..sort((a, b) => b.lastConnectedAt!.compareTo(a.lastConnectedAt!));
-    return stamped.take(3).toList();
-  }
-
   ConnectionConfig? connectionById(String id) {
     for (final c in _connections) {
       if (c.id == id) return c;
@@ -126,32 +118,27 @@ class AppStore extends ChangeNotifier {
 
   // ---- load / save lifecycle ----------------------------------------
 
-  /// One-time hydration from `store.json`. Failures fall back to defaults
-  /// so a corrupt file never blocks launch.
-  ///
-  /// `main()` awaits this before `runApp`, so a throw here is not a degraded
-  /// session — it is a window that never opens, with no UI to explain why.
-  /// A section that won't parse is dropped and the rest still loads.
-  Future<void> load() async {
-    final decoded = await _file.load();
-    if (decoded is Map<String, dynamic>) {
-      _readSection(
-        'preferences',
-        () => _readPreferences(decoded['preferences']),
-      );
-      _readSection(
-        'connections',
-        () => _readConnections(decoded['connections']),
-      );
-    }
+  /// False until [open]: the settings are sealed in the store, so before
+  /// unlock there is nothing to show but the defaults.
+  bool get isOpen => _db != null;
+
+  /// Hydrates from the unlocked [db], which the store keeps and writes to
+  /// from then on.
+  void open(StoreDatabase db) {
+    final snapshot = db.load();
+    _db = db;
+    _readPreferences(snapshot.preferences);
+    _connections
+      ..clear()
+      ..addAll(snapshot.connections);
     _applyPalette();
-    if (_windowFramePersisted != null) {
-      // Restoring the native window frame is async but doesn't gate UI
-      // hydration — kick it off after the listeners run.
-      unawaited(_window.write(_windowFramePersisted!));
-    }
+    final frame = _windowFramePersisted;
+    if (frame != null) unawaited(_window.write(frame));
     notifyListeners();
   }
+
+  /// Re-encrypts the open store under [passphrase].
+  void changePassphrase(String passphrase) => _db!.rekey(passphrase);
 
   /// Drains the pending debounced write so the app can quit without
   /// losing a mutation buffered in the last 500 ms.
@@ -160,9 +147,8 @@ class AppStore extends ChangeNotifier {
     _saveTimer = null;
     if (_dirty) {
       _dirty = false;
-      await _writeNow();
+      _writeNow();
     }
-    await _file.drain();
   }
 
   // ---- preference setters --------------------------------------------
@@ -476,15 +462,20 @@ class AppStore extends ChangeNotifier {
     _saveTimer = null;
     if (!_dirty) return;
     _dirty = false;
-    unawaited(_writeNow());
+    _writeNow();
   }
 
-  Future<void> _writeNow() async {
+  /// A no-op until [open]: a preference nudged before unlock (the window
+  /// frame captured at launch) has nowhere to go, and [open] replaces it
+  /// with the stored value anyway.
+  void _writeNow() {
+    final db = _db;
+    if (db == null) return;
     try {
-      await _file.save(_toJson());
+      db.save(_snapshot());
     } catch (e, st) {
       developer.log(
-        'failed to save store.json',
+        'failed to save the store',
         name: 'aperture.store',
         error: e,
         stackTrace: st,
@@ -493,93 +484,57 @@ class AppStore extends ChangeNotifier {
     }
   }
 
-  Map<String, dynamic> _toJson() => {
-    'version': 1,
-    'preferences': {
-      'brightness': _themeMode.name,
-      'sidebarVisible': _sidebarVisible,
-      'sidebarWidth': _sidebarWidth,
-      'logPanelWidth': _logPanelWidth,
-      'queryResultsFraction': _queryResultsFraction,
-      if (_windowFramePersisted != null) 'windowFrame': _windowFramePersisted,
+  static const _themeKey = 'themeMode';
+  static const _sidebarVisibleKey = 'sidebarVisible';
+  static const _sidebarWidthKey = 'sidebarWidth';
+  static const _logPanelWidthKey = 'logPanelWidth';
+  static const _queryResultsFractionKey = 'queryResultsFraction';
+  static const _windowKeys = ['x', 'y', 'w', 'h'];
+
+  StoreSnapshot _snapshot() => StoreSnapshot(
+    preferences: {
+      _themeKey: _themeMode.name,
+      _sidebarVisibleKey: _sidebarVisible ? 1 : 0,
+      _sidebarWidthKey: _sidebarWidth,
+      _logPanelWidthKey: _logPanelWidth,
+      _queryResultsFractionKey: _queryResultsFraction,
+      if (_windowFramePersisted case final frame?)
+        for (final k in _windowKeys) 'window.$k': frame[k]!,
     },
-    'connections': [for (final c in _connections) c.toJson()],
-  };
+    connections: List.of(_connections),
+  );
 
-  void _readSection(String name, void Function() read) {
-    try {
-      read();
-    } catch (e, st) {
-      developer.log(
-        'failed to read $name from store.json',
-        name: 'aperture.store',
-        error: e,
-        stackTrace: st,
-      );
+  void _readPreferences(Map<String, Object> raw) {
+    double? number(String key) => switch (raw[key]) {
+      final num n => n.toDouble(),
+      _ => null,
+    };
+    final modeName = raw[_themeKey];
+    for (final m in AppThemeMode.values) {
+      if (m.name == modeName) _themeMode = m;
     }
-  }
-
-  void _readPreferences(Object? raw) {
-    if (raw is! Map) return;
-    final modeName = raw['brightness'];
-    if (modeName is String) {
-      for (final m in AppThemeMode.values) {
-        if (m.name == modeName) {
-          _themeMode = m;
-          break;
-        }
-      }
+    final sidebar = raw[_sidebarVisibleKey];
+    if (sidebar is int) _sidebarVisible = sidebar != 0;
+    if (number(_sidebarWidthKey) case final w?) {
+      _sidebarWidth = w.clamp(sidebarWidthMin, sidebarWidthMax);
     }
-    final sidebar = raw['sidebarVisible'];
-    if (sidebar is bool) _sidebarVisible = sidebar;
-    final sw = raw['sidebarWidth'];
-    if (sw is num) {
-      _sidebarWidth = sw.toDouble().clamp(sidebarWidthMin, sidebarWidthMax);
+    if (number(_logPanelWidthKey) case final w?) {
+      _logPanelWidth = w.clamp(logPanelWidthMin, logPanelWidthMax);
     }
-    final lw = raw['logPanelWidth'];
-    if (lw is num) {
-      _logPanelWidth = lw.toDouble().clamp(logPanelWidthMin, logPanelWidthMax);
-    }
-    final qf = raw['queryResultsFraction'];
-    if (qf is num) {
-      _queryResultsFraction = qf.toDouble().clamp(
+    if (number(_queryResultsFractionKey) case final f?) {
+      _queryResultsFraction = f.clamp(
         queryResultsFractionMin,
         queryResultsFractionMax,
       );
     }
-    final frame = raw['windowFrame'];
-    if (frame is Map) {
-      _windowFramePersisted = {
-        'x': (frame['x'] as num).toDouble(),
-        'y': (frame['y'] as num).toDouble(),
-        'w': (frame['w'] as num).toDouble(),
-        'h': (frame['h'] as num).toDouble(),
-      };
-    }
-  }
-
-  void _readConnections(Object? raw) {
-    _connections.clear();
-    if (raw is! List) return;
-    for (final item in raw) {
-      if (item is! Map<String, dynamic>) continue;
-      try {
-        if (item['id'] is! String) continue;
-        _connections.add(ConnectionConfig.fromJson(item));
-      } catch (e, st) {
-        developer.log(
-          'failed to parse connection entry',
-          name: 'aperture.store',
-          error: e,
-          stackTrace: st,
-        );
-      }
-    }
+    final frame = {for (final k in _windowKeys) k: ?number('window.$k')};
+    if (frame.length == _windowKeys.length) _windowFramePersisted = frame;
   }
 
   @override
   void dispose() {
     _saveTimer?.cancel();
+    _db?.close();
     super.dispose();
   }
 }

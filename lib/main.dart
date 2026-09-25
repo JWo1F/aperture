@@ -8,6 +8,7 @@ import 'state/app_state.dart';
 import 'theme/app_theme.dart';
 import 'ui/app_shell/app_shell.dart';
 import 'ui/app_shell/confirm_discard.dart';
+import 'ui/unlock/unlock_screen.dart';
 import 'ui/widgets/value_selector.dart';
 
 Future<void> main() async {
@@ -17,11 +18,13 @@ Future<void> main() async {
   await WindowManipulator.enableFullSizeContentView();
   await WindowManipulator.hideTitle();
   final state = AppState();
-  // Seeded before the store loads so a persisted `auto` resolves against
+  // Seeded before the store opens so a persisted `auto` resolves against
   // the real OS appearance on the very first paint.
   state.store.setSystemBrightness(_systemBrightness());
-  await state.load();
   appState = state;
+  // A passphrase remembered in the Keychain opens the store before the
+  // first frame, so the unlock screen never flashes past.
+  await state.unlockFromKeychain();
   _installErrorHandlers(state);
   runApp(const ApertureApp());
 }
@@ -102,17 +105,22 @@ class _ApertureAppState extends State<ApertureApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return Selector<AppBrightness>(
+    return Selector<(AppBrightness, bool)>(
       listenable: appState.store,
-      selector: () => appState.store.brightness,
-      builder: (context, brightness) => MaterialApp(
-        title: 'Aperture',
-        navigatorKey: _navigator,
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.build(brightness),
-        scrollBehavior: const _DesktopScrollBehavior(),
-        home: AppShell(key: ValueKey(brightness)),
-      ),
+      selector: () => (appState.store.brightness, appState.store.isOpen),
+      builder: (context, value) {
+        final (brightness, open) = value;
+        return MaterialApp(
+          title: 'Aperture',
+          navigatorKey: _navigator,
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.build(brightness),
+          scrollBehavior: const _DesktopScrollBehavior(),
+          home: open
+              ? AppShell(key: ValueKey(brightness))
+              : const UnlockScreen(),
+        );
+      },
     );
   }
 }

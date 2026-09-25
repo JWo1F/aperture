@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:aperture/models/connection_config.dart';
-import 'package:aperture/services/atomic_json.dart';
+import 'package:aperture/services/store_database.dart';
 import 'package:aperture/state/app_state.dart';
 import 'package:aperture/state/app_store.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,7 +25,7 @@ void main() {
   setUp(() async {
     tmp = await Directory.systemTemp.createTemp('aperture_connect_test');
     PathProviderPlatform.instance = _StubPathProvider(tmp);
-    state = AppState(store: AppStore(file: AtomicJsonFile('store.json')));
+    state = AppState(store: AppStore()..open(StoreDatabase.inMemory()));
   });
 
   tearDown(() async {
