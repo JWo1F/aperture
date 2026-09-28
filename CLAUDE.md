@@ -83,7 +83,8 @@ pubspec bump for that commit). Then `--amend --no-edit` is acceptable.
 | State | `ChangeNotifier` + a process-global `appState`. No `provider`. |
 | Postgres | `postgres: ^3.5.0` (extended query mode) |
 | SQLite | `sqlite3: ^3.6.0`, built as SQLite3MultipleCiphers (`hooks: user_defines: sqlite3: source: sqlite3mc`) |
-| SQL grammar | `highlight` / `flutter_highlight` (read-only); custom `CodeEditor` (editable) |
+| SQL grammar | `highlight` / `flutter_highlight` (read-only views, `CodeField`); `re_highlight` inside `re_editor` |
+| Code editing | `re_editor` for multi-line (query editor, cell picker); own `CodeField` for the single-line clause bars |
 | Window chrome | `macos_window_utils` |
 | Fonts | Inter + JetBrains Mono bundled under `assets/fonts/` (`AppTheme.uiFamily` / `monoFamily`); never fetched at runtime |
 | Persistence | encrypted `store.sqlite` under Application Support (`path_provider`) |
@@ -285,7 +286,8 @@ allowed for cohesive presentational widgets like `plan_node_card.dart`):
 | Query plan view | `lib/ui/workspace/query_plan/` — layered: `model/`, `parsing/`, `analysis/`, `glossary/`, `view/` |
 | Object tab | `SchemaTab` over a sealed `SchemaObject`; `schema_view.dart` + `lib/ui/workspace/object_view/` — Info (plain-language, relations only) and DDL |
 | Results grid | `lib/ui/workspace/results_grid/` — 20 files |
-| Code editor | `lib/ui/widgets/code_editor/` — layered: `controller`, `indent` (pure), `metrics`, `suggestions/`, `view` |
+| SQL editor | `lib/ui/workspace/query/sql_editor.dart` (`re_editor`) + `sql_autocomplete.dart`; shared style/keys in `lib/ui/widgets/code_view.dart` |
+| Clause-bar field | `lib/ui/widgets/code_editor/` — `CodeField`, `controller`, `token`, `suggestions/` |
 
 `lib/ui/widgets/code_editor.dart` is a 1-line barrel re-export; existing
 imports point through it. The real module is `code_editor/`.
@@ -362,17 +364,29 @@ this bug for binary: a bytea literal is spelled differently by the two
 engines and it has no engine context, so "filter by this value" on a
 binary column builds a filter that matches nothing.
 
-### Code editor
+### Code editing
 
-The indent functions (`handleTab`, `shiftLines`, `handleNewlineInsert`,
-`tokenStart`) are PURE — they take
-`({String text, TextSelection selection, ...})` and return an
-`EditResult` record. No widget refs. Tested in
-`test/ui/widgets/code_editor/indent_test.dart`.
+Multi-line code is `re_editor`, which lays out and paints only the lines
+in view. Its caret is a `CodeLinePosition` (line, column); the SQL
+tooling speaks flat offsets — convert with `flatOffset` in
+`sql_autocomplete.dart`.
 
-Newline boundary inclusion follows modern editor convention: a
-selection ending exactly at the start of line N+1 does NOT extend the
-shift into N+1.
+`re_editor` publishes the visible lines' positions to its indicator
+**from its layout pass**. Anything driven by them — the gutter's run
+icons, the statement bands — must repaint, never rebuild: the icons are
+a `Flow` placed at paint time, the bands a `CustomPainter`.
+
+Its key map comes from `AppCodeShortcuts` (`code_view.dart`), which drops
+⌘↵ / ⇧⌘↵ / Esc so they reach the query editor and the cell picker, and
+drops find / replace / save. `re_editor` caches the platform in top-level
+finals on first read, so a widget test that needs its desktop behaviour
+sets `debugDefaultTargetPlatformOverride = TargetPlatform.macOS` before
+the first pump.
+
+The query editor's autocomplete is `re_editor`'s own: it opens only on
+typed input (no Ctrl-Space, no reopen after accepting), Enter accepts,
+and Esc does not close it. `CodeField` keeps the app's own popup (Tab
+accepts, Ctrl-Space, Esc).
 
 ### Query plan view
 
@@ -441,8 +455,9 @@ doesn't reallocate items.
 - **Do not** keep dead code alive with `// ignore: unused_element`. Delete.
 - **Do not** mutate a tab's collection directly — use the tab's
   mutator method.
-- **Do not** mutate a `CodeEditorController` from inside a `build`
-  method — schedule via `didUpdateWidget` or a listener.
+- **Do not** mutate a `CodeEditorController` or a
+  `CodeLineEditingController` from inside a `build` method — schedule via
+  `didUpdateWidget` or a listener.
 - **Do not** rebuild `_ResultsGridState` on a column-resize tick —
   subscribe via `ListenableBuilder` on `ColumnWidths`.
 - **Do not** drive-by-fix latent bugs during a refactor. Flag in the

@@ -3,7 +3,7 @@ import 'package:re_editor/re_editor.dart';
 
 import '../../../theme/app_theme.dart';
 import '../../widgets/code_editor/suggestions/suggestion.dart';
-import '../../widgets/code_editor/indent.dart' as indent;
+import '../../widgets/code_editor/token.dart';
 import '../../widgets/code_editor/suggestions/popup_widget.dart' show KindChip;
 
 /// Offset of [position] into the editor's text as one string, lines joined
@@ -38,7 +38,7 @@ class SqlPromptsBuilder implements CodeAutocompletePromptsBuilder {
   ) {
     final text = controller.text;
     final cursor = flatOffset(controller.codeLines, selection.extent);
-    final start = indent.tokenStart(text, cursor);
+    final start = tokenStart(text, cursor);
     final token = text.substring(start, cursor);
     final items = suggest(
       SuggestRequest(

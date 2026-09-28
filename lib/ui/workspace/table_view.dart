@@ -541,10 +541,9 @@ class _ClauseRowState extends State<_ClauseRow> {
           Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
-              child: CodeEditor(
+              child: CodeField(
                 controller: widget.controller,
                 focusNode: widget.focusNode,
-                singleLine: true,
                 fontSize: 11.5,
                 cursorHeight: 12,
                 padding: const EdgeInsets.symmetric(
