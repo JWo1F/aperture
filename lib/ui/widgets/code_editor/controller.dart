@@ -1,7 +1,5 @@
-import 'dart:isolate';
-
 import 'package:flutter/widgets.dart';
-import 'package:highlight/highlight.dart' show Node, highlight;
+import 'package:highlight/highlight.dart' show highlight;
 import 'package:highlight/languages/json.dart' as lang_json;
 import 'package:highlight/languages/pgsql.dart' as lang_pgsql;
 
@@ -19,10 +17,6 @@ class CodeEditorController extends TextEditingController {
   /// Highlight language name (`pgsql`, `json`, …). Override and call
   /// [notifyListeners] to repaint with a new grammar.
   String language;
-
-  String? _parsedText;
-  String? _parsedLanguage;
-  List<Node>? _parsedNodes;
 
   String? _cachedText;
   String? _cachedLanguage;
@@ -58,7 +52,11 @@ class CodeEditorController extends TextEditingController {
         ? TextSpan(text: '', style: base)
         : TextSpan(
             style: base,
-            children: highlightNodesToSpans(_nodes(), base, apertureCodeStyles),
+            children: highlightNodesToSpans(
+              highlight.parse(text, language: language).nodes,
+              base,
+              apertureCodeStyles,
+            ),
           );
     _cachedText = text;
     _cachedLanguage = language;
@@ -67,39 +65,7 @@ class CodeEditorController extends TextEditingController {
     _cachedSpan = span;
     return span;
   }
-
-  List<Node> _nodes() {
-    if (_parsedNodes == null ||
-        _parsedText != text ||
-        _parsedLanguage != language) {
-      _parsedNodes = highlight.parse(text, language: language).nodes ?? [];
-      _parsedText = text;
-      _parsedLanguage = language;
-    }
-    return _parsedNodes!;
-  }
-
-  /// Parses the current text on a background isolate, so the first
-  /// `buildTextSpan` finds the grammar walk already done. Only the parse
-  /// moves: laying the spans out is still the UI thread's.
-  Future<void> parseInBackground() async {
-    final text = this.text;
-    final language = this.language;
-    final nodes = await _parseOnIsolate(text, language);
-    if (this.text != text || this.language != language) return;
-    _parsedText = text;
-    _parsedLanguage = language;
-    _parsedNodes = nodes;
-  }
 }
-
-// Top-level so the isolate closure captures only its two arguments; one
-// built inside a method would carry `this` and everything reachable from it.
-Future<List<Node>> _parseOnIsolate(String text, String language) =>
-    Isolate.run(() {
-      _registerLanguage(language);
-      return highlight.parse(text, language: language).nodes ?? <Node>[];
-    });
 
 final _registeredLanguages = <String>{};
 

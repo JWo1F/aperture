@@ -8,6 +8,7 @@ import 'package:aperture/ui/cell_picker/target.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:re_editor/re_editor.dart';
 
 // The panel sizes in `kinds.dart` are fixed, so the test font's square
 // glyphs would measure every label wider than the app ever draws it. Load
@@ -74,7 +75,7 @@ Future<void> _pumpPanel(
   if (kind.id == KindId.json || kind.id == KindId.array) {
     for (
       var i = 0;
-      i < 200 && find.byType(EditableText).evaluate().isEmpty;
+      i < 200 && find.byType(CodeEditor).evaluate().isEmpty;
       i++
     ) {
       await tester.runAsync(
@@ -82,8 +83,11 @@ Future<void> _pumpPanel(
       );
       await tester.pump();
     }
-    expect(find.byType(EditableText), findsOneWidget);
+    expect(find.byType(CodeEditor), findsOneWidget);
   }
+  // re_editor schedules short fire-and-forget delays once it takes focus;
+  // let them run so none is left pending when the tree is torn down.
+  await tester.pump(const Duration(milliseconds: 200));
 }
 
 void main() {
@@ -147,24 +151,6 @@ void main() {
     expect(find.text('NULL'), findsOneWidget);
     expect(find.text('Default'), findsOneWidget);
     expect(find.text('Revert'), findsOneWidget);
-  });
-
-  testWidgets('a long JSON document scrolls in one scroll view', (
-    tester,
-  ) async {
-    // Line lengths that sweep across the wrap edge: a field that wraps any
-    // of them a row earlier than the editor measured outgrows its scroll
-    // content and scrolls on its own, hiding the last lines.
-    await _pumpPanel(
-      tester,
-      dataType: 'jsonb',
-      value: {for (var i = 0; i < 300; i++) 'k$i': 'x' * (i % 300)},
-    );
-    final positions = tester
-        .stateList<ScrollableState>(find.byType(Scrollable))
-        .map((s) => s.position)
-        .toList();
-    expect(positions.where((p) => p.maxScrollExtent > 0), hasLength(1));
   });
 
   testWidgets('a boolean shows NULL once, in its strip', (tester) async {

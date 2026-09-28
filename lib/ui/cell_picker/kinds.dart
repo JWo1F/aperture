@@ -13,8 +13,6 @@ class Kind {
     required this.label,
     required this.color,
     required this.size,
-    this.multiline = false,
-    this.inputFormatters,
     this.withTimezone = false,
   });
 
@@ -22,8 +20,6 @@ class Kind {
   final String label;
   final Color color;
   final Size size;
-  final bool multiline;
-  final List<TextInputFormatter>? inputFormatters;
 
   /// Whether to show a timezone input row — set for `*tz` Postgres types.
   final bool withTimezone;
@@ -51,28 +47,24 @@ Kind get _kJson => Kind(
   label: 'json',
   color: AppColors.tJson,
   size: const Size(540, 340),
-  multiline: true,
 );
 Kind get _kArray => Kind(
   id: KindId.array,
   label: 'array',
   color: AppColors.tJson,
   size: const Size(540, 340),
-  multiline: true,
 );
 Kind get _kInt => Kind(
   id: KindId.text,
   label: 'int',
   color: AppColors.tNum,
   size: const Size(280, 120),
-  inputFormatters: [intFilter],
 );
 Kind get _kNumber => Kind(
   id: KindId.text,
   label: 'number',
   color: AppColors.tNum,
   size: const Size(280, 120),
-  inputFormatters: [numberFilter],
 );
 // Sizes are the sum of the fixed parts: header 30 + footer 38 + 2 of
 // border, plus the body — value line 36 + quick actions 32 for the moment
@@ -116,14 +108,12 @@ Kind get _kBytes => Kind(
   label: 'bytes',
   color: AppColors.textMuted,
   size: const Size(380, 200),
-  multiline: true,
 );
 Kind get _kString => Kind(
   id: KindId.text,
   label: 'string',
   color: AppColors.tStr,
   size: const Size(380, 200),
-  multiline: true,
 );
 
 /// Picks a picker shape. The column's `dataType` (from the catalog) is the

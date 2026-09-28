@@ -4,10 +4,10 @@ import 'dart:isolate';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:re_editor/re_editor.dart';
 
 import '../../state/workspace_tab.dart';
 import '../../theme/app_theme.dart';
-import '../widgets/code_editor.dart';
 import 'bodies/bool_body.dart';
 import 'bodies/calendar_body.dart';
 import 'bodies/datetime_body.dart';
@@ -108,11 +108,16 @@ class _PanelState extends State<Panel> {
           widget.target.originalValue,
           widget.target.pendingEdit,
         );
-        _state = TextEditorState(
-          controller: TextEditingController(text: text),
-          baseline: text,
-          isJson: false,
-        );
+        _state = _isNumber
+            ? NumberEditorState(
+                controller: TextEditingController(text: text),
+                baseline: text,
+              )
+            : TextEditorState(
+                controller: CodeLineEditingController.fromText(text),
+                baseline: text,
+                isJson: false,
+              );
         _ready = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _focus.requestFocus();
@@ -139,20 +144,11 @@ class _PanelState extends State<Panel> {
       // malformed array literal. Seeding the braces form means what the
       // user sees is what gets written.
       final text = await _seedTextOnIsolate(raw, pending, isJson: isJson);
-      final controller = isJson
-          ? CodeEditorController(text: text, language: 'json')
-          : TextEditingController(text: text);
-      if (controller is CodeEditorController) {
-        await controller.parseInBackground();
-      }
-      if (!mounted) {
-        controller.dispose();
-        return;
-      }
+      if (!mounted) return;
       _spinnerDelay?.cancel();
       setState(() {
         _state = TextEditorState(
-          controller: controller,
+          controller: CodeLineEditingController.fromText(text),
           baseline: text,
           isJson: isJson,
         );
@@ -174,6 +170,9 @@ class _PanelState extends State<Panel> {
     _focus.dispose();
     super.dispose();
   }
+
+  bool get _isNumber =>
+      widget.kind.label == 'number' || widget.kind.label == 'int';
 
   bool get _isDirty => _ready && _state.isDirty;
 
@@ -207,6 +206,8 @@ class _PanelState extends State<Panel> {
         setState(() => s.jsonError = null);
         widget.onCommit(CellLiteral(text));
       case TextEditorState s:
+        widget.onCommit(CellLiteral(s.controller.text));
+      case NumberEditorState s:
         widget.onCommit(CellLiteral(s.controller.text));
     }
   }
@@ -350,7 +351,22 @@ class _PanelState extends State<Panel> {
       onNull: () => widget.onCommit(const CellLiteral(null)),
     ),
     MomentEditorState s => _momentBody(s),
-    TextEditorState s => _textOrNumberBody(s),
+    NumberEditorState s => NumberBody(
+      controller: s.controller,
+      focus: _focus,
+      intOnly: widget.kind.label == 'int',
+      onChanged: () => setState(() {}),
+    ),
+    TextEditorState s => TextBody(
+      controller: s.controller,
+      focus: _focus,
+      isJson: s.isJson,
+      onChanged: () => setState(() {
+        // Clear the stale JSON error as soon as the user starts typing.
+        if (s.jsonError != null) s.jsonError = null;
+      }),
+      error: s.isJson ? s.jsonError : null,
+    ),
   };
 
   Widget _momentBody(MomentEditorState s) {
@@ -420,28 +436,4 @@ class _PanelState extends State<Panel> {
     ),
     _ => const SizedBox.shrink(),
   };
-
-  Widget _textOrNumberBody(TextEditorState s) {
-    final isNumber =
-        widget.kind.label == 'number' || widget.kind.label == 'int';
-    if (isNumber) {
-      return NumberBody(
-        controller: s.controller,
-        focus: _focus,
-        intOnly: widget.kind.label == 'int',
-        onChanged: () => setState(() {}),
-      );
-    }
-    return TextBody(
-      controller: s.controller,
-      focus: _focus,
-      multiline: widget.kind.multiline,
-      onChanged: () => setState(() {
-        // Clear the stale JSON error as soon as the user starts typing.
-        if (s.jsonError != null) s.jsonError = null;
-      }),
-      inputFormatters: widget.kind.inputFormatters,
-      error: s.isJson ? s.jsonError : null,
-    );
-  }
 }

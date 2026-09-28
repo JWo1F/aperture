@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
+import 'package:re_editor/re_editor.dart';
 
 import '../../models/value_format.dart';
 import '../../state/workspace_tab.dart';
@@ -14,6 +15,21 @@ sealed class EditorState {
   void disposeResources() {}
 }
 
+/// Plain [TextEditingController] for the number kinds' one-line field.
+final class NumberEditorState extends EditorState {
+  NumberEditorState({required this.controller, required this.baseline});
+
+  final TextEditingController controller;
+  final String baseline;
+
+  @override
+  bool get isDirty => controller.text != baseline;
+
+  @override
+  void disposeResources() => controller.dispose();
+}
+
+/// Text, bytes, JSON and arrays, edited in `re_editor`.
 final class TextEditorState extends EditorState {
   TextEditorState({
     required this.controller,
@@ -21,7 +37,7 @@ final class TextEditorState extends EditorState {
     required this.isJson,
   });
 
-  final TextEditingController controller;
+  final CodeLineEditingController controller;
   final String baseline;
   final bool isJson;
   String? jsonError;
@@ -59,8 +75,7 @@ final class MomentEditorState extends EditorState {
   final bool withTz;
 
   @override
-  bool get isDirty =>
-      value != baselineValue || (withTz && tz != baselineTz);
+  bool get isDirty => value != baselineValue || (withTz && tz != baselineTz);
 }
 
 // --- Initial state extraction -----------------------------------------
