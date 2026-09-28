@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/common.dart';
 
+const double quickActionsHeight = 32;
+
 /// Row of small action chips (Now / Today / shift) under the value line. The
-/// `primary` action lights in the accent, others stay quiet.
+/// `primary` action is tinted with the accent, the others stay quiet.
 class QuickActionsRow extends StatelessWidget {
   const QuickActionsRow({super.key, required this.children});
 
@@ -13,16 +15,14 @@ class QuickActionsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.bg,
-        border: Border(bottom: BorderSide(color: AppColors.hairline)),
-      ),
+      height: quickActionsHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      alignment: Alignment.centerLeft,
       child: Row(
         children: [
           for (var i = 0; i < children.length; i++) ...[
-            Expanded(child: children[i]),
-            if (i < children.length - 1)
-              Container(width: 1, height: 28, color: AppColors.hairline),
+            if (i > 0) const SizedBox(width: 2),
+            children[i],
           ],
         ],
       ),
@@ -46,34 +46,30 @@ class QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color fg = primary ? AppColors.accent : AppColors.textSecondary;
     return Hoverable(
       onTap: onTap,
       builder: (context, hovering) {
-        final Color bg = primary && hovering
+        final Color fg = primary
+            ? AppColors.accent
+            : (hovering ? AppColors.textPrimary : AppColors.textSecondary);
+        final Color hoverBg = primary
             ? AppColors.accentSoft
-            : (hovering ? AppColors.sidebarRowHover : Colors.transparent);
-        final Color fgHover = hovering && !primary ? AppColors.textPrimary : fg;
+            : AppColors.surfaceHover;
         return Container(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-          alignment: Alignment.center,
-          color: bg,
+          height: 22,
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          decoration: BoxDecoration(
+            color: hovering ? hoverBg : hoverBg.withValues(alpha: 0),
+            borderRadius: Radii.brSm,
+          ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
               if (icon != null) ...[
-                Icon(icon, size: 10, color: fgHover),
-                const SizedBox(width: 6),
+                Icon(icon, size: 11, color: fg),
+                const SizedBox(width: 5),
               ],
-              Text(
-                label,
-                style: AppTheme.mono(
-                  size: 11.5,
-                  color: fgHover,
-                  weight: primary ? FontWeight.w600 : FontWeight.w400,
-                ),
-              ),
+              Text(label, style: AppTheme.ui(size: 11.5, color: fg)),
             ],
           ),
         );

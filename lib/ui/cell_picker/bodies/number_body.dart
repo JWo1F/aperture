@@ -5,8 +5,7 @@ import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 import '../kinds.dart';
 
-/// Right-aligned mono input + vertical stepper for the number kind.
-/// Matches the design's `.num-field` / `.num-steppers` layout.
+/// Right-aligned mono input with a ±1 stepper on its trailing edge.
 class NumberBody extends StatefulWidget {
   const NumberBody({
     super.key,
@@ -36,58 +35,43 @@ class _NumberBodyState extends State<NumberBody> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.bg,
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+    return Padding(
+      padding: const EdgeInsets.all(10),
       child: Container(
+        height: 30,
         decoration: BoxDecoration(
-          color: AppColors.bgDeep,
-          borderRadius: BorderRadius.circular(5),
+          color: AppColors.bg,
+          borderRadius: Radii.brSm,
           border: Border.all(color: AppColors.border),
         ),
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: widget.controller,
-                  focusNode: widget.focus,
-                  textAlign: TextAlign.right,
-                  cursorColor: AppColors.accent,
-                  inputFormatters: [
-                    widget.intOnly ? intFilter : numberFilter,
-                  ],
-                  style: AppTheme.mono(size: 12, color: AppColors.textPrimary)
-                      .copyWith(
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                  decoration: const InputDecoration(
-                    isCollapsed: true,
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                  ),
-                  onChanged: (_) => widget.onChanged(),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: widget.controller,
+                focusNode: widget.focus,
+                textAlign: TextAlign.right,
+                cursorColor: AppColors.accent,
+                inputFormatters: [widget.intOnly ? intFilter : numberFilter],
+                style: AppTheme.mono(
+                  size: 12.5,
+                  color: AppColors.textPrimary,
+                ).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                decoration: const InputDecoration(
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 8),
                 ),
+                onChanged: (_) => widget.onChanged(),
               ),
-              Container(width: 1, color: AppColors.border),
-              Column(
-                children: [
-                  _StepperBtn(
-                    icon: Hgi.arrowUp01,
-                    onTap: () => _bump(1),
-                  ),
-                  Container(width: 22, height: 1, color: AppColors.border),
-                  _StepperBtn(
-                    icon: Hgi.arrowDown01,
-                    onTap: () => _bump(-1),
-                  ),
-                ],
-              ),
-            ],
-          ),
+            ),
+            Column(
+              children: [
+                _StepperBtn(icon: Hgi.arrowUp01, onTap: () => _bump(1)),
+                _StepperBtn(icon: Hgi.arrowDown01, onTap: () => _bump(-1)),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -105,14 +89,13 @@ class _StepperBtn extends StatelessWidget {
     return Hoverable(
       onTap: onTap,
       builder: (context, hovering) => Container(
-        width: 22,
-        height: 18,
+        width: 20,
+        height: 14,
         alignment: Alignment.center,
-        color: hovering ? AppColors.surfaceHover : Colors.transparent,
         child: Icon(
           icon,
-          size: 14,
-          color: hovering ? AppColors.textPrimary : AppColors.textMuted,
+          size: 11,
+          color: hovering ? AppColors.textPrimary : AppColors.text4,
         ),
       ),
     );

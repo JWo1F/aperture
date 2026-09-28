@@ -17,7 +17,6 @@ import 'formatters.dart';
 import 'kinds.dart';
 import 'quick_actions.dart';
 import 'target.dart';
-import 'tz_input.dart';
 import 'value_line.dart';
 import '../../theme/hugeicons.dart';
 
@@ -169,25 +168,6 @@ class _PanelState extends State<Panel> {
 
   void _setDefault() => widget.onCommit(const CellDefault());
 
-  /// Footer hint string, mirroring the design's `.ce-hint`: commit affordance
-  /// changes for one-line kinds (Enter commits) vs multi-line / picker kinds
-  /// (⌘↵ commits).
-  String _footerHint() {
-    if (widget.target.isPrimaryKey) return 'cannot edit primary key';
-    switch (widget.kind.id) {
-      case KindId.text:
-        return '↵ commit · esc cancel';
-      case KindId.bool:
-        return 'esc cancel';
-      case KindId.json:
-      case KindId.array:
-      case KindId.date:
-      case KindId.time:
-      case KindId.datetime:
-        return '⌘↵ commit · esc cancel';
-    }
-  }
-
   MomentEditorState get _moment => _state as MomentEditorState;
 
   /// Mutates the moment through [f] and bumps [_resetTick] so child widgets
@@ -242,20 +222,16 @@ class _PanelState extends State<Panel> {
         child: Material(
           color: Colors.transparent,
           child: Container(
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: AppColors.surface,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.accent, width: 1.5),
+              borderRadius: Radii.brMd,
+              border: Border.all(color: AppColors.border),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.shadow,
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-                BoxShadow(
-                  color: AppColors.accentSoft,
-                  blurRadius: 0,
-                  spreadRadius: 4,
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
@@ -265,16 +241,16 @@ class _PanelState extends State<Panel> {
                 Header(target: widget.target, kind: widget.kind),
                 Expanded(child: _buildBody()),
                 Footer(
-                  hasPending: widget.target.pendingEdit != null,
                   canSave: _isDirty,
-                  canBeNull: widget.target.canBeNull,
-                  hasDefault: widget.target.hasDefault,
-                  kindHint: _footerHint(),
+                  showNull:
+                      widget.target.canBeNull && widget.kind.id != KindId.bool,
+                  showDefault: widget.target.hasDefault,
                   onSave: _save,
-                  onCancel: widget.onClose,
                   onSetNull: _setNull,
                   onSetDefault: _setDefault,
-                  onRevert: widget.onRevert,
+                  onRevert: widget.target.pendingEdit == null
+                      ? null
+                      : widget.onRevert,
                 ),
               ],
             ),
@@ -287,6 +263,7 @@ class _PanelState extends State<Panel> {
   Widget _buildBody() => switch (_state) {
     BoolEditorState s => BoolBody(
       value: s.value,
+      canBeNull: widget.target.canBeNull,
       onChange: (v) => setState(() => s.value = v),
       onNull: () => widget.onCommit(const CellLiteral(null)),
     ),
@@ -354,24 +331,10 @@ class _PanelState extends State<Panel> {
       onChange: (d) =>
           setState(() => s.value = DateTime(d.year, d.month, d.day)),
     ),
-    KindId.time =>
-      s.withTz
-          ? Container(
-              color: AppColors.bg,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: TzInput(
-                value: s.tz,
-                onChange: (tz) => setState(() => s.tz = tz),
-              ),
-            )
-          : const SizedBox.shrink(),
     KindId.datetime => DateTimeBody(
       initial: s.value,
-      withTz: s.withTz,
-      tz: s.tz,
       resetTick: _resetTick,
       onChange: (dt) => setState(() => s.value = dt),
-      onTzChange: (tz) => setState(() => s.tz = tz),
     ),
     _ => const SizedBox.shrink(),
   };

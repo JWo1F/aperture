@@ -1,93 +1,77 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
-import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 
+/// true / false / NULL as one segmented strip. NULL commits at once, the
+/// same as the footer's NULL on other kinds, so the footer leaves it out
+/// for booleans.
 class BoolBody extends StatelessWidget {
   const BoolBody({
     super.key,
     required this.value,
+    required this.canBeNull,
     required this.onChange,
     required this.onNull,
   });
 
   final bool? value;
+  final bool canBeNull;
   final ValueChanged<bool> onChange;
   final VoidCallback onNull;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.bg,
-      padding: const EdgeInsets.all(6),
-      child: Row(
-        children: [
-          _option(
-            label: 'true',
-            icon: Hgi.tick02,
-            selected: value == true,
-            onTap: () => onChange(true),
-          ),
-          const SizedBox(width: 4),
-          _option(
-            label: 'false',
-            icon: Hgi.cancel01,
-            selected: value == false,
-            onTap: () => onChange(false),
-          ),
-          const SizedBox(width: 4),
-          _option(
-            label: 'NULL',
-            icon: Hgi.minusSign,
-            selected: value == null,
-            onTap: onNull,
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: Container(
+        height: 28,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: AppColors.bg,
+          borderRadius: Radii.brSm,
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            _segment('true', value == true, () => onChange(true)),
+            _segment('false', value == false, () => onChange(false)),
+            _segment('NULL', value == null, canBeNull ? onNull : null),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _option({
-    required String label,
-    required IconData icon,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
+  Widget _segment(String label, bool selected, VoidCallback? onTap) {
+    final enabled = onTap != null;
     return Expanded(
       child: Hoverable(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
         onTap: onTap,
-        builder: (_, hover) => Container(
-          height: 28,
+        builder: (_, hovering) => Container(
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected
-                ? AppColors.accentSoft
-                : (hover ? AppColors.surfaceHover : Colors.transparent),
+                ? AppColors.accent
+                : (hovering && enabled
+                      ? AppColors.surfaceHover
+                      : AppColors.surfaceHover.withValues(alpha: 0)),
             borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: selected ? AppColors.accent : AppColors.border,
-            ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 10,
-                color: selected ? AppColors.textPrimary : AppColors.textMuted,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: AppTheme.mono(
-                  size: 11,
-                  color: selected
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
-                ),
-              ),
-            ],
+          child: Text(
+            label,
+            style: AppTheme.mono(
+              size: 11.5,
+              weight: FontWeight.w500,
+              color: selected
+                  ? Colors.white
+                  : !enabled
+                  ? AppColors.text4
+                  : (hovering
+                        ? AppColors.textPrimary
+                        : AppColors.textSecondary),
+            ),
           ),
         ),
       ),

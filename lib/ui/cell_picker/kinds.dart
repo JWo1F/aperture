@@ -44,7 +44,7 @@ Kind get _kBool => Kind(
   id: KindId.bool,
   label: 'bool',
   color: AppColors.tBool,
-  size: const Size(296, 130),
+  size: const Size(280, 118),
 );
 Kind get _kJson => Kind(
   id: KindId.json,
@@ -64,71 +64,65 @@ Kind get _kInt => Kind(
   id: KindId.text,
   label: 'int',
   color: AppColors.tNum,
-  size: const Size(296, 132),
+  size: const Size(280, 120),
   inputFormatters: [intFilter],
 );
 Kind get _kNumber => Kind(
   id: KindId.text,
   label: 'number',
   color: AppColors.tNum,
-  size: const Size(296, 132),
+  size: const Size(280, 120),
   inputFormatters: [numberFilter],
 );
-// Widths and heights are sized to fit each picker's tightest constraint:
-//   - Width: the footer's pill cluster (set NULL · DEFAULT · cancel · save ⌘↵
-//     plus the optional `revert` chip) consistently wants ~290px before the
-//     `kindHint` Expanded text collapses, so every date/time variant lives at
-//     ≥ 296px; tz-bearing variants add room for the `@` punct + tz chip in
-//     the mono value line.
-//   - Height: header + value line + quick-actions row + body + footer must
-//     all fit without `Expanded` having to crush the calendar's fixed 30px
-//     rows. Datetime's body is just the calendar (~242) — h/m/s editing
-//     happens via the value-line segments above. The tz variant adds ~50 for
-//     a divider + TZ input row beneath the calendar.
+// Sizes are the sum of the fixed parts: header 30 + footer 38 + 2 of
+// border, plus the body — value line 36 + quick actions 32 for the moment
+// kinds, and the calendar's 208 for date and datetime. The `*tz` datetime is
+// wider for the zone field at the end of its value line; timetz fits at the
+// base width.
 Kind get _kDate => Kind(
   id: KindId.date,
   label: 'date',
   color: AppColors.tDate,
-  size: const Size(296, 384),
+  size: const Size(280, 346),
 );
 Kind get _kTime => Kind(
   id: KindId.time,
   label: 'time',
   color: AppColors.tDate,
-  size: const Size(296, 140),
+  size: const Size(280, 138),
 );
 Kind get _kTimeTz => Kind(
   id: KindId.time,
   label: 'timetz',
   color: AppColors.tDate,
-  size: const Size(320, 190),
+  size: const Size(280, 138),
   withTimezone: true,
 );
 Kind get _kDatetime => Kind(
   id: KindId.datetime,
   label: 'timestamp',
   color: AppColors.tDate,
-  size: const Size(320, 400),
+  size: const Size(280, 346),
 );
 Kind get _kDatetimeTz => Kind(
   id: KindId.datetime,
   label: 'timestamptz',
   color: AppColors.tDate,
-  size: const Size(340, 460),
+  size: const Size(348, 346),
   withTimezone: true,
 );
 Kind get _kBytes => Kind(
   id: KindId.text,
   label: 'bytes',
   color: AppColors.textMuted,
-  size: const Size(380, 220),
+  size: const Size(380, 200),
   multiline: true,
 );
 Kind get _kString => Kind(
   id: KindId.text,
   label: 'string',
   color: AppColors.tStr,
-  size: const Size(380, 220),
+  size: const Size(380, 200),
   multiline: true,
 );
 

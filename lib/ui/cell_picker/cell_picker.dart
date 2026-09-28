@@ -9,11 +9,11 @@ export 'target.dart' show CellEditTarget;
 
 /// Opens an overlay editor anchored to the cell's top-left corner. The shape
 /// of the picker depends on the value type — text grows multi-line, JSON gets
-/// syntax highlighting + room, booleans become a two-button toggle, dates
-/// show a calendar, times show an HH:MM:SS spinner, datetimes combine both.
+/// syntax highlighting + room, booleans become a true / false / NULL strip,
+/// dates show a calendar, times an editable HH:MM:SS line, datetimes both.
 ///
-/// Set NULL / Set DEFAULT are disabled when the column metadata forbids them
-/// (via [CellEditTarget.canBeNull] / [CellEditTarget.hasDefault]).
+/// NULL / Default are hidden when the column metadata forbids them (via
+/// [CellEditTarget.canBeNull] / [CellEditTarget.hasDefault]).
 void showCellPicker(
   BuildContext context, {
   required Rect anchorRect,

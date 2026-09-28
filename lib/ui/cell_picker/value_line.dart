@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../theme/app_theme.dart';
-import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
-import '../widgets/context_menu.dart';
 import 'formatters.dart';
 import 'kinds.dart';
+import 'tz_input.dart';
 
-/// Mono value line shown above date / time / datetime pickers — the design's
-/// `.dt-valueline`, one tabular row showing the chosen moment in
-/// `yyyy-mm-dd hh:mm:ss[@tz]` form with arrow-key bump on focused segments.
+const double valueLineHeight = 36;
+
+/// Mono value line shown above date / time / datetime pickers: the chosen
+/// moment as `yyyy-mm-dd hh:mm:ss`, each segment click-to-type, with the
+/// zone field at the end for `*tz` columns.
 class MonoValueLine extends StatelessWidget {
   const MonoValueLine({
     super.key,
@@ -30,10 +31,12 @@ class MonoValueLine extends StatelessWidget {
   final ValueChanged<String> onTzChange;
 
   void _setYear(int v) => onChange(moment.copyWith(year: v));
-  void _setMonth(int v) => onChange(moment.copyWith(
-    month: v,
-    day: moment.day.clamp(1, daysInMonth(moment.year, v)),
-  ));
+  void _setMonth(int v) => onChange(
+    moment.copyWith(
+      month: v,
+      day: moment.day.clamp(1, daysInMonth(moment.year, v)),
+    ),
+  );
   void _setDay(int v) => onChange(
     moment.copyWith(day: v.clamp(1, daysInMonth(moment.year, moment.month))),
   );
@@ -47,11 +50,8 @@ class MonoValueLine extends StatelessWidget {
     final hasTime = kind == KindId.time || kind == KindId.datetime;
 
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.bgDeep,
-        border: Border(bottom: BorderSide(color: AppColors.hairline)),
-      ),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      height: valueLineHeight,
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
       child: Row(
         children: [
           if (hasDate) ...[
@@ -112,8 +112,8 @@ class MonoValueLine extends StatelessWidget {
             ),
           ],
           if (withTz && hasTime) ...[
-            const _AtPunct(),
-            _TzChip(value: tz, onChange: onTzChange),
+            const Spacer(),
+            TzField(value: tz, onChange: onTzChange),
           ],
         ],
       ),
@@ -287,83 +287,6 @@ class _Punct extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 1),
       child: Text(text, style: AppTheme.mono(size: 14, color: AppColors.text4)),
-    );
-  }
-}
-
-class _AtPunct extends StatelessWidget {
-  const _AtPunct();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, right: 6),
-      child: Text('@', style: AppTheme.mono(size: 14, color: AppColors.text4)),
-    );
-  }
-}
-
-class _TzChip extends StatelessWidget {
-  const _TzChip({required this.value, required this.onChange});
-
-  final String value;
-  final ValueChanged<String> onChange;
-
-  static const _options = [
-    ('-08', 'PST'),
-    ('-07', 'PDT/MST'),
-    ('-05', 'EST'),
-    ('+00', 'UTC'),
-    ('+01', 'CET'),
-    ('+05:30', 'IST'),
-    ('+09', 'JST'),
-  ];
-
-  void _open(BuildContext context) {
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final origin = box.localToGlobal(Offset(0, box.size.height + 4));
-    showContextMenu(
-      context,
-      globalPosition: origin,
-      entries: [
-        for (final (tz, lbl) in _options)
-          CmItem(
-            label: tz,
-            shortcut: lbl,
-            icon: tz == value ? Hgi.tick02 : null,
-            onTap: () => onChange(tz),
-          ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final display = value.trim().isEmpty ? '+00' : value;
-    return Builder(
-      builder: (context) => Hoverable(
-        cursor: SystemMouseCursors.click,
-        onTap: () => _open(context),
-        builder: (context, hovering) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-          decoration: BoxDecoration(
-            color: hovering ? AppColors.accentSoft : Colors.transparent,
-            borderRadius: BorderRadius.circular(3),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                display,
-                style: AppTheme.mono(size: 14, color: AppColors.accent),
-              ),
-              const SizedBox(width: 3),
-              Icon(Hgi.arrowDown01, size: 10, color: AppColors.text4),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

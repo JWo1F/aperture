@@ -39,24 +39,20 @@ class _CalendarBodyState extends State<CalendarBody> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.bg,
-      child: CalendarGrid(
-        key: ValueKey('cal-${widget.resetTick}'),
-        initial: _current,
-        onChange: (d) {
-          setState(() => _current = d);
-          widget.onChange(d);
-        },
-      ),
+    return CalendarGrid(
+      key: ValueKey('cal-${widget.resetTick}'),
+      initial: _current,
+      onChange: (d) {
+        setState(() => _current = d);
+        widget.onChange(d);
+      },
     );
   }
 }
 
-/// Grid-style calendar matching the design handoff — hairlines around every
-/// cell, a 3px accent dot under today, and a solid-accent square highlight on
-/// the selected day (no pill rounding). Exposed so DateTimeBody can embed it
-/// directly without going through CalendarBody's resetTick gating.
+/// Month grid: the selected day is a filled accent tile, today is drawn in
+/// the accent. Exposed so DateTimeBody can embed it directly without going
+/// through CalendarBody's resetTick gating.
 class CalendarGrid extends StatefulWidget {
   const CalendarGrid({
     super.key,
@@ -169,43 +165,19 @@ class _CalendarGridState extends State<CalendarGrid> {
   }
 
   Widget _header() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
-      decoration: BoxDecoration(
-        color: AppColors.bgDeep,
-        border: Border(bottom: BorderSide(color: AppColors.hairline)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 6, 2),
       child: Row(
         children: [
-          _navBtn(Hgi.chevronLeft, _prev, 'prev month'),
           Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  _months[_vm - 1].toUpperCase(),
-                  style: AppTheme.mono(
-                    size: 11,
-                    color: AppColors.textPrimary,
-                    weight: FontWeight.w600,
-                  ).copyWith(letterSpacing: 0.04 * 11),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '$_vy',
-                  style: AppTheme.mono(
-                    size: 10.5,
-                    color: AppColors.textMuted,
-                    weight: FontWeight.w500,
-                  ),
-                ),
-              ],
+            child: Text(
+              '${_months[_vm - 1]} $_vy',
+              style: AppTheme.ui(size: 12, weight: FontWeight.w600),
             ),
           ),
-          _navBtn(Hgi.record, _jumpToday, 'jump to current month'),
-          _navBtn(Hgi.chevronRight, _next, 'next month'),
+          _navBtn(Hgi.chevronLeft, _prev, 'Previous month'),
+          _navBtn(Hgi.record, _jumpToday, 'Current month'),
+          _navBtn(Hgi.chevronRight, _next, 'Next month'),
         ],
       ),
     );
@@ -221,12 +193,14 @@ class _CalendarGridState extends State<CalendarGrid> {
           height: 22,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: hovering ? AppColors.surfaceHover : Colors.transparent,
+            color: hovering
+                ? AppColors.surfaceHover
+                : AppColors.surfaceHover.withValues(alpha: 0),
             borderRadius: Radii.brSm,
           ),
           child: Icon(
             icon,
-            size: icon == Hgi.record ? 8 : 14,
+            size: icon == Hgi.record ? 7 : 13,
             color: hovering ? AppColors.textPrimary : AppColors.textMuted,
           ),
         ),
@@ -235,33 +209,19 @@ class _CalendarGridState extends State<CalendarGrid> {
   }
 
   Widget _dow() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.bgDeep,
-        border: Border(bottom: BorderSide(color: AppColors.hairline)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
-          for (final l in const [
-            'SUN',
-            'MON',
-            'TUE',
-            'WED',
-            'THU',
-            'FRI',
-            'SAT',
-          ])
+          for (final l in const ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'])
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(
-                  l,
-                  textAlign: TextAlign.center,
-                  style: AppTheme.mono(
-                    size: 9.5,
-                    color: AppColors.text4,
-                    weight: FontWeight.w600,
-                  ).copyWith(letterSpacing: 0.06 * 9.5),
+              child: SizedBox(
+                height: 18,
+                child: Center(
+                  child: Text(
+                    l,
+                    style: AppTheme.ui(size: 10, color: AppColors.text4),
+                  ),
                 ),
               ),
             ),
@@ -271,21 +231,24 @@ class _CalendarGridState extends State<CalendarGrid> {
   }
 
   Widget _grid(List<_CalCell> cells, DateTime today) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var r = 0; r < 6; r++)
-          Row(
-            children: [
-              for (var c = 0; c < 7; c++)
-                Expanded(child: _cellWidget(cells[r * 7 + c], today, c)),
-            ],
-          ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var r = 0; r < 6; r++)
+            Row(
+              children: [
+                for (var c = 0; c < 7; c++)
+                  Expanded(child: _cellWidget(cells[r * 7 + c], today)),
+              ],
+            ),
+        ],
+      ),
     );
   }
 
-  Widget _cellWidget(_CalCell cell, DateTime today, int colIndex) {
+  Widget _cellWidget(_CalCell cell, DateTime today) {
     final isToday =
         !cell.outside &&
         cell.day == today.day &&
@@ -328,49 +291,26 @@ class _CalendarGridState extends State<CalendarGrid> {
       builder: (context, hovering) {
         final Color bg = isSel
             ? AppColors.accent
-            : (hovering && !cell.outside
-                  ? AppColors.sidebarRowHover
-                  : Colors.transparent);
+            : (hovering
+                  ? AppColors.surfaceHover
+                  : AppColors.surfaceHover.withValues(alpha: 0));
         final Color fg = isSel
             ? Colors.white
             : cell.outside
-            ? AppColors.text4.withValues(alpha: 0.45)
-            : (isToday ? AppColors.textPrimary : AppColors.textSecondary);
+            ? AppColors.text4
+            : (isToday ? AppColors.accent : AppColors.textSecondary);
         return Container(
-          height: 30,
-          decoration: BoxDecoration(
-            color: bg,
-            border: Border(
-              right: colIndex == 6
-                  ? BorderSide.none
-                  : BorderSide(color: AppColors.hairline),
-              bottom: BorderSide(color: AppColors.hairline),
+          height: 24,
+          margin: const EdgeInsets.all(1),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: bg, borderRadius: Radii.brSm),
+          child: Text(
+            '${cell.day}',
+            style: AppTheme.mono(
+              size: 11.5,
+              color: fg,
+              weight: FontWeight.w500,
             ),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Text(
-                '${cell.day}',
-                style: AppTheme.mono(
-                  size: 11.5,
-                  color: fg,
-                  weight: isToday || isSel ? FontWeight.w600 : FontWeight.w400,
-                ),
-              ),
-              if (isToday)
-                Positioned(
-                  bottom: 4,
-                  child: Container(
-                    width: 3,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: isSel ? Colors.white : AppColors.accent,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-            ],
           ),
         );
       },

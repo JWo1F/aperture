@@ -1,20 +1,35 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/hugeicons.dart';
+import '../widgets/common.dart';
+import '../widgets/context_menu.dart';
 
-/// Free-form timezone text input — accepts `UTC`, `+02:00`, `Europe/Berlin`, …
-class TzInput extends StatefulWidget {
-  const TzInput({super.key, required this.value, required this.onChange});
+/// Inline timezone field for the value line: free text (`UTC`, `+02:00`,
+/// `Europe/Berlin`, …) plus a chevron with common offsets. Empty means no
+/// zone is written, so the server applies the session's.
+class TzField extends StatefulWidget {
+  const TzField({super.key, required this.value, required this.onChange});
 
   final String value;
   final ValueChanged<String> onChange;
 
   @override
-  State<TzInput> createState() => _TzInputState();
+  State<TzField> createState() => _TzFieldState();
 }
 
-class _TzInputState extends State<TzInput> {
+class _TzFieldState extends State<TzField> {
   late final TextEditingController _c;
+
+  static const _presets = [
+    ('-08', 'PST'),
+    ('-07', 'PDT/MST'),
+    ('-05', 'EST'),
+    ('+00', 'UTC'),
+    ('+01', 'CET'),
+    ('+05:30', 'IST'),
+    ('+09', 'JST'),
+  ];
 
   @override
   void initState() {
@@ -23,7 +38,7 @@ class _TzInputState extends State<TzInput> {
   }
 
   @override
-  void didUpdateWidget(TzInput old) {
+  void didUpdateWidget(TzField old) {
     super.didUpdateWidget(old);
     if (old.value != widget.value && _c.text != widget.value) {
       _c.text = widget.value;
@@ -36,58 +51,68 @@ class _TzInputState extends State<TzInput> {
     super.dispose();
   }
 
+  void _openPresets(BuildContext context) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    showContextMenu(
+      context,
+      globalPosition: box.localToGlobal(Offset(0, box.size.height + 4)),
+      entries: [
+        for (final (tz, label) in _presets)
+          CmItem(
+            label: tz,
+            shortcut: label,
+            icon: tz == widget.value ? Hgi.tick02 : null,
+            onTap: () => widget.onChange(tz),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceAlt,
-            borderRadius: Radii.brSm,
-          ),
-          child: Text(
-            'TZ',
-            style: AppTheme.mono(
-              size: 10,
-              color: AppColors.textMuted,
-              weight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: TextField(
-            controller: _c,
-            cursorColor: AppColors.accent,
-            onChanged: widget.onChange,
-            style: AppTheme.mono(size: 12),
-            decoration: InputDecoration(
-              isCollapsed: true,
-              hintText: 'UTC / +02:00 / Europe/Berlin',
-              hintStyle: AppTheme.mono(size: 11.5, color: AppColors.textMuted),
-              filled: true,
-              fillColor: AppColors.surface,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 6,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: Radii.brSm,
-                borderSide: BorderSide(color: AppColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: Radii.brSm,
-                borderSide: BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: Radii.brSm,
-                borderSide: BorderSide(color: AppColors.accent),
+    return Container(
+      width: 88,
+      height: 24,
+      decoration: BoxDecoration(
+        color: AppColors.bg,
+        borderRadius: Radii.brSm,
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _c,
+              cursorColor: AppColors.accent,
+              onChanged: widget.onChange,
+              style: AppTheme.mono(size: 12, color: AppColors.accent),
+              decoration: InputDecoration(
+                isCollapsed: true,
+                border: InputBorder.none,
+                hintText: 'session',
+                hintStyle: AppTheme.ui(size: 11, color: AppColors.text4),
+                contentPadding: const EdgeInsets.only(left: 6, top: 4),
               ),
             ),
           ),
-        ),
-      ],
+          Builder(
+            builder: (context) => Hoverable(
+              onTap: () => _openPresets(context),
+              builder: (context, hovering) => Container(
+                width: 18,
+                height: 22,
+                alignment: Alignment.center,
+                child: Icon(
+                  Hgi.arrowDown01,
+                  size: 11,
+                  color: hovering ? AppColors.textPrimary : AppColors.text4,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

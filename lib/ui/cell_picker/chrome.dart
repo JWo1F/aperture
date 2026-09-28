@@ -7,6 +7,9 @@ import '../widgets/common.dart';
 import 'kinds.dart';
 import 'target.dart';
 
+const double headerHeight = 30;
+const double footerHeight = 38;
+
 class Header extends StatelessWidget {
   const Header({super.key, required this.target, required this.kind});
 
@@ -15,14 +18,14 @@ class Header extends StatelessWidget {
 
   ({String label, Color color})? _flag() {
     if (target.isPrimaryKey) {
-      return (label: 'read-only', color: AppColors.warn);
+      return (label: 'Primary key', color: AppColors.warn);
     }
     return switch (target.pendingEdit) {
       CellLiteral(:final value) when value == null => (
         label: 'NULL',
         color: AppColors.accent,
       ),
-      CellLiteral() => (label: 'edited', color: AppColors.accent),
+      CellLiteral() => (label: 'Edited', color: AppColors.accent),
       CellDefault() => (label: 'DEFAULT', color: AppColors.accent),
       null => null,
     };
@@ -33,18 +36,18 @@ class Header extends StatelessWidget {
     final flag = _flag();
     final typeLabel = target.columnDataType ?? kind.label;
     return Container(
+      height: headerHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface2,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+        border: Border(bottom: BorderSide(color: AppColors.hairline)),
       ),
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
       child: Row(
         children: [
           if (target.isPrimaryKey) ...[
-            Icon(Hgi.key01, size: 10, color: AppColors.accent),
+            Icon(Hgi.key01, size: 11, color: AppColors.warn),
             const SizedBox(width: 6),
           ] else if (target.isForeignKey) ...[
-            Icon(Hgi.arrowUpRight01, size: 10, color: AppColors.tFk),
+            Icon(Hgi.arrowUpRight01, size: 11, color: AppColors.tFk),
             const SizedBox(width: 6),
           ],
           Flexible(
@@ -53,9 +56,9 @@ class Header extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTheme.mono(
-                size: 10.5,
+                size: 11.5,
                 color: AppColors.textPrimary,
-                weight: FontWeight.w600,
+                weight: FontWeight.w500,
               ),
             ),
           ),
@@ -65,19 +68,13 @@ class Header extends StatelessWidget {
               typeLabel,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
+              style: AppTheme.mono(size: 11, color: AppColors.textMuted),
             ),
           ),
           if (flag != null) ...[
             const Spacer(),
-            Text(
-              flag.label,
-              style: AppTheme.mono(
-                size: 10,
-                color: flag.color,
-                weight: FontWeight.w500,
-              ),
-            ),
+            const SizedBox(width: 8),
+            Text(flag.label, style: AppTheme.ui(size: 11, color: flag.color)),
           ],
         ],
       ),
@@ -85,134 +82,119 @@ class Header extends StatelessWidget {
   }
 }
 
+/// Value shortcuts on the left, Save on the right. NULL and DEFAULT are
+/// left out entirely when the column forbids them rather than shown
+/// disabled; closing is Esc or a click outside, so there is no Cancel.
 class Footer extends StatelessWidget {
   const Footer({
     super.key,
-    required this.hasPending,
     required this.canSave,
-    required this.canBeNull,
-    required this.hasDefault,
-    required this.kindHint,
+    required this.showNull,
+    required this.showDefault,
     required this.onSave,
-    required this.onCancel,
     required this.onSetNull,
     required this.onSetDefault,
     required this.onRevert,
   });
 
-  final bool hasPending;
   final bool canSave;
-  final bool canBeNull;
-  final bool hasDefault;
-  final String kindHint;
+  final bool showNull;
+  final bool showDefault;
   final VoidCallback onSave;
-  final VoidCallback onCancel;
   final VoidCallback onSetNull;
   final VoidCallback onSetDefault;
+
+  /// Null when the cell has no pending edit to revert.
   final VoidCallback? onRevert;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: footerHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       decoration: BoxDecoration(
-        color: AppColors.bgDeep,
-        border: Border(top: BorderSide(color: AppColors.border)),
+        border: Border(top: BorderSide(color: AppColors.hairline)),
       ),
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              kindHint,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTheme.mono(size: 10.5, color: AppColors.textMuted),
-            ),
-          ),
-          if (hasPending) ...[
-            _PillButton(label: 'revert', onPressed: onRevert),
-            const SizedBox(width: 4),
-          ],
-          _PillButton(
-            label: 'set NULL',
-            disabled: !canBeNull,
-            onPressed: canBeNull ? onSetNull : null,
-          ),
-          const SizedBox(width: 4),
-          _PillButton(
-            label: 'DEFAULT',
-            disabled: !hasDefault,
-            onPressed: hasDefault ? onSetDefault : null,
-          ),
-          const SizedBox(width: 6),
-          _PillButton(label: 'cancel', onPressed: onCancel),
-          const SizedBox(width: 4),
-          _PillButton(
-            label: 'save  ⌘↵',
-            primary: true,
-            onPressed: canSave ? onSave : null,
-          ),
+          if (showNull) _TextAction(label: 'NULL', onTap: onSetNull),
+          if (showDefault) _TextAction(label: 'Default', onTap: onSetDefault),
+          if (onRevert != null) _TextAction(label: 'Revert', onTap: onRevert!),
+          const Spacer(),
+          _SaveButton(onTap: canSave ? onSave : null),
         ],
       ),
     );
   }
 }
 
-/// Small mono pill button used in the cell editor footer for set NULL /
-/// DEFAULT / cancel / save. Primary variant lights the accent.
-class _PillButton extends StatelessWidget {
-  const _PillButton({
-    required this.label,
-    required this.onPressed,
-    this.disabled = false,
-    this.primary = false,
-  });
+class _TextAction extends StatelessWidget {
+  const _TextAction({required this.label, required this.onTap});
 
   final String label;
-  final VoidCallback? onPressed;
-  final bool disabled;
-  final bool primary;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final enabled = onPressed != null && !disabled;
+    return Hoverable(
+      onTap: onTap,
+      builder: (context, hovering) => Container(
+        height: 24,
+        padding: const EdgeInsets.symmetric(horizontal: 7),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: hovering
+              ? AppColors.surfaceHover
+              : AppColors.surfaceHover.withValues(alpha: 0),
+          borderRadius: Radii.brSm,
+        ),
+        child: Text(
+          label,
+          style: AppTheme.ui(
+            size: 11.5,
+            color: hovering ? AppColors.textPrimary : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SaveButton extends StatelessWidget {
+  const _SaveButton({required this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
     return Hoverable(
       cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-      onTap: enabled ? onPressed : null,
-      builder: (context, hovering) {
-        final Color bg = primary
-            ? (enabled
-                  ? (hovering ? AppColors.accentHover : AppColors.accent)
-                  : AppColors.accent.withValues(alpha: 0.4))
-            : (hovering && enabled
-                  ? AppColors.surfaceHover
-                  : AppColors.surfaceHover.withValues(alpha: 0));
-        final Color border = primary
-            ? Colors.transparent
-            : (enabled ? AppColors.border : AppColors.borderSoft);
-        final Color fg = primary
-            ? Colors.white
-            : (enabled
-                  ? (hovering ? AppColors.textPrimary : AppColors.textSecondary)
-                  : AppColors.text4);
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: border),
-          ),
-          child: Text(
-            label,
-            style: AppTheme.mono(
-              size: 10.5,
-              color: fg,
-              weight: primary ? FontWeight.w600 : FontWeight.w500,
+      onTap: onTap,
+      builder: (context, hovering) => Container(
+        height: 24,
+        padding: const EdgeInsets.only(left: 10, right: 4),
+        decoration: BoxDecoration(
+          color: !enabled
+              ? AppColors.accent.withValues(alpha: 0.4)
+              : (hovering ? AppColors.accentHover : AppColors.accent),
+          borderRadius: Radii.brSm,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Save',
+              style: AppTheme.ui(
+                size: 11.5,
+                color: Colors.white.withValues(alpha: enabled ? 1 : 0.7),
+              ),
             ),
-          ),
-        );
-      },
+            const SizedBox(width: 6),
+            const KbdChip('⌘↵', size: 9.5, onAccent: true),
+          ],
+        ),
+      ),
     );
   }
 }

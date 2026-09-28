@@ -25,46 +25,40 @@ class TextBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.bg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: CodeEditor(
-              controller: controller,
-              focusNode: focus,
-              singleLine: !multiline,
-              fontSize: 12,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              inputFormatters: inputFormatters,
-              onChanged: (_) => onChanged(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: CodeEditor(
+            controller: controller,
+            focusNode: focus,
+            singleLine: !multiline,
+            fontSize: 12.5,
+            background: AppColors.surface,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            inputFormatters: inputFormatters,
+            onChanged: (_) => onChanged(),
+          ),
+        ),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+            child: Row(
+              children: [
+                Icon(Hgi.alertCircle, size: 12, color: AppColors.error),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    error!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTheme.ui(size: 11, color: AppColors.error),
+                  ),
+                ),
+              ],
             ),
           ),
-          if (error != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: AppColors.dangerSoft,
-                border: Border(top: BorderSide(color: AppColors.error)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Hgi.alertCircle, size: 13, color: AppColors.error),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      error!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTheme.mono(size: 11, color: AppColors.error),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
+      ],
     );
   }
 }
