@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:re_editor/re_editor.dart';
 
 import '../../../services/sql_complete.dart';
 import '../../../services/sql_statements.dart';
@@ -10,7 +11,6 @@ import '../../../state/catalog_controller.dart';
 import '../../../state/workspace_tab.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
-import '../../widgets/code_editor.dart';
 import '../../widgets/common.dart';
 import '../../widgets/value_selector.dart';
 import '../query_messages_view.dart';
@@ -20,6 +20,8 @@ import 'query_fk.dart';
 import 'query_split_handle.dart';
 import 'query_statusbar.dart';
 import 'query_toolbar.dart';
+import 'sql_autocomplete.dart';
+import 'sql_editor.dart';
 import 'results_tab_strip.dart';
 
 /// The query page: toolbar, SQL editor, section strip, results, status bar.
@@ -41,7 +43,7 @@ class QueryEditor extends StatefulWidget {
 }
 
 class _QueryEditorState extends State<QueryEditor> {
-  late final CodeEditorController _controller;
+  late final CodeLineEditingController _controller;
   final FocusNode _focusNode = FocusNode();
   Timer? _saveTimer;
   List<SqlStatement> _statements = const [];
@@ -50,7 +52,7 @@ class _QueryEditorState extends State<QueryEditor> {
   @override
   void initState() {
     super.initState();
-    _controller = CodeEditorController(text: widget.tab.sql);
+    _controller = CodeLineEditingController.fromText(widget.tab.sql);
     _controller.addListener(_onControllerChange);
     // Per-tab fields (view, plan*, messages, lastRunSql, …) notify the
     // tab directly. The TabsController only fires for things that mutate
@@ -109,8 +111,13 @@ class _QueryEditorState extends State<QueryEditor> {
     _cursorStmt = _computeCursorStmt();
   }
 
+  /// The caret as an offset into the whole script, where the statement
+  /// model lives.
+  int get _caret =>
+      flatOffset(_controller.codeLines, _controller.selection.base);
+
   int? _computeCursorStmt() {
-    final offset = _controller.selection.baseOffset;
+    final offset = _caret;
     if (offset < 0 || _statements.isEmpty) return null;
     for (var i = 0; i < _statements.length; i++) {
       final s = _statements[i];
@@ -171,7 +178,7 @@ class _QueryEditorState extends State<QueryEditor> {
 
   void _runAtCursor() {
     if (_statements.isEmpty) return;
-    final offset = _controller.selection.baseOffset;
+    final offset = _caret;
     final stmt = offset < 0
         ? _statements.first
         : statementAtOffset(_statements, offset) ?? _statements.last;
@@ -218,8 +225,7 @@ class _QueryEditorState extends State<QueryEditor> {
           foreignKeys: resolveResultForeignKeys(catalog, tab.result!),
           onFollowForeignKey: (fk, value) =>
               appState.followForeignKey(fk, value),
-          findRowOwner: (col) =>
-              findResultRowOwner(catalog, tab.result!, col),
+          findRowOwner: (col) => findResultRowOwner(catalog, tab.result!, col),
           onFindRow: (table, col, value) =>
               appState.findRowInTable(table, col, value),
         );
@@ -262,19 +268,17 @@ class _QueryEditorState extends State<QueryEditor> {
     ];
   }
 
-  LineIcon? _gutterIcon(int line, Map<int, SqlStatement> stmtByLine) {
-    final stmt = stmtByLine[line];
-    if (stmt == null) return null;
+  GutterAction _gutterIcon(SqlStatement stmt) {
     final tab = widget.tab;
     final isRunning = tab.running && _statementAt(_runningStmt) == stmt;
     if (isRunning) {
-      return LineIcon(
+      return GutterAction(
         icon: Icon(Hgi.stop, size: 14, color: AppColors.error),
         tooltip: 'Cancel running statement',
         onTap: tab.cancelRequested ? null : _cancelRunning,
       );
     }
-    return LineIcon(
+    return GutterAction(
       icon: Icon(
         Hgi.play,
         size: 14,
@@ -298,9 +302,6 @@ class _QueryEditorState extends State<QueryEditor> {
     final store = appState.store;
     final tab = widget.tab;
 
-    final stmtByLine = <int, SqlStatement>{
-      for (final s in _statements) s.startLine: s,
-    };
     final canExplain =
         !tab.running &&
         !tab.planLoading &&
@@ -316,16 +317,13 @@ class _QueryEditorState extends State<QueryEditor> {
           shift: true,
         ): _runAll,
       },
-      child: CodeEditor(
+      child: SqlEditor(
         controller: _controller,
         focusNode: _focusNode,
-        showLineNumbers: true,
-        padding: const EdgeInsets.symmetric(
-          horizontal: Insets.md,
-          vertical: 12,
-        ),
-        lineBands: _buildBands(),
-        lineIcon: (line) => _gutterIcon(line, stmtByLine),
+        bands: _buildBands(),
+        gutterActions: {
+          for (final s in _statements) s.startLine: _gutterIcon(s),
+        },
         suggest: (req) {
           // Limit scope to the statement under the cursor so a `FROM users`
           // in a sibling statement doesn't leak its columns into another one.
