@@ -69,6 +69,21 @@ Future<void> _pumpPanel(
     ),
   );
   await tester.pump();
+  // JSON and array values are prepared on an isolate, which a fake-async
+  // test clock never lets finish; wait for it on the real one.
+  if (kind.id == KindId.json || kind.id == KindId.array) {
+    for (
+      var i = 0;
+      i < 200 && find.byType(EditableText).evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump();
+    }
+    expect(find.byType(EditableText), findsOneWidget);
+  }
 }
 
 void main() {
@@ -132,6 +147,24 @@ void main() {
     expect(find.text('NULL'), findsOneWidget);
     expect(find.text('Default'), findsOneWidget);
     expect(find.text('Revert'), findsOneWidget);
+  });
+
+  testWidgets('a long JSON document scrolls in one scroll view', (
+    tester,
+  ) async {
+    // Line lengths that sweep across the wrap edge: a field that wraps any
+    // of them a row earlier than the editor measured outgrows its scroll
+    // content and scrolls on its own, hiding the last lines.
+    await _pumpPanel(
+      tester,
+      dataType: 'jsonb',
+      value: {for (var i = 0; i < 300; i++) 'k$i': 'x' * (i % 300)},
+    );
+    final positions = tester
+        .stateList<ScrollableState>(find.byType(Scrollable))
+        .map((s) => s.position)
+        .toList();
+    expect(positions.where((p) => p.maxScrollExtent > 0), hasLength(1));
   });
 
   testWidgets('a boolean shows NULL once, in its strip', (tester) async {

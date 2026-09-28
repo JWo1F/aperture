@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:isolate';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +21,16 @@ import 'quick_actions.dart';
 import 'target.dart';
 import 'value_line.dart';
 import '../../theme/hugeicons.dart';
+
+// Top-level so the isolate closure captures only the value; one built in a
+// State method would carry the State, its timers and the widget tree.
+Future<String> _seedTextOnIsolate(
+  Object? raw,
+  CellEditValue? pending, {
+  required bool isJson,
+}) => Isolate.run(
+  () => isJson ? initialText(raw, pending) : initialArrayText(raw, pending),
+);
 
 /// The picker's core widget: hosts the kind-specific [EditorState], dispatches
 /// `save` / `revert` / `setNull` / `setDefault`, and assembles the per-kind
@@ -44,7 +56,14 @@ class Panel extends StatefulWidget {
 }
 
 class _PanelState extends State<Panel> {
-  late final EditorState _state;
+  // Unset until [_ready]: JSON and array values are serialised (and JSON
+  // highlighted) on a background isolate, and the panel shows a spinner
+  // instead of freezing the window on a large document.
+  late EditorState _state;
+  bool _ready = false;
+  bool _showSpinner = false;
+  Object? _prepareError;
+  Timer? _spinnerDelay;
 
   // Bumped whenever Now/Today resets the moment; passed as a Key to the
   // time/calendar sub-widgets so they refresh their internal state without
@@ -64,6 +83,7 @@ class _PanelState extends State<Panel> {
           widget.target.pendingEdit,
         );
         _state = BoolEditorState(value: v, baseline: v);
+        _ready = true;
       case KindId.date:
       case KindId.time:
       case KindId.datetime:
@@ -82,47 +102,83 @@ class _PanelState extends State<Panel> {
           baselineTz: tz,
           withTz: withTz,
         );
+        _ready = true;
       case KindId.text:
-      case KindId.json:
-      case KindId.array:
-        // An array seeds as a Postgres array literal, not as JSON. The
-        // grid paints `[1,2]` because that reads better in a cell, but
-        // that is not a value the column accepts back — `SET tags =
-        // '[1,2]'` is a malformed array literal. Seeding the braces form
-        // means what the user sees is what gets written.
-        final text = k == KindId.array
-            ? initialArrayText(
-                widget.target.originalValue,
-                widget.target.pendingEdit,
-              )
-            : initialText(
-                widget.target.originalValue,
-                widget.target.pendingEdit,
-              );
-        final isJson = k == KindId.json;
-        _state = TextEditorState(
-          controller: isJson
-              ? CodeEditorController(text: text, language: 'json')
-              : TextEditingController(text: text),
-          baseline: text,
-          isJson: isJson,
+        final text = initialText(
+          widget.target.originalValue,
+          widget.target.pendingEdit,
         );
+        _state = TextEditorState(
+          controller: TextEditingController(text: text),
+          baseline: text,
+          isJson: false,
+        );
+        _ready = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _focus.requestFocus();
         });
+      case KindId.json:
+      case KindId.array:
+        // A spinner that flashes for one frame on a small value reads as a
+        // glitch; show it only once the work is visibly taking time.
+        _spinnerDelay = Timer(const Duration(milliseconds: 120), () {
+          if (mounted && !_ready) setState(() => _showSpinner = true);
+        });
+        _prepareStructured(k);
+    }
+  }
+
+  Future<void> _prepareStructured(KindId k) async {
+    final raw = widget.target.originalValue;
+    final pending = widget.target.pendingEdit;
+    final isJson = k == KindId.json;
+    try {
+      // An array seeds as a Postgres array literal, not as JSON. The grid
+      // paints `[1,2]` because that reads better in a cell, but that is not
+      // a value the column accepts back — `SET tags = '[1,2]'` is a
+      // malformed array literal. Seeding the braces form means what the
+      // user sees is what gets written.
+      final text = await _seedTextOnIsolate(raw, pending, isJson: isJson);
+      final controller = isJson
+          ? CodeEditorController(text: text, language: 'json')
+          : TextEditingController(text: text);
+      if (controller is CodeEditorController) {
+        await controller.parseInBackground();
+      }
+      if (!mounted) {
+        controller.dispose();
+        return;
+      }
+      _spinnerDelay?.cancel();
+      setState(() {
+        _state = TextEditorState(
+          controller: controller,
+          baseline: text,
+          isJson: isJson,
+        );
+        _ready = true;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focus.requestFocus();
+      });
+    } catch (e) {
+      _spinnerDelay?.cancel();
+      if (mounted) setState(() => _prepareError = e);
     }
   }
 
   @override
   void dispose() {
-    _state.disposeResources();
+    _spinnerDelay?.cancel();
+    if (_ready) _state.disposeResources();
     _focus.dispose();
     super.dispose();
   }
 
-  bool get _isDirty => _state.isDirty;
+  bool get _isDirty => _ready && _state.isDirty;
 
   void _save() {
+    if (!_ready) return;
     switch (_state) {
       case BoolEditorState s:
         if (s.value == null) return;
@@ -260,7 +316,33 @@ class _PanelState extends State<Panel> {
     );
   }
 
-  Widget _buildBody() => switch (_state) {
+  Widget _buildBody() {
+    if (_prepareError != null) {
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text(
+          'Could not open the value: $_prepareError',
+          style: AppTheme.ui(size: 11.5, color: AppColors.error),
+        ),
+      );
+    }
+    if (!_ready) {
+      if (!_showSpinner) return const SizedBox.shrink();
+      return Center(
+        child: SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.6,
+            color: AppColors.accent,
+          ),
+        ),
+      );
+    }
+    return _editorBody();
+  }
+
+  Widget _editorBody() => switch (_state) {
     BoolEditorState s => BoolBody(
       value: s.value,
       canBeNull: widget.target.canBeNull,
