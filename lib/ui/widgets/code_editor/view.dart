@@ -130,10 +130,16 @@ class _CodeEditorState extends State<CodeEditor> {
 
   late final PopupOverlay _popup;
 
+  // TextField merges this over the theme's M3 input style (`bodyLarge`), so
+  // every field it leaves unset is inherited in the field but not in the
+  // `LineMetrics` painter. `letterSpacing` is the one that differs: the
+  // inherited 0.5 wrapped long lines earlier in the field than in the
+  // metrics. Pinned at the value the editors have always painted with.
   TextStyle get _bodyStyle => TextStyle(
     fontFamily: AppTheme.monoFamily,
     fontSize: widget.fontSize,
     height: widget.lineHeight,
+    letterSpacing: 0.5,
     color: widget.textColor ?? AppColors.textPrimary,
   );
 
@@ -281,10 +287,7 @@ class _CodeEditorState extends State<CodeEditor> {
       return KeyEventResult.handled;
     }
 
-    if (widget.singleLine &&
-        widget.onSubmit != null &&
-        noModifier &&
-        isEnter) {
+    if (widget.singleLine && widget.onSubmit != null && noModifier && isEnter) {
       widget.onSubmit!();
       return KeyEventResult.handled;
     }
@@ -406,6 +409,12 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _ensureMetrics(BuildContext context, double bodyWidth) {
     if (bodyWidth <= 0) return;
+    // RenderEditable lays its paragraph out `cursorWidth + 1` narrower than
+    // the field to leave room for the caret. Measuring at the full width
+    // wraps a line near the edge one row later than the field does; enough
+    // of those and the field outgrows the scroll content, grows a scroll of
+    // its own, and the last lines fall out of the outer one's reach.
+    const caretMargin = 2.0 + 1.0;
     final span = widget.controller.buildTextSpan(
       context: context,
       style: _bodyStyle,
@@ -415,7 +424,7 @@ class _CodeEditorState extends State<CodeEditor> {
       context: context,
       span: span,
       text: widget.controller.text,
-      bodyWidth: bodyWidth,
+      bodyWidth: bodyWidth - caretMargin,
     );
   }
 
@@ -591,8 +600,7 @@ class _CodeEditorState extends State<CodeEditor> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SizedBox(height: widget.padding.top),
-            for (var i = 0; i < lines; i++)
-              _buildGutterRow(i, numberStyle),
+            for (var i = 0; i < lines; i++) _buildGutterRow(i, numberStyle),
           ],
         ),
       ),
