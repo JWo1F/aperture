@@ -1,0 +1,72 @@
+name: Website
+
+# The site renders the app's screens from the app's own palette, icon table
+# and fonts, so a change to any of them re-publishes it — not only edits
+# under website/.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "lib/theme/**"
+      - "assets/fonts/**"
+      - "assets/brand/**"
+      - "pubspec.yaml"
+      - ".github/workflows/website.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: website
+      - name: Check
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets
+          cargo test
+
+      # A project page is served from https://<owner>.github.io/<repo>/, so
+      # every link carries that prefix; configure-pages computes it (empty
+      # for a custom domain), which is what --base expects.
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+      - name: Build
+        run: ./tools/build.sh
+        env:
+          BASE: ${{ steps.pages.outputs.base_path }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
