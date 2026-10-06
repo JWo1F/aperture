@@ -4,8 +4,8 @@
 #   ./tools/build.sh           compile the CSS, then render pages and screens
 #   ./tools/build.sh serve     …and serve dist on http://localhost:8080
 #
-# Set BASE for a subpath deploy — a GitHub project page lives at /<repo>/,
-# so CI builds with BASE=/aperture.
+# Vercel serves the site from the root, so its build leaves BASE empty
+# (see vercel.json). Set BASE only to host it under a subpath.
 #
 # The CSS is compiled first because the generator copies assets/ verbatim:
 # rendering against a stale stylesheet publishes the wrong one, silently.
