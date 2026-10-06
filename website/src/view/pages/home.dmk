@@ -15,7 +15,7 @@
         <h1 class="animate-rise font-display text-[clamp(2.7rem,7.4vw,5.6rem)] font-semibold leading-[0.94] tracking-[-0.05em] text-balance" style="--i:1">A close look at <span class="bg-spectrum bg-clip-text text-transparent">PostgreSQL</span> and SQLite.</h1>
         <p class="animate-rise max-w-[34rem] text-[1.12rem] leading-relaxed text-ink-soft text-pretty" style="--i:2">Aperture is a dense, keyboard-driven database client in a native window. Browse a schema, edit rows in place, read a query plan, and send it all in one transaction you reviewed first.</p>
         <div class="animate-rise flex flex-wrap items-center gap-3" style="--i:3">
-          <Button href={self.site.url("/#install")} icon="download-04" trail="arrow-right-01">Build it from source</Button>
+          <Button href={self.releases().to_string()} icon="download-04" trail="arrow-right-01">Download for macOS</Button>
           <Button href={self.repo().to_string()} variant={Variant::Secondary} icon="github-01">Read the code</Button>
         </div>
         <SpecStrip items={self.facts()} class="animate-rise [--i:4]"/>
@@ -168,18 +168,40 @@
   {# ── 06 Install ─────────────────────────────────────────────────────── #}
   <Section id="install" class="overflow-hidden">
     <HeroIris class="absolute -bottom-[40%] -left-[12%] -z-10 w-[min(80vw,620px)] opacity-40"/>
-    <Container class="grid items-center gap-12 *:min-w-0 lg:grid-cols-[0.9fr_1.1fr]">
-      <SectionHeader index="06" eyebrow="Build it">
-        Open source. <em>Bring your own build.</em>
-        <p slot="lede">There is no installer — Aperture is built for one person and shared as code. Clone it, build it with Flutter and full Xcode, and make it yours.</p>
-      </SectionHeader>
-      <div class="flex flex-col gap-4">
-        <CodeBlock code={self.build()} lang={Lang::Shell} label="terminal · zsh" class="reveal"/>
-        <div class="reveal flex flex-wrap items-center gap-x-6 gap-y-2 text-[0.88rem] text-ink-muted">
-          <span class="inline-flex items-center gap-2"><Icon name="apple" class="text-ink-soft"/>macOS 12 or later</span>
-          <span class="inline-flex items-center gap-2"><Icon name="code-square" class="text-ink-soft"/>Flutter stable 3.x</span>
-          <span class="inline-flex items-center gap-2"><Icon name="git-fork" class="text-ink-soft"/>Fork it, it's yours</span>
+    <Container class="grid items-start gap-12 *:min-w-0 lg:grid-cols-[0.9fr_1.1fr]">
+      <div class="flex flex-col gap-8">
+        <SectionHeader index="06" eyebrow="Install">
+          Download, drag, <em>open.</em>
+          <p slot="lede">Every release is a DMG on GitHub, built by CI from the tagged commit. It's free and MIT-licensed, and it needs macOS 12 or later.</p>
+        </SectionHeader>
+        <div class="reveal flex flex-wrap items-center gap-3">
+          <Button href={self.releases().to_string()} icon="download-04" trail="arrow-right-01">Download the latest release</Button>
+          <Button href={self.repo().to_string()} variant={Variant::Ghost} icon="github-01">Source</Button>
         </div>
+      </div>
+      <div class="flex flex-col gap-5">
+        <ol class="reveal flex flex-col overflow-hidden rounded-lg border border-line bg-panel">
+          {#for (n, title, body) in self.steps()}
+          <li class="flex gap-4 border-b border-line-soft px-5 py-4 last:border-b-0">
+            <span class="pt-0.5 font-label text-[0.66rem] text-accent">{n}</span>
+            <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+              <p class="text-[0.98rem] font-medium">{title}</p>
+              <p class="text-[0.9rem] leading-relaxed text-ink-muted">{body}</p>
+              {#if n == "03"}<CodeBlock code={self.unquarantine()} lang={Lang::Shell} label="first launch only" class="mt-2"/>{/if}
+            </div>
+          </li>
+          {/for}
+        </ol>
+        <details class="reveal group rounded-lg border border-line bg-panel">
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-[0.95rem] font-medium [&::-webkit-details-marker]:hidden">
+            <span class="inline-flex items-center gap-2.5"><Icon name="code-square" class="text-accent"/>Or build it from source</span>
+            <Icon name="arrow-down-01" class="text-ink-muted transition-transform group-open:rotate-180"/>
+          </summary>
+          <div class="flex flex-col gap-3 px-5 pb-5">
+            <p class="text-[0.9rem] leading-relaxed text-ink-muted">Needs Flutter (stable) and a full Xcode install — the Command Line Tools alone are not enough.</p>
+            <CodeBlock code={self.build()} lang={Lang::Shell} label="terminal · zsh"/>
+          </div>
+        </details>
       </div>
     </Container>
   </Section>

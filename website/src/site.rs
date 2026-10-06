@@ -10,6 +10,9 @@
 const PUBSPEC: &str = include_str!("../../pubspec.yaml");
 
 pub const REPO_URL: &str = "https://github.com/JWo1F/aperture";
+/// The newest release's page. Its DMG is named after the version, so the
+/// page — not a fixed asset URL — is the link that never goes stale.
+pub const RELEASES_URL: &str = "https://github.com/JWo1F/aperture/releases/latest";
 
 #[derive(Debug, Clone)]
 pub struct Site {

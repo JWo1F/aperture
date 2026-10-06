@@ -1,7 +1,7 @@
 use damask::Component;
 
 use crate::screens;
-use crate::site::{REPO_URL, Site};
+use crate::site::{RELEASES_URL, REPO_URL, Site};
 use crate::view::marketing::Slide;
 
 /// The landing page.
@@ -13,6 +13,10 @@ pub struct Home<'a> {
 impl Home<'_> {
     fn repo(&self) -> &'static str {
         REPO_URL
+    }
+
+    fn releases(&self) -> &'static str {
+        RELEASES_URL
     }
 
     fn shot(name: &str) -> (String, String, u32, u32) {
@@ -66,8 +70,33 @@ select E'it\\'s fine'; select 1;";
     const BUILD: &'static str = "git clone https://github.com/JWo1F/aperture.git
 cd aperture
 flutter pub get
-flutter build macos --release
-open build/macos/Build/Products/Release/Aperture.app";
+tool/make_dmg.sh   # → dist/Aperture-<version>.dmg";
+
+    const UNQUARANTINE: &'static str = "xattr -dr com.apple.quarantine /Applications/Aperture.app";
+
+    fn unquarantine(&self) -> String {
+        Self::UNQUARANTINE.to_string()
+    }
+
+    fn steps(&self) -> [(&'static str, &'static str, &'static str); 3] {
+        [
+            (
+                "01",
+                "Download the DMG",
+                "From the latest release on GitHub. One universal build for Apple silicon and Intel.",
+            ),
+            (
+                "02",
+                "Drag it to Applications",
+                "Open the disk image and drop Aperture on the Applications shortcut beside it.",
+            ),
+            (
+                "03",
+                "Allow it once",
+                "The build is ad-hoc signed, not notarized, so macOS stops the first launch. Click Open Anyway in System Settings → Privacy & Security, or clear the quarantine flag:",
+            ),
+        ]
+    }
 
     fn build(&self) -> String {
         Self::BUILD.to_string()

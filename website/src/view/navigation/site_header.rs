@@ -1,6 +1,6 @@
 use damask::Component;
 
-use crate::site::{REPO_URL, Site};
+use crate::site::{RELEASES_URL, REPO_URL, Site};
 
 /// The sticky top bar, built like the app's own toolbar: segments split by
 /// 1px rails, frosted over whatever scrolls beneath.
@@ -10,10 +10,20 @@ pub struct SiteHeader<'a> {
 }
 
 impl SiteHeader<'_> {
-    const LINKS: [(&'static str, &'static str); 5] =
-        [("Grid", "/#grid"), ("Editor", "/#editor"), ("Plans", "/#plans"), ("Safety", "/#safety"), ("Keys", "/#keys")];
+    const LINKS: [(&'static str, &'static str); 6] = [
+        ("Grid", "/#grid"),
+        ("Editor", "/#editor"),
+        ("Plans", "/#plans"),
+        ("Safety", "/#safety"),
+        ("Keys", "/#keys"),
+        ("Install", "/#install"),
+    ];
 
     fn repo(&self) -> &'static str {
         REPO_URL
+    }
+
+    fn releases(&self) -> &'static str {
+        RELEASES_URL
     }
 }
