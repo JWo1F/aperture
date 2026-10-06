@@ -5,8 +5,6 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
-export PATH="/Users/jwo1f/flutter/bin:$PATH"
-
 app_name="Aperture"
 version="$(sed -n 's/^version: *\([0-9][^+]*\).*/\1/p' pubspec.yaml)"
 [ -n "$version" ] || { echo "make_dmg: no version: line in pubspec.yaml" >&2; exit 1; }

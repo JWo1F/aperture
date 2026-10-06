@@ -28,13 +28,7 @@ shims; if you need to change a contract, change every caller.
 
 ## Build / test / verify loop
 
-Flutter binaries are at `~/flutter/bin`. Prefix every command:
-
-```bash
-export PATH="/Users/jwo1f/flutter/bin:$PATH" && flutter <cmd>
-```
-
-After every meaningful change, in this order:
+Use the `flutter` on your PATH (stable channel). After every meaningful change, in this order:
 
 ```bash
 flutter analyze         # MUST show "No issues found!"
@@ -60,8 +54,8 @@ For every commit, in this order:
 2. Sync `_version` in `lib/ui/about/about_dialog.dart`.
 3. Stage **only** the files this change touches. Never `git add -A` /
    `git add .` — the working tree often has unrelated in-progress
-   edits AND untracked dirs (`android/`, `macos/Runner.xcodeproj/.../swiftpm/`)
-   that must be left alone.
+   edits AND untracked dirs (`macos/Runner.xcodeproj/.../swiftpm/`) that
+   must be left alone.
 4. Imperative subject under ~70 chars. Body explains **why** (the bug,
    the duplication, the perf problem) — not the mechanics; those are
    in the diff.
@@ -475,7 +469,7 @@ doesn't reallocate items.
   `1.7.0+39` and the file is now `1.8.0+45`, the user knew what they
   were doing — use that as your new baseline.
 - **Working tree may be dirty.** Pre-existing in-progress edits AND
-  untracked dirs (`android/`, `macos/.../swiftpm/`) are normal. Never
+  untracked dirs (`macos/.../swiftpm/`) are normal. Never
   blanket-stage; never touch them.
 - **Re-run `flutter analyze` yourself** after sub-agent work. Agent
   reports of "clean" have been wrong (missed info-level lints in new
@@ -578,13 +572,3 @@ Two of those are load-bearing and cannot be renamed casually:
 - **The cipher pragmas in `StoreDatabase._applyKey`** (`cipher =
   'sqlcipher'`, `legacy = 4`). Changing either makes every existing store
   fail to open, reported as a wrong passphrase, unrecoverably.
-
-## Memory pointers
-
-Font preferences, theme aesthetic, commit style and UI-redesign
-discipline are under
-`~/.claude/projects/-Users-jwo1f-work-jwo1f-dbv-dbv/memory/` — a path
-keyed to where the repo used to live. The project is now at
-`~/work/jwo1f/aperture`, whose own memory directory
-(`-Users-jwo1f-work-jwo1f-aperture`) is empty, so a session started here
-loads none of them. Read the old path explicitly on a fresh session.
