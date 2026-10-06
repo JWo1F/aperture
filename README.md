@@ -99,6 +99,11 @@ Aperture to Applications.
 Releases are signed with a Developer ID and notarized by Apple, so the app
 opens like any other. Requires macOS 12 or later.
 
+Once installed, Aperture keeps itself up to date: it checks for a new release
+once a day (or on demand under **Aperture → Check for Updates…**) and
+installs it with [Sparkle](https://sparkle-project.org), which verifies
+each update's EdDSA signature before it touches the app.
+
 ## Build from source
 
 You need Flutter (stable channel) and a full Xcode install; the Command
@@ -138,7 +143,7 @@ go through Swift method channels in `macos/Runner/`.
 | `lib/theme/` | Both palettes, the type scale, and the Hugeicons glyph table |
 | `macos/Runner/` | The window, Keychain and menu channels |
 | `website/` | The project site: a Rust generator over [Damask](https://github.com/jwo1f/damask) components that redraws the app's screens as SVG |
-| `tool/` | `make_dmg.sh`, Developer ID signing and notarization, the icon-table generator |
+| `tool/` | `make_dmg.sh`, Developer ID signing and notarization, `make_appcast.sh` (the Sparkle feed), the icon-table generator |
 
 [CLAUDE.md](CLAUDE.md) is the detailed architecture guide: invariants,
 driver quirks and known gaps. Read it before a non-trivial change.

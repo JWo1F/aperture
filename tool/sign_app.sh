@@ -26,7 +26,19 @@ sign() {
   codesign --force --timestamp --options runtime --sign "$DEVELOPER_ID" "$@"
 }
 
-find "$app/Contents/Frameworks" -mindepth 1 -maxdepth 1 \( -name '*.framework' -o -name '*.dylib' \) -print0 |
+# Sparkle ships helper executables inside its framework; each is signed on
+# its own, in the order Sparkle's documentation gives, and the Downloader
+# keeps the entitlements it was built with.
+sparkle="$app/Contents/Frameworks/Sparkle.framework"
+if [ -d "$sparkle" ]; then
+  sign "$sparkle/Versions/B/XPCServices/Installer.xpc"
+  sign --preserve-metadata=entitlements "$sparkle/Versions/B/XPCServices/Downloader.xpc"
+  sign "$sparkle/Versions/B/Autoupdate"
+  sign "$sparkle/Versions/B/Updater.app"
+  sign "$sparkle"
+fi
+
+find "$app/Contents/Frameworks" -mindepth 1 -maxdepth 1 \( -name '*.framework' -o -name '*.dylib' \) ! -name Sparkle.framework -print0 |
   while IFS= read -r -d '' code; do
     sign "$code"
   done

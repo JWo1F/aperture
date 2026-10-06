@@ -84,6 +84,7 @@ pubspec bump for that commit). Then `--amend --no-edit` is acceptable.
 | Persistence | encrypted `store.sqlite` under Application Support (`path_provider`) |
 | File save | `file_selector` |
 | Secrets | login Keychain via the `aperture/keychain` channel; password commands via the login shell |
+| Updates | Sparkle 2 (Swift package in `macos/Runner`), fed by the latest release's `appcast.xml` |
 
 **Sandbox is OFF** — the app must reopen arbitrary SQLite paths after
 relaunch. Entitlements: `macos/Runner/{Debug,Release}.entitlements`.
@@ -104,6 +105,17 @@ Do not turn the hardened runtime on in the project: an ad-hoc app under it
 fails library validation against its own frameworks. Anything that needs a
 runtime exception (JIT, unsigned libraries) goes in
 `macos/Runner/Release.entitlements`, which `sign_app.sh` applies.
+
+`AppDelegate.swift` owns the Sparkle updater and adds "Check for Updates…"
+under About. `SUFeedURL` is the latest GitHub release's `appcast.xml`,
+written and EdDSA-signed by `tool/make_appcast.sh` in CI on a `v*` tag
+(secret `SPARKLE_ED_PRIVATE_KEY`; the public half is `SUPublicEDKey` in
+`Info.plist`). Sparkle orders releases by `CFBundleVersion` — the pubspec
+build number — so a release whose `+N` did not go up is never offered.
+Sparkle trusts the EdDSA signature first and then only asks that the new
+app be validly code signed. Lose the private key and installed copies can
+no longer update: they have to be reinstalled by hand from a build with a
+new key.
 
 ## Architecture map
 

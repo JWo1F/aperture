@@ -60,10 +60,22 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: tool/make_dmg.sh
+
+      # Installed copies update through Sparkle, which accepts a DMG only
+      # with an EdDSA signature from the key whose public half is in
+      # Info.plist. Only a tag publishes, so only a tag signs.
+      - name: Sign the update and write the appcast
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: tool/make_appcast.sh
+
       - uses: actions/upload-artifact@v4
         with:
           name: aperture-macos
-          path: dist/*.dmg
+          path: |
+            dist/*.dmg
+            dist/appcast.xml
           if-no-files-found: error
 
   website:
@@ -113,4 +125,4 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/*.dmg --title "Aperture ${GITHUB_REF_NAME#v}" --generate-notes
+        run: gh release create "${GITHUB_REF_NAME}" dist/*.dmg dist/appcast.xml --title "Aperture ${GITHUB_REF_NAME#v}" --generate-notes

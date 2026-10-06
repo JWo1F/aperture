@@ -172,7 +172,7 @@
       <div class="flex flex-col gap-8">
         <SectionHeader index="06" eyebrow="Install">
           Download, drag, <em>open.</em>
-          <p slot="lede">Every release is a DMG on GitHub, built by CI from the tagged commit. It's free and MIT-licensed, and it needs macOS 12 or later.</p>
+          <p slot="lede">Every release is a DMG on GitHub, built by CI from the tagged commit. Install it once; after that it updates itself through Sparkle, checking every update's signature first. It's free and MIT-licensed, and it needs macOS 12 or later.</p>
         </SectionHeader>
         <div class="reveal flex flex-wrap items-center gap-3">
           <Button href={self.releases().to_string()} icon="download-04" trail="arrow-right-01">Download the latest release</Button>

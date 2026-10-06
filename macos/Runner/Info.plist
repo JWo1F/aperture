@@ -28,5 +28,11 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/JWo1F/aperture/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>TXl2wkzBZ/XWHGXikAExsy09tIKtQvacS4KcqL9Pmjo=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
 </dict>
 </plist>
