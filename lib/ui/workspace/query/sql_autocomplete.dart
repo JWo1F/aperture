@@ -64,16 +64,15 @@ class SqlPrompt extends CodePrompt {
   final CodeSuggestion suggestion;
   final String input;
 
-  /// re_editor replaces the typed [input] with the word, then moves the
-  /// caret by `selection` measured from where the caret stood before the
-  /// replacement — hence the `- input.length`.
+  /// The caret lands at the end of the word. `selection` is measured from
+  /// the word's start; [CodeAutocompleteEditingValue.autocomplete] rebases
+  /// it onto the caret's position before the replacement, so a pick must go
+  /// through that getter rather than read this one directly.
   @override
   CodeAutocompleteResult get autocomplete => CodeAutocompleteResult(
     input: input,
     word: suggestion.insertText,
-    selection: TextSelection.collapsed(
-      offset: suggestion.insertText.length - input.length,
-    ),
+    selection: TextSelection.collapsed(offset: suggestion.insertText.length),
   );
 
   @override
@@ -180,7 +179,9 @@ class _SqlAutocompleteViewState extends State<SqlAutocompleteView> {
           widget.notifier.value = widget.notifier.value.copyWith(index: i),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => widget.onSelected(prompt.autocomplete),
+        onTap: () => widget.onSelected(
+          widget.notifier.value.copyWith(index: i).autocomplete,
+        ),
         child: Container(
           color: active
               ? AppColors.accentSoft

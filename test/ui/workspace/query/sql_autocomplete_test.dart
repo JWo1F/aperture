@@ -180,6 +180,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(controller.text, 'sele\nSELECT');
     expect(find.text('SELECT'), findsNothing);
+    expect(controller.selection.extent.offset, 6);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
