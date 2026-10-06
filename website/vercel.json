@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal && ./tools/get-tailwind.sh",
-  "buildCommand": ". \"$HOME/.cargo/env\" && ./tools/build.sh",
+  "installCommand": "./tools/get-tailwind.sh",
+  "buildCommand": "./tools/vercel-build.sh",
   "outputDirectory": "dist",
   "trailingSlash": true
 }
