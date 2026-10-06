@@ -92,9 +92,9 @@ anywhere on disk after a relaunch.
 
 ## Install
 
-Download the DMG from
-[Releases](https://github.com/JWo1F/aperture/releases), open it, and drag
-Aperture to Applications.
+Download [**Aperture.dmg**](https://github.com/JWo1F/aperture/releases/latest/download/Aperture.dmg)
+(always the latest [release](https://github.com/JWo1F/aperture/releases)),
+open it, and drag Aperture to Applications.
 
 Releases are signed with a Developer ID and notarized by Apple, so the app
 opens like any other. Requires macOS 12 or later.

@@ -20,7 +20,7 @@
       <a href={self.repo()} class="inline-grid size-9 place-items-center rounded-md text-ink-soft transition-colors hover:bg-raised hover:text-ink" aria-label="Source on GitHub">
         <Icon name="github-01" class="text-[1.1rem]"/>
       </a>
-      <a href={self.releases()} class="ml-1 hidden h-8 items-center gap-1.5 rounded-md bg-accent px-3 text-[0.85rem] font-medium text-white transition-colors hover:bg-accent-hover sm:inline-flex">
+      <a href={self.download()} class="ml-1 hidden h-8 items-center gap-1.5 rounded-md bg-accent px-3 text-[0.85rem] font-medium text-white transition-colors hover:bg-accent-hover sm:inline-flex">
         <Icon name="download-04" class="text-[0.95rem]"/> Download
       </a>
     </div>

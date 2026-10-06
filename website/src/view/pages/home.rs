@@ -1,7 +1,7 @@
 use damask::Component;
 
 use crate::screens;
-use crate::site::{RELEASES_URL, REPO_URL, Site};
+use crate::site::{DOWNLOAD_URL, RELEASES_URL, REPO_URL, Site};
 use crate::view::marketing::Slide;
 
 /// The landing page.
@@ -13,6 +13,10 @@ pub struct Home<'a> {
 impl Home<'_> {
     fn repo(&self) -> &'static str {
         REPO_URL
+    }
+
+    fn download(&self) -> &'static str {
+        DOWNLOAD_URL
     }
 
     fn releases(&self) -> &'static str {

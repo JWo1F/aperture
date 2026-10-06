@@ -47,7 +47,7 @@ cat > dist/appcast.xml <<XML
       <sparkle:shortVersionString>$version</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>$min_macos</sparkle:minimumSystemVersion>
       <sparkle:releaseNotesLink>$repo/releases/tag/v$version</sparkle:releaseNotesLink>
-      <enclosure url="$repo/releases/download/v$version/Aperture-$version.dmg" type="application/octet-stream" $signature/>
+      <enclosure url="$repo/releases/download/v$version/Aperture.dmg" type="application/octet-stream" $signature/>
     </item>
   </channel>
 </rss>

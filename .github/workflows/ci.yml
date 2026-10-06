@@ -134,7 +134,12 @@ jobs:
         with:
           name: aperture-macos
           path: dist
+      # Attached under one fixed name, so releases/latest/download/Aperture.dmg
+      # always downloads the newest build; the appcast points at the same
+      # name under this tag's path.
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/*.dmg dist/appcast.xml --title "Aperture ${GITHUB_REF_NAME#v}" --generate-notes
+        run: |
+          mv dist/Aperture-*.dmg dist/Aperture.dmg
+          gh release create "${GITHUB_REF_NAME}" dist/Aperture.dmg dist/appcast.xml --title "Aperture ${GITHUB_REF_NAME#v}" --generate-notes

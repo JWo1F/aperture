@@ -10,8 +10,12 @@
 const PUBSPEC: &str = include_str!("../../pubspec.yaml");
 
 pub const REPO_URL: &str = "https://github.com/JWo1F/aperture";
-/// The newest release's page. Its DMG is named after the version, so the
-/// page — not a fixed asset URL — is the link that never goes stale.
+/// The newest release's DMG itself. Every release attaches it as
+/// `Aperture.dmg`, so this one URL always downloads the current version — a
+/// link built from pubspec's version would 404 between a version bump and
+/// its tag.
+pub const DOWNLOAD_URL: &str = "https://github.com/JWo1F/aperture/releases/latest/download/Aperture.dmg";
+/// The newest release's page: notes, and every older DMG.
 pub const RELEASES_URL: &str = "https://github.com/JWo1F/aperture/releases/latest";
 
 #[derive(Debug, Clone)]
