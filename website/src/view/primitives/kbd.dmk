@@ -1,0 +1,5 @@
+<kbd class="inline-flex items-center gap-1 align-middle font-sans not-italic">
+  {#for cap in self.caps()}
+  <span class={@tokens("inline-grid place-items-center rounded-xs border border-line-strong border-b-2 bg-raised text-ink-soft font-medium leading-none", self.size())}>{cap}</span>
+  {/for}
+</kbd>

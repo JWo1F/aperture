@@ -1,0 +1,49 @@
+{use super::{Glyph, KbdChip, TableGlyph, Txt}}
+{use super::command_palette::CommandPalette as Me}
+{let p = self.p}
+{let (x, y, w, h) = (self.x(), self.y(), self.w(), self.h())}
+<g>
+  <defs>
+    <filter id="palette-shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color={p.c("shadow")}/>
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color={p.c("shadow")}/>
+    </filter>
+    <clipPath id="palette-clip"><rect x={x} y={y} width={w} height={h} rx="12"/></clipPath>
+  </defs>
+  <rect width={self.win_w} height={self.win_h} fill={p.c("scrim")}/>
+  <rect x={x} y={y} width={w} height={h} rx="12" fill={p.c("surface")} filter="url(#palette-shadow)"/>
+  <g clip-path="url(#palette-clip)">
+    <Glyph slug="search-01" cx={x + 25.5} cy={y + 25.0} size={19.0} fill={p.c("textSecondary")}/>
+    <Txt x={x + 46.0} y={y + 25.0} size={15.0} fill={p.c("textPrimary")}>{self.query}</Txt>
+    <rect x={x + 47.0 + self.query_w()} y={y + 15.0} width="1.5" height="20" fill={p.c("accent")}/>
+    <KbdChip p={p} x={x + w - 12.0 - KbdChip::width("esc", 10.0)} cy={y + 25.0} key="esc" size={10.0}/>
+    <rect x={x} y={y + 50.0} width={w} height="1" fill={p.c("hairline")}/>
+
+    {#for (i, ry, hit) in self.rows()}
+      {let on = i == 0}
+      {let cy = ry + 23.0}
+      {#if on}
+        <rect x={x + 8.0} y={ry} width={w - 16.0} height="46" rx="6" fill={p.c("accentSoft")}/>
+        <rect x={x + 8.0} y={cy - 9.0} width="3" height="18" rx="1.5" fill={p.c("accent")}/>
+      {/if}
+      <rect x={x + 18.0} y={cy - 14.0} width="28" height="28" rx="6" fill={if on { p.a("accent", 0.16) } else { p.c("surface2") }} stroke={if on { p.a("accent", 0.3) } else { p.c("border") }}/>
+      {#if let Some(icon) = hit.icon}<Glyph slug={icon} cx={x + 32.0} cy={cy} size={15.0} fill={if on { p.c("accent") } else { p.c("textSecondary") }}/>{:else}<TableGlyph cx={x + 32.0} cy={cy} size={14.0} color={if on { p.c("accent") } else { p.c("textSecondary") }}/>{/if}
+      <text x={x + 57.0} y={cy - 8.0 + 4.5} font-family="JetBrains Mono" font-size="12.5" font-weight="500" fill={p.c("textPrimary")} xml:space="preserve">{#for (run, matched) in Me::runs(hit)}<tspan fill={if matched { Some(p.c("accentHover")) } else { None }} font-weight={if matched { Some(700) } else { None }}>{run}</tspan>{/for}</text>
+      <Txt x={x + 57.0} y={cy + 8.0} size={11.0} fill={p.c("textMuted")}>{hit.subtitle}</Txt>
+      {let cw = Me::chip_w(hit.chip)}
+      <rect x={x + w - 46.0 - cw} y={cy - 9.0} width={cw} height="18" rx="6" fill={p.a(hit.chip_color, 0.12)} stroke={p.a(hit.chip_color, 0.22)}/>
+      <Txt x={x + w - 46.0 - cw / 2.0} y={cy} size={9.5} weight={600} mono anchor="middle" fill={p.c(hit.chip_color)}>{hit.chip}</Txt>
+      {#if on}<Glyph slug="corner-down-left" cx={x + w - 27.0} cy={cy} size={13.0} fill={p.c("accent")}/>{/if}
+    {/for}
+
+    <rect x={x} y={self.footer_y()} width={w} height="32" fill={p.c("bgDeep")}/>
+    <rect x={x} y={self.footer_y()} width={w} height="1" fill={p.c("hairline")}/>
+    <Txt x={x + 14.0} y={self.footer_y() + 16.0} size={10.5} mono fill={p.c("textMuted")}>{format!("{} matches", self.hits.len())}</Txt>
+    {#for (hx, keys, label) in self.hints()}
+      {let mut kx = hx}
+      {#for key in keys}<KbdChip p={p} x={kx} cy={self.footer_y() + 16.0} key={key.to_string()} size={10.0}/>{ kx += KbdChip::width(key, 10.0) + 3.0; }{/for}
+      <Txt x={kx + 2.0} y={self.footer_y() + 16.0} size={10.5} fill={p.c("textMuted")}>{label}</Txt>
+    {/for}
+  </g>
+  <rect x={x} y={y} width={w} height={h} rx="12" fill="none" stroke={p.c("borderStrong")}/>
+</g>

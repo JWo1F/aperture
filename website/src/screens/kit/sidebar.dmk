@@ -1,0 +1,80 @@
+{use super::{Glyph, TableGlyph, Txt}}
+{use super::sidebar::Item}
+{let p = self.p}
+{let muted = p.c("textMuted")}
+{let faint = p.c("text4")}
+<g>
+  <defs>
+    <linearGradient id="sidebar-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color={p.c("sidebarTint")}/>
+      <stop offset="1" stop-color={p.c("bgDeep")}/>
+    </linearGradient>
+    <linearGradient id="hero-fill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color={p.c("surface")}/>
+      <stop offset="1" stop-color={p.c("surfaceAlt")}/>
+    </linearGradient>
+    <linearGradient id="avatar-fill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color={self.tint(1.0)}/>
+      <stop offset="1" stop-color="#3552C9"/>
+    </linearGradient>
+    <clipPath id="sidebar-clip"><rect x="0" y={self.y} width="248" height={self.h - 28.0}/></clipPath>
+    <filter id="soft-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.5"/></filter>
+  </defs>
+  <rect x="0" y={self.y} width="248" height={self.h} fill="url(#sidebar-fill)"/>
+  <rect x="247" y={self.y} width="1" height={self.h} fill={p.c("hairline")}/>
+
+  <rect x="10" y={self.y + 12.0} width="228" height="46" rx="8" fill="url(#hero-fill)" stroke={p.c("borderSoft")}/>
+  <rect x="18" y={self.y + 20.0} width="30" height="30" rx="6" fill={self.tint(0.42)} filter="url(#soft-glow)"/>
+  <rect x="18" y={self.y + 20.0} width="30" height="30" rx="6" fill="url(#avatar-fill)"/>
+  <Glyph slug="server-stack-01" cx={33.0} cy={self.y + 35.0} size={15.0} fill="#ffffff"/>
+  <Txt x={58.0} y={self.y + 28.0} size={13.0} weight={600} spacing={-0.1} fill={p.c("textPrimary")}>{crate::screens::demo::CONN_TITLE}</Txt>
+  <Txt x={58.0} y={self.y + 43.0} size={10.5} fill={muted.clone()}>{crate::screens::demo::CONN_SUBTITLE}</Txt>
+  <Glyph slug="expand" cx={223.0} cy={self.y + 35.0} size={14.0} fill={faint.clone()}/>
+
+  <rect x="10" y={self.y + 60.0} width="228" height="28" rx="6" fill={p.c("surface")} stroke={p.c("borderSoft")}/>
+  <Glyph slug="search-01" cx={24.5} cy={self.y + 74.0} size={13.0} fill={muted.clone()}/>
+  <Txt x={37.0} y={self.y + 74.0} size={12.0} fill={muted.clone()}>Filter tables, queries, schemas…</Txt>
+
+  <g clip-path="url(#sidebar-clip)">
+  {#for item in self.items()}
+    {#if let Item::Section { label, count, y } = item}
+      {let w = crate::screens::fonts::width("Inter", 700, 9.5, 0.8, &label.to_uppercase())}
+      <Txt x={14.0} y={y + 6.0} size={9.5} weight={700} spacing={0.8} fill={muted.clone()}>{label.to_uppercase()}</Txt>
+      <rect x={14.0 + w + 10.0} y={y + 6.0} width={248.0 - 14.0 - 30.0 - w - 20.0} height="1" fill={p.c("hairline")}/>
+      <rect x="210" y={y} width="24" height="13" rx="4" fill={p.c("surface")} stroke={p.c("borderSoft")}/>
+      <Txt x={222.0} y={y + 6.5} size={9.5} weight={600} anchor="middle" fill={faint.clone()}>{count}</Txt>
+    {:else if let Item::Table { name, stat, indent, y, active } = item}
+      {let x = 14.0 + indent * 18.0}
+      {#if active}
+        <rect x="6" y={y} width="236" height="24" rx="6" fill={self.tint(0.13)}/>
+        <rect x="6" y={y + 5.0} width="2.5" height="14" rx="1.2" fill={self.tint(1.0)}/>
+      {/if}
+      <TableGlyph cx={x + 18.0 + 7.0} cy={y + 12.0} size={12.0} color={if active { self.tint(1.0) } else { muted.clone() }}/>
+      <Txt x={x + 18.0 + 14.0 + 8.0} y={y + 12.0} size={12.0} weight={if active { 600 } else { 400 }} fill={if active { p.c("textPrimary") } else { p.c("textSecondary") }}>{name}</Txt>
+      {#if let Some(stat) = stat}<Txt x={236.0} y={y + 12.0} size={9.5} mono anchor="end" fill={p.a("textSecondary", 0.3)}>{stat}</Txt>{/if}
+    {:else if let Item::Query { name, ago, y } = item}
+      <Glyph slug="source-code" cx={39.0} cy={y + 12.0} size={12.0} fill={muted.clone()}/>
+      <Txt x={54.0} y={y + 12.0} size={12.0} fill={p.c("textSecondary")}>{name}</Txt>
+      <Txt x={236.0} y={y + 12.0} size={10.0} anchor="end" fill={faint.clone()}>{ago}</Txt>
+    {:else if let Item::Schema { name, count, open, y } = item}
+      <Glyph slug="chevron-right" cx={27.0} cy={y + 13.0} size={14.0} fill={muted.clone()} rotate={if open { Some(90.0) } else { None }}/>
+      <rect x="38" y={y + 6.0} width="14" height="14" rx="4" fill={if open { self.tint(0.16) } else { p.c("surface") }} stroke={if open { self.tint(0.5) } else { p.c("borderSoft") }}/>
+      <Txt x={45.0} y={y + 13.0} size={8.5} weight={700} anchor="middle" fill={if open { self.tint(1.0) } else { muted.clone() }}>{name[..1].to_uppercase()}</Txt>
+      <Txt x={60.0} y={y + 13.0} size={12.0} weight={600} fill={p.c("textSecondary")}>{name}</Txt>
+      <Txt x={236.0} y={y + 13.0} size={10.5} anchor="end" fill={faint.clone()}>{count}</Txt>
+    {:else if let Item::Folder { label, count, open, y } = item}
+      <Glyph slug="chevron-right" cx={41.0} cy={y + 12.0} size={14.0} fill={muted.clone()} rotate={if open { Some(90.0) } else { None }}/>
+      <Glyph slug={if open { "folder-open" } else { "folder-01" }} cx={57.5} cy={y + 12.0} size={13.0} fill={muted.clone()}/>
+      <Txt x={72.0} y={y + 12.0} size={12.0} fill={p.c("textSecondary")}>{label}</Txt>
+      <Txt x={78.0 + crate::screens::fonts::ui(400, 12.0, label)} y={y + 12.0} size={10.0} fill={faint.clone()}>{count}</Txt>
+    {/if}
+  {/for}
+  </g>
+
+  <rect x="0" y={self.footer_y()} width="247" height="28" fill={p.c("bgDeep")}/>
+  <rect x="0" y={self.footer_y()} width="247" height="1" fill={p.c("border")}/>
+  <circle cx="16.5" cy={self.footer_y() + 14.0} r="4" fill={p.a("success", 0.5)} filter="url(#soft-glow)"/>
+  <circle cx="16.5" cy={self.footer_y() + 14.0} r="2.5" fill={p.c("success")}/>
+  <Txt x={27.0} y={self.footer_y() + 14.0} size={10.5} weight={500} fill={muted.clone()}>live</Txt>
+  <Txt x={234.0} y={self.footer_y() + 14.0} size={10.5} anchor="end" fill={faint.clone()}>18 tables</Txt>
+</g>

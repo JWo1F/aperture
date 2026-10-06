@@ -1,0 +1,7 @@
+{use crate::screens::kit::Window}
+{use crate::screens::{H, W, demo}}
+{use super::QueryBody}
+{use super::query_body::Bottom}
+<Window p={self.p} w={W} h={H}>
+  <QueryBody p={self.p} tab="Revenue by month" sql={demo::PLAN_SQL} statements={vec![(0, 4)]} caret={(0, 3, 24)} position="1/1" bottom={Bottom::Plan(demo::advice(), demo::plan())}/>
+</Window>

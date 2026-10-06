@@ -1,0 +1,20 @@
+{use crate::view::layouts::Container}
+{use crate::view::marketing::ApertureMark}
+{use crate::view::primitives::Label}
+<footer class="border-t border-line-soft">
+  <div class="h-px w-full bg-spectrum opacity-60"></div>
+  <Container class="flex flex-col gap-8 py-12 md:flex-row md:items-end md:justify-between">
+    <div class="flex flex-col gap-3">
+      <a href={self.site.url("/")} class="flex items-center gap-2.5 text-ink">
+        <ApertureMark class="size-5 text-accent"/>
+        <span class="font-display font-semibold tracking-[-0.02em]">Aperture</span>
+      </a>
+      <p class="max-w-sm text-[0.9rem] leading-relaxed text-ink-muted">A native macOS client for PostgreSQL and SQLite. Built in Flutter, for one power user — and whoever forks it.</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-3 text-[0.88rem] text-ink-soft">
+      <a href={self.repo()} class="hover:text-ink">Source</a>
+      <a href={self.site.url("/design/")} class="hover:text-ink">Design system</a>
+      <Label>v{self.site.version()} · macOS 12+</Label>
+    </div>
+  </Container>
+</footer>

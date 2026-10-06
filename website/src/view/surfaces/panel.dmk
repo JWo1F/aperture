@@ -1,0 +1,10 @@
+{use crate::view::primitives::Label}
+<div class={@tokens("overflow-hidden rounded-lg border border-line bg-panel", self.class.as_deref())}>
+  {#if self.label.is_some() || self.meta.is_some()}
+  <div class="flex h-9 items-center justify-between gap-3 border-b border-line-soft bg-raised/60 px-3.5">
+    {#if let Some(label) = &self.label}<Label>{label}</Label>{/if}
+    {#if let Some(meta) = &self.meta}<span class="font-mono text-[0.7rem] text-ink-faint">{meta}</span>{/if}
+  </div>
+  {/if}
+  <slot/>
+</div>

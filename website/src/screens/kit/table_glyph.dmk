@@ -1,0 +1,6 @@
+<g>
+  <rect x={self.x()} y={self.y()} width={self.side()} height={self.band()} rx="1.6" fill={self.color.clone()} fill-opacity="0.32"/>
+  <rect x={self.x()} y={self.y()} width={self.side()} height={self.side()} rx="1.6" fill="none" stroke={self.color.clone()} stroke-width="1.1"/>
+  <line x1={self.x()} y1={self.y() + self.band()} x2={self.x() + self.side()} y2={self.y() + self.band()} stroke={self.color.clone()} stroke-width="1.1"/>
+  <line x1={self.x()} y1={self.divider()} x2={self.x() + self.side()} y2={self.divider()} stroke={self.color.clone()} stroke-width="1.1"/>
+</g>

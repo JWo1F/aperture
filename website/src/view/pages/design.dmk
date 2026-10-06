@@ -1,0 +1,138 @@
+{use crate::view::layouts::{Container, Page, Section}}
+{use crate::view::primitives::{Badge, Button, Icon, Kbd, Label, Rail, TextLink, Tone, Variant}}
+{use crate::view::surfaces::{CodeBlock, Lang, Panel, Screenshot}}
+{use crate::view::content::{Feature, SectionHeader, ShortcutRow, Stat}}
+{use crate::view::marketing::{ApertureMark, HeroIris, SpecStrip, Spectrum}}
+{#snippet heading(index: &'static str, title: &'static str)}
+  <div class="flex items-baseline gap-4 border-b border-line-soft pb-4">
+    <span class="font-label text-[0.66rem] text-accent">{index}</span>
+    <h2 class="font-display text-[1.7rem] font-semibold tracking-[-0.03em]">{title}</h2>
+  </div>
+{/snippet}
+<Page site={self.site} title="Design system" description="The tokens and components the Aperture site is built from, in both themes.">
+  <section class="relative isolate overflow-hidden border-b border-line-soft pt-16 pb-14">
+    <div class="absolute inset-0 -z-10 bg-dotfield opacity-60"></div>
+    <Container class="flex flex-col items-start gap-5">
+      <Label index="DS">Aperture · design system</Label>
+      <h1 class="font-display text-[clamp(2.4rem,6vw,4.2rem)] font-semibold leading-[0.98] tracking-[-0.045em]">The panel, <span class="text-accent">turned outward.</span></h1>
+      <p class="max-w-[42rem] text-[1.06rem] leading-relaxed text-ink-soft">The app's palettes, lifted from <span class="font-mono text-[0.9em] text-ink">lib/theme/app_theme.dart</span>; its toolbar rhythm of engraved labels and 1px rails; and its data-type colours as a spectrum. Every swatch below reads a live token — switch the theme and watch it follow.</p>
+    </Container>
+  </section>
+
+  <Section class="border-t-0! py-16!">
+    <Container class="flex flex-col gap-16">
+      <div class="flex flex-col gap-8">
+        {@render heading("01", "Colour")}
+        {#for (group, swatches) in self.palettes()}
+        <div class="flex flex-col gap-3">
+          <Label>{group}</Label>
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+            {#for sw in &swatches}
+            <div class="overflow-hidden rounded-md border border-line bg-panel">
+              <div class={@tokens("h-16 border-b border-line-soft", sw.class)}></div>
+              <div class="flex flex-col gap-0.5 px-2.5 py-2">
+                <span class="font-mono text-[0.74rem] text-ink">--{sw.token}</span>
+                <span class="text-[0.72rem] text-ink-muted">{sw.note}</span>
+              </div>
+            </div>
+            {/for}
+          </div>
+        </div>
+        {/for}
+        <div class="h-[3px] w-full rounded-full bg-spectrum"></div>
+      </div>
+
+      <div class="flex flex-col gap-8">
+        {@render heading("02", "Type")}
+        <div class="grid gap-x-10 gap-y-2 md:grid-cols-[8rem_1fr]">
+          {#for (name, class, sample) in self.type_scale()}
+          <span class="pt-2 font-label text-[0.62rem] uppercase tracking-[0.16em] text-ink-muted">{name}</span>
+          <p class={@tokens("border-b border-line-soft pb-4", class)}>{sample}</p>
+          {/for}
+        </div>
+        <p class="text-[0.88rem] text-ink-muted">Bricolage Grotesque for display and body · Martian Mono for engraved labels · JetBrains Mono for code, the face the app draws data in.</p>
+      </div>
+
+      <div class="flex flex-col gap-8">
+        {@render heading("03", "Primitives")}
+        <div class="grid gap-6 lg:grid-cols-2">
+          <Panel label="Button" meta="primitives/button">
+            <div class="flex flex-wrap items-center gap-3 p-5">
+              <Button href="#" icon="download-04" trail="arrow-right-01">Primary</Button>
+              <Button href="#" variant={Variant::Secondary} icon="github-01">Secondary</Button>
+              <Button href="#" variant={Variant::Ghost}>Ghost</Button>
+            </div>
+          </Panel>
+          <Panel label="Badge" meta="primitives/badge">
+            <div class="flex flex-wrap items-center gap-2 p-5">
+              <Badge>neutral</Badge>
+              <Badge tone={Tone::Accent} dot>accent</Badge>
+              <Badge tone={Tone::Success} dot>success</Badge>
+              <Badge tone={Tone::Warn} dot>warn</Badge>
+              <Badge tone={Tone::Danger} dot>danger</Badge>
+            </div>
+          </Panel>
+          <Panel label="Kbd · Label · Rail · TextLink" meta="primitives/*">
+            <div class="flex flex-wrap items-center gap-5 p-5">
+              <Kbd keys="⌘ ⇧ ↵"/>
+              <span class="flex h-6"><Rail/></span>
+              <Label index="04">Engraved</Label>
+              <span class="flex h-6"><Rail/></span>
+              <span class="text-[0.95rem] text-ink-soft">Read <TextLink href="#">the source</TextLink>.</span>
+            </div>
+          </Panel>
+          <Panel label="Icon" meta="Hugeicons stroke-rounded">
+            <div class="grid grid-cols-8 gap-1 p-4">
+              {#for name in self.icons()}
+              <span class="grid aspect-square place-items-center rounded-sm text-ink-soft transition-colors hover:bg-raised hover:text-accent" title={name}><Icon name={name.to_string()} class="text-[1.25rem]"/></span>
+              {/for}
+            </div>
+          </Panel>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-8">
+        {@render heading("04", "Surfaces")}
+        <div class="grid gap-6 *:min-w-0 lg:grid-cols-2">
+          <CodeBlock code={self.sample_sql()} lang={Lang::Sql} label="CodeBlock · sql"/>
+          <CodeBlock code={self.sample_shell()} lang={Lang::Shell} label="CodeBlock · shell"/>
+        </div>
+        <Screenshot site={self.site} name="palette" alt="Screenshot component showing the command palette" width={1280} height={800}/>
+      </div>
+
+      <div class="flex flex-col gap-8">
+        {@render heading("05", "Content")}
+        <SectionHeader index="00" eyebrow="SectionHeader">
+          A heading with <em>an accent.</em>
+          <p slot="lede">And a lede in the default body colour, slotted as a paragraph.</p>
+        </SectionHeader>
+        <div class="grid gap-10 sm:grid-cols-3">
+          <Feature icon="pencil-edit-02" title="Feature">An icon tile, a title, and a sentence with <code>inline code</code>.</Feature>
+          <div class="grid grid-cols-2 divide-x divide-line-soft self-start overflow-hidden rounded-lg border border-line bg-panel">
+            <Stat value="10k" label="Stat"/>
+            <Stat value="12ms" label="Stat"/>
+          </div>
+          <Panel label="ShortcutRow">
+            <ul class="px-4 py-1">{#for (keys, action) in self.keys()}<ShortcutRow keys={keys.to_string()} action={action.to_string()}/>{/for}</ul>
+          </Panel>
+        </div>
+        <SpecStrip items={self.facts()}/>
+        <Spectrum/>
+      </div>
+
+      <div class="flex flex-col gap-8">
+        {@render heading("06", "Brand")}
+        <div class="grid items-center gap-10 md:grid-cols-[1fr_1fr]">
+          <div class="flex items-end gap-8 text-accent">
+            <ApertureMark class="size-24"/>
+            <ApertureMark class="size-12"/>
+            <ApertureMark class="size-6"/>
+            <ApertureMark class="size-4 text-ink"/>
+          </div>
+          <HeroIris class="relative mx-auto w-full max-w-[360px]"/>
+        </div>
+        <p class="max-w-[42rem] text-[0.92rem] text-ink-muted">Six blades. Each edge is a side of the hexagonal opening carried on until it meets the housing — the geometry lives in <span class="font-mono text-[0.9em] text-ink-soft">marketing/iris.rs</span>, shared by the mark and the hero.</p>
+      </div>
+    </Container>
+  </Section>
+</Page>

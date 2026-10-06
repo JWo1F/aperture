@@ -1,0 +1,57 @@
+{use super::{CodeLine, Glyph, Txt}}
+{use super::code_line::Grammar}
+{use crate::screens::demo::{ColKind, RowState}}
+{let p = self.p}
+<g>
+  <defs><clipPath id={self.id}><rect x={self.x} y={self.y} width={self.w} height={self.h}/></clipPath></defs>
+  <g clip-path={self.clip()}>
+    <rect x={self.x} y={self.y} width={self.w} height={self.h} fill={p.c("gridRowBg")}/>
+    {#for row in self.rows()}
+      {#if let Some(tint) = self.row_tint(row.state)}<rect x={self.x} y={row.y} width={self.w} height="26" fill={tint}/>{/if}
+      <g opacity={if row.state == RowState::Deleted { Some(0.55) } else { None }}>
+      {#for cell in &row.cells}
+        {#if cell.edited}
+          <rect x={cell.x} y={row.y} width={cell.w} height="26" fill={p.c("accentSoft")}/>
+          <rect x={cell.x} y={row.y} width="2" height="26" fill={p.c("accent")}/>
+        {/if}
+        {#if cell.json}
+          <CodeLine p={p} x={cell.x + 9.0} y={row.y + 13.0} size={11.5} code={cell.text.clone()} grammar={Some(Grammar::Json)}/>
+        {:else}
+          <Txt x={cell.x + 9.0} y={row.y + 13.0} size={11.5} mono weight={cell.weight} italic={cell.italic} fill={cell.color.clone()}>{cell.text}</Txt>
+        {/if}
+        <rect x={cell.x + cell.w - 1.0} y={row.y} width="1" height="26" fill={p.c("hairline")}/>
+      {/for}
+      </g>
+      {#for cell in &row.cells}
+        {#if cell.focused}<rect x={cell.x + 0.75} y={row.y + 0.75} width={cell.w - 1.5} height="24.5" rx="2" fill="none" stroke={p.c("accent")} stroke-width="1.5"/>{/if}
+      {/for}
+      <rect x={self.x} y={row.y + 25.0} width={self.w} height="1" fill={p.c("hairline")}/>
+      <rect x={self.x} y={row.y} width="64" height="26" fill={p.c("bg")}/>
+      {#if let Some(tint) = self.row_tint(row.state)}<rect x={self.x} y={row.y} width="64" height="26" fill={tint}/>{/if}
+      {#if let Some(stripe) = self.stripe(row.state)}<rect x={self.x} y={row.y} width="2" height="26" fill={stripe}/>{/if}
+      {let (ink, weight) = self.index_ink(row.state)}
+      <Txt x={self.x + 54.0} y={row.y + 13.0} size={10.0} mono anchor="end" weight={weight} fill={ink}>{row.label}</Txt>
+      <rect x={self.x} y={row.y + 25.0} width="64" height="1" fill={p.c("hairline")}/>
+    {/for}
+    <rect x={self.x + 63.0} y={self.y} width="1" height={self.h} fill={p.c("border")}/>
+
+    <rect x={self.x} y={self.y} width={self.w} height="28" fill={p.c("bgDeep")}/>
+    <Txt x={self.x + 32.0} y={self.y + 14.0} size={10.0} mono anchor="middle" fill={p.c("text4")}>#</Txt>
+    <rect x={self.x + 63.0} y={self.y} width="1" height="28" fill={p.c("border")}/>
+    {#for (cx, col) in self.columns()}
+      {let ink = self.header_ink(col.kind)}
+      {let mut tx = cx + 10.0}
+      {#if col.kind == ColKind::Pk}<Glyph slug="key-01" cx={tx + 5.0} cy={self.y + 14.0} size={10.0} fill={ink.clone()}/>{ tx += 15.0; }{/if}
+      {#if col.kind == ColKind::Fk}<Glyph slug="arrow-up-right-01" cx={tx + 5.0} cy={self.y + 14.0} size={10.0} fill={ink.clone()}/>{ tx += 15.0; }{/if}
+      <Txt x={tx} y={self.y + 14.0} size={11.0} weight={600} mono fill={ink.clone()}>{col.name}</Txt>
+      {#if col.sorted}<Glyph slug="arrow-down-01" cx={cx + col.width - 14.0} cy={self.y + 14.0} size={11.0} fill={p.c("accent")}/>{/if}
+      <rect x={cx + col.width - 1.0} y={self.y} width="1" height="28" fill={p.c("hairline")}/>
+    {/for}
+    <rect x={self.x} y={self.y + 27.0} width={self.w} height="1" fill={p.c("border")}/>
+
+    {let (vy, vh) = self.v_thumb()}
+    <rect x={self.x + self.w - 10.0} y={vy} width="8" height={vh} rx="4" fill={p.c("borderStrong")}/>
+    {let (hx, hw) = self.h_thumb()}
+    <rect x={hx} y={self.body_bottom() - 10.0} width={hw} height="8" rx="4" fill={p.c("borderStrong")}/>
+  </g>
+</g>

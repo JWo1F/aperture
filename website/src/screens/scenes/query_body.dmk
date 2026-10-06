@@ -1,0 +1,19 @@
+{use crate::screens::kit::{Grid, Pagebar, PlanView, QueryToolbar, SectionStrip, Sidebar, SqlEditor, TabStrip, Toolbar}}
+{use super::{tabs, query_body::Bottom}}
+{let p = self.p}
+<g>
+  <Sidebar p={p} y={36.0} h={self.win_h() - 36.0} active={None}/>
+  <TabStrip p={p} x={self.x()} y={36.0} w={self.w()} tabs={tabs(self.tab)}/>
+  <QueryToolbar p={p} x={self.x()} y={72.0} w={self.w()} position={self.position} kind={self.kind()}/>
+  <SqlEditor p={p} x={self.x()} y={self.editor_y()} w={self.w()} h={self.editor_h()} code={self.sql} statements={self.statements.clone()} caret={self.caret}/>
+  <rect x={self.x()} y={self.editor_y() + self.editor_h()} width={self.w()} height="6" fill={p.c("bg")}/>
+  <rect x={self.x()} y={self.editor_y() + self.editor_h() + 2.5} width={self.w()} height="1" fill={p.c("hairline")}/>
+  <SectionStrip p={p} x={self.x()} y={self.strip_y()} w={self.w()} active={self.section()} counts={self.counts()}/>
+  {#if let Bottom::Results(data) = &self.bottom}
+    <Grid p={p} id="query-grid" x={self.x()} y={self.section_y()} w={self.w()} h={self.section_h()} data={*data}/>
+  {:else if let Bottom::Plan(advice, nodes) = &self.bottom}
+    <PlanView p={p} x={self.x()} y={self.section_y()} w={self.w()} h={self.section_h()} advice={advice.as_slice()} nodes={nodes.as_slice()}/>
+  {/if}
+  <Pagebar p={p} x={self.x()} y={self.win_h() - 28.0} w={self.w()} stats={self.stats()} pages={Vec::new()} status={Some(("success", "success"))}/>
+  <Toolbar p={p} w={self.win_w()} pending={None}/>
+</g>

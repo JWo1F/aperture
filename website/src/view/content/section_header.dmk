@@ -1,0 +1,6 @@
+{use crate::view::primitives::Label}
+<header class={@tokens("reveal flex max-w-[44rem] flex-col gap-5", self.align())}>
+  <Label index={self.index.clone()}>{self.eyebrow}</Label>
+  <h2 class="font-display text-[clamp(2rem,4.4vw,3.25rem)] font-semibold leading-[1.02] tracking-[-0.035em] text-balance text-ink [&_em]:not-italic [&_em]:text-accent"><slot/></h2>
+  {#if slots.has("lede")}<div class="text-[1.06rem] leading-relaxed text-pretty text-ink-soft"><slot name="lede"/></div>{/if}
+</header>

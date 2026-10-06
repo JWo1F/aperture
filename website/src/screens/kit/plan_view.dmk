@@ -1,0 +1,74 @@
+{use super::{Glyph, Txt}}
+{use super::plan_view::PlanView as Me}
+{let p = self.p}
+<g>
+  <defs><clipPath id="plan-clip"><rect x={self.x} y={self.y} width={self.w} height={self.clip_h()}/></clipPath></defs>
+  <rect x={self.x} y={self.y} width={self.w} height={self.h} fill={p.c("bg")}/>
+  <g clip-path="url(#plan-clip)">
+    {let sy = self.summary_y()}
+    <rect x={self.inner_x()} y={sy} width={self.inner_w()} height="74" rx="8" fill={p.c("surfaceAlt")} stroke={p.c("border")}/>
+    <Txt x={self.inner_x() + 14.0} y={sy + 20.0} size={9.5} weight={600} spacing={0.6} mono fill={p.c("textMuted")}>EXECUTION</Txt>
+    <Txt x={self.inner_x() + 14.0} y={sy + 40.0} size={18.0} weight={600} mono fill={p.c("textPrimary")}>12.48</Txt>
+    <Txt x={self.inner_x() + 14.0 + Me::bold_w(18.0, "12.48")} y={sy + 41.5} size={11.0} mono fill={p.c("textMuted")}>{" ms"}</Txt>
+    <Txt x={self.inner_x() + 120.0} y={sy + 20.0} size={9.5} weight={600} spacing={0.6} mono fill={p.c("textMuted")}>PLANNING</Txt>
+    <Txt x={self.inner_x() + 120.0} y={sy + 40.0} size={18.0} weight={600} mono fill={p.c("textSecondary")}>0.84</Txt>
+    <Txt x={self.inner_x() + 120.0 + Me::bold_w(18.0, "0.84")} y={sy + 41.5} size={11.0} mono fill={p.c("textMuted")}>{" ms"}</Txt>
+    <Txt x={self.inner_x() + 14.0} y={sy + 61.0} size={11.0} mono fill={p.c("textMuted")}>5 operations  ·  slowest is Seq Scan on orders</Txt>
+    {let bw = Me::badge_w("Seq Scan")}
+    <rect x={self.inner_x() + self.inner_w() - 14.0 - bw} y={sy + 14.0} width={bw} height="23" rx="6" fill={p.a("sqlKeyword", 0.14)}/>
+    <Txt x={self.inner_x() + self.inner_w() - 14.0 - bw + 7.0} y={sy + 25.5} size={12.0} weight={600} mono fill={p.c("sqlKeyword")}>Seq Scan</Txt>
+
+    {#for (ay, advice) in self.advice_at()}
+      {let color = "warning"}
+      <rect x={self.inner_x()} y={ay} width={self.inner_w()} height="52" rx="8" fill={p.a(color, 0.06)} stroke={p.a(color, 0.35)}/>
+      <Glyph slug="alert-02" cx={self.inner_x() + 19.0} cy={ay + 18.0} size={14.0} fill={p.c(color)}/>
+      <Txt x={self.inner_x() + 34.0} y={ay + 18.0} size={12.0} weight={600} fill={p.c("textPrimary")}>{advice.title}</Txt>
+      <Txt x={self.inner_x() + 34.0} y={ay + 36.0} size={11.0} mono fill={p.c("textSecondary")}>{advice.body}</Txt>
+    {/for}
+
+    {#for n in self.placed()}
+      {let node = n.node}
+      {#if node.depth > 0}
+        <path d="M{n.x - 13.0} {n.y - 6.0} V{n.y + 18.0} H{n.x - 3.0}" fill="none" stroke={p.c("hairline")} stroke-width="1"/>
+        <path d="M{n.x - 7.0} {n.y + 15.0} L{n.x - 3.0} {n.y + 18.0} L{n.x - 7.0} {n.y + 21.0}" fill="none" stroke={p.c("textMuted")} stroke-width="1"/>
+      {/if}
+      <rect x={n.x} y={n.y} width={n.w} height={n.h} rx="8" fill={if node.slowest { p.a("warning", 0.06) } else { p.c("surface") }} stroke={if node.slowest { p.a("warning", 0.4) } else { p.c("border") }}/>
+      {let color = Me::badge_color(node.op)}
+      {let bw = Me::badge_w(node.op)}
+      <rect x={n.x + 12.0} y={n.y + 10.0} width={bw} height="23" rx="6" fill={p.a(color, 0.14)}/>
+      <Txt x={n.x + 19.0} y={n.y + 21.5} size={12.0} weight={600} mono fill={p.c(color)}>{node.op}</Txt>
+      <Txt x={n.x + 12.0 + bw + 8.0} y={n.y + 21.5} size={12.0} mono fill={p.c("textPrimary")}>{node.target}</Txt>
+      {#if node.slowest}
+        {let sx = n.x + 12.0 + bw + 8.0 + Me::mono_w(12.0, node.target) + 10.0}
+        <rect x={sx} y={n.y + 13.5} width={Me::bold_w(9.5, "slowest") + 12.0} height="16" rx="8" fill={p.a("warning", 0.16)}/>
+        <Txt x={sx + 6.0} y={n.y + 21.5} size={9.5} weight={600} mono fill={p.c("warning")}>slowest</Txt>
+      {/if}
+      {let pct = format!("{}%", node.pct)}
+      {let pw = Me::bold_w(10.0, &pct) + 12.0}
+      {let pc = Me::pct_color(node)}
+      <rect x={n.x + n.w - 12.0 - pw} y={n.y + 13.5} width={pw} height="16" rx="8" fill={p.a(pc, 0.14)}/>
+      <Txt x={n.x + n.w - 12.0 - pw / 2.0} y={n.y + 21.5} size={10.0} weight={600} mono anchor="middle" fill={p.c(pc)}>{pct}</Txt>
+      <Txt x={n.x + n.w - 12.0 - pw - 8.0} y={n.y + 21.5} size={12.0} weight={600} mono anchor="end" fill={p.c("textPrimary")}>{format!("{:.2} ms", node.ms)}</Txt>
+      <Txt x={n.x + 12.0} y={n.y + 45.0} size={11.0} mono fill={p.c("textMuted")}>{node.desc}</Txt>
+      {let mut my = n.y + 66.0}
+      {#if !node.chips.is_empty()}
+        {#for (cx, label, value) in self.chips(&n)}
+          <rect x={cx} y={n.y + 56.0} width={Me::chip_w(label, value)} height="21" rx="4" fill={p.c("surfaceAlt")} stroke={p.c("border")}/>
+          <Txt x={cx + 6.0} y={n.y + 66.5} size={10.5} mono fill={p.c("textMuted")}>{label}</Txt>
+          <Txt x={cx + 6.0 + Me::mono_w(10.5, label) + Me::mono_w(10.5, " ")} y={n.y + 66.5} size={10.5} mono fill={p.c("textPrimary")}>{value}</Txt>
+        {/for}
+        { my += 27.0; }
+      {/if}
+      <Txt x={n.x + 12.0} y={my} size={11.0} weight={600} mono fill={p.c("textPrimary")}>{node.rows}</Txt>
+      {let rx = n.x + 12.0 + Me::bold_w(11.0, node.rows)}
+      <Txt x={rx} y={my} size={11.0} mono fill={p.c("textMuted")}>{format!(" rows  ·  {} estimated  ·  1 loop", node.estimated)}</Txt>
+      {#if node.off}
+        {let ox = rx + Me::mono_w(11.0, &format!(" rows  ·  {} estimated  ·  1 loop", node.estimated)) + 12.0}
+        <Glyph slug="alert-02" cx={ox + 5.0} cy={my} size={11.0} fill={p.c("warning")}/>
+        <Txt x={ox + 14.0} y={my} size={9.5} mono fill={p.c("warning")}>estimate off ×4.4</Txt>
+      {/if}
+      <rect x={n.x + 12.0} y={n.y + n.h - 15.0} width={n.w - 24.0} height="5" rx="2.5" fill={p.c("surfaceAlt")}/>
+      <rect x={n.x + 12.0} y={n.y + n.h - 15.0} width={((n.w - 24.0) * node.pct.max(1) as f64 / 100.0)} height="5" rx="2.5" fill={self.bar_fill(node)}/>
+    {/for}
+  </g>
+</g>

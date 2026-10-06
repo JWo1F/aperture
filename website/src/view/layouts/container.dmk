@@ -1,0 +1,1 @@
+<div class={@tokens("mx-auto w-full max-w-[1200px] px-4 md:px-8", self.class.as_deref())}><slot/></div>

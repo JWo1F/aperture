@@ -1,0 +1,23 @@
+{use super::{CodeLine, Glyph, Txt}}
+{let p = self.p}
+{let (band_y, band_h) = self.band()}
+{let (caret_x, caret_y) = self.caret_xy()}
+{let runs = self.run_lines()}
+<g>
+  <defs>
+    <linearGradient id="caret-band" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color={p.a("accent", 0.06)}/>
+      <stop offset="0.8" stop-color={p.a("accent", 0.0)}/>
+    </linearGradient>
+  </defs>
+  <rect x={self.x} y={self.y} width={self.w} height={self.h} fill={p.c("bg")}/>
+  <rect x={self.divider()} y={band_y} width={self.w - 55.0} height={band_h} fill="url(#caret-band)"/>
+  <rect x={self.divider()} y={band_y} width="2" height={band_h} fill={p.a("accent", 0.55)}/>
+  <rect x={self.divider()} y={self.y} width="1" height={self.h} fill={p.c("hairline")}/>
+  {#for (i, cy, line) in self.lines()}
+    <Txt x={self.numbers_right()} y={cy} size={12.5} mono anchor="end" fill={if i == self.caret.1 { p.c("textMuted") } else { p.c("text4") }}>{i + 1}</Txt>
+    {#if runs.contains(&i)}<Glyph slug="play" cx={self.icon_x()} cy={cy} size={14.0} fill={p.c("success")}/>{/if}
+    <CodeLine p={p} x={self.code_x()} y={cy} size={12.5} code={line.to_string()}/>
+  {/for}
+  <rect x={caret_x} y={caret_y + 1.0} width="1.5" height="16" fill={p.c("accent")}/>
+</g>

@@ -1,0 +1,9 @@
+{use crate::screens::kit::{PendingEdits, Window}}
+{use crate::screens::{H, W, demo}}
+{use super::TableBody}
+{let data = super::overlay_shots::data()}
+<Window p={self.p} w={W} h={H}>
+  <defs><filter id="backdrop-blur" x="0" y="0" width="1" height="1"><feGaussianBlur stdDeviation="6"/></filter></defs>
+  <g filter="url(#backdrop-blur)"><TableBody p={self.p} data={&data}/></g>
+  <PendingEdits p={self.p} win_w={W} win_h={H} statements={demo::staged()}/>
+</Window>

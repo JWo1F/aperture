@@ -1,0 +1,5 @@
+{use crate::view::primitives::Kbd}
+<li class="flex min-h-12 items-center justify-between gap-4 border-b border-line-soft py-2 last:border-b-0">
+  <span class="text-[0.93rem] text-ink-soft">{self.action}</span>
+  <Kbd keys={self.keys.clone()}/>
+</li>

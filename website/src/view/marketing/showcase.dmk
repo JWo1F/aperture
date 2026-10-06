@@ -1,0 +1,23 @@
+{use crate::view::surfaces::Screenshot}
+<div data-controller="showcase" class="reveal flex flex-col gap-5">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <div role="tablist" class="inline-flex rounded-md border border-line bg-panel p-1">
+      {#for (i, slide) in self.slides.iter().enumerate()}
+      <button type="button" role="tab" data-showcase-target="tab" data-action="showcase#select" data-showcase-index-param={i}
+              aria-selected={if i == 0 { "true" } else { "false" }}
+              class="h-8 rounded-sm px-3.5 text-[0.86rem] font-medium text-ink-muted transition-colors hover:text-ink aria-selected:bg-accent aria-selected:text-white">{slide.label}</button>
+      {/for}
+    </div>
+    {#for (i, slide) in self.slides.iter().enumerate()}
+    <p data-showcase-target="caption" hidden={i != 0} class="max-w-md text-[0.92rem] text-ink-muted">{slide.caption}</p>
+    {/for}
+  </div>
+  <div class="grid">
+    {#for (i, slide) in self.slides.iter().enumerate()}
+    {let (w, h) = Self::size(slide.shot)}
+    <div data-showcase-target="panel" role="tabpanel" class="col-start-1 row-start-1 transition-opacity duration-500 data-[off]:pointer-events-none data-[off]:opacity-0" data-off={i != 0}>
+      <Screenshot site={self.site} name={slide.shot.to_string()} alt={Self::alt(slide.shot)} width={w} height={h}/>
+    </div>
+    {/for}
+  </div>
+</div>

@@ -1,0 +1,1 @@
+<text x={self.x} y={self.baseline()} font-family={self.family()} font-size={self.size} xml:space="preserve">{#for (kind, text) in self.spans()}<tspan fill={Self::color(self.p, kind)} font-weight={Self::weight(kind)} font-style={Self::style(kind)}>{text}</tspan>{/for}</text>

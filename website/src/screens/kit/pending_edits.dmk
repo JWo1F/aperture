@@ -1,0 +1,87 @@
+{use super::{CodeLine, Glyph, KbdChip, Txt}}
+{use super::pending_edits::PendingEdits as Me}
+{let p = self.p}
+{let (x, y, w, h) = (self.x(), self.y(), self.w(), self.h())}
+<g>
+  <defs>
+    <radialGradient id="edits-scrim" cx="0.5" cy="0.5" r="0.75">
+      <stop offset="0" stop-color={p.a("bgDeep", 0.55)}/>
+      <stop offset="1" stop-color={p.a("bgDeep", 0.78)}/>
+    </radialGradient>
+    <linearGradient id="edits-head" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color={p.c("surface")}/>
+      <stop offset="1" stop-color={p.c("bgDeep")}/>
+    </linearGradient>
+    <filter id="edits-shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="18" stdDeviation="24" flood-color={p.c("shadow")}/></filter>
+    <clipPath id="edits-clip"><rect x={x} y={y} width={w} height={h} rx="12"/></clipPath>
+  </defs>
+  <rect width={self.win_w} height={self.win_h} fill="url(#edits-scrim)"/>
+  <rect x={x} y={y} width={w} height={h} rx="12" fill={p.c("bg")} filter="url(#edits-shadow)"/>
+  <g clip-path="url(#edits-clip)">
+    <rect x={x} y={y} width={w} height="96" fill="url(#edits-head)"/>
+    <rect x={x} y={y + 95.0} width={w} height="1" fill={p.c("border")}/>
+    <Txt x={x + 22.0} y={y + 23.0} size={10.0} weight={600} spacing={0.6} fill={p.c("accent")}>REVIEW</Txt>
+    <Txt x={x + 22.0} y={y + 43.0} size={16.0} weight={600} fill={p.c("textPrimary")}>Pending changes</Txt>
+    <Glyph slug="copy-01" cx={x + w - 54.0} cy={y + 30.0} size={14.0} fill={p.c("textMuted")}/>
+    <Glyph slug="cancel-01" cx={x + w - 26.0} cy={y + 30.0} size={14.0} fill={p.c("textMuted")}/>
+    {let sy = y + 73.0}
+    {let total = self.statements.len().to_string()}
+    <Txt x={x + 22.0} y={sy} size={13.0} weight={700} mono fill={p.c("textPrimary")}>{total}</Txt>
+    {let mut sx = x + 22.0 + Me::mono_w(13.0, 700, &total) + 6.0}
+    <Txt x={sx} y={sy} size={11.5} weight={500} fill={p.c("textSecondary")}>statements</Txt>
+    { sx += crate::screens::fonts::ui(500, 11.5, "statements") + 18.0; }
+    {#for (kind, n) in self.counts()}
+      <circle cx={sx + 3.0} cy={sy} r="3" fill={p.c(kind.color())}/>
+      <Txt x={sx + 11.0} y={sy} size={11.5} weight={600} mono fill={p.c("textPrimary")}>{n}</Txt>
+      <Txt x={sx + 11.0 + Me::mono_w(11.5, 600, &n.to_string()) + 5.0} y={sy} size={11.0} mono fill={p.c("textMuted")}>{kind.word()}</Txt>
+      { sx += 11.0 + Me::mono_w(11.5, 600, &n.to_string()) + 5.0 + Me::mono_w(11.0, 400, kind.word()) + 16.0; }
+    {/for}
+
+    {#for card in self.cards()}
+      {let s = card.statement}
+      {let cx = x + 18.0}
+      {let cw = w - 36.0}
+      <rect x={cx} y={card.y} width={cw} height={card.h} rx="6" fill={p.c("surface")} stroke={p.c("border")}/>
+      <clipPath id="card-{card.n}"><rect x={cx} y={card.y} width={cw} height={card.h} rx="6"/></clipPath>
+      <rect x={cx} y={card.y + 39.0} width={cw} height={card.h - 39.0} fill={p.c("bgDeep")} clip-path="url(#card-{card.n})"/>
+      <rect x={cx} y={card.y + 38.0} width={cw} height="1" fill={p.a("border", 0.55)}/>
+      <rect x={cx} y={card.y} width="3" height={card.h} fill={p.c(s.kind.color())} clip-path="url(#card-{card.n})"/>
+      {let my = card.y + 19.0}
+      <rect x={cx + 12.0} y={my - 9.0} width="22" height="18" rx="4" fill={p.c("surfaceAlt")}/>
+      <Txt x={cx + 23.0} y={my} size={10.0} weight={600} mono anchor="middle" fill={p.c("textMuted")}>{card.n}</Txt>
+      {let bw = Me::badge_w(s.kind)}
+      <rect x={cx + 42.0} y={my - 8.0} width={bw} height="16" rx="3" fill={p.a(s.kind.color(), 0.14)} stroke={p.a(s.kind.color(), 0.32)}/>
+      <Txt x={cx + 49.0} y={my} size={9.5} weight={700} spacing={0.57} mono fill={p.c(s.kind.color())}>{s.kind.word()}</Txt>
+      {let rx = cx + 42.0 + bw + 10.0}
+      <Txt x={rx} y={my} size={12.0} weight={600} mono fill={p.c("textPrimary")}>public.orders</Txt>
+      {#if let Some(row) = s.row}
+        {let dx = rx + Me::mono_w(12.0, 600, "public.orders") + 10.0}
+        <rect x={dx} y={my - 6.0} width="1" height="12" fill={p.c("border")}/>
+        <Txt x={dx + 10.0} y={my} size={10.5} mono fill={p.c("textMuted")}>{row}</Txt>
+      {/if}
+      {#for (ly, line) in Me::code_lines(&card)}<CodeLine p={p} x={cx + 14.0} y={ly} size={11.5} code={line.to_string()}/>{/for}
+      <Glyph slug="copy-01" cx={cx + cw - 20.0} cy={card.y + 53.0} size={12.0} fill={p.c("textMuted")}/>
+    {/for}
+
+    {let fy = self.footer_y()}
+    <rect x={x} y={fy} width={w} height="54" fill={p.c("surface")}/>
+    <rect x={x} y={fy} width={w} height="1" fill={p.c("border")}/>
+    <Glyph slug="shield-01" cx={x + 24.5} cy={fy + 27.0} size={13.0} fill={p.c("textMuted")}/>
+    <Txt x={x + 37.0} y={fy + 27.0} size={11.5} weight={500} fill={p.c("textMuted")}>Runs in a single transaction</Txt>
+    {let aw = self.apply_w()}
+    {let ax = x + w - 12.0 - aw}
+    <rect x={ax} y={fy + 12.0} width={aw} height="30" rx="6" fill={p.c("accent")}/>
+    <Glyph slug="tick-02" cx={ax + 19.0} cy={fy + 27.0} size={14.0} fill="#ffffff"/>
+    <Txt x={ax + 32.0} y={fy + 27.0} size={12.5} weight={600} fill="#ffffff">Apply</Txt>
+    {let kx = ax + 32.0 + crate::screens::fonts::ui(600, 12.5, "Apply") + 8.0}
+    <KbdChip p={p} x={kx} cy={fy + 27.0} key="⌘" size={10.0} on_accent/>
+    <KbdChip p={p} x={kx + KbdChip::width("⌘", 10.0) + 3.0} cy={fy + 27.0} key="↵" size={10.0} on_accent/>
+    {let close_x = ax - 8.0 - Me::button_w("Close")}
+    <rect x={close_x} y={fy + 12.0} width={Me::button_w("Close")} height="30" rx="6" fill={p.c("surfaceAlt")} stroke={p.c("border")}/>
+    <Txt x={close_x + 12.0} y={fy + 27.0} size={12.5} weight={500} fill={p.c("textPrimary")}>Close</Txt>
+    {let revert_x = close_x - 8.0 - Me::button_w("Revert all")}
+    <rect x={revert_x} y={fy + 12.0} width={Me::button_w("Revert all")} height="30" rx="6" fill={p.c("surfaceAlt")} stroke={p.c("border")}/>
+    <Txt x={revert_x + 12.0} y={fy + 27.0} size={12.5} weight={500} fill={p.c("error")}>Revert all</Txt>
+  </g>
+  <rect x={x} y={y} width={w} height={h} rx="12" fill="none" stroke={p.c("borderStrong")}/>
+</g>

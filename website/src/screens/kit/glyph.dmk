@@ -1,0 +1,1 @@
+<text x={self.cx} y={self.baseline()} font-family={self.family()} font-size={self.size} text-anchor="middle" fill={self.fill.clone()} transform={self.transform()}>{self.ch()}</text>

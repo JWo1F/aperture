@@ -1,0 +1,286 @@
+/* The Aperture site's stylesheet — the design system's single source.
+ *
+ * Compiled by the standalone Tailwind CLI into `assets/site.css`
+ * (see `tools/build.sh`). `source(none)` makes the `@source` list below the
+ * whole list: without it Tailwind scans the repository root, and every
+ * class-shaped string in the Flutter app's Dart becomes CSS in the bundle. */
+@import "tailwindcss" source(none);
+
+@source "../src/view";
+
+/* The toggle sets `data-theme` on <html>; the boot script in `Base` sets it
+   before the first paint, so an explicit choice can disagree with the OS. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* The site is the app's panel turned outward: the same slate surfaces, the
+ * same single indigo, the same hairlines — the palettes are lifted from
+ * `lib/theme/app_theme.dart`. What it adds is the instrument-panel voice the
+ * toolbars already have (engraved mono labels, segments split by 1px rails)
+ * and the data-type colours as a spectrum, the light that comes through.
+ *
+ * `@theme inline` emits utilities as `var(--x)`, so the dark ramp is one
+ * override block instead of a `dark:` variant on every coloured element. */
+@theme inline {
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-label: "Martian Mono", ui-monospace, monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  --color-ground: var(--ground);
+  --color-panel: var(--panel);
+  --color-raised: var(--raised);
+  --color-raised-2: var(--raised-2);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ring: var(--accent-ring);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-warn: var(--warn);
+
+  --color-t-null: var(--t-null);
+  --color-t-num: var(--t-num);
+  --color-t-str: var(--t-str);
+  --color-t-bool: var(--t-bool);
+  --color-t-uuid: var(--t-uuid);
+  --color-t-date: var(--t-date);
+  --color-t-json: var(--t-json);
+  --color-t-fk: var(--t-fk);
+
+  --color-sql-keyword: var(--sql-keyword);
+  --color-sql-string: var(--sql-string);
+  --color-sql-number: var(--sql-number);
+  --color-sql-comment: var(--sql-comment);
+  --color-sql-function: var(--sql-function);
+  --color-sql-operator: var(--sql-operator);
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
+
+  --shadow-window: 0 1px 0 0 var(--hairline) inset, 0 40px 80px -24px var(--shadow), 0 12px 24px -12px var(--shadow);
+  --shadow-pop: 0 8px 24px -8px var(--shadow);
+
+  --ease-iris: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Light — `lightPalette`. `--ink-muted` is darker than the app's textMuted:
+   the app sets it on 11px chrome a user already knows, the site sets it on
+   prose a reader has never seen, so it is held to 4.5:1 on `--ground`. */
+:root {
+  --ground: #f4f5f7;
+  --panel: #ffffff;
+  --raised: #f1f2f5;
+  --raised-2: #e7e9ed;
+  --line: #e2e4e9;
+  --line-soft: #eaecf0;
+  --line-strong: #cbced5;
+  --hairline: rgb(0 0 0 / 0.06);
+  --ink: #15171c;
+  --ink-soft: #4a5160;
+  --ink-muted: #687080;
+  --ink-faint: #a9afba;
+  --accent: #4f6fe8;
+  --accent-hover: #3a5bd9;
+  --accent-soft: rgb(79 111 232 / 0.12);
+  --accent-ring: rgb(79 111 232 / 0.32);
+  --success: #10a372;
+  --danger: #e0445c;
+  --warn: #b45a1f;
+  --shadow: rgb(30 36 54 / 0.18);
+
+  --t-null: #98a0ac;
+  --t-num: #1f4e8c;
+  --t-str: #1a1815;
+  --t-bool: #2f7a4f;
+  --t-uuid: #3a4a6b;
+  --t-date: #6b3a78;
+  --t-json: #7a3fb0;
+  --t-fk: #2a3fac;
+
+  --sql-keyword: #3a5bd9;
+  --sql-string: #1f7a4d;
+  --sql-number: #1f4e8c;
+  --sql-comment: #8a8f99;
+  --sql-function: #7a3fb0;
+  --sql-operator: #4f4a40;
+
+  color-scheme: light;
+}
+
+/* Dark — `darkPalette`. */
+[data-theme="dark"] {
+  --ground: #0a0c10;
+  --panel: #0e1014;
+  --raised: #16181c;
+  --raised-2: #1a1d23;
+  --line: #21252d;
+  --line-soft: #1b1e25;
+  --line-strong: #2b2f38;
+  --hairline: rgb(255 255 255 / 0.06);
+  --ink: #e6e8ec;
+  --ink-soft: #b0b6c2;
+  --ink-muted: #858c9a;
+  --ink-faint: #4d5462;
+  --accent: #5b7cfa;
+  --accent-hover: #6e8bfa;
+  --accent-soft: rgb(91 124 250 / 0.14);
+  --accent-ring: rgb(91 124 250 / 0.35);
+  --success: #57b07a;
+  --danger: #e5484d;
+  --warn: #c9933c;
+  --shadow: rgb(0 0 0 / 0.6);
+
+  --t-null: #6b7180;
+  --t-num: #d6c68f;
+  --t-str: #bfd1e7;
+  --t-bool: #93c9a3;
+  --t-uuid: #8fa9cb;
+  --t-date: #c9a3d1;
+  --t-json: #d8b58b;
+  --t-fk: #87a0da;
+
+  --sql-keyword: #8fa9f6;
+  --sql-string: #93c9a3;
+  --sql-number: #d6c68f;
+  --sql-comment: #5f6672;
+  --sql-function: #c9a3d1;
+  --sql-operator: #9097a3;
+
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    font-feature-settings: "ss01", "cv11";
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* The ground's texture: a 24px dot field, the grid the app's own panels sit
+   on, fading out below the fold so long sections read as plain paper. */
+@utility bg-dotfield {
+  background-image: radial-gradient(circle at 1px 1px, var(--line-strong) 1px, transparent 0);
+  background-size: 24px 24px;
+  mask-image: linear-gradient(to bottom, black, transparent 85%);
+}
+
+/* The data-type spectrum as one stroke — the site's signature rule. */
+@utility bg-spectrum {
+  background-image: linear-gradient(
+    90deg,
+    var(--t-fk),
+    var(--t-uuid),
+    var(--t-str),
+    var(--t-bool),
+    var(--t-num),
+    var(--t-json),
+    var(--t-date)
+  );
+}
+
+/* The light through the iris. Always the dark palette's type colours —
+   pastel enough to glow on graphite and on pewter alike, where the light
+   palette's inks would read as a bruise. */
+@utility bg-prism {
+  background-image: conic-gradient(
+    from 200deg,
+    #87a0da,
+    #8fa9cb,
+    #bfd1e7,
+    #93c9a3,
+    #d6c68f,
+    #d8b58b,
+    #c9a3d1,
+    #87a0da
+  );
+}
+
+/* Entrance: one staggered reveal on load, driven by `--i` on each child. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@utility animate-rise {
+  animation: rise 0.9s var(--ease-iris) both;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+@keyframes iris-open {
+  from {
+    transform: rotate(-38deg) scale(0.86);
+    opacity: 0;
+  }
+}
+
+@utility animate-iris {
+  animation: iris-open 1.6s var(--ease-iris) both;
+  transform-origin: center;
+}
+
+/* Scroll reveal: `reveal` hides, the `reveal` controller adds `is-in`. With
+   JavaScript off the controller never runs, so the hidden state is gated on
+   `.js`, which the boot script sets. */
+.js .reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.8s var(--ease-iris),
+    transform 0.8s var(--ease-iris);
+}
+
+.js .reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Hugeicons glyphs inherit size from font-size; this resets the line box so
+   an icon sits on the text baseline like a letter instead of a block. In a
+   layer, so a `hidden` utility on an icon still wins. */
+@layer components {
+  .hgi {
+    line-height: 1;
+  }
+}

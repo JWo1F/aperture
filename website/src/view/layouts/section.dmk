@@ -1,0 +1,1 @@
+<section id={self.id.clone()} class={@tokens("relative scroll-mt-20 border-t border-line-soft py-24 md:py-32", self.class.as_deref())}><slot/></section>

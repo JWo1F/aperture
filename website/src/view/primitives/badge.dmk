@@ -1,0 +1,4 @@
+<span class={@tokens("inline-flex items-center gap-1.5 h-6 px-2 rounded-full border font-label text-[0.62rem] font-medium uppercase tracking-[0.12em]", self.skin())}>
+  {#if self.dot.unwrap_or(false)}<span class="size-1.5 rounded-full bg-current"></span>{/if}
+  <slot/>
+</span>

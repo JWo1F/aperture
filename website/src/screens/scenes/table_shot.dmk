@@ -1,0 +1,7 @@
+{use crate::screens::kit::Window}
+{use super::TableBody}
+{let (w, h) = self.size()}
+{let data = self.data()}
+<Window p={self.p} w={w} h={h}>
+  <TableBody p={self.p} data={&data}/>
+</Window>

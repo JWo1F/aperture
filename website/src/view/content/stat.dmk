@@ -1,0 +1,5 @@
+{use crate::view::primitives::Label}
+<div class="flex flex-col gap-2 px-5 py-4">
+  <span class="font-mono text-[1.6rem] font-medium tracking-[-0.03em] text-ink">{self.value}</span>
+  <Label>{self.label}</Label>
+</div>

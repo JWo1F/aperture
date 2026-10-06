@@ -1,0 +1,37 @@
+{use super::{Glyph, Txt}}
+{let p = self.p}
+{let muted = p.c("textMuted")}
+<g>
+  <rect width={self.w} height="36" fill={p.a("bg", 0.72)}/>
+  <rect y="35" width={self.w} height="1" fill={p.c("hairline")}/>
+  {#for (cx, color) in self.lights()}
+  <circle cx={cx} cy="18" r="6" fill={color} stroke="rgba(0,0,0,0.14)" stroke-width="0.5"/>
+  {/for}
+  {#for (slug, cx) in self.left_icons()}<Glyph slug={slug} cx={cx} cy={18.0} size={14.0} fill={muted.clone()}/>{/for}
+  <rect x="108" y="11" width="1" height="14" fill={p.c("hairline")}/>
+  {#for x in self.group_rails()}<rect x={x} y="6" width="1" height="24" fill={p.c("hairline")}/>{/for}
+
+  {#if self.pending.is_some()}
+  {let a = self.actions()}
+  <rect x={a.badge_x} y="7" width={a.badge_w} height="22" rx="6" fill={p.c("surface")} stroke={p.c("border")}/>
+  <Txt x={a.badge_x + a.badge_w / 2.0} y={18.0} size={11.0} weight={600} mono anchor="middle" fill={p.c("textPrimary")}>{self.badge_text()}</Txt>
+  <Glyph slug="tick-02" cx={a.tick} cy={18.0} size={13.0} fill={p.c("success")}/>
+  <Glyph slug="cancel-01" cx={a.cancel} cy={18.0} size={13.0} fill={muted.clone()}/>
+  <Glyph slug="refresh" cx={a.refresh} cy={18.0} size={13.0} fill={muted.clone()}/>
+  <rect x={a.manual_x} y="7" width={self.manual_w()} height="22" rx="6" fill="none"/>
+  <Txt x={a.manual_x + 7.0} y={18.0} size={10.5} mono fill={p.c("textSecondary")}>manual</Txt>
+  <Glyph slug="arrow-down-01" cx={a.manual_x + self.manual_w() - 12.5} cy={18.0} size={11.0} fill={muted.clone()}/>
+  <rect x={a.rail} y="6" width="1" height="24" fill={p.c("hairline")}/>
+  {/if}
+
+  <rect x={self.search_x()} y="6" width={self.search_w()} height="24" rx="6" fill={p.c("surface")} stroke={p.c("border")}/>
+  <Glyph slug="search-01" cx={self.search_x() + 16.0} cy={18.0} size={12.0} fill={muted.clone()}/>
+  <Txt x={self.search_x() + 30.0} y={18.0} size={11.0} fill={muted.clone()}>Find tables, queries…</Txt>
+  {#for (i, key) in ["⌘", "K"].iter().enumerate()}
+  <rect x={self.search_x() + self.search_w() - 43.0 + i as f64 * 18.0} y="10" width="16" height="16" rx="3" fill={p.c("surface2")} stroke={p.c("border")}/>
+  <Txt x={self.search_x() + self.search_w() - 35.0 + i as f64 * 18.0} y={18.0} size={9.0} weight={500} anchor="middle" fill={p.c("textSecondary")}>{key}</Txt>
+  {/for}
+  <rect x={self.w - 61.0} y="11" width="1" height="14" fill={p.c("hairline")}/>
+  {#if p.is_dark()}<Glyph slug="moon-02" cx={self.w - 43.0} cy={18.0} size={14.0} fill={muted.clone()}/>{:else}<Glyph slug="sun-03" cx={self.w - 43.0} cy={18.0} size={14.0} fill={muted.clone()}/>{/if}
+  <Glyph slug="folder-01" cx={self.w - 17.0} cy={18.0} size={14.0} fill={muted.clone()}/>
+</g>

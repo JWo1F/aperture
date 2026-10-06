@@ -1,0 +1,10 @@
+{use super::Icon}
+<a href={self.href.clone()}
+   class={@tokens("group inline-flex items-center gap-2 h-10 px-4 rounded-md border text-[0.92rem] font-medium tracking-[-0.01em]",
+                  "transition-[background-color,border-color,color] duration-200",
+                  self.skin(), self.class.as_deref())}
+   {...self.attrs}>
+  {#if let Some(icon) = &self.icon}<Icon name={icon.clone()} class="text-[1.05em]"/>{/if}
+  <slot/>
+  {#if let Some(trail) = &self.trail}<Icon name={trail.clone()} class="text-[1em] opacity-70 transition-transform duration-200 group-hover:translate-x-0.5"/>{/if}
+</a>

@@ -1,0 +1,12 @@
+[package]
+name = "aperture-site"
+description = "The Aperture website: Damask components rendered into static HTML."
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[dependencies]
+damask = "0.13"
+resvg = "0.48"
+ttf-parser = "0.25"

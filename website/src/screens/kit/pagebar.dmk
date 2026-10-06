@@ -1,0 +1,29 @@
+{use super::{Glyph, Txt}}
+{use super::pagebar::{Page, Run}}
+{let p = self.p}
+<g>
+  <rect x={self.x} y={self.y} width={self.w} height="28" fill={p.c("bgDeep")}/>
+  <rect x={self.x} y={self.y} width={self.w} height="1" fill={p.c("border")}/>
+  {let cy = self.y + 14.0}
+  {#for run in self.runs()}
+    {#if let Run::Value(x, text) = run}<Txt x={x} y={cy} size={10.5} weight={600} mono fill={p.c("textPrimary")}>{text}</Txt>
+    {:else if let Run::Unit(x, text) = run}<Txt x={x} y={cy} size={10.5} mono fill={p.c("textMuted")}>{text}</Txt>
+    {:else if let Run::Dot(x) = run}<Txt x={x} y={cy} size={10.5} mono fill={p.c("text4")}>·</Txt>
+    {/if}
+  {/for}
+  {#if let Some((dot, word)) = self.status}
+    <circle cx={self.x + self.w - 22.0 - crate::screens::fonts::mono(10.5, word)} cy={cy} r="2.5" fill={p.c(dot)}/>
+    <Txt x={self.x + self.w - 12.0} y={cy} size={10.5} mono anchor="end" fill={p.c(dot)}>{word}</Txt>
+  {:else}
+    {let (prev, slots, next) = self.page_slots()}
+    <Glyph slug="chevron-left" cx={prev} cy={cy} size={14.0} fill={p.c("textMuted")}/>
+    {#for (cx, page) in slots}
+      {#if let Page::Number(n, current) = page}
+        <Txt x={cx} y={cy} size={10.5} mono anchor="middle" weight={if *current { 700 } else { 500 }} fill={if *current { p.c("accent") } else { p.c("textMuted") }}>{n}</Txt>
+      {:else}
+        <Txt x={cx} y={cy} size={10.5} mono anchor="middle" fill={p.c("text4")}>…</Txt>
+      {/if}
+    {/for}
+    <Glyph slug="chevron-right" cx={next} cy={cy} size={14.0} fill={p.c("textMuted")}/>
+  {/if}
+</g>

@@ -1,0 +1,11 @@
+<div class="reveal overflow-hidden rounded-lg border border-line bg-panel">
+  <div class="h-[3px] w-full bg-spectrum"></div>
+  <ul class="grid grid-cols-2 sm:grid-cols-4">
+    {#for (kind, sample, color) in Self::TYPES}
+    <li class="flex flex-col gap-1.5 border-b border-r border-line-soft px-4 py-3.5">
+      <span class="font-label text-[0.58rem] uppercase tracking-[0.16em] text-ink-muted">{kind}</span>
+      <span class={@tokens("truncate font-mono text-[0.88rem]", color)}>{sample}</span>
+    </li>
+    {/for}
+  </ul>
+</div>

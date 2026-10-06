@@ -1,0 +1,18 @@
+<div class={@tokens("pointer-events-none aspect-square select-none", self.class.as_deref())} aria-hidden="true">
+  <div class="absolute inset-[30%] rounded-full bg-prism opacity-80 blur-2xl"></div>
+  <div class="absolute inset-[36%] rounded-full bg-prism opacity-90"></div>
+  <svg viewBox="0 0 200 200" class="animate-iris relative size-full">
+    <defs>
+      <radialGradient id="blade-shade" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0.35" stop-color="black" stop-opacity="0"/>
+        <stop offset="1" stop-color="black" stop-opacity="0.28"/>
+      </radialGradient>
+    </defs>
+    {#for (d, fill) in self.blades()}
+    <path d={d} class={@tokens(fill, "stroke-line-strong")} stroke-width="0.45" stroke-linejoin="round"/>
+    {/for}
+    <circle cx="100" cy="100" r="97" fill="url(#blade-shade)" class="opacity-60 dark:opacity-100"/>
+    <circle cx="100" cy="100" r="97.5" fill="none" class="stroke-line-strong" stroke-width="1"/>
+    <circle cx="100" cy="100" r="99.4" fill="none" class="stroke-line" stroke-width="0.6" stroke-dasharray="0.6 2.4"/>
+  </svg>
+</div>

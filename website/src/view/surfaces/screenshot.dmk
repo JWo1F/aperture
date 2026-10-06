@@ -1,0 +1,4 @@
+<figure class={@tokens("relative overflow-hidden rounded-[14px] shadow-window ring-1 ring-black/10 dark:ring-white/8", self.class.as_deref())}>
+  <img src={self.src("dark")} alt={self.alt.clone()} width={self.width} height={self.height} loading={self.loading()} decoding="async" class="hidden h-auto w-full dark:block">
+  <img src={self.src("light")} alt={self.alt.clone()} width={self.width} height={self.height} loading={self.loading()} decoding="async" class="block h-auto w-full dark:hidden">
+</figure>

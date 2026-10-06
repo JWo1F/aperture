@@ -1,0 +1,1 @@
+<a href={self.href.clone()} class="text-ink underline decoration-accent/50 decoration-1 underline-offset-[0.22em] transition-[text-decoration-color,text-decoration-thickness] hover:decoration-accent hover:decoration-2"><slot/></a>

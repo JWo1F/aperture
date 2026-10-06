@@ -1,0 +1,1 @@
+<i class={@tokens("hgi hgi-stroke", format!("hgi-{}", self.name), self.class.as_deref())} aria-hidden="true" {...self.attrs}></i>

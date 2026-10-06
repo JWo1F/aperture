@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{self.document_title()}</title>
+  <meta name="description" content={self.description.clone()}>
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0a0c10">
+  {@html Self::THEME_BOOT}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href={Self::FONTS}>
+  <link rel="stylesheet" href={Self::ICONS}>
+  <link rel="stylesheet" href={self.site.url("/assets/site.css")}>
+  <link rel="icon" type="image/svg+xml" href={self.site.url("/assets/favicon.svg")}>
+  <link rel="apple-touch-icon" href={self.site.url("/assets/app-icon.png")}>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content={self.document_title()}>
+  <meta property="og:description" content={self.description.clone()}>
+  <meta property="og:image" content={self.site.url("/screens/table-dark.png")}>
+  {@html Self::IMPORT_MAP}
+  <script type="module" src={self.site.url("/assets/js/main.js")}></script>
+</head>
+<body data-controller="reveal" class="relative min-h-screen overflow-x-clip bg-ground font-sans text-ink antialiased">
+  <slot/>
+</body>
+</html>

@@ -1,0 +1,4 @@
+<span class={@tokens("inline-flex items-center gap-2.5 font-label text-[0.66rem] font-medium uppercase tracking-[0.16em] text-ink-muted", self.class.as_deref())} {...self.attrs}>
+  {#if let Some(index) = &self.index}<span class="text-accent">{index}</span><span class="h-px w-5 bg-line-strong"></span>{/if}
+  <slot/>
+</span>

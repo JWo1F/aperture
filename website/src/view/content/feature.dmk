@@ -1,0 +1,8 @@
+{use crate::view::primitives::Icon}
+<div class="reveal group flex flex-col gap-3">
+  <span class="inline-grid size-10 place-items-center rounded-md border border-line bg-panel text-accent transition-colors group-hover:border-accent-ring">
+    <Icon name={self.icon.clone()} class="text-[1.15rem]"/>
+  </span>
+  <h3 class="text-[1.02rem] font-semibold tracking-[-0.01em] text-ink">{self.title}</h3>
+  <p class="text-[0.93rem] leading-relaxed text-ink-muted [&_code]:font-mono [&_code]:text-[0.85em] [&_code]:text-ink-soft"><slot/></p>
+</div>

@@ -1,0 +1,9 @@
+{use crate::view::primitives::Icon}
+<button type="button" data-controller="theme" data-action="theme#toggle"
+        class="inline-grid size-9 place-items-center rounded-md text-ink-soft transition-colors hover:bg-raised hover:text-ink"
+        aria-label="Switch colour theme">
+  {# Hugeicons' own stylesheet sets `display` on every glyph, unlayered, so
+     it beats a `hidden` utility; the wrappers carry the visibility. #}
+  <span class="hidden dark:inline-flex"><Icon name="sun-03" class="text-[1.1rem]"/></span>
+  <span class="inline-flex dark:hidden"><Icon name="moon-02" class="text-[1.1rem]"/></span>
+</button>

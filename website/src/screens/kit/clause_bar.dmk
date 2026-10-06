@@ -1,0 +1,26 @@
+{use super::{CodeLine, Glyph, Txt}}
+{let p = self.p}
+<g>
+  <defs>
+    <linearGradient id="clause-label" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color={p.a("accent", 0.0)}/>
+      <stop offset="1" stop-color={p.a("accent", 0.04)}/>
+    </linearGradient>
+  </defs>
+  <rect x={self.x} y={self.y} width={self.w} height="78" fill={p.c("bgDeep")}/>
+  {#for (y, clause) in self.rows()}
+    {let active = clause.code.is_some()}
+    <rect x={self.x} y={y} width="64" height="26" fill="url(#clause-label)"/>
+    <rect x={self.x + 63.0} y={y} width="1" height="26" fill={p.c("hairline")}/>
+    <Txt x={self.x + 12.0} y={y + 13.0} size={10.5} weight={600} spacing={0.42} mono fill={if active { p.c("accent") } else { p.c("textMuted") }}>{clause.label}</Txt>
+    {#if let Some(code) = clause.code}
+      <CodeLine p={p} x={self.x + 74.0} y={y + 13.0} size={11.5} code={code.to_string()}/>
+    {:else}
+      <Txt x={self.x + 74.0} y={y + 13.0} size={11.5} mono fill={p.c("text4")}>{clause.hint}</Txt>
+    {/if}
+    <rect x={self.x + self.w - 28.0} y={y} width="1" height="26" fill={p.c("hairline")}/>
+    <Glyph slug={clause.icon} cx={self.x + self.w - 14.0} cy={y + 13.0} size={13.0} fill={if active { p.c("accent") } else { p.c("textMuted") }}/>
+    <rect x={self.x} y={y + 25.0} width={self.w} height="1" fill={p.c("hairline")}/>
+  {/for}
+  <rect x={self.x} y={self.y + 77.0} width={self.w} height="1" fill={p.c("border")}/>
+</g>

@@ -1,0 +1,18 @@
+{use super::{Glyph, TableGlyph, Txt}}
+{let p = self.p}
+{let cy = self.y + 13.0}
+<g>
+  <rect x={self.x} y={self.y} width={self.w} height="26" fill={p.c("bgDeep")}/>
+  <rect x={self.x} y={self.y + 25.0} width={self.w} height="1" fill={p.c("border")}/>
+  {#for item in self.items()}
+    {let on = item.section == self.active}
+    {let ink = if on { p.c("textPrimary") } else { p.c("textMuted") }}
+    {#if on}
+      <rect x={item.x} y={self.y} width={item.w} height="26" fill={p.c("accentSoft")}/>
+      <rect x={item.x} y={self.y + 24.0} width={item.w} height="2" fill={p.c("accent")}/>
+    {/if}
+    {#if let Some(icon) = item.icon}<Glyph slug={icon} cx={item.x + 15.5} cy={cy} size={11.0} fill={ink.clone()}/>{:else}<TableGlyph cx={item.x + 15.5} cy={cy} size={11.0} color={ink.clone()}/>{/if}
+    <Txt x={item.x + 27.0} y={cy} size={10.0} weight={600} spacing={0.6} mono fill={ink.clone()}>{item.label}</Txt>
+    {#if let Some(count) = item.count}<Txt x={item.x + item.w - 10.0} y={cy} size={9.5} weight={600} mono anchor="end" fill={if on { p.c("accent") } else { p.c("text4") }}>{count}</Txt>{/if}
+  {/for}
+</g>

@@ -1,0 +1,8 @@
+<dl class={@tokens("flex flex-wrap items-stretch overflow-hidden rounded-lg border border-line bg-panel/70 backdrop-blur", self.class.as_deref())}>
+  {#for (term, value) in &self.items}
+  <div class="flex flex-col gap-1 border-r border-line-soft px-4 py-2.5 last:border-r-0">
+    <dt class="font-label text-[0.58rem] uppercase tracking-[0.16em] text-ink-muted">{term}</dt>
+    <dd class="font-mono text-[0.82rem] text-ink">{value}</dd>
+  </div>
+  {/for}
+</dl>

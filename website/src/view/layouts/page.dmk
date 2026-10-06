@@ -1,0 +1,7 @@
+{use super::Base}
+{use crate::view::navigation::{SiteFooter, SiteHeader}}
+<Base site={self.site} title={self.title.clone()} description={self.description.clone()}>
+  <SiteHeader site={self.site}/>
+  <main id="main"><slot/></main>
+  <SiteFooter site={self.site}/>
+</Base>

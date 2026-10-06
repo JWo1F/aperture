@@ -1,0 +1,21 @@
+{use super::{Glyph, KbdChip, Txt}}
+{let p = self.p}
+{let cy = self.cy()}
+<g>
+  <rect x={self.x} y={self.y} width={self.w} height="34" fill={p.c("bgDeep")}/>
+  <rect x={self.x} y={self.y + 33.0} width={self.w} height="1" fill={p.c("border")}/>
+  <rect x={self.x + 8.0} y={cy - 12.0} width={self.run_w()} height="24" rx="6" fill={p.c("accent")}/>
+  <Glyph slug="play" cx={self.x + 8.0 + 15.0} cy={cy} size={12.0} fill="#ffffff"/>
+  <Txt x={self.x + 8.0 + 27.0} y={cy} size={11.5} weight={600} fill="#ffffff">Run</Txt>
+  {#for (kx, key) in self.chips(self.run_keys_x(), &["⌘", "↵"], 9.5)}<KbdChip p={p} x={kx} cy={cy} key={key.to_string()} size={9.5} on_accent/>{/for}
+  {#for g in self.ghosts()}
+    <rect x={g.x} y={cy - 12.0} width={g.w} height="24" rx="6" fill="none" stroke={p.c("border")}/>
+    <Glyph slug={g.icon} cx={g.x + 15.0} cy={cy} size={12.0} fill={p.c("textSecondary")}/>
+    <Txt x={g.x + 26.0} y={cy} size={11.5} weight={500} fill={p.c("textSecondary")}>{g.label}</Txt>
+    {#for (kx, key) in self.chips(Self::ghost_keys_x(&g), g.keys, 10.0)}<KbdChip p={p} x={kx} cy={cy} key={key.to_string()} size={10.0}/>{/for}
+  {/for}
+  <rect x={self.rail_x()} y={cy - 8.0} width="1" height="16" fill={p.c("border")}/>
+  <Txt x={self.readout_x()} y={cy} size={10.5} mono anchor="end" fill={p.c("text4")}>{format!("{}  ·  ", self.position)}</Txt>
+  <Txt x={self.readout_x()} y={cy} size={10.5} mono weight={600} spacing={0.5} fill={p.c("textSecondary")}>{self.kind}</Txt>
+  <Glyph slug="eraser" cx={self.x + self.w - 20.0} cy={cy} size={16.0} fill={p.c("textMuted")}/>
+</g>

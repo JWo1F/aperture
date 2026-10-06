@@ -1,0 +1,9 @@
+{use crate::screens::kit::{ClauseBar, Grid, Pagebar, Sidebar, TabStrip, Toolbar}}
+<g>
+  <Sidebar p={self.p} y={36.0} h={self.h() - 36.0} active={Some("orders")}/>
+  <TabStrip p={self.p} x={self.work_x()} y={36.0} w={self.work_w()} tabs={self.tabs()}/>
+  <ClauseBar p={self.p} x={self.work_x()} y={72.0} w={self.work_w()} clauses={self.clauses()}/>
+  <Grid p={self.p} id="orders-grid" x={self.work_x()} y={self.grid_y()} w={self.work_w()} h={self.grid_h()} data={self.data}/>
+  <Pagebar p={self.p} x={self.work_x()} y={self.h() - 28.0} w={self.work_w()} stats={self.stats()} pages={self.pages()} status={None}/>
+  <Toolbar p={self.p} w={self.w()} pending={Some(3)}/>
+</g>

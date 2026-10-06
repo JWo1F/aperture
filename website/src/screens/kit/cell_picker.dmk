@@ -1,0 +1,50 @@
+{use super::{Glyph, KbdChip, Txt}}
+{let p = self.p}
+{let (x, y, w, h) = (self.x, self.y, self.w(), self.h())}
+<g>
+  <defs>
+    <filter id="pop-shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color={p.c("shadow")}/></filter>
+  </defs>
+  <rect x={x} y={y} width={w} height={h} rx="8" fill={p.c("surface")} stroke={p.c("border")} filter="url(#pop-shadow)"/>
+
+  <Txt x={x + 12.0} y={y + 15.0} size={11.5} weight={500} mono fill={p.c("textPrimary")}>placed_at</Txt>
+  <Txt x={x + 12.0 + crate::screens::fonts::mono(11.5, "placed_at") + 8.0} y={y + 15.0} size={11.0} mono fill={p.c("textMuted")}>timestamptz</Txt>
+  <Txt x={x + w - 12.0} y={y + 15.0} size={11.0} weight={500} anchor="end" fill={p.c("accent")}>Edited</Txt>
+  <rect x={x} y={y + 29.0} width={w} height="1" fill={p.c("hairline")}/>
+
+  {let (segments, marks) = self.segments()}
+  {let vcy = self.value_cy()}
+  {#for s in &segments}
+    {#if s.editing}<rect x={s.x} y={vcy - 12.0} width={s.w} height="24" rx="3" fill={p.c("accentSoft")}/>{/if}
+    <Txt x={s.x + s.w / 2.0} y={vcy} size={14.0} weight={500} mono anchor="middle" fill={p.c("textPrimary")}>{s.text}</Txt>
+  {/for}
+  {#for (mx, mark) in marks}<Txt x={mx} y={vcy} size={14.0} mono anchor="middle" fill={p.c("text4")}>{mark}</Txt>{/for}
+  <rect x={self.tz_x()} y={vcy - 12.0} width="88" height="24" rx="6" fill={p.c("bg")} stroke={p.c("border")}/>
+  <Txt x={self.tz_x() + 10.0} y={vcy} size={12.0} mono fill={p.c("accent")}>+02:00</Txt>
+  <Glyph slug="arrow-down-01" cx={self.tz_x() + 76.0} cy={vcy} size={11.0} fill={p.c("textMuted")}/>
+
+  {#for (cx, cw, icon, label, primary) in self.quick()}
+    {let ink = if primary { p.c("accent") } else { p.c("textSecondary") }}
+    {#if primary}<rect x={cx} y={self.quick_cy() - 11.0} width={cw} height="22" rx="6" fill={p.c("accentSoft")}/>{/if}
+    {let mut tx = cx + 7.0}
+    {#if let Some(icon) = icon}<Glyph slug={icon} cx={tx + 5.5} cy={self.quick_cy()} size={11.0} fill={ink.clone()}/>{ tx += 15.0; }{/if}
+    <Txt x={tx} y={self.quick_cy()} size={11.5} weight={500} fill={ink.clone()}>{label}</Txt>
+  {/for}
+
+  <Txt x={x + 12.0} y={self.cal_header_cy()} size={12.0} weight={600} fill={p.c("textPrimary")}>October 2026</Txt>
+  <Glyph slug="chevron-left" cx={x + w - 61.0} cy={self.cal_header_cy()} size={13.0} fill={p.c("textMuted")}/>
+  <Glyph slug="record" cx={x + w - 39.0} cy={self.cal_header_cy()} size={7.0} fill={p.c("textMuted")}/>
+  <Glyph slug="chevron-right" cx={x + w - 17.0} cy={self.cal_header_cy()} size={13.0} fill={p.c("textMuted")}/>
+  {#for (dx, d) in self.dow()}<Txt x={dx} y={self.dow_cy()} size={10.0} anchor="middle" fill={p.c("text4")}>{d}</Txt>{/for}
+  {#for d in self.days()}
+    {#if d.selected}<rect x={d.x + 1.0} y={d.y + 1.0} width={self.cell_w() - 2.0} height="24" rx="6" fill={p.c("accent")}/>{/if}
+    <Txt x={d.x + self.cell_w() / 2.0} y={d.y + 13.0} size={11.5} weight={500} mono anchor="middle" fill={if d.selected { "#ffffff".to_string() } else if d.today { p.c("accent") } else if d.in_month { p.c("textSecondary") } else { p.c("text4") }}>{d.n}</Txt>
+  {/for}
+
+  <rect x={x} y={self.footer_cy() - 19.0} width={w} height="1" fill={p.c("hairline")}/>
+  {#for (fx, label) in self.footer_actions()}<Txt x={fx} y={self.footer_cy()} size={11.5} weight={500} fill={p.c("textSecondary")}>{label}</Txt>{/for}
+  {let sw = self.save_w()}
+  <rect x={x + w - 8.0 - sw} y={self.footer_cy() - 12.0} width={sw} height="24" rx="6" fill={p.c("accent")}/>
+  <Txt x={x + w - 8.0 - sw + 10.0} y={self.footer_cy()} size={11.5} weight={500} fill="#ffffff">Save</Txt>
+  <KbdChip p={p} x={x + w - 8.0 - 4.0 - super::KbdChip::width("⌘↵", 9.5)} cy={self.footer_cy()} key="⌘↵" size={9.5} on_accent/>
+</g>

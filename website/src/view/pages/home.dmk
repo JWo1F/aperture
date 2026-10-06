@@ -1,0 +1,186 @@
+{use crate::view::layouts::{Container, Page, Section}}
+{use crate::view::primitives::{Badge, Button, Icon, Kbd, Label, Tone, Variant}}
+{use crate::view::surfaces::{CodeBlock, Lang, Panel, Screenshot}}
+{use crate::view::content::{Feature, SectionHeader, ShortcutRow, Stat}}
+{use crate::view::marketing::{HeroIris, Showcase, SpecStrip, Spectrum}}
+<Page site={self.site} title="" description="Aperture is a native macOS client for PostgreSQL and SQLite: an editable data grid, a multi-statement SQL editor, EXPLAIN plans with advice, and a ⌘K palette.">
+
+  {# ── Hero ───────────────────────────────────────────────────────────── #}
+  <section class="relative isolate overflow-hidden pt-14 md:pt-20">
+    <div class="absolute inset-0 -z-20 bg-dotfield opacity-70"></div>
+    <HeroIris class="absolute -right-[18%] -top-[12%] -z-10 w-[min(92vw,780px)] opacity-90 md:-right-[8%] lg:-right-[2%]"/>
+    <Container class="relative">
+      <div class="flex max-w-[40rem] flex-col items-start gap-7">
+        <span class="animate-rise" style="--i:0"><Badge tone={Tone::Accent} dot>v{self.site.version()} · native on macOS</Badge></span>
+        <h1 class="animate-rise font-display text-[clamp(2.7rem,7.4vw,5.6rem)] font-semibold leading-[0.94] tracking-[-0.05em] text-balance" style="--i:1">A close look at <span class="bg-spectrum bg-clip-text text-transparent">PostgreSQL</span> and SQLite.</h1>
+        <p class="animate-rise max-w-[34rem] text-[1.12rem] leading-relaxed text-ink-soft text-pretty" style="--i:2">Aperture is a dense, keyboard-driven database client in a native window. Browse a schema, edit rows in place, read a query plan, and send it all in one transaction you reviewed first.</p>
+        <div class="animate-rise flex flex-wrap items-center gap-3" style="--i:3">
+          <Button href={self.site.url("/#install")} icon="download-04" trail="arrow-right-01">Build it from source</Button>
+          <Button href={self.repo().to_string()} variant={Variant::Secondary} icon="github-01">Read the code</Button>
+        </div>
+        <SpecStrip items={self.facts()} class="animate-rise [--i:4]"/>
+      </div>
+    </Container>
+    <Container class="relative mt-16 md:mt-24">
+      {let (name, alt, w, h) = Self::shot("table")}
+      <div class="animate-rise relative" style="--i:5">
+        <div class="absolute -inset-x-8 -bottom-10 top-1/3 -z-10 bg-spectrum opacity-25 blur-3xl dark:opacity-20"></div>
+        <Screenshot site={self.site} name={name} alt={alt} width={w} height={h} eager/>
+      </div>
+    </Container>
+    <div class="h-16 md:h-20"></div>
+  </section>
+
+  {# ── 01 Grid ────────────────────────────────────────────────────────── #}
+  <Section id="grid">
+    <Container class="flex flex-col gap-14">
+      <SectionHeader index="01" eyebrow="The grid">
+        Edit like a spreadsheet. <em>Commit like a DBA.</em>
+        <p slot="lede">Double-click a cell and an editor built for its type opens on it. Changes stage in memory, painted where they will land, until you review them and send the batch as a single transaction.</p>
+      </SectionHeader>
+      <Showcase site={self.site} slides={self.grid_slides()}/>
+      <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+        <Feature icon="pencil-edit-02" title="Type-aware editors">Calendars for dates, HH:MM:SS segments for time and timetz, a toggle for bool, live-highlighted JSON. <code>NULL</code> and <code>DEFAULT</code> are one click, and greyed out where the schema forbids them.</Feature>
+        <Feature icon="shield-01" title="Exactly one row, or nothing">Rows are addressed by <code>ctid</code> on Postgres and <code>rowid</code> on SQLite. A statement that touches anything but one row rolls the whole batch back instead of guessing.</Feature>
+        <Feature icon="link-square-02" title="Follow the keys">Foreign-key columns carry a ↗. Click through to the referenced row, filtered, and step back with ⌘[ — history covers every tab switch, filter and sort.</Feature>
+        <Feature icon="filter" title="Clauses, not dialogs">One line each for <code>WHERE</code>, <code>SELECT</code> and <code>ORDER</code>, with SQL highlighting. Click headers for multi-column sorts. Filter by any cell's value from its menu.</Feature>
+      </div>
+      <div class="grid items-start gap-10 lg:grid-cols-[0.8fr_1.2fr]">
+        <div class="reveal flex flex-col gap-4">
+          <Label>Every type has a colour</Label>
+          <p class="text-[0.98rem] leading-relaxed text-ink-soft">Cells are tinted by what they hold, so a column of timestamps reads differently from a column of totals before you read a single digit — and <span class="font-mono italic text-ink-muted">NULL</span> never looks like the string <span class="font-mono text-t-str">'NULL'</span>.</p>
+        </div>
+        <Spectrum/>
+      </div>
+    </Container>
+  </Section>
+
+  {# ── 02 Editor ──────────────────────────────────────────────────────── #}
+  <Section id="editor">
+    <Container class="flex flex-col gap-14">
+      <div class="grid items-end gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+        <SectionHeader index="02" eyebrow="The editor">
+          Scripts in. <em>Statements out.</em>
+          <p slot="lede">A real multi-line editor with schema-fed autocomplete and a ▶ beside every statement. <Kbd keys="⌘ ↵" small/> runs the one under the caret; <Kbd keys="⌘ ⇧ ↵" small/> runs them all, in order.</p>
+        </SectionHeader>
+        <div class="reveal grid grid-cols-3 divide-x divide-line-soft overflow-hidden rounded-lg border border-line bg-panel">
+          <Stat value="10k" label="row cap on a bare select"/>
+          <Stat value="400ms" label="autosave debounce"/>
+          <Stat value="500" label="statements in the log"/>
+        </div>
+      </div>
+      {let (name, alt, w, h) = Self::shot("editor")}
+      <div class="reveal"><Screenshot site={self.site} name={name} alt={alt} width={w} height={h}/></div>
+      <div class="grid items-start gap-10 *:min-w-0 lg:grid-cols-[1fr_1fr]">
+        <div class="reveal flex flex-col gap-6">
+          <h3 class="font-display text-[1.6rem] font-semibold leading-tight tracking-[-0.03em]">A splitter that reads Postgres the way Postgres does.</h3>
+          <p class="text-[0.98rem] leading-relaxed text-ink-soft">Statements are split client-side, then sent one by one — so the extended-query protocol's “cannot insert multiple commands” never reaches you. Single- and double-quoted strings, <span class="font-mono text-[0.9em] text-ink">E'…'</span> escapes, <span class="font-mono text-[0.9em] text-ink">$$ … $$</span> and <span class="font-mono text-[0.9em] text-ink">$tag$ … $tag$</span> bodies, line and block comments: a semicolon inside any of them is just a character.</p>
+          <ul class="flex flex-col gap-3 text-[0.94rem] text-ink-soft">
+            <li class="flex gap-3"><Icon name="tick-02" class="mt-1 text-accent"/><span>A bare <span class="font-mono text-[0.9em]">SELECT</span> without <span class="font-mono text-[0.9em]">LIMIT</span> is capped at 10,000 rows, and the grid says when it was.</span></li>
+            <li class="flex gap-3"><Icon name="tick-02" class="mt-1 text-accent"/><span>Every query autosaves to the connection and survives a restart in the sidebar.</span></li>
+            <li class="flex gap-3"><Icon name="tick-02" class="mt-1 text-accent"/><span>Results export to CSV or Markdown — a file, streamed with a cancel button, or the clipboard.</span></li>
+          </ul>
+        </div>
+        <CodeBlock code={self.script()} lang={Lang::Sql} label="three statements · not five" class="reveal"/>
+      </div>
+    </Container>
+  </Section>
+
+  {# ── 03 Plans ───────────────────────────────────────────────────────── #}
+  <Section id="plans">
+    <Container class="flex flex-col gap-14">
+      <SectionHeader index="03" eyebrow="Query plans">
+        EXPLAIN, <em>explained.</em>
+        <p slot="lede">The plan as a tree of cards, each with its share of the time as a bar. Then a rule pass reads it the way you would at 2 a.m. and says what it sees.</p>
+      </SectionHeader>
+      {let (name, alt, w, h) = Self::shot("plan")}
+      <div class="reveal"><Screenshot site={self.site} name={name} alt={alt} width={w} height={h}/></div>
+      <div class="reveal flex flex-col gap-5">
+        <Label>What the rule pass looks for</Label>
+        <ul class="grid gap-px overflow-hidden rounded-lg border border-line bg-line-soft sm:grid-cols-2 lg:grid-cols-4">
+          {#for (title, body) in self.rules()}
+          <li class="flex flex-col gap-2 bg-panel p-5">
+            <Icon name="alert-02" class="text-[1.05rem] text-warn"/>
+            <p class="text-[0.95rem] font-medium">{title}</p>
+            <p class="text-[0.86rem] leading-relaxed text-ink-muted">{body}</p>
+          </li>
+          {/for}
+        </ul>
+      </div>
+    </Container>
+  </Section>
+
+  {# ── 04 Safety ──────────────────────────────────────────────────────── #}
+  <Section id="safety">
+    <Container class="flex flex-col gap-14">
+      <SectionHeader index="04" eyebrow="Credentials & safety">
+        Nothing you'd mind <em>losing your laptop with.</em>
+        <p slot="lede">Connections, saved queries and history live in one SQLCipher-encrypted file. Passwords can stay out of it entirely.</p>
+      </SectionHeader>
+      <div class="grid gap-4 md:grid-cols-2">
+        <Panel label="The store" meta="store.sqlite" class="reveal">
+          <div class="flex flex-col gap-3 p-5 text-[0.94rem] leading-relaxed text-ink-soft">
+            <p>Everything persisted is one SQLite file under Application Support, keyed with SQLCipher 4 — a wrong passphrase fails on the first read, and any SQLCipher tool can open it with the right one.</p>
+            <p>The passphrase can be remembered in your login Keychain, so the app unlocks with the Mac.</p>
+          </div>
+        </Panel>
+        <Panel label="Password commands" meta="$SHELL -l -c" class="reveal">
+          <div class="flex flex-col gap-4 p-5 text-[0.94rem] leading-relaxed text-ink-soft">
+            <p>Instead of a password, give a connection a shell command. It runs through your login shell on every connect, and its output is the password — 1Password, <span class="font-mono text-[0.9em]">pass</span>, Vault, whatever you already use.</p>
+            <CodeBlock code={self.password()} lang={Lang::Shell} label="password command"/>
+          </div>
+        </Panel>
+        <Panel label="The clause gate" meta="validateClauseSnippet" class="reveal">
+          <div class="flex flex-col gap-3 p-5 text-[0.94rem] leading-relaxed text-ink-soft">
+            <p>The <span class="font-mono text-[0.9em]">WHERE</span>, <span class="font-mono text-[0.9em]">SELECT</span> and <span class="font-mono text-[0.9em]">ORDER</span> fields take free SQL by design — and refuse a second statement before anything is concatenated.</p>
+            <p class="font-mono text-[0.85rem]"><span class="text-ink">1=1; drop table orders</span> <span class="text-danger">→ refused</span></p>
+          </div>
+        </Panel>
+        <Panel label="Connection health" meta="every 30s" class="reveal">
+          <div class="flex flex-col gap-3 p-5 text-[0.94rem] leading-relaxed text-ink-soft">
+            <p>A quiet keepalive notices a dropped socket. You get a reconnect banner that keeps your tabs and your place, not a trip back to the welcome screen.</p>
+            <p>Auto-refresh pauses itself while edits are staged.</p>
+          </div>
+        </Panel>
+      </div>
+    </Container>
+  </Section>
+
+  {# ── 05 Keys ────────────────────────────────────────────────────────── #}
+  <Section id="keys">
+    <Container class="grid items-start gap-14 *:min-w-0 lg:grid-cols-[1.1fr_0.9fr]">
+      <div class="flex flex-col gap-10">
+        <SectionHeader index="05" eyebrow="Keyboard">
+          Your hands <em>stay put.</em>
+          <p slot="lede"><Kbd keys="⌘ K" small/> fuzzy-finds tables, open tabs, saved queries, connections and commands from one box.</p>
+        </SectionHeader>
+        {let (name, alt, w, h) = Self::shot("palette")}
+        <div class="reveal"><Screenshot site={self.site} name={name} alt={alt} width={w} height={h}/></div>
+      </div>
+      <Panel label="Shortcuts" meta="⌘ = command" class="reveal lg:mt-40">
+        <ul class="px-4 py-1">
+          {#for (keys, action) in self.keys()}<ShortcutRow keys={keys.to_string()} action={action.to_string()}/>{/for}
+        </ul>
+      </Panel>
+    </Container>
+  </Section>
+
+  {# ── 06 Install ─────────────────────────────────────────────────────── #}
+  <Section id="install" class="overflow-hidden">
+    <HeroIris class="absolute -bottom-[40%] -left-[12%] -z-10 w-[min(80vw,620px)] opacity-40"/>
+    <Container class="grid items-center gap-12 *:min-w-0 lg:grid-cols-[0.9fr_1.1fr]">
+      <SectionHeader index="06" eyebrow="Build it">
+        Open source. <em>Bring your own build.</em>
+        <p slot="lede">There is no installer — Aperture is built for one person and shared as code. Clone it, build it with Flutter and full Xcode, and make it yours.</p>
+      </SectionHeader>
+      <div class="flex flex-col gap-4">
+        <CodeBlock code={self.build()} lang={Lang::Shell} label="terminal · zsh" class="reveal"/>
+        <div class="reveal flex flex-wrap items-center gap-x-6 gap-y-2 text-[0.88rem] text-ink-muted">
+          <span class="inline-flex items-center gap-2"><Icon name="apple" class="text-ink-soft"/>macOS 12 or later</span>
+          <span class="inline-flex items-center gap-2"><Icon name="code-square" class="text-ink-soft"/>Flutter stable 3.x</span>
+          <span class="inline-flex items-center gap-2"><Icon name="git-fork" class="text-ink-soft"/>Fork it, it's yours</span>
+        </div>
+      </div>
+    </Container>
+  </Section>
+</Page>

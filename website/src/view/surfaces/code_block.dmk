@@ -1,0 +1,11 @@
+{use crate::view::primitives::{Icon, Label}}
+<div data-controller="copy" class={@tokens("group relative overflow-hidden rounded-lg border border-line bg-panel", self.class.as_deref())}>
+  <div class="flex h-9 items-center justify-between border-b border-line-soft bg-raised/60 pl-3.5 pr-1.5">
+    <Label>{self.label.clone().unwrap_or_default()}</Label>
+    <button type="button" data-action="copy#copy" class="inline-flex h-7 items-center gap-1.5 rounded-sm px-2 font-label text-[0.6rem] uppercase tracking-[0.12em] text-ink-muted transition-colors hover:bg-raised-2 hover:text-ink" aria-label="Copy to clipboard">
+      <span data-copy-target="idle" class="inline-flex items-center gap-1.5"><Icon name="copy-01" class="text-[0.85rem]"/>Copy</span>
+      <span data-copy-target="done" hidden class="inline-flex items-center gap-1.5 text-success"><Icon name="tick-02" class="text-[0.85rem]"/>Copied</span>
+    </button>
+  </div>
+  <pre class="overflow-x-auto px-4 py-3.5 font-mono text-[0.82rem] leading-[1.7] text-ink"><code data-copy-target="source">{@html self.body()}</code></pre>
+</div>

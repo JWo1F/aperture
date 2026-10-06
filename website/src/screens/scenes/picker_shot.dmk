@@ -1,0 +1,8 @@
+{use crate::screens::kit::{CellPicker, Window}}
+{use crate::screens::{H, W}}
+{use super::TableBody}
+{let data = super::overlay_shots::data()}
+<Window p={self.p} w={W} h={H}>
+  <TableBody p={self.p} data={&data}/>
+  <CellPicker p={self.p} x={784.0} y={308.0}/>
+</Window>

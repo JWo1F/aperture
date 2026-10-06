@@ -1,0 +1,1 @@
+<text x={self.x} y={self.baseline()} font-family={self.family()} font-size={self.size} font-weight={self.weight.unwrap_or(400)} font-style={self.style()} letter-spacing={self.spacing} text-anchor={self.anchor} fill={self.fill.clone()} opacity={self.opacity} xml:space="preserve"><slot/></text>

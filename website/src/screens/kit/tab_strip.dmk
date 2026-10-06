@@ -1,0 +1,25 @@
+{use super::tab_strip::TabKind}
+{use super::{Glyph, Txt}}
+{let p = self.p}
+<g>
+  <rect x={self.x} y={self.y} width={self.w} height="36" fill={p.c("bgDeep")}/>
+  <rect x={self.x} y={self.y + 35.0} width={self.w} height="1" fill={p.c("border")}/>
+  {#for t in self.placed()}
+    {let cy = self.y + 18.0}
+    {#if t.tab.active}<rect x={t.x} y={self.y + 3.0} width={t.w} height="30" rx="7" fill={p.c("surface")} stroke={p.c("borderSoft")} stroke-width="0.5"/>{/if}
+    {let dot = self.dot(t.tab.kind)}
+    {#if t.tab.dirty}
+      <circle cx={t.x + 17.0} cy={cy} r="4.4" fill="none" stroke={p.c("warn")} stroke-width="1.2"/>
+      <circle cx={t.x + 17.0} cy={cy} r="2" fill={p.c("warn")}/>
+    {:else}
+      {#if t.tab.active}<circle cx={t.x + 17.0} cy={cy} r="4" fill={p.a(dot, 0.35)} filter="url(#soft-glow)"/>{/if}
+      <circle cx={t.x + 17.0} cy={cy} r="3" fill={if t.tab.active { p.c(dot) } else { p.a(dot, 0.55) }}/>
+    {/if}
+    <Txt x={t.x + 33.0} y={cy} size={12.5} weight={500} spacing={-0.2} fill={if t.tab.active { p.c("textPrimary") } else { p.c("textMuted") }}>{t.tab.label}</Txt>
+    {#if t.tab.kind == TabKind::Schema}
+      <Txt x={t.x + 33.0 + crate::screens::fonts::width("Inter", 500, 12.5, -0.2, t.tab.label)} y={cy} size={12.5} weight={500} opacity={0.55} fill={p.c("textMuted")}>{"  ddl"}</Txt>
+    {/if}
+    {#if t.tab.active}<Glyph slug="cancel-01" cx={t.x + t.w - 12.0} cy={cy} size={11.0} fill={p.c("textMuted")}/>{/if}
+  {/for}
+  <Glyph slug="add-01" cx={self.plus_x()} cy={self.y + 18.0} size={14.0} fill={p.c("textMuted")}/>
+</g>
