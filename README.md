@@ -1,181 +1,162 @@
 # Aperture
 
-A native macOS database client for PostgreSQL and SQLite — dense and
-keyboard-driven, built in Flutter.
+A native macOS client for PostgreSQL and SQLite: dense, keyboard-driven,
+editable down to the cell. Built in Flutter.
 
-Power-user density over consumer polish: a translucent schema sidebar,
-an editable data grid, a multi-statement SQL editor, and a ⌘K command
-palette. Source is open — fork it and run your own.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
+  <img alt="Aperture showing a filtered, sorted orders table with staged edits" src="docs/screenshot-light.png">
+</picture>
 
-## What it does
+Aperture started as one person's daily tool, and it still prefers density
+and correctness over consumer polish. It is open source so you can use it,
+read it, or fork it and make it yours.
+
+## Features
 
 **Browse**
-- Translucent sidebar with saved connections, recently-used tables,
-  favourites, and the live schema tree.
-- Schema search (⌘F) filters the table list as you type.
-- ⌘K command palette jumps to any table, switches connections, runs
-  named actions.
+- A sidebar with your saved connections, pinned tables, saved queries and
+  the live schema tree, all filtered by one search field.
+- <kbd>⌘K</kbd> opens a command palette that fuzzy-finds tables, open
+  tabs, recent items, saved queries, connections and commands.
+- <kbd>⌘[</kbd> and <kbd>⌘]</kbd> step back and forth through every tab
+  switch, filter and sort.
 
-**Query data**
-- Editable data grid with lazy `ListView.builder` rendering, resizable
-  columns (per-table widths persisted), type-aware cell colours, inline
-  JSON syntax highlighting, hover-to-reveal full values.
-- Single-row clausebar with `SELECT` · `WHERE` · `ORDER BY` inputs —
-  applied on `↵`, with SQL syntax highlighting and column-header
-  click-to-sort with multi-column priority.
-- Right-click any cell for: copy / copy as JSON / Set NULL / Set DEFAULT
-  / revert / filter by value / sort / follow foreign key / find row in
-  related table.
-- Foreign-key columns marked with a ↗ indicator; click → opens the
-  referenced table filtered to the matching row.
-- Tab navigation history (⌘[ / ⌘]) — back/forward through every tab
-  switch *and* filter / sort change.
-
-**Edit cells**
-- Double-click any cell for a type-aware overlay picker anchored to the
-  cell:
-  - text / json (with live JSON highlight)
-  - bool toggle
-  - integer / numeric (digit-only input filters)
-  - date (refined Material 3 calendar with Aperture palette)
-  - time / timetz (HH : MM : SS . ms segments + optional timezone row)
-  - timestamp / timestamptz (calendar + time + tz)
-- Set NULL / Set DEFAULT / Today / Now in the picker footer; disabled
-  when the schema forbids them.
-- Edits, row deletes and queued inserts stage in memory with a per-cell
-  highlight; **Apply** sends the batch as one transaction, keyed by
-  `ctid` on Postgres and `rowid` on SQLite. A statement that doesn't
-  affect exactly one row rolls the whole batch back rather than guessing.
-- Pending-edits modal (click the badge) previews every statement with
-  full SQL highlighting before commit.
+**Edit data**
+- The grid colours each cell by its type, keeps per-table column widths,
+  and shows the full value on hover.
+- Clause fields for `WHERE`, `SELECT` and `ORDER` take free SQL with
+  highlighting. Click a column header for a multi-column sort.
+- Double-click a cell to open an editor built for its type: text and JSON,
+  bool, integer and numeric, date, time and timetz, timestamp and
+  timestamptz. `NULL` and `DEFAULT` are one click away, and disabled
+  wherever the schema forbids them.
+- Edits, deletes and inserts stage in memory first. Before anything runs,
+  you see every statement highlighted. **Apply** then sends the whole batch
+  as one transaction, finding rows by `ctid` on Postgres and `rowid` on
+  SQLite. If any statement would touch anything other than exactly one
+  row, the whole batch rolls back.
+- Right-click a cell to copy it (as a value, pretty JSON, or
+  `column = …`), filter by its value, sort, follow its foreign key, or find
+  the row in a related table.
 
 **Run SQL**
-- Multi-line code editor with `pgsql` grammar, autocomplete fed by the
-  loaded schema (tables + columns), gutter line numbers + a per-
-  statement ▶ icon to run blocks individually.
-- Statements are parsed properly — single and double-quoted strings,
-  `E'…'` escape strings, `$$ … $$` and `$tag$ … $tag$` bodies (so
-  `CREATE FUNCTION` and `DO` blocks survive), line and block comments.
-  `⌘↵` runs everything; `⌘⇧↵` runs the statement under the caret.
-- A bare `SELECT` with no `LIMIT` is capped at 10,000 rows, and the grid
-  says when it was.
-- Multi-statement scripts are split client-side and executed in
-  sequence — the postgres extended-query protocol's "cannot insert
-  multiple commands" error is handled invisibly.
-- Per-query autosave (400 ms debounce) to the active connection's
-  saved-query list; queries appear in the sidebar and survive restarts.
-- Right-click saved queries for: open / rename / duplicate / copy SQL /
-  delete.
+- The editor has schema-fed autocomplete and a ▶ beside every statement.
+  <kbd>⌘↵</kbd> runs the statement under the caret; <kbd>⌘⇧↵</kbd> runs
+  the whole script.
+- Scripts are split into statements by the client, so semicolons inside
+  `'…'`, `E'…'`, `$$ … $$` / `$tag$ … $tag$` bodies and comments don't
+  break them up, and each statement is sent on its own.
+- A bare `SELECT` without a `LIMIT` is capped at 10,000 rows, and the grid
+  tells you when that happened.
+- Queries save automatically to their connection and survive restarts.
 
-**Explore schema**
-- `CREATE TABLE` viewer per table — selectable, copyable, line-numbered.
-  On Postgres the DDL is reconstructed from `pg_catalog`: columns with
-  `format_type()` output, PK / FK / UNIQUE / CHECK constraints via
-  `pg_get_constraintdef`, indexes from `pg_indexes`, column + table
-  comments. On SQLite it's the verbatim `sqlite_master` text, reflowed
-  one column per line, plus standalone index DDL.
-- `EXPLAIN` plan view with a node tree and a rule-based advice pass —
-  sequential scans, disk sorts, estimate mismatches, batched hashes.
+**Understand**
+- `EXPLAIN` plans are drawn as a tree of timed nodes. A set of rules reads
+  each plan and flags sequential scans, sorts that spill to disk, estimate
+  mismatches and hash batches.
+- Every table and view gets an object tab with plain-language **Info** and
+  **DDL**: rebuilt from `pg_catalog` on Postgres, or taken verbatim from
+  `sqlite_master` on SQLite.
+- The activity log (<kbd>⌘L</kbd>) records every statement the app sent,
+  with its timing, row count and errors.
 
-**Keep an eye on things**
-- Activity log (⌘L): every statement the app sent, with timing, rows
-  affected and errors — a 500-entry ring buffer for the session.
-- Floating toasts for anything that fails out of band.
-- 30-second keepalive; a dropped socket becomes a reconnect banner that
-  keeps your tabs and your place instead of dumping you on the welcome
-  panel.
-- Optional per-tab auto-refresh, which pauses itself while edits are
-  staged.
+**Stay connected**
+- A 30-second keepalive notices a dropped socket. Instead of throwing you
+  back to the welcome screen, it shows a reconnect banner and keeps your
+  tabs.
+- Tabs can auto-refresh, and they pause while edits are staged.
+- Any table or result exports to CSV or Markdown, either streamed to a
+  file (with a cancel button) or copied to the clipboard.
 
-**Export**
-- CSV and Markdown, from any table view (current page or all filtered
-  rows) or query result — through the native macOS save dialog, streamed
-  to disk with a cancel button, or straight to the clipboard. Adding a
-  format is one subclass in `lib/services/exporter.dart`.
+## Credentials and storage
 
-**macOS-native window**
-- Transparent titlebar with full-size content view; traffic lights
-  overlay our toolbar; pan-to-move and double-click-to-zoom wired via a
-  Swift method channel.
-- Custom **command palette** (⌘K), **back/forward** (⌘[ / ⌘]),
-  **search** (⌘F) keyboard shortcuts.
+Everything Aperture keeps (connections, saved queries, history,
+preferences) lives in one SQLite file encrypted with **SQLCipher 4**:
+`~/Library/Application Support/com.jwo1f.aperture/store.sqlite`. It is
+locked by a passphrase you choose on first launch. You can have that
+passphrase remembered in your login Keychain. There is no recovery: lose
+the passphrase and the store has to be erased.
 
-## Aesthetic
+A connection's password can live in the encrypted store, or it can come
+from a **password command**: a shell command that runs through your login
+shell on every connect and prints the password, e.g.
 
-"Aperture" theme — near-black panels, a single indigo accent
-(`#5B7CFA`), hairline borders, Inter for UI text and JetBrains Mono for
-data / SQL / identifiers. The toolbars use a synth-panel rhythm of
-labelled segments separated by 1 px vertical rails.
+```sh
+op read "op://Private/atlas-prod/password"
+security find-generic-password -s atlas-prod -w
+```
 
-## Tech stack
+The app sandbox is off on purpose, so Aperture can reopen SQLite files
+anywhere on disk after a relaunch.
 
-- **[Flutter](https://flutter.dev/)** for the UI (only macOS is wired
-  up; the other platform folders are scaffolding).
-- **[`postgres`](https://pub.dev/packages/postgres)** as the wire-
-  protocol client, and
-  **[`sqlite3`](https://pub.dev/packages/sqlite3)** +
-  **[`sqlite3_flutter_libs`](https://pub.dev/packages/sqlite3_flutter_libs)**
-  for local database files.
-- **[`flutter_highlight`](https://pub.dev/packages/flutter_highlight)**
-  + the **[`highlight`](https://pub.dev/packages/highlight)** package's
-  grammars for read-only SQL and JSON views. The editable editor is
-  ours — `lib/ui/widgets/code_editor/`.
-- **[`macos_window_utils`](https://pub.dev/packages/macos_window_utils)**
-  for the custom titlebar.
-- **[`file_selector`](https://pub.dev/packages/file_selector)** for the
-  native open/save dialogs.
-- **[`pointycastle`](https://pub.dev/packages/pointycastle)** for the
-  master-passphrase key derivation and cipher.
-- **[`path_provider`](https://pub.dev/packages/path_provider)** — all
-  persisted state in one `store.json` under Application Support.
+## Install
 
-State is plain `ChangeNotifier`s reached through a process-global
-`appState`; there is no `provider` package. The sandbox is deliberately
-**off**, so the app can reopen arbitrary SQLite paths after a relaunch.
+Download the DMG from
+[Releases](https://github.com/JWo1F/aperture/releases), open it, and drag
+Aperture to Applications.
 
-## Running locally
+The build is ad-hoc signed but **not notarized**, so macOS blocks it the
+first time you open it. Either open **System Settings → Privacy & Security**
+and click **Open Anyway**, or clear the quarantine flag:
 
-Requires Flutter (channel `stable`, 3.x).
+```sh
+xattr -dr com.apple.quarantine /Applications/Aperture.app
+```
 
-```bash
+Requires macOS 12 or later.
+
+## Build from source
+
+You need Flutter (stable channel) and a full Xcode install; the Command
+Line Tools alone are not enough.
+
+```sh
+git clone https://github.com/JWo1F/aperture.git
+cd aperture
 flutter pub get
-flutter run -d macos
+flutter run -d macos           # debug
+tool/make_dmg.sh               # release build packed into dist/Aperture-<version>.dmg
 ```
 
-To build a release `.app`:
+Before sending a change, run:
 
-```bash
-flutter build macos --release
+```sh
+flutter analyze   # must report no issues, info-level lints included
+flutter test
 ```
 
-Everything persisted — saved connections, per-connection favourites /
-recents / column widths / saved queries, preferences, window frame —
-lives in a single `store.json` under `~/Library/Application
-Support/com.jwo1f.aperture/`, written temp-then-rename so a crash
-mid-write can't shred it.
+Only macOS is supported. The window chrome, the Keychain and the app menu
+go through Swift method channels in `macos/Runner/`.
 
-Passwords are **not** in the Keychain. Each connection picks one of
-three credential sources:
+## Project layout
 
-- **1Password** — a `op://` secret reference, read through the `op` CLI
-  at connect time. Nothing sensitive is persisted.
-- **Encrypted** — AES-GCM ciphertext in `store.json`, under a key
-  derived from a master passphrase (PBKDF2-HMAC-SHA256). The passphrase
-  is never stored; unlock once per session.
-- **Plain** — the password in `store.json` as typed. Convenient for a
-  throwaway local database; treat the file as a secret if you use it.
+| Path | What |
+|---|---|
+| `lib/state/` | `ChangeNotifier` controllers behind a process-global `appState` (no `provider`) |
+| `lib/services/` | Postgres and SQLite drivers, introspection, SQL rendering, the encrypted store |
+| `lib/ui/` | The shell, sidebar, workspace tabs, results grid, editors, query plan view |
+| `lib/theme/` | Both palettes, the type scale, and the Hugeicons glyph table |
+| `macos/Runner/` | The window, Keychain and menu channels |
+| `website/` | The project site: a Rust generator over [Damask](https://github.com/jwo1f/damask) components that redraws the app's screens as SVG |
+| `tool/` | `make_dmg.sh` and the icon-table generator |
 
-## Project conventions
+[CLAUDE.md](CLAUDE.md) is the detailed architecture guide: invariants,
+driver quirks and known gaps. Read it before a non-trivial change.
 
-- Built with the help of the
-  [CLAUDE.md](CLAUDE.md) guide and the playbooks under
-  [.claude/skills/](.claude/skills/).
-- Aesthetic + commit style preferences live in user-level memory
-  files; the CLAUDE.md links them.
-- Power-user density over consumer polish. Three similar lines beat a
-  premature abstraction.
+## Contributing
+
+This is a personal tool, maintained for its author's own workflow. Issues
+are welcome. Pull requests are read, but may not be merged if they pull
+the app away from that workflow. If you want it to go somewhere else, fork
+it. That's what the license is for.
 
 ## License
 
-No license — all rights reserved. Fork it if you like, but nothing
-here ships as a finished product.
+[MIT](LICENSE) © Aleksandr Ivashkin.
+
+Bundled third-party assets:
+- [Inter](https://rsms.me/inter/) and [JetBrains Mono](https://www.jetbrains.com/lp/mono/),
+  under the SIL Open Font License 1.1 ([`assets/fonts/OFL.txt`](assets/fonts/OFL.txt)).
+- [Hugeicons](https://hugeicons.com) Free, stroke-rounded set, under the MIT License
+  ([`assets/fonts/HUGEICONS-LICENSE.txt`](assets/fonts/HUGEICONS-LICENSE.txt)).
