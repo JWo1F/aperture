@@ -47,10 +47,22 @@ jobs:
           security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           rm "$RUNNER_TEMP/certificate.p12"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
+          # The runner trusts Apple's roots but not the Developer ID
+          # intermediates, so without them the identity has no chain and
+          # find-identity -v leaves it out. Both generations: a certificate
+          # may come from either.
+          for ca in DeveloperIDCA DeveloperIDG2CA; do
+            curl -fsSL "https://www.apple.com/certificateauthority/$ca.cer" -o "$RUNNER_TEMP/$ca.cer"
+            security import "$RUNNER_TEMP/$ca.cer" -k "$keychain"
+          done
           # shellcheck disable=SC2046
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
           identity="$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)"
-          [ -n "$identity" ] || { echo "no Developer ID Application identity in the certificate" >&2; exit 1; }
+          if [ -z "$identity" ]; then
+            echo "no valid Developer ID Application identity; what the keychain holds:" >&2
+            security find-identity -p codesigning "$keychain" >&2
+            exit 1
+          fi
           echo "DEVELOPER_ID=$identity" >> "$GITHUB_ENV"
           printf '%s' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
           echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
