@@ -96,15 +96,8 @@ Download the DMG from
 [Releases](https://github.com/JWo1F/aperture/releases), open it, and drag
 Aperture to Applications.
 
-The build is ad-hoc signed but **not notarized**, so macOS blocks it the
-first time you open it. Either open **System Settings → Privacy & Security**
-and click **Open Anyway**, or clear the quarantine flag:
-
-```sh
-xattr -dr com.apple.quarantine /Applications/Aperture.app
-```
-
-Requires macOS 12 or later.
+Releases are signed with a Developer ID and notarized by Apple, so the app
+opens like any other. Requires macOS 12 or later.
 
 ## Build from source
 
@@ -118,6 +111,12 @@ flutter pub get
 flutter run -d macos           # debug
 tool/make_dmg.sh               # release build packed into dist/Aperture-<version>.dmg
 ```
+
+A local `make_dmg.sh` build is ad-hoc signed: it runs on your Mac but not
+on someone else's. To sign and notarize it the way CI does, set
+`DEVELOPER_ID` to your "Developer ID Application" identity and
+`NOTARY_PROFILE` to a profile saved with `xcrun notarytool store-credentials`
+— see `tool/sign_app.sh` and `tool/notarize.sh`.
 
 Before sending a change, run:
 
@@ -139,7 +138,7 @@ go through Swift method channels in `macos/Runner/`.
 | `lib/theme/` | Both palettes, the type scale, and the Hugeicons glyph table |
 | `macos/Runner/` | The window, Keychain and menu channels |
 | `website/` | The project site: a Rust generator over [Damask](https://github.com/jwo1f/damask) components that redraws the app's screens as SVG |
-| `tool/` | `make_dmg.sh` and the icon-table generator |
+| `tool/` | `make_dmg.sh`, Developer ID signing and notarization, the icon-table generator |
 
 [CLAUDE.md](CLAUDE.md) is the detailed architecture guide: invariants,
 driver quirks and known gaps. Read it before a non-trivial change.

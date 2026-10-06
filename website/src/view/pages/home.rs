@@ -72,12 +72,6 @@ cd aperture
 flutter pub get
 tool/make_dmg.sh   # → dist/Aperture-<version>.dmg";
 
-    const UNQUARANTINE: &'static str = "xattr -dr com.apple.quarantine /Applications/Aperture.app";
-
-    fn unquarantine(&self) -> String {
-        Self::UNQUARANTINE.to_string()
-    }
-
     fn steps(&self) -> [(&'static str, &'static str, &'static str); 3] {
         [
             (
@@ -92,8 +86,8 @@ tool/make_dmg.sh   # → dist/Aperture-<version>.dmg";
             ),
             (
                 "03",
-                "Allow it once",
-                "The build is ad-hoc signed, not notarized, so macOS stops the first launch. Click Open Anyway in System Settings → Privacy & Security, or clear the quarantine flag:",
+                "Open it",
+                "Every release is signed with a Developer ID and notarized by Apple, so it opens like any other app — no Gatekeeper detour.",
             ),
         ]
     }

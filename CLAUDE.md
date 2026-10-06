@@ -95,6 +95,16 @@ generic-password items under service `com.jwo1f.aperture`). Ad-hoc-signed
 debug builds change signature every build, so macOS asks once per build
 before handing the Keychain item over.
 
+The Xcode project signs ad-hoc, Release included, and has the hardened
+runtime **off**. Distribution signing happens after the build:
+`tool/make_dmg.sh` calls `tool/sign_app.sh` (Developer ID, hardened
+runtime, secure timestamp, inside-out) and `tool/notarize.sh` when
+`DEVELOPER_ID` and notary credentials are set — CI sets them on `v*` tags.
+Do not turn the hardened runtime on in the project: an ad-hoc app under it
+fails library validation against its own frameworks. Anything that needs a
+runtime exception (JIT, unsigned libraries) goes in
+`macos/Runner/Release.entitlements`, which `sign_app.sh` applies.
+
 ## Architecture map
 
 ### State layer (`lib/state/`)

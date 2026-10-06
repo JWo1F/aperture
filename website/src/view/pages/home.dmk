@@ -187,7 +187,6 @@
             <div class="flex min-w-0 flex-1 flex-col gap-1.5">
               <p class="text-[0.98rem] font-medium">{title}</p>
               <p class="text-[0.9rem] leading-relaxed text-ink-muted">{body}</p>
-              {#if n == "03"}<CodeBlock code={self.unquarantine()} lang={Lang::Shell} label="first launch only" class="mt-2"/>{/if}
             </div>
           </li>
           {/for}
