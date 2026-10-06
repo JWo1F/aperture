@@ -27,7 +27,7 @@ class Toast {
   final Duration? duration;
 }
 
-/// Floating-toast queue, JetBrains-style bottom-right stack.
+/// Floating-toast queue, stacked in the bottom-right corner.
 ///
 /// The controller owns the list of live toasts; the card widgets own
 /// their own animation + auto-dismiss timers and call [dismiss] when

@@ -1,7 +1,7 @@
 # Aperture — Claude project guide
 
-Personal macOS Flutter desktop app: a power-user database viewer
-for PostgreSQL and SQLite. Built for **one user** (jwo1f). Prefer
+Personal macOS Flutter desktop app: a power-user database client for
+PostgreSQL and SQLite. Built for **one user** (jwo1f). Prefer
 density and correctness over consumer polish. Skip backward-compat
 shims; if you need to change a contract, change every caller.
 
