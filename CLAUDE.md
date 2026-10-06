@@ -384,8 +384,9 @@ sets `debugDefaultTargetPlatformOverride = TargetPlatform.macOS` before
 the first pump.
 
 The query editor's autocomplete is `re_editor`'s own: it opens only on
-typed input (no Ctrl-Space, no reopen after accepting), Enter accepts,
-and Esc does not close it. `CodeField` keeps the app's own popup (Tab
+typed input (no Ctrl-Space, no reopen after accepting), Tab accepts
+(`_TabAccepts` in `sql_editor.dart` takes it from Enter, which always
+breaks the line), and Esc does not close it. `CodeField` keeps the app's own popup (Tab
 accepts, Ctrl-Space, Esc).
 
 ### Query plan view

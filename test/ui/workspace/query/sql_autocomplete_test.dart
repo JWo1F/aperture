@@ -1,5 +1,6 @@
 import 'package:aperture/ui/widgets/code_editor/suggestions/suggestion.dart';
 import 'package:aperture/ui/workspace/query/sql_autocomplete.dart';
+import 'package:aperture/ui/workspace/query/sql_editor.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -131,4 +132,62 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     },
   );
+
+  testWidgets('Tab accepts a prompt, Enter breaks the line', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    final controller = CodeLineEditingController.fromText('sel');
+    addTearDown(controller.dispose);
+    final focus = FocusNode();
+    addTearDown(focus.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SqlEditor(
+            controller: controller,
+            focusNode: focus,
+            bands: const [],
+            gutterActions: const {},
+            suggest: (req) => req.token.isEmpty
+                ? const []
+                : const [CodeSuggestion(label: 'SELECT', insertText: 'SELECT')],
+          ),
+        ),
+      ),
+    );
+    focus.requestFocus();
+    await tester.pump();
+    controller.selection = const CodeLineSelection.collapsed(
+      index: 0,
+      offset: 3,
+    );
+    await tester.pump();
+
+    Future<void> type(String oldText, String insert, int at) async {
+      await _typeDelta(tester, oldText: oldText, insert: insert, at: at);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('SELECT'), findsOneWidget);
+    }
+
+    await type('sel', 'e', 3);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(controller.text, 'sele\n');
+    expect(find.text('SELECT'), findsNothing);
+
+    await type('', 's', 0);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(controller.text, 'sele\nSELECT');
+    expect(find.text('SELECT'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(controller.text, isNot('sele\nSELECT'));
+    expect(controller.text, startsWith('sele\n'));
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(milliseconds: 200));
+    debugDefaultTargetPlatformOverride = null;
+  });
 }

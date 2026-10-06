@@ -138,62 +138,114 @@ class _SqlEditorState extends State<SqlEditor> {
             viewBuilder: (context, notifier, onSelected) =>
                 SqlAutocompleteView(notifier: notifier, onSelected: onSelected),
             promptsBuilder: _prompts,
-            child: CodeEditor(
-              controller: widget.controller,
-              focusNode: widget.focusNode,
-              wordWrap: true,
-              padding: const EdgeInsets.fromLTRB(Insets.md, 12, Insets.md, 12),
-              shortcutsActivatorsBuilder: const AppCodeShortcuts(),
-              scrollbarBuilder: codeScrollbar,
-              verticalScrollbarWidth: 10,
-              chunkAnalyzer: const NonCodeChunkAnalyzer(),
-              style: codeEditorStyle(
-                language: CodeLanguage.sql,
-                background: AppColors.bg.withValues(alpha: 0),
-              ),
-              leadingDivider: Container(width: 1, color: AppColors.hairline),
-              indicatorBuilder: (context, editing, chunks, notifier) {
-                _track(notifier);
-                return _SizeReport(
-                  width: _gutterWidth,
-                  child: ColoredBox(
-                    color: AppColors.bg,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8, right: 6),
-                          child: DefaultCodeLineNumber(
-                            controller: editing,
-                            notifier: notifier,
-                            textStyle: AppTheme.mono(
-                              size: SqlEditor._fontSize,
-                              color: AppColors.text4,
-                            ).copyWith(height: SqlEditor._lineHeight),
-                            focusedTextStyle: AppTheme.mono(
-                              size: SqlEditor._fontSize,
-                              color: AppColors.textMuted,
-                            ).copyWith(height: SqlEditor._lineHeight),
+            child: _TabAccepts(
+              child: CodeEditor(
+                controller: widget.controller,
+                focusNode: widget.focusNode,
+                wordWrap: true,
+                padding: const EdgeInsets.fromLTRB(
+                  Insets.md,
+                  12,
+                  Insets.md,
+                  12,
+                ),
+                shortcutsActivatorsBuilder: const AppCodeShortcuts(),
+                scrollbarBuilder: codeScrollbar,
+                verticalScrollbarWidth: 10,
+                chunkAnalyzer: const NonCodeChunkAnalyzer(),
+                style: codeEditorStyle(
+                  language: CodeLanguage.sql,
+                  background: AppColors.bg.withValues(alpha: 0),
+                ),
+                leadingDivider: Container(width: 1, color: AppColors.hairline),
+                indicatorBuilder: (context, editing, chunks, notifier) {
+                  _track(notifier);
+                  return _SizeReport(
+                    width: _gutterWidth,
+                    child: ColoredBox(
+                      color: AppColors.bg,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, right: 6),
+                            child: DefaultCodeLineNumber(
+                              controller: editing,
+                              notifier: notifier,
+                              textStyle: AppTheme.mono(
+                                size: SqlEditor._fontSize,
+                                color: AppColors.text4,
+                              ).copyWith(height: SqlEditor._lineHeight),
+                              focusedTextStyle: AppTheme.mono(
+                                size: SqlEditor._fontSize,
+                                color: AppColors.textMuted,
+                              ).copyWith(height: SqlEditor._lineHeight),
+                            ),
                           ),
-                        ),
-                        SizedBox(
-                          width: SqlEditor._iconsWidth,
-                          child: _GutterIcons(
-                            notifier: notifier,
-                            actions: widget.gutterActions,
+                          SizedBox(
+                            width: SqlEditor._iconsWidth,
+                            child: _GutterIcons(
+                              notifier: notifier,
+                              actions: widget.gutterActions,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+/// Tab accepts the highlighted prompt and Enter always breaks the line.
+/// re_editor's own autocomplete takes Enter, by answering the newline
+/// intent while its popup is open.
+///
+/// Before running its handler for a key, the editor asks the nearest
+/// ancestor `Actions` for that intent, and invokes it instead when it is
+/// enabled. Sitting between the autocomplete and the editor, this hides the
+/// autocomplete's newline action behind a disabled one, and enables Tab
+/// exactly while that action is — so Tab still indents with no popup open.
+class _TabAccepts extends StatelessWidget {
+  const _TabAccepts({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Actions(
+    actions: {
+      CodeShortcutNewLineIntent: _Disabled<CodeShortcutNewLineIntent>(),
+      CodeShortcutIndentIntent: _AcceptPrompt(
+        Actions.find<CodeShortcutNewLineIntent>(context),
+      ),
+    },
+    child: child,
+  );
+}
+
+class _Disabled<T extends Intent> extends Action<T> {
+  @override
+  bool get isActionEnabled => false;
+
+  @override
+  Object? invoke(T intent) => null;
+}
+
+// A CallbackAction because the editor invokes no other kind.
+class _AcceptPrompt extends CallbackAction<CodeShortcutIndentIntent> {
+  _AcceptPrompt(this._accept)
+    : super(onInvoke: (_) => _accept.invoke(const CodeShortcutNewLineIntent()));
+
+  final Action<CodeShortcutNewLineIntent> _accept;
+
+  @override
+  bool get isActionEnabled => _accept.isActionEnabled;
 }
 
 /// One icon per entry of [actions], placed at paint time on its line's
