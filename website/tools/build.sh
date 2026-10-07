@@ -7,6 +7,9 @@
 # Vercel serves the site from the root, so its build leaves BASE empty
 # (see vercel.json). Set BASE only to host it under a subpath.
 #
+# Off Vercel the build is a dev one (`--dev`): it carries the design page at
+# /design/ and leaves out analytics. Vercel sets VERCEL on every deploy.
+#
 # The CSS is compiled first because the generator copies assets/ verbatim:
 # rendering against a stale stylesheet publishes the wrong one, silently.
 set -euo pipefail
@@ -22,7 +25,9 @@ echo "==> Compiling CSS"
 echo "    $(wc -c < assets/site.css | tr -d ' ') bytes"
 
 echo "==> Rendering pages and screens"
-cargo run --release --quiet -- --base "${BASE}"
+DEV=""
+if [ -z "${VERCEL:-}" ]; then DEV="--dev"; fi
+cargo run --release --quiet -- --base "${BASE}" ${DEV}
 
 if [ "${MODE}" = "serve" ]; then
   echo "==> http://localhost:8080${BASE}/"

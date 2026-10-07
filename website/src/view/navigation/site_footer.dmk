@@ -13,7 +13,6 @@
     </div>
     <div class="flex flex-wrap items-center gap-x-6 gap-y-3 text-[0.88rem] text-ink-soft">
       <a href={self.repo()} class="hover:text-ink">Source</a>
-      <a href={self.site.url("/design/")} class="hover:text-ink">Design system</a>
       <Label>v{self.site.version()} · macOS 12+</Label>
     </div>
   </Container>

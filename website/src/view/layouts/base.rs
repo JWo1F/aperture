@@ -40,6 +40,15 @@ impl Base<'_> {
 { "imports": { "galvani": "https://cdn.jsdelivr.net/npm/galvani@0.5.0/src/index.js" } }
 </script>"#;
 
+    /// Google Analytics. A constant for the same reason as [`Self::THEME_BOOT`].
+    const ANALYTICS: &'static str = r#"<script async src="https://www.googletagmanager.com/gtag/js?id=G-G3JDFCJ0M0"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-G3JDFCJ0M0');
+</script>"#;
+
     const FONTS: &'static str = "https://fonts.googleapis.com/css2\
         ?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700\
         &family=Martian+Mono:wght@400;500\

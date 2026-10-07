@@ -21,6 +21,9 @@
   <meta property="og:image" content={self.site.url("/screens/table-dark.png")}>
   {@html Self::IMPORT_MAP}
   <script type="module" src={self.site.url("/assets/js/main.js")}></script>
+  {#if !self.site.dev}
+    {@html Self::ANALYTICS}
+  {/if}
 </head>
 <body data-controller="reveal" class="relative min-h-screen overflow-x-clip bg-ground font-sans text-ink antialiased">
   <slot/>

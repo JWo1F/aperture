@@ -22,13 +22,16 @@ pub const RELEASES_URL: &str = "https://github.com/JWo1F/aperture/releases/lates
 pub struct Site {
     /// `""` or `/segment` — no trailing slash, so joining is `base + path`.
     base: String,
+    /// A build for the author's own machine: it carries the design page and
+    /// leaves out analytics, so local visits never reach the numbers.
+    pub dev: bool,
 }
 
 impl Site {
-    pub fn new(base: &str) -> Self {
+    pub fn new(base: &str, dev: bool) -> Self {
         let trimmed = base.trim().trim_matches('/');
         let base = if trimmed.is_empty() { String::new() } else { format!("/{trimmed}") };
-        Self { base }
+        Self { base, dev }
     }
 
     pub fn url(&self, path: &str) -> String {
@@ -53,14 +56,14 @@ mod tests {
     #[test]
     fn a_base_is_normalised_however_it_is_written() {
         for written in ["aperture", "/aperture", "aperture/", "/aperture/"] {
-            assert_eq!(Site::new(written).url("/"), "/aperture/", "from {written:?}");
+            assert_eq!(Site::new(written, false).url("/"), "/aperture/", "from {written:?}");
         }
-        assert_eq!(Site::new("").url("/design/"), "/design/");
+        assert_eq!(Site::new("", false).url("/design/"), "/design/");
     }
 
     #[test]
     fn version_drops_the_build_number() {
-        let v = Site::new("").version();
+        let v = Site::new("", false).version();
         assert!(!v.contains('+') && v.split('.').count() == 3, "{v}");
     }
 }
