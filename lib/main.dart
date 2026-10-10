@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -15,10 +16,12 @@ import 'ui/widgets/value_selector.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await WindowManipulator.initialize(enableWindowDelegate: true);
-  await WindowManipulator.makeTitlebarTransparent();
-  await WindowManipulator.enableFullSizeContentView();
-  await WindowManipulator.hideTitle();
+  if (Platform.isMacOS) {
+    await WindowManipulator.initialize(enableWindowDelegate: true);
+    await WindowManipulator.makeTitlebarTransparent();
+    await WindowManipulator.enableFullSizeContentView();
+    await WindowManipulator.hideTitle();
+  }
   final state = AppState();
   // Seeded before the store opens so a persisted `auto` resolves against
   // the real OS appearance on the very first paint.

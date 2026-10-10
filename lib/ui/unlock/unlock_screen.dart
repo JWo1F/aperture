@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -5,6 +7,7 @@ import '../../services/store_database.dart';
 import '../../state/app_globals.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/hugeicons.dart';
+import '../app_shell/window_controls.dart';
 import '../widgets/common.dart';
 import 'passphrase_widgets.dart';
 
@@ -123,6 +126,8 @@ class _UnlockScreenState extends State<UnlockScreen> {
               onDoubleTap: () => _windowChannel.invokeMethod('toggleZoom'),
             ),
           ),
+          if (Platform.isLinux)
+            const Positioned(top: 5, right: 4, child: WindowControls()),
           if (exists != null)
             Center(
               child: SingleChildScrollView(

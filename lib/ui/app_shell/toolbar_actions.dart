@@ -11,11 +11,11 @@ import '../edits/pending_edits_modal.dart';
 import '../export/export_dialog.dart';
 
 /// Reveals the app's Application Support directory — home of the encrypted
-/// settings store — in Finder. The
+/// settings store — in Finder or the desktop's file manager. The
 /// app is unsandboxed, so a plain `open` needs no security-scoped bookmark.
 Future<void> revealConfigFolder() async {
   final dir = await getApplicationSupportDirectory();
-  await Process.run('open', [dir.path]);
+  await Process.run(Platform.isMacOS ? 'open' : 'xdg-open', [dir.path]);
 }
 
 /// Returns the [QueryResult] the toolbar's Export action would feed to the

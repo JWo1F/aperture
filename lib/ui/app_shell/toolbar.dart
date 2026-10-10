@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:macos_window_utils/macos/ns_window_delegate.dart';
@@ -15,6 +17,7 @@ import '../widgets/pagebar.dart';
 import '../widgets/value_selector.dart';
 import 'toolbar_actions.dart';
 import 'toolbar_widgets.dart';
+import 'window_controls.dart';
 
 const _windowChannel = MethodChannel('aperture/window');
 
@@ -59,7 +62,7 @@ class _ToolbarState extends State<Toolbar> {
   @override
   void initState() {
     super.initState();
-    _watchFullScreen();
+    if (Platform.isMacOS) _watchFullScreen();
   }
 
   Future<void> _watchFullScreen() async {
@@ -183,7 +186,7 @@ class _ToolbarState extends State<Toolbar> {
           ),
         ),
         padding: EdgeInsets.only(
-          left: _fullScreen ? 4 : _trafficLightInset,
+          left: Platform.isMacOS && !_fullScreen ? _trafficLightInset : 4,
           right: 4,
         ),
         child: Stack(
@@ -277,6 +280,10 @@ class _ToolbarState extends State<Toolbar> {
                   tooltip: 'Reveal config folder in Finder',
                   onPressed: revealConfigFolder,
                 ),
+                if (Platform.isLinux) ...[
+                  const TbRail(),
+                  const WindowControls(),
+                ],
               ],
             ),
           ],
