@@ -15,7 +15,13 @@ pub const REPO_URL: &str = "https://github.com/JWo1F/aperture";
 /// link built from pubspec's version would 404 between a version bump and
 /// its tag.
 pub const DOWNLOAD_URL: &str = "https://github.com/JWo1F/aperture/releases/latest/download/Aperture.dmg";
-/// The newest release's page: notes, and every older DMG.
+/// The newest release's Linux tarballs, attached under fixed names for the
+/// same reason as the DMG.
+pub const LINUX_AMD64_URL: &str =
+    "https://github.com/JWo1F/aperture/releases/latest/download/Aperture-linux-amd64.tar.gz";
+pub const LINUX_ARM64_URL: &str =
+    "https://github.com/JWo1F/aperture/releases/latest/download/Aperture-linux-arm64.tar.gz";
+/// The newest release's page: notes, and every older build.
 pub const RELEASES_URL: &str = "https://github.com/JWo1F/aperture/releases/latest";
 
 #[derive(Debug, Clone)]

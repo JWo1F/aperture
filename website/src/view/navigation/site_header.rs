@@ -1,6 +1,6 @@
 use damask::Component;
 
-use crate::site::{DOWNLOAD_URL, REPO_URL, Site};
+use crate::site::{REPO_URL, Site};
 
 /// The sticky top bar, built like the app's own toolbar: segments split by
 /// 1px rails, frosted over whatever scrolls beneath.
@@ -23,7 +23,9 @@ impl SiteHeader<'_> {
         REPO_URL
     }
 
-    fn download(&self) -> &'static str {
-        DOWNLOAD_URL
+    /// The install section rather than a file: it offers the DMG and both
+    /// Linux tarballs, and the header cannot know which one a visitor needs.
+    fn download(&self) -> String {
+        self.site.url("/#install")
     }
 }

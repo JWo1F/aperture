@@ -1,7 +1,7 @@
 use damask::Component;
 
 use crate::screens;
-use crate::site::{DOWNLOAD_URL, RELEASES_URL, REPO_URL, Site};
+use crate::site::{DOWNLOAD_URL, LINUX_AMD64_URL, LINUX_ARM64_URL, RELEASES_URL, REPO_URL, Site};
 use crate::view::marketing::Slide;
 
 /// The landing page.
@@ -17,6 +17,14 @@ impl Home<'_> {
 
     fn download(&self) -> &'static str {
         DOWNLOAD_URL
+    }
+
+    fn linux_amd64(&self) -> &'static str {
+        LINUX_AMD64_URL
+    }
+
+    fn linux_arm64(&self) -> &'static str {
+        LINUX_ARM64_URL
     }
 
     fn releases(&self) -> &'static str {
@@ -74,7 +82,15 @@ select E'it\\'s fine'; select 1;";
     const BUILD: &'static str = "git clone https://github.com/JWo1F/aperture.git
 cd aperture
 flutter pub get
-tool/make_dmg.sh   # → dist/Aperture-<version>.dmg";
+tool/make_dmg.sh             # macOS → dist/Aperture-<version>.dmg
+tool/make_linux_tarball.sh   # Linux → dist/Aperture-<version>-linux-<arch>.tar.gz";
+
+    const LINUX_RUN: &'static str = "tar -xzf Aperture-linux-amd64.tar.gz
+./aperture/aperture";
+
+    fn linux_run(&self) -> String {
+        Self::LINUX_RUN.to_string()
+    }
 
     fn steps(&self) -> [(&'static str, &'static str, &'static str); 3] {
         [
