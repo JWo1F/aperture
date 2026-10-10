@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
+import '../../widgets/command_key.dart';
 
 class WelcomeHero extends StatelessWidget {
   const WelcomeHero({
@@ -87,7 +88,7 @@ class WelcomeHero extends StatelessWidget {
         _HeroButton(
           icon: Hgi.search01,
           label: 'Search',
-          shortcut: '⌘K',
+          shortcut: commandLabel('K'),
           onTap: onSearch,
         ),
         _HeroButton(

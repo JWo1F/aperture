@@ -18,6 +18,7 @@ import '../widgets/value_selector.dart';
 import 'toolbar_actions.dart';
 import 'toolbar_widgets.dart';
 import 'window_controls.dart';
+import '../widgets/command_key.dart';
 
 const _windowChannel = MethodChannel('aperture/window');
 
@@ -215,12 +216,12 @@ class _ToolbarState extends State<Toolbar> {
                 const TbRail(),
                 TbIcon(
                   icon: Hgi.arrowLeft01,
-                  tooltip: 'Back  ⌘[',
+                  tooltip: 'Back  ${commandLabel('[')}',
                   onPressed: canGoBack ? appState.historyBack : null,
                 ),
                 TbIcon(
                   icon: Hgi.arrowRight01,
-                  tooltip: 'Forward  ⌘]',
+                  tooltip: 'Forward  ${commandLabel(']')}',
                   onPressed: canGoForward ? appState.historyForward : null,
                 ),
                 const SizedBox(width: 8),
@@ -260,7 +261,7 @@ class _ToolbarState extends State<Toolbar> {
                 else
                   TbIcon(
                     icon: Hgi.search01,
-                    tooltip: 'Search  ⌘K',
+                    tooltip: 'Search  ${commandLabel('K')}',
                     onPressed: () => showCommandPalette(context),
                   ),
                 const TbRail(),

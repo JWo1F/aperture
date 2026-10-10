@@ -5,6 +5,7 @@ import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 import 'run_button.dart';
+import '../../widgets/command_key.dart';
 
 /// Header of the query page. Three zones, left to right: the execute
 /// cluster, the caret readout, and the destructive action kept out on its
@@ -61,7 +62,7 @@ class QueryToolbar extends StatelessWidget {
           GhostButton(
             label: 'Run all',
             icon: Hgi.flash,
-            kbd: const ['⌘', '⇧', '↵'],
+            kbd: [commandCap, '⇧', '↵'],
             onPressed: onRunAll,
           ),
           const Rail(height: 16),

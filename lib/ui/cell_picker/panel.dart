@@ -21,6 +21,7 @@ import 'quick_actions.dart';
 import 'target.dart';
 import 'value_line.dart';
 import '../../theme/hugeicons.dart';
+import '../widgets/command_key.dart';
 
 // Top-level so the isolate closure captures only the value; one built in a
 // State method would carry the State, its timers and the widget tree.
@@ -274,7 +275,7 @@ class _PanelState extends State<Panel> {
       child: CallbackShortcuts(
         bindings: {
           const SingleActivator(LogicalKeyboardKey.escape): widget.onClose,
-          const SingleActivator(LogicalKeyboardKey.enter, meta: true): _save,
+          commandActivator(LogicalKeyboardKey.enter): _save,
         },
         child: Material(
           color: Colors.transparent,

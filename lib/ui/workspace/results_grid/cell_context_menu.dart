@@ -8,6 +8,7 @@ import '../../../models/db_object.dart';
 import '../../../models/value_format.dart';
 import '../../widgets/context_menu.dart';
 import '../../../theme/hugeicons.dart';
+import '../../widgets/command_key.dart';
 
 /// The cell a results-grid right-click menu acts on.
 class CellMenuTarget {
@@ -95,7 +96,7 @@ void showCellContextMenu(
     CmItem(
       icon: Hgi.copy01,
       label: 'Copy value',
-      shortcut: '⌘C',
+      shortcut: commandLabel('C'),
       onTap: () => copy(displayValue ?? 'NULL'),
     ),
     if (!target.isInsert &&

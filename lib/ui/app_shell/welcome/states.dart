@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
+import '../../widgets/command_key.dart';
 
 /// Spinner + caption while a connection opens and its first schema fetch
 /// lands. Two captions, one per gap, so the user can tell whether the
@@ -205,8 +206,8 @@ class WelcomeFooter extends StatelessWidget {
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        hint('⌘K', 'Search connections & commands'),
-        hint('⌘L', 'Activity log'),
+        hint(commandLabel('K'), 'Search connections & commands'),
+        hint(commandLabel('L'), 'Activity log'),
         Hoverable(
           onTap: onAbout,
           builder: (context, hovering) => Text(

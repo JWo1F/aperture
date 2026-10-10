@@ -5,6 +5,7 @@ import '../../../models/time_ago.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
+import '../../widgets/command_key.dart';
 
 class HomeHeader extends StatelessWidget {
   const HomeHeader({
@@ -117,7 +118,7 @@ class HomeHeader extends StatelessWidget {
         _HeaderButton(
           icon: Hgi.search01,
           label: 'Search',
-          shortcut: '⌘K',
+          shortcut: commandLabel('K'),
           showLabel: !compact,
           onTap: onSearch,
         ),
@@ -125,7 +126,7 @@ class HomeHeader extends StatelessWidget {
         _HeaderButton(
           icon: Hgi.add01,
           label: 'New query',
-          shortcut: '⌘N',
+          shortcut: commandLabel('N'),
           primary: true,
           showLabel: !compact,
           onTap: onNewQuery,

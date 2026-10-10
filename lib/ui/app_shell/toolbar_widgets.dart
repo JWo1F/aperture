@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
+import '../widgets/command_key.dart';
 
 /// Short 1×14 hairline used *within* a toolbar group — e.g. between the
 /// sidebar toggle and the back/forward pair. Matches the design's `.rail`.
@@ -89,7 +90,7 @@ class TbSearch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: 'Find tables, queries…  ⌘K',
+      message: 'Find tables, queries…  ${commandLabel('K')}',
       child: Hoverable(
         onTap: onTap,
         builder: (context, hovering) => Container(
@@ -119,7 +120,7 @@ class TbSearch extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              const _TbKbd(parts: ['⌘', 'K']),
+              _TbKbd(parts: [commandCap, 'K']),
             ],
           ),
         ),

@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/code_theme.dart';
 import '../widgets/common.dart';
 import '../../theme/hugeicons.dart';
+import '../widgets/command_key.dart';
 
 /// Inspector-style review surface for pending row mutations. Built on
 /// [showGeneralDialog] so the backdrop is ours: a real Gaussian blur of
@@ -217,7 +218,7 @@ class _PendingPanelState extends State<_PendingPanel> {
   @override
   Widget build(BuildContext context) {
     final shortcuts = <ShortcutActivator, VoidCallback>{
-      const SingleActivator(LogicalKeyboardKey.enter, meta: true): _apply,
+      commandActivator(LogicalKeyboardKey.enter): _apply,
       const SingleActivator(LogicalKeyboardKey.escape): _close,
     };
 
@@ -958,7 +959,7 @@ class _ApplyButton extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 9),
-              _InlineKbd(parts: const ['⌘', '↵']),
+              _InlineKbd(parts: [commandCap, '↵']),
             ],
           ),
         );

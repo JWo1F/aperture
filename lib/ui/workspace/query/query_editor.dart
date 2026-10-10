@@ -23,6 +23,7 @@ import 'query_toolbar.dart';
 import 'sql_autocomplete.dart';
 import 'sql_editor.dart';
 import 'results_tab_strip.dart';
+import '../../widgets/command_key.dart';
 
 /// The query page: toolbar, SQL editor, section strip, results, status bar.
 ///
@@ -207,12 +208,13 @@ class _QueryEditorState extends State<QueryEditor> {
     switch (tab.view) {
       case QueryResultsView.results:
         if (tab.result == null) {
-          return const EmptyState(
+          return EmptyState(
             icon: Hgi.terminal,
             title: 'Run a query',
             message:
-                'Write SQL above and press ⌘↵ to run the statement under '
-                'the caret, or click ▶ in the gutter to run one block.',
+                'Write SQL above and press ${commandLabel('↵')} to run the '
+                'statement under the caret, or click ▶ in the gutter to run '
+                'one block.',
           );
         }
         return ResultsGrid(
@@ -309,13 +311,9 @@ class _QueryEditorState extends State<QueryEditor> {
 
     final editor = CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.enter, meta: true):
+        commandActivator(LogicalKeyboardKey.enter):
             _runAtCursor,
-        const SingleActivator(
-          LogicalKeyboardKey.enter,
-          meta: true,
-          shift: true,
-        ): _runAll,
+        commandActivator(LogicalKeyboardKey.enter, shift: true): _runAll,
       },
       child: SqlEditor(
         controller: _controller,

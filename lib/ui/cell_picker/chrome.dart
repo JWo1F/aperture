@@ -6,6 +6,7 @@ import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
 import 'kinds.dart';
 import 'target.dart';
+import '../widgets/command_key.dart';
 
 const double headerHeight = 30;
 const double footerHeight = 38;
@@ -191,7 +192,7 @@ class _SaveButton extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            const KbdChip('⌘↵', size: 9.5, onAccent: true),
+            KbdChip(commandLabel('↵'), size: 9.5, onAccent: true),
           ],
         ),
       ),

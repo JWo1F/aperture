@@ -6,6 +6,7 @@ import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 import 'run_clock.dart';
+import '../../widgets/command_key.dart';
 
 /// The query page's primary execute control, and the one place the page
 /// reports that something is happening.
@@ -110,7 +111,7 @@ class _RunButtonState extends State<RunButton>
           const SizedBox(width: 6),
           const _Label('Run'),
           const SizedBox(width: 8),
-          const KbdCluster(['⌘', '↵'], size: 9.5, onAccent: true),
+          KbdCluster([commandCap, '↵'], size: 9.5, onAccent: true),
         ],
       ),
     );

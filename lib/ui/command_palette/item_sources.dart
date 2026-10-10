@@ -11,6 +11,7 @@ import '../about/about_dialog.dart';
 import '../unlock/change_passphrase_dialog.dart';
 import '../widgets/table_glyph.dart';
 import 'item_model.dart';
+import '../widgets/command_key.dart';
 
 /// Builds the palette's pool of searchable items from the live controllers.
 /// The palette's [BuildContext] is needed by a single command (About) which
@@ -68,7 +69,9 @@ class PaletteItemSource {
           PaletteItem(
             kind: PaletteKind.command,
             title: 'Go back',
-            subtitle: 'Step back through tab and filter history  ⌘[',
+            subtitle:
+                'Step back through tab and filter history  '
+                '${commandLabel('[')}',
             icon: Hgi.arrowLeft01,
             tokens: 'history previous navigate',
             run: appState.historyBack,
@@ -80,7 +83,7 @@ class PaletteItemSource {
           PaletteItem(
             kind: PaletteKind.command,
             title: 'Go forward',
-            subtitle: 'Step forward through history  ⌘]',
+            subtitle: 'Step forward through history  ${commandLabel(']')}',
             icon: Hgi.arrowRight01,
             tokens: 'history next navigate',
             run: appState.historyForward,
@@ -105,7 +108,7 @@ class PaletteItemSource {
       PaletteItem(
         kind: PaletteKind.command,
         title: 'Activity log',
-        subtitle: 'Show or hide the SQL event log  ⌘L',
+        subtitle: 'Show or hide the SQL event log  ${commandLabel('L')}',
         icon: Hgi.invoice01,
         tokens: 'events console history queries',
         run: eventLog.toggleVisible,

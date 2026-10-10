@@ -19,6 +19,7 @@ import 'resize_handles.dart';
 import 'toast_overlay.dart';
 import 'toolbar.dart';
 import 'welcome_panel.dart';
+import '../widgets/command_key.dart';
 
 /// Root layout: toolbar on top, sidebar + workspace in the middle, a thin
 /// status bar at the bottom.
@@ -113,7 +114,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   bool _onKey(KeyEvent event) {
     if (event is! KeyDownEvent) return false;
-    if (!HardwareKeyboard.instance.isMetaPressed) return false;
+    if (!isCommandPressed) return false;
     if (event.logicalKey == LogicalKeyboardKey.bracketLeft) {
       appState.historyBack();
       return true;
@@ -160,19 +161,19 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
         final body = CallbackShortcuts(
           bindings: {
-            const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
+            commandActivator(LogicalKeyboardKey.keyK): () =>
                 showCommandPalette(context),
-            const SingleActivator(LogicalKeyboardKey.keyL, meta: true):
+            commandActivator(LogicalKeyboardKey.keyL):
                 eventLog.toggleVisible,
             // ⌘N and ⌘W are advertised by the tab strip's tooltip, the
             // workspace-home quick actions and the tab context menu, so
             // they have to exist.
-            const SingleActivator(LogicalKeyboardKey.keyN, meta: true):
+            commandActivator(LogicalKeyboardKey.keyN):
                 tabs.newQueryTab,
-            const SingleActivator(LogicalKeyboardKey.keyW, meta: true):
+            commandActivator(LogicalKeyboardKey.keyW):
                 _closeActiveTab,
             if (connected)
-              const SingleActivator(LogicalKeyboardKey.keyR, meta: true): () {
+              commandActivator(LogicalKeyboardKey.keyR): () {
                 final tab = tabs.activeTab;
                 if (tab is TableTab) tabs.refreshTable(tab);
               },

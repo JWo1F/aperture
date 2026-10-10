@@ -12,6 +12,7 @@ import 'query/query_editor.dart';
 import 'schema_view.dart';
 import 'table_view.dart';
 import 'workspace_home.dart';
+import '../widgets/command_key.dart';
 
 class Workspace extends StatelessWidget {
   const Workspace({super.key});
@@ -143,7 +144,7 @@ class _NewTabButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: 'New query  ⌘N',
+      message: 'New query  ${commandLabel('N')}',
       waitDuration: const Duration(milliseconds: 350),
       child: Hoverable(
         onTap: onTap,
@@ -223,7 +224,7 @@ void _showTabMenu(
       CmItem(
         icon: Hgi.cancel01,
         label: 'Close',
-        shortcut: '⌘W',
+        shortcut: commandLabel('W'),
         onTap: () => _closeGuarded(
           context,
           closing: [tab],
