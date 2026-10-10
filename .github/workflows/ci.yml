@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FLUTTER_VERSION: 3.47.4
+
 jobs:
   app:
     name: App (analyze, test, build)
@@ -18,7 +21,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.47.4
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - run: flutter pub get
       - run: flutter analyze
@@ -90,6 +93,38 @@ jobs:
             dist/appcast.xml
           if-no-files-found: error
 
+  # Flutter cannot cross-compile a Linux desktop app, so each architecture
+  # builds on a runner of its own. 22.04 keeps the glibc floor at 2.35.
+  linux:
+    name: Linux (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the GTK toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+      # A git checkout rather than flutter-action: Flutter publishes no
+      # prebuilt SDK archive for arm64 Linux.
+      - name: Install Flutter
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: tool/make_linux_tarball.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: aperture-linux-${{ matrix.arch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
   website:
     name: Website (fmt, clippy, test)
     runs-on: ubuntu-latest
@@ -114,7 +149,7 @@ jobs:
   release:
     name: Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [app, website]
+    needs: [app, linux, website]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -134,12 +169,23 @@ jobs:
         with:
           name: aperture-macos
           path: dist
-      # Attached under one fixed name, so releases/latest/download/Aperture.dmg
-      # always downloads the newest build; the appcast points at the same
-      # name under this tag's path.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: aperture-linux-*
+          path: dist
+          merge-multiple: true
+      # Attached under fixed names, so releases/latest/download/Aperture.dmg
+      # and its Linux siblings always download the newest build; the appcast
+      # points at the DMG's name under this tag's path.
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mv dist/Aperture-*.dmg dist/Aperture.dmg
-          gh release create "${GITHUB_REF_NAME}" dist/Aperture.dmg dist/appcast.xml --title "Aperture ${GITHUB_REF_NAME#v}" --generate-notes
+          for arch in amd64 arm64; do
+            mv dist/Aperture-*-linux-"$arch".tar.gz dist/Aperture-linux-"$arch".tar.gz
+          done
+          gh release create "${GITHUB_REF_NAME}" \
+            dist/Aperture.dmg dist/appcast.xml \
+            dist/Aperture-linux-amd64.tar.gz dist/Aperture-linux-arm64.tar.gz \
+            --title "Aperture ${GITHUB_REF_NAME#v}" --generate-notes
