@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="460" viewBox="0 0 660 460">
+  <!-- The DMG window's background, drawn in the website's light palette.
+       Icon centres are fixed by tool/dmg/settings.py: the app at (180, 200),
+       Applications at (480, 200). Finder paints each icon's label in the
+       system appearance's colour — black in light mode, white in dark — so
+       each label sits on an ink-muted chip that reads under both.
+       Below y = 420 is filler: Finder may show its status bar over the
+       bottom of the window whatever the .DS_Store says, and the window is
+       sized so the content above it stays in view either way. -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7f8fa"/>
+      <stop offset="1" stop-color="#eef0f3"/>
+    </linearGradient>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#cbced5"/>
+    </pattern>
+    <linearGradient id="dot-fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.9"/>
+      <stop offset="0.85" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="dot-mask">
+      <rect width="660" height="460" fill="url(#dot-fade)"/>
+    </mask>
+    <radialGradient id="blade-shade" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.35" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.17"/>
+    </radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+    <filter id="chip-shadow" x="-20%" y="-50%" width="140%" height="200%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#1e2436" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="660" height="460" fill="url(#ground)"/>
+  <rect width="660" height="460" fill="url(#dots)" mask="url(#dot-mask)"/>
+
+  <!-- The site's hero iris, off the top-right corner, with the data-type
+       spectrum showing through the opening. -->
+  <g transform="translate(490 -80) scale(1.2)">
+    <g filter="url(#glow)" opacity="0.8">
+      <circle cx="88" cy="92" r="26" fill="#87a0da"/>
+      <circle cx="112" cy="88" r="24" fill="#93c9a3"/>
+      <circle cx="110" cy="112" r="24" fill="#d8b58b"/>
+      <circle cx="88" cy="112" r="22" fill="#c9a3d1"/>
+    </g>
+    <g filter="url(#soft)">
+      <circle cx="92" cy="94" r="18" fill="#8fa9cb"/>
+      <circle cx="108" cy="96" r="17" fill="#bfd1e7"/>
+      <circle cx="104" cy="108" r="16" fill="#d6c68f"/>
+      <circle cx="92" cy="106" r="15" fill="#c9a3d1"/>
+    </g>
+    <g stroke="#cbced5" stroke-width="0.45" stroke-linejoin="round">
+      <path d="M108.545 129.799L54.562 185.700A97 97 0 0 1 3.063 103.500L78.466 122.300Z" fill="#f1f2f5"/>
+      <path d="M78.466 122.300L3.063 103.500A97 97 0 0 1 48.501 17.800L69.921 92.500Z" fill="#e7e9ed"/>
+      <path d="M69.921 92.500L48.501 17.800A97 97 0 0 1 145.438 14.300L91.455 70.201Z" fill="#f1f2f5"/>
+      <path d="M91.455 70.201L145.438 14.300A97 97 0 0 1 196.937 96.500L121.534 77.700Z" fill="#e7e9ed"/>
+      <path d="M121.534 77.700L196.937 96.500A97 97 0 0 1 151.499 182.200L130.079 107.500Z" fill="#f1f2f5"/>
+      <path d="M130.079 107.500L151.499 182.200A97 97 0 0 1 54.562 185.700L108.545 129.799Z" fill="#e7e9ed"/>
+    </g>
+    <circle cx="100" cy="100" r="97" fill="url(#blade-shade)"/>
+    <circle cx="100" cy="100" r="97.5" fill="none" stroke="#cbced5" stroke-width="1"/>
+    <circle cx="100" cy="100" r="99.4" fill="none" stroke="#e2e4e9" stroke-width="0.6" stroke-dasharray="0.6 2.4"/>
+  </g>
+
+  <!-- Wordmark. -->
+  <g transform="translate(32 30)">
+    <g transform="scale(0.9167)" fill="none" stroke="#4f6fe8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10.25"/>
+      <path d="M16.357 12.612L9.144 21.844M13.648 16.080L2.047 14.449M9.291 15.467L4.902 4.605M7.643 11.388L14.856 2.156M10.352 7.920L21.953 9.551M14.709 8.533L19.098 19.395"/>
+    </g>
+    <text x="30" y="16" font-family="Inter" font-weight="600" font-size="15" letter-spacing="-0.3" fill="#15171c">Aperture</text>
+  </g>
+
+  <!-- Drag path from the app to Applications. -->
+  <g fill="none" stroke="#4f6fe8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M266 196 C 300 170, 360 170, 392 194" stroke-width="2.2" stroke-dasharray="0.1 8"/>
+    <path d="M383 186 L 394 196 L 380 200" stroke-width="2.2"/>
+  </g>
+  <text x="330" y="232" text-anchor="middle" font-family="JetBrains Mono" font-weight="500" font-size="9.5" letter-spacing="1.5" fill="#687080">DRAG TO INSTALL</text>
+
+  <!-- Label chips, under Finder's own labels. -->
+  <g fill="#687080" filter="url(#chip-shadow)">
+    <rect x="136" y="273" width="88" height="20" rx="10"/>
+    <rect x="426" y="273" width="108" height="20" rx="10"/>
+  </g>
+
+  <text x="32" y="394" font-family="JetBrains Mono" font-weight="500" font-size="9" letter-spacing="1.4" fill="#a9afba">POSTGRESQL · SQLITE</text>
+</svg>

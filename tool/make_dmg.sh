@@ -37,25 +37,21 @@ if [ -n "${DEVELOPER_ID:-}" ]; then
   fi
 fi
 
-stage="$(mktemp -d)"
-trap 'rm -rf "$stage"' EXIT
-
-# ditto keeps the bundle's signature and extended attributes intact; cp -R does not.
-ditto "$app" "$stage/$app_name.app"
-ln -s /Applications "$stage/Applications"
+# dmgbuild writes the window's layout (background, icon places, size)
+# straight into the image's .DS_Store, so it needs no Finder session — which
+# a CI runner does not have. It copies the app with ditto, which keeps the
+# signature and extended attributes intact. Pinned, in a venv of its own.
+venv="$root/build/dmgbuild-venv"
+if [ ! -x "$venv/bin/dmgbuild" ]; then
+  python3 -m venv "$venv"
+  "$venv/bin/pip" install --quiet dmgbuild==1.6.5
+fi
 
 mkdir -p "$dist"
 rm -f "$dmg"
 
-echo "==> hdiutil create $dmg"
-hdiutil create \
-  -volname "$app_name $version" \
-  -srcfolder "$stage" \
-  -fs HFS+ \
-  -format UDZO \
-  -imagekey zlib-level=9 \
-  -quiet \
-  "$dmg"
+echo "==> dmgbuild $dmg"
+"$venv/bin/dmgbuild" -s tool/dmg/settings.py -D app="$app" "$app_name $version" "$dmg"
 
 hdiutil verify -quiet "$dmg"
 
