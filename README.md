@@ -1,6 +1,6 @@
 # Aperture
 
-A native macOS client for PostgreSQL and SQLite: dense, keyboard-driven,
+A native macOS client for PostgreSQL, MySQL and SQLite: dense, keyboard-driven,
 editable down to the cell. Built in Flutter.
 
 <picture>
@@ -33,9 +33,9 @@ read it, or fork it and make it yours.
   wherever the schema forbids them.
 - Edits, deletes and inserts stage in memory first. Before anything runs,
   you see every statement highlighted. **Apply** then sends the whole batch
-  as one transaction, finding rows by `ctid` on Postgres and `rowid` on
-  SQLite. If any statement would touch anything other than exactly one
-  row, the whole batch rolls back.
+  as one transaction, finding rows by `ctid` on Postgres, `rowid` on
+  SQLite and the primary key on MySQL. If any statement would touch
+  anything other than exactly one row, the whole batch rolls back.
 - Right-click a cell to copy it (as a value, pretty JSON, or
   `column = …`), filter by its value, sort, follow its foreign key, or find
   the row in a related table.
@@ -46,18 +46,20 @@ read it, or fork it and make it yours.
   the whole script.
 - Scripts are split into statements by the client, so semicolons inside
   `'…'`, `E'…'`, `$$ … $$` / `$tag$ … $tag$` bodies and comments don't
-  break them up, and each statement is sent on its own.
+  break them up, and each statement is sent on its own. On MySQL the
+  splitter follows MySQL's own rules — backslash escapes, backticks, `#`
+  comments — and the `DELIMITER` directive of the `mysql` CLI.
 - A bare `SELECT` without a `LIMIT` is capped at 10,000 rows, and the grid
   tells you when that happened.
 - Queries save automatically to their connection and survive restarts.
 
 **Understand**
-- `EXPLAIN` plans are drawn as a tree of timed nodes. A set of rules reads
+- On PostgreSQL, `EXPLAIN` plans are drawn as a tree of timed nodes. A set of rules reads
   each plan and flags sequential scans, sorts that spill to disk, estimate
   mismatches and hash batches.
 - Every table and view gets an object tab with plain-language **Info** and
-  **DDL**: rebuilt from `pg_catalog` on Postgres, or taken verbatim from
-  `sqlite_master` on SQLite.
+  **DDL**: rebuilt from `pg_catalog` on Postgres, `SHOW CREATE` on MySQL,
+  or taken verbatim from `sqlite_master` on SQLite.
 - The activity log (<kbd>⌘L</kbd>) records every statement the app sent,
   with its timing, row count and errors.
 
@@ -138,7 +140,7 @@ go through Swift method channels in `macos/Runner/`.
 | Path | What |
 |---|---|
 | `lib/state/` | `ChangeNotifier` controllers behind a process-global `appState` (no `provider`) |
-| `lib/services/` | Postgres and SQLite drivers, introspection, SQL rendering, the encrypted store |
+| `lib/services/` | Postgres, MySQL and SQLite drivers, introspection, SQL rendering, the encrypted store |
 | `lib/ui/` | The shell, sidebar, workspace tabs, results grid, editors, query plan view |
 | `lib/theme/` | Both palettes, the type scale, and the Hugeicons glyph table |
 | `macos/Runner/` | The window, Keychain and menu channels |

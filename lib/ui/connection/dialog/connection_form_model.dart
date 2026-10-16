@@ -25,7 +25,9 @@ class ConnectionFormModel extends ChangeNotifier {
     final ec = e?.credential;
     name = TextEditingController(text: e?.name ?? '');
     host = TextEditingController(text: e?.host ?? 'localhost');
-    port = TextEditingController(text: (e?.port ?? 5432).toString());
+    port = TextEditingController(
+      text: (e?.port ?? DbEngine.postgres.defaultPort).toString(),
+    );
     database = TextEditingController(text: e?.database ?? '');
     username = TextEditingController(text: e?.username ?? 'postgres');
     password = TextEditingController(
@@ -70,11 +72,30 @@ class ConnectionFormModel extends ChangeNotifier {
 
   late DbEngine _engine;
   DbEngine get engine => _engine;
+  /// Switching between server engines carries the port and user over when
+  /// they are still the previous engine's defaults, so picking MySQL on a
+  /// fresh form doesn't leave it pointed at 5432 as `postgres`.
   set engine(DbEngine v) {
     if (v == _engine) return;
+    final previous = _engine;
     _engine = v;
+    if (v != DbEngine.sqlite) {
+      if (port.text.trim() == '${previous.defaultPort}' ||
+          port.text.trim().isEmpty) {
+        port.text = '${v.defaultPort}';
+      }
+      if (username.text.trim() == _defaultUser(previous)) {
+        username.text = _defaultUser(v);
+      }
+    }
     notifyListeners();
   }
+
+  static String _defaultUser(DbEngine engine) => switch (engine) {
+    DbEngine.postgres => 'postgres',
+    DbEngine.mysql => 'root',
+    DbEngine.sqlite => '',
+  };
 
   late TlsMode _tls;
   TlsMode get tls => _tls;
@@ -169,7 +190,7 @@ class ConnectionFormModel extends ChangeNotifier {
     final label = name.text.trim().isEmpty ? '$db @ $h' : name.text.trim();
     return base.copyWith(
       name: label,
-      engine: DbEngine.postgres,
+      engine: _engine,
       host: h,
       port: int.parse(port.text.trim()),
       database: db,

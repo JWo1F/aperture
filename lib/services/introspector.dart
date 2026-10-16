@@ -3,9 +3,9 @@ import '../models/db_object.dart';
 /// Engine-neutral catalog introspection surface.
 ///
 /// Each method is one batched sweep across the live database; together they
-/// build the [DatabaseCatalog] the sidebar and schema tree render from. The
-/// Postgres and SQLite services each return their own implementation —
-/// [CatalogController] never sees which one it has.
+/// build the [DatabaseCatalog] the sidebar and schema tree render from. Each
+/// engine's service returns its own implementation — [CatalogController]
+/// never sees which one it has.
 ///
 /// Engines that have no concept of a given sweep (SQLite has no enums or
 /// domains, for instance) return an empty collection rather than throwing.

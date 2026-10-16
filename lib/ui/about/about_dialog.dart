@@ -9,7 +9,7 @@ import '../widgets/command_key.dart';
 
 /// Build/version is wired in here rather than read from pubspec at runtime
 /// so the About dialog stays a zero-dependency widget. Bump on release.
-const _version = '1.40.3';
+const _version = '1.41.0';
 const _author = 'Aleksandr Ivashkin';
 const _copyrightYear = 2026;
 
@@ -127,7 +127,7 @@ class _Header extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'A close look at PostgreSQL and SQLite.',
+            'A close look at PostgreSQL, MySQL and SQLite.',
             textAlign: TextAlign.center,
             style: AppTheme.ui(
               size: 12.5,
@@ -192,7 +192,11 @@ class _FeatureGrid extends StatelessWidget {
   const _FeatureGrid();
 
   static final _features = [
-    (Hgi.database01, 'Two engines', 'PostgreSQL servers and SQLite files'),
+    (
+      Hgi.database01,
+      'Three engines',
+      'PostgreSQL and MySQL servers, SQLite files',
+    ),
     (Hgi.editTable, 'Edit in place', 'Stage row edits, review, then apply'),
     (Hgi.chartRelationship, 'Query plans', 'EXPLAIN as a tree, with advice'),
     (

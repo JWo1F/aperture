@@ -32,8 +32,9 @@ class QueryResult {
   final List<String> columns;
   final List<List<Object?>> rows;
 
-  /// Per-row Postgres `ctid`, present only for single-relation table pages.
-  /// Used to target rows in UPDATE statements.
+  /// Per-row identity token (see `TableRepository.fetchPage`), present only
+  /// for single-relation table pages. Used to target rows in UPDATE
+  /// statements.
   final List<String>? rowIds;
 
   /// Per-column source metadata from the Postgres wire protocol. Parallel to

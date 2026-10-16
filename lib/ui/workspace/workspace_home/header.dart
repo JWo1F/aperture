@@ -34,7 +34,7 @@ class HomeHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final conn = connection;
-    final engine = conn?.engine == DbEngine.sqlite ? 'SQLite' : 'PostgreSQL';
+    final engine = (conn?.engine ?? DbEngine.postgres).label;
     final version = serverVersion;
     final connectedAt = conn?.lastConnectedAt;
     final summary = conn?.summary ?? '';

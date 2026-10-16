@@ -156,7 +156,7 @@ class WelcomeEmpty extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'A PostgreSQL server or a SQLite file on this Mac.',
+              'A PostgreSQL or MySQL server, or a SQLite file on this Mac.',
               textAlign: TextAlign.center,
               style: AppTheme.ui(
                 size: 12.5,

@@ -42,7 +42,7 @@ Object? decodeDriverValue(Object? raw) {
     return raw.asString;
   }
   final bytes = raw.bytes;
-  if (!_containsBinaryControlBytes(bytes)) {
+  if (!containsBinaryControlBytes(bytes)) {
     try {
       return raw.asString;
     } catch (_) {
@@ -85,7 +85,10 @@ String _zoneText(int secondsEast) {
   return '$sign$h:$m';
 }
 
-bool _containsBinaryControlBytes(List<int> bytes) {
+/// Whether [bytes] hold a sub-space control byte other than tab, LF or CR —
+/// the line both drivers draw between text that arrived as bytes and a
+/// genuine binary value.
+bool containsBinaryControlBytes(List<int> bytes) {
   for (final b in bytes) {
     // Allow tab (9), LF (10), CR (13); reject any other sub-space control.
     if (b < 0x20 && b != 9 && b != 10 && b != 13) return true;

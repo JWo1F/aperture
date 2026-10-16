@@ -21,8 +21,8 @@ class CommandCredential extends Credential {
   final String command;
 }
 
-/// How a Postgres connection uses TLS — exactly the modes the driver
-/// implements.
+/// How a server connection uses TLS — exactly the modes both server drivers
+/// implement.
 enum TlsMode {
   /// Plain TCP; the password crosses the network readable.
   off,
@@ -38,17 +38,32 @@ enum TlsMode {
 /// Which database engine a connection targets.
 enum DbEngine {
   postgres,
+  mysql,
   sqlite;
 
-  static DbEngine fromName(String? raw) => raw == 'sqlite' ? sqlite : postgres;
+  /// Display name, as the engine spells itself. MySQL covers MariaDB too:
+  /// both speak the same protocol and catalog.
+  String get label => switch (this) {
+    postgres => 'PostgreSQL',
+    mysql => 'MySQL',
+    sqlite => 'SQLite',
+  };
+
+  /// The engine's usual TCP port; zero for SQLite, which has none.
+  int get defaultPort => switch (this) {
+    postgres => 5432,
+    mysql => 3306,
+    sqlite => 0,
+  };
 
   SqlDialect get dialect => switch (this) {
     postgres || sqlite => SqlDialect.ansi,
+    mysql => SqlDialect.mysql,
   };
 }
 
-/// User-supplied details for one database connection — a Postgres endpoint
-/// or a local SQLite file, distinguished by [engine].
+/// User-supplied details for one database connection — a Postgres or MySQL
+/// endpoint or a local SQLite file, distinguished by [engine].
 class ConnectionConfig {
   ConnectionConfig({
     required this.id,
@@ -89,7 +104,7 @@ class ConnectionConfig {
   final String database;
   final String username;
 
-  /// Absolute path to the SQLite database file. Empty for Postgres
+  /// Absolute path to the SQLite database file. Empty for server
   /// connections; the sole address for [DbEngine.sqlite] connections.
   final String filePath;
 
@@ -161,7 +176,8 @@ class ConnectionConfig {
 
   String get summary => switch (engine) {
     DbEngine.sqlite => filePath.isEmpty ? 'sqlite' : filePath,
-    DbEngine.postgres => '$username@$host:$port/$database',
+    DbEngine.postgres ||
+    DbEngine.mysql => '$username@$host:$port/$database',
   };
 
   ConnectionConfig copyWith({

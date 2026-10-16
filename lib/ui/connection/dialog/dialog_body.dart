@@ -54,12 +54,18 @@ class ConnectionDialogBody extends StatelessWidget {
           const SizedBox(height: 14),
           LabeledField(
             label: 'Database',
-            child: BoxedTextInput(controller: model.database, hint: 'postgres'),
+            child: BoxedTextInput(
+              controller: model.database,
+              hint: model.engine == DbEngine.mysql ? 'app' : 'postgres',
+            ),
           ),
           const SizedBox(height: 14),
           LabeledField(
             label: 'User',
-            child: BoxedTextInput(controller: model.username, hint: 'postgres'),
+            child: BoxedTextInput(
+              controller: model.username,
+              hint: model.engine == DbEngine.mysql ? 'root' : 'postgres',
+            ),
           ),
           const SizedBox(height: 14),
           _passwordField(),
@@ -94,7 +100,7 @@ class ConnectionDialogBody extends StatelessWidget {
             label: 'Port',
             child: BoxedTextInput(
               controller: model.port,
-              hint: '5432',
+              hint: '${model.engine.defaultPort}',
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             ),
           ),

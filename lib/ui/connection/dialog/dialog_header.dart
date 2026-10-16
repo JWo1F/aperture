@@ -4,6 +4,7 @@ import '../../../models/connection_config.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
+import '../engine_icon.dart';
 
 /// Connection-dialog header: a tinted glyph that previews the chosen
 /// connection color, the title, the engine subtitle, and a close button.
@@ -46,9 +47,7 @@ class ConnectionDialogHeader extends StatelessWidget {
             ),
             alignment: Alignment.center,
             child: Icon(
-              engine == DbEngine.sqlite
-                  ? Hgi.file01
-                  : Hgi.serverStack01,
+              engineIcon(engine),
               size: 17,
               color: tint,
             ),
@@ -70,7 +69,7 @@ class ConnectionDialogHeader extends StatelessWidget {
               Text(
                 engine == DbEngine.sqlite
                     ? 'Local SQLite file'
-                    : 'PostgreSQL server',
+                    : '${engine.label} server',
                 style: AppTheme.ui(
                   size: 11,
                   weight: FontWeight.w400,

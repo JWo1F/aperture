@@ -1,7 +1,7 @@
 # Aperture — Claude project guide
 
 Personal macOS Flutter desktop app: a power-user database client for
-PostgreSQL and SQLite. Built for **one user** (jwo1f). Prefer
+PostgreSQL, MySQL (and MariaDB) and SQLite. Built for **one user** (jwo1f). Prefer
 density and correctness over consumer polish. Skip backward-compat
 shims; if you need to change a contract, change every caller.
 
@@ -76,6 +76,7 @@ pubspec bump for that commit). Then `--amend --no-edit` is acceptable.
 |---|---|
 | State | `ChangeNotifier` + a process-global `appState`. No `provider`. |
 | Postgres | `postgres: ^3.5.0` (extended query mode) |
+| MySQL / MariaDB | `mysql_dart: ^3.0.0` (pure Dart, text protocol) |
 | SQLite | `sqlite3: ^3.6.0`, built as SQLite3MultipleCiphers (`hooks: user_defines: sqlite3: source: sqlite3mc`) |
 | SQL grammar | `highlight` / `flutter_highlight` (read-only views, `CodeField`); `re_highlight` inside `re_editor` |
 | Code editing | `re_editor` for multi-line (query editor, cell picker); own `CodeField` for the single-line clause bars |
@@ -250,9 +251,10 @@ Shared cross-engine helpers — do not duplicate:
 | `keychain.dart` | `Keychain` — the remembered store passphrase |
 
 Backend triad: `DbService` / `Introspector` / `TableRepository` — each
-implemented by `Postgres*` and `Sqlite*`. The interface is clean;
+implemented by `Postgres*`, `Mysql*` and `Sqlite*`. The interface is clean;
 implementations diverge in legitimately-engine-specific ways (ctid vs
-rowid, INSERT-vs-UPDATE `DEFAULT` handling, transaction model). Do not
+rowid vs primary key, INSERT-vs-UPDATE `DEFAULT` handling, transaction
+model). Do not
 force shared abstractions where the engines genuinely differ.
 
 **The introspector instance is cached** in a service field, created in
@@ -290,6 +292,28 @@ is the single defense against `1=1; DROP TABLE x` style injection
    accepts `SET col = DEFAULT`; SQLite INSERT accepts `DEFAULT` in
    VALUES. The `renderAssignment` helper stays correct for both; only
    the SQLite UPDATE site filters.
+
+### MySQL driver gotchas
+
+1. One connection, not a pool — the editor is a session (`USE`, `SET`,
+   temp tables). `mysql_dart` throws "connection is busy" on a second
+   command in flight, so every command goes through
+   `MysqlService._serial`. A transaction holds the queue; statements
+   inside it go through `MysqlTx`, which skips it.
+2. Everything arrives as text. `decodeMysqlValue` types it by column
+   type: ints, doubles, JSON → Map/List; DECIMAL and dates stay text
+   (the form MySQL accepts back).
+3. Row identity is the primary key, encoded as a self-describing JSON
+   token (`[["id","7"]]`) so the preview's predicate needs no lookup.
+   No primary key, or a binary-typed key column → read-only page.
+4. An UPDATE reports *changed* rows (no `CLIENT_FOUND_ROWS`), so 0 is
+   checked against the key before it counts as stale.
+5. The catalog is the connection's database only (from the config, not
+   `DATABASE()`); relation ids are handed out per name for the
+   introspector's life.
+6. `SqlDialect.mysql` escapes `\` in literals and quotes with backticks;
+   `parseSqlStatements` reads `#`, `-- `, backslash escapes, `/*! */`
+   and `DELIMITER` the MySQL way. The clause gate depends on it.
 
 ## UI layer
 
@@ -577,6 +601,22 @@ Real, deliberately unfixed. Don't rediscover them as new findings.
   reach it (`QueryTab.sql` doesn't notify), but a cell edit still
   re-derives the favourites and frequent lists and re-allocates a row
   widget per table. Its `ListenableBuilder` wants to be a `Selector`.
+- **A server error mid-row-stream drops a MySQL session.** When the
+  server ends a statement with an error after rows have started — a
+  cancel (`KILL QUERY`; always on MariaDB, mid-stream on MySQL), a
+  `max_execution_time`, a per-row evaluation error — `mysql_dart` reads
+  the ERR packet as a row ("Wrong first byte…") and closes the socket.
+  The keepalive then marks the session lost. The fix is in the driver's
+  row loop.
+- **`mysql_dart` decodes `BINARY` / `VARBINARY` as UTF-8**, lossily, so
+  those cells don't round-trip and a binary primary key can't address a
+  row (such tables page read-only).
+- **MySQL literals assume backslash escapes.** A server running with
+  `NO_BACKSLASH_ESCAPES` would store `\\` for every `\` an edit writes.
+- **MySQL's row count is an exact `COUNT(*)`**, a full scan on a large
+  InnoDB table, where Postgres reads an estimate.
+- **No query plan view for MySQL.** The plan view reads Postgres'
+  `EXPLAIN (FORMAT JSON)` only.
 
 ## Naming
 

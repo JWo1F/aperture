@@ -7,16 +7,17 @@ export '../models/cell_edit.dart' show EditResult;
 /// Engine-neutral per-relation database operations: paging, exporting,
 /// applying cell edits, and building the DDL for the schema viewer.
 ///
-/// The Postgres and SQLite services each return their own implementation;
-/// row identity differs (Postgres `ctid` vs SQLite `rowid`) but the surface
-/// the workspace talks to does not.
+/// Each engine's service returns its own implementation; row identity
+/// differs (Postgres `ctid`, SQLite `rowid`, MySQL primary-key values) but
+/// the surface the workspace talks to does not.
 abstract interface class TableRepository {
   /// Total row count for a relation under the active filter.
   Future<int> countRows(DbTable table, {String filter = ''});
 
   /// One page of rows. For editable relations each row carries an opaque
   /// row-identity token in [QueryResult.rowIds]; relations with no usable
-  /// identity (views, `WITHOUT ROWID` tables) return a null `rowIds`.
+  /// identity (views, `WITHOUT ROWID` tables, MySQL tables without a
+  /// primary key) return a null `rowIds`.
   Future<QueryResult> fetchPage(
     DbTable table, {
     required int limit,
@@ -55,7 +56,8 @@ class StaleRowException implements Exception {
     required this.table,
   });
 
-  /// The opaque row-identity token (Postgres `ctid`, SQLite `rowid`).
+  /// The opaque row-identity token (Postgres `ctid`, SQLite `rowid`, MySQL
+  /// primary-key values).
   final String rowId;
   final int affectedRows;
   final DbTable table;

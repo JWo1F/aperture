@@ -6,6 +6,7 @@ import '../../state/session_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/hugeicons.dart';
 import '../widgets/common.dart';
+import '../connection/engine_icon.dart';
 import '../widgets/context_menu.dart';
 
 /// The connection card at the top of the sidebar: engine glyph, database
@@ -40,9 +41,7 @@ class ConnHero extends StatelessWidget {
     final connected = session.status == ConnectionStatus.connected;
     final menuEnabled = connected || session.status == ConnectionStatus.lost;
     final tint = AppColors.connectionTint(conn?.color);
-    final engineIcon = conn?.engine == DbEngine.sqlite
-        ? Hgi.file01
-        : Hgi.serverStack01;
+    final icon = engineIcon(conn?.engine ?? DbEngine.postgres);
 
     final title = switch (session.status) {
       ConnectionStatus.connected => conn?.database ?? 'connected',
@@ -130,7 +129,7 @@ class ConnHero extends StatelessWidget {
                   ),
                   alignment: Alignment.center,
                   child: Icon(
-                    engineIcon,
+                    icon,
                     size: 15,
                     color: Colors.white,
                   ),

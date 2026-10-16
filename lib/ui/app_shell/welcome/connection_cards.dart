@@ -7,11 +7,11 @@ import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
 import '../../widgets/table_glyph.dart';
 
-IconData _engineIcon(ConnectionConfig c) =>
-    c.engine == DbEngine.sqlite ? Hgi.fileDatabase : Hgi.database01;
-
-String _engineLabel(ConnectionConfig c) =>
-    c.engine == DbEngine.sqlite ? 'SQLite' : 'PostgreSQL';
+IconData _engineIcon(ConnectionConfig c) => switch (c.engine) {
+  DbEngine.postgres => Hgi.database01,
+  DbEngine.mysql => Hgi.database02,
+  DbEngine.sqlite => Hgi.fileDatabase,
+};
 
 /// Connection-tinted square holding the engine glyph.
 class _Avatar extends StatelessWidget {
@@ -259,7 +259,7 @@ class ResumeCard extends StatelessWidget {
                       spacing: 6,
                       runSpacing: 6,
                       children: [
-                        _Chip(_engineLabel(config)),
+                        _Chip(config.engine.label),
                         if (config.readOnly)
                           const _Chip('read-only', icon: Hgi.lock),
                         if (queries > 0)
@@ -378,7 +378,7 @@ class ConnectionCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        _engineLabel(config),
+                        config.engine.label,
                         style: AppTheme.ui(
                           size: 11,
                           weight: FontWeight.w400,

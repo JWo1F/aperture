@@ -3,6 +3,7 @@ import '../models/connection_config.dart';
 import '../models/db_object.dart';
 import '../models/query_result.dart';
 import 'introspector.dart';
+import 'mysql_service.dart';
 import 'postgres_service.dart';
 import 'sqlite_service.dart';
 
@@ -31,8 +32,8 @@ typedef EditLogger =
 
 /// Engine-neutral facade over a single live database connection. The
 /// workspace, catalog loader, and session controller talk only to this
-/// surface; [PostgresService] and [SqliteService] provide the concrete
-/// implementations and decide what `runQuery`, introspection, and cell
+/// surface; [PostgresService], [MysqlService] and [SqliteService] provide
+/// the concrete implementations and decide what `runQuery`, introspection, and cell
 /// editing mean for their engine.
 abstract interface class DbService {
   /// The connection this service was built for.
@@ -65,7 +66,8 @@ abstract interface class DbService {
   /// Best-effort cancel of the statement currently in flight.
   ///
   /// Postgres uses the wire-protocol cancel handshake (`pg_cancel_backend`
-  /// under the hood). SQLite's Dart driver doesn't expose `sqlite3_interrupt`,
+  /// under the hood); MySQL sends `KILL QUERY` from a second connection.
+  /// SQLite's Dart driver doesn't expose `sqlite3_interrupt`,
   /// so the in-flight statement runs to completion — the run-all loop still
   /// breaks at the next iteration via the tab's cancel flag.
   Future<void> cancelCurrent();
@@ -148,6 +150,11 @@ DbService createDbService(
   EditLogger? onEditApplied,
 }) => switch (config.engine) {
   DbEngine.postgres => PostgresService(
+    config,
+    onQueryRun: onQueryRun,
+    onEditApplied: onEditApplied,
+  ),
+  DbEngine.mysql => MysqlService(
     config,
     onQueryRun: onQueryRun,
     onEditApplied: onEditApplied,

@@ -67,7 +67,7 @@ class WelcomeHero extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'A close look at PostgreSQL and SQLite.',
+                'A close look at PostgreSQL, MySQL and SQLite.',
                 style: AppTheme.ui(
                   size: 13.5,
                   weight: FontWeight.w400,

@@ -5,6 +5,7 @@ import '../../../models/connection_config.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/hugeicons.dart';
 import '../../widgets/common.dart';
+import '../engine_icon.dart';
 
 /// Inter caption rendered above a form control.
 TextStyle get fieldLabelStyle => AppTheme.ui(
@@ -265,7 +266,7 @@ class InlineAction extends StatelessWidget {
   }
 }
 
-/// Full-width two-up selector for the database engine.
+/// Full-width selector for the database engine, one segment per engine.
 class EngineToggle extends StatelessWidget {
   const EngineToggle({super.key, required this.value, required this.onChanged});
 
@@ -284,17 +285,16 @@ class EngineToggle extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: _segment(DbEngine.postgres, Hgi.serverStack01, 'PostgreSQL'),
-          ),
-          const SizedBox(width: 3),
-          Expanded(child: _segment(DbEngine.sqlite, Hgi.file01, 'SQLite')),
+          for (final engine in DbEngine.values) ...[
+            if (engine != DbEngine.values.first) const SizedBox(width: 3),
+            Expanded(child: _segment(engine)),
+          ],
         ],
       ),
     );
   }
 
-  Widget _segment(DbEngine engine, IconData icon, String label) {
+  Widget _segment(DbEngine engine) {
     final selected = engine == value;
     return Hoverable(
       onTap: () => onChanged(engine),
@@ -318,7 +318,7 @@ class EngineToggle extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              icon,
+              engineIcon(engine),
               size: 14,
               color: selected
                   ? AppColors.accent
@@ -326,7 +326,7 @@ class EngineToggle extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              label,
+              engine.label,
               style: AppTheme.ui(
                 size: 12.5,
                 weight: FontWeight.w600,

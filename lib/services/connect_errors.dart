@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:mysql_dart/exception.dart';
 import 'package:postgres/postgres.dart';
 
 import '../models/connection_config.dart';
@@ -49,6 +50,16 @@ FriendlyConnectError friendlyConnectError(
       detail: detail,
     );
   }
+  if (error is MySQLServerException) {
+    final byCode = _byMysqlCode(error.errorCode, config);
+    return FriendlyConnectError(
+      message: byCode ?? error.message,
+      detail: detail,
+    );
+  }
+  if (error is MySQLException) {
+    return FriendlyConnectError(message: error.message, detail: detail);
+  }
   if (error is ServerException) {
     final code = error.code;
     final byCode = _byCode(code, config);
@@ -84,6 +95,19 @@ String? _byCode(String? code, ConnectionConfig c) {
       return null;
   }
 }
+
+/// MySQL and MariaDB share these server error numbers.
+String? _byMysqlCode(int code, ConnectionConfig c) => switch (code) {
+  1045 => 'Wrong password for user "${c.username}", or the user may not '
+      'connect from this host.',
+  1044 => 'User "${c.username}" has no access to database "${c.database}".',
+  1049 => 'Database "${c.database}" does not exist on the server.',
+  1040 => 'Server has too many open connections.',
+  1129 => 'Server blocked this host after too many failed connections.',
+  3159 => 'Server requires SSL — choose Require or Verify in the connection '
+      'dialog.',
+  _ => null,
+};
 
 /// Last-resort message-pattern matching for older servers that don't
 /// surface a sqlState on the exception.
