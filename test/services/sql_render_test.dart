@@ -1,38 +1,45 @@
 import 'package:aperture/models/cell_edit.dart';
+import 'package:aperture/models/db_object.dart';
+import 'package:aperture/services/sql_identifier.dart';
 import 'package:aperture/services/sql_render.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+const _ansi = SqlDialect.ansi;
+
+void _validateAnsi(String snippet, {required ClauseKind kind}) =>
+    validateClauseSnippet(snippet, kind: kind, dialect: _ansi);
+
 void main() {
-  group('literalSql', () {
+  group('SqlDialect.ansi.literal', () {
     test('null becomes the bare NULL keyword', () {
-      expect(literalSql(null), 'NULL');
+      expect(_ansi.literal(null), 'NULL');
     });
 
     test('plain string is single-quoted', () {
-      expect(literalSql('Alice'), "'Alice'");
+      expect(_ansi.literal('Alice'), "'Alice'");
     });
 
     test('embedded single quote is doubled', () {
-      expect(literalSql("O'Brien"), "'O''Brien'");
+      expect(_ansi.literal("O'Brien"), "'O''Brien'");
     });
 
     test('empty string round-trips as an empty literal', () {
-      expect(literalSql(''), "''");
+      expect(_ansi.literal(''), "''");
     });
 
     test('does not escape backslashes or double quotes', () {
-      expect(literalSql(r'a\b"c'), '\'a\\b"c\'');
+      expect(_ansi.literal(r'a\b"c'), '\'a\\b"c\'');
     });
   });
 
   group('renderAssignment', () {
-    test('CellLiteral routes through literalSql', () {
-      expect(renderAssignment(const CellLiteral('x')), "'x'");
-      expect(renderAssignment(const CellLiteral(null)), 'NULL');
+    test('CellLiteral routes through the dialect literal', () {
+      expect(renderAssignment(const CellLiteral('x'), _ansi), "'x'");
+      expect(renderAssignment(const CellLiteral(null), _ansi), 'NULL');
     });
 
     test('CellDefault becomes the bare DEFAULT keyword', () {
-      expect(renderAssignment(const CellDefault()), 'DEFAULT');
+      expect(renderAssignment(const CellDefault(), _ansi), 'DEFAULT');
     });
   });
 
@@ -73,25 +80,25 @@ void main() {
       // one page. Postgres errors instead, which made it look like engine
       // flakiness.
       expect(
-        () => validateClauseSnippet('1=1;', kind: ClauseKind.filter),
+        () => _validateAnsi('1=1;', kind: ClauseKind.filter),
         throwsA(isA<ClauseSyntaxException>()),
       );
     });
 
     test('order by and select list too', () {
       expect(
-        () => validateClauseSnippet('name;', kind: ClauseKind.orderBy),
+        () => _validateAnsi('name;', kind: ClauseKind.orderBy),
         throwsA(isA<ClauseSyntaxException>()),
       );
       expect(
-        () => validateClauseSnippet('id;', kind: ClauseKind.selectList),
+        () => _validateAnsi('id;', kind: ClauseKind.selectList),
         throwsA(isA<ClauseSyntaxException>()),
       );
     });
 
     test('a semicolon inside a string literal is still fine', () {
       expect(
-        () => validateClauseSnippet(
+        () => _validateAnsi(
           "title = 'a;b'",
           kind: ClauseKind.filter,
         ),
@@ -101,7 +108,7 @@ void main() {
 
     test('a semicolon inside a comment is still fine', () {
       expect(
-        () => validateClauseSnippet(
+        () => _validateAnsi(
           '1=1 /* a;b */',
           kind: ClauseKind.filter,
         ),
@@ -113,28 +120,28 @@ void main() {
   group('validateClauseSnippet', () {
     test('empty filter passes', () {
       expect(
-        () => validateClauseSnippet('', kind: ClauseKind.filter),
+        () => _validateAnsi('', kind: ClauseKind.filter),
         returnsNormally,
       );
     });
 
     test('whitespace-only filter passes', () {
       expect(
-        () => validateClauseSnippet('   \n\t', kind: ClauseKind.filter),
+        () => _validateAnsi('   \n\t', kind: ClauseKind.filter),
         returnsNormally,
       );
     });
 
     test('plain boolean filter passes', () {
       expect(
-        () => validateClauseSnippet('1 = 1', kind: ClauseKind.filter),
+        () => _validateAnsi('1 = 1', kind: ClauseKind.filter),
         returnsNormally,
       );
     });
 
     test('filter with stacked DROP is rejected', () {
       expect(
-        () => validateClauseSnippet(
+        () => _validateAnsi(
           '1=1; DROP TABLE x',
           kind: ClauseKind.filter,
         ),
@@ -144,14 +151,14 @@ void main() {
 
     test('filter with trailing semicolon + comment is rejected', () {
       expect(
-        () => validateClauseSnippet('1=1; --', kind: ClauseKind.filter),
+        () => _validateAnsi('1=1; --', kind: ClauseKind.filter),
         throwsA(isA<ClauseSyntaxException>()),
       );
     });
 
     test('semicolon inside a string literal is allowed', () {
       expect(
-        () => validateClauseSnippet(
+        () => _validateAnsi(
           "name = 'a;b;c'",
           kind: ClauseKind.filter,
         ),
@@ -161,7 +168,7 @@ void main() {
 
     test('semicolon inside a dollar-quoted block is allowed', () {
       expect(
-        () => validateClauseSnippet(
+        () => _validateAnsi(
           r"body = $tag$ raw ; text $tag$",
           kind: ClauseKind.filter,
         ),
@@ -171,7 +178,7 @@ void main() {
 
     test('multi-column order by passes', () {
       expect(
-        () => validateClauseSnippet(
+        () => _validateAnsi(
           'name asc, id desc',
           kind: ClauseKind.orderBy,
         ),
@@ -181,7 +188,7 @@ void main() {
 
     test('order by with stacked statement is rejected', () {
       expect(
-        () => validateClauseSnippet(
+        () => _validateAnsi(
           'name; DROP TABLE x',
           kind: ClauseKind.orderBy,
         ),
@@ -191,7 +198,7 @@ void main() {
 
     test('multi-column select list passes', () {
       expect(
-        () => validateClauseSnippet(
+        () => _validateAnsi(
           'id, name, lower(email)',
           kind: ClauseKind.selectList,
         ),
@@ -201,7 +208,7 @@ void main() {
 
     test('select list with stacked statement is rejected', () {
       expect(
-        () => validateClauseSnippet(
+        () => _validateAnsi(
           'id; DROP TABLE x',
           kind: ClauseKind.selectList,
         ),
@@ -211,12 +218,66 @@ void main() {
 
     test('exception message names the clause kind', () {
       try {
-        validateClauseSnippet('1=1; DROP TABLE x', kind: ClauseKind.filter);
+        _validateAnsi('1=1; DROP TABLE x', kind: ClauseKind.filter);
         fail('expected ClauseSyntaxException');
       } on ClauseSyntaxException catch (e) {
         expect(e.toString(), contains('filter'));
         expect(e.kind, ClauseKind.filter);
       }
+    });
+  });
+
+  group('MySQL', () {
+    // ANSI sees one statement here — `'a\''` doubles the quote and the
+    // string runs on to the final `'`. MySQL reads `\'` as an escape, closes
+    // the string after it, and runs the DROP.
+    test('the clause gate splits snippets the way MySQL reads them', () {
+      const snippet = r"x = 'a\'' ; DROP TABLE t; -- '";
+      expect(
+        () => validateClauseSnippet(
+          snippet,
+          kind: ClauseKind.filter,
+          dialect: SqlDialect.mysql,
+        ),
+        throwsA(isA<ClauseSyntaxException>()),
+      );
+    });
+
+    final table = DbTable(
+      oid: 1,
+      schema: 'shop',
+      name: 'orders',
+      kind: DbRelationKind.table,
+      dialect: SqlDialect.mysql,
+    );
+    final policy = EditPolicy(
+      rowIdPredicate: (id) => 'WHERE `id` = $id',
+      insertOmitsDefaultColumns: false,
+      updateDropsDefaultAssignments: false,
+    );
+
+    test('edit statements quote with backticks and escape backslashes', () {
+      final sql = buildEditStatements(
+        table,
+        EditBatch(
+          updatesByCtid: {
+            '7': {'note': const CellLiteral(r'C:\tmp')},
+          },
+        ),
+        policy,
+      );
+      expect(sql, [
+        "UPDATE `shop`.`orders` SET\n  `note` = 'C:\\\\tmp'\nWHERE `id` = 7",
+      ]);
+    });
+
+    test('an insert with no columns uses the MySQL empty-row form', () {
+      final sql = buildEditStatements(
+        table,
+        EditBatch(inserts: [PendingInsert()]),
+        policy,
+      );
+      expect(sql, ['INSERT INTO `shop`.`orders` () VALUES ()']);
     });
   });
 }

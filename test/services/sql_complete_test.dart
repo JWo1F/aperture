@@ -1,11 +1,18 @@
 import 'package:aperture/models/db_catalog.dart';
 import 'package:aperture/models/db_object.dart';
 import 'package:aperture/services/sql_complete.dart';
+import 'package:aperture/services/sql_identifier.dart';
 import 'package:aperture/ui/widgets/code_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 DbTable _t(int oid, String schema, String name) =>
-    DbTable(oid: oid, schema: schema, name: name, kind: DbRelationKind.table);
+    DbTable(
+      oid: oid,
+      schema: schema,
+      name: name,
+      kind: DbRelationKind.table,
+      dialect: SqlDialect.ansi,
+    );
 
 DbColumn _c(String name, String type, {bool pk = false}) => DbColumn(
   name: name,

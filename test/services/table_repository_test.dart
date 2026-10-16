@@ -1,6 +1,7 @@
 import 'package:aperture/models/cell_edit.dart';
 import 'package:aperture/models/db_object.dart';
 import 'package:aperture/services/postgres_table_repository.dart';
+import 'package:aperture/services/sql_identifier.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -9,6 +10,7 @@ void main() {
     schema: 'public',
     name: 'events',
     kind: DbRelationKind.table,
+    dialect: SqlDialect.ansi,
   );
 
   EditBatch updates(Map<String, Map<String, CellEditValue>> u) =>

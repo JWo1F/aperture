@@ -47,7 +47,11 @@ class PostgresTableRepository implements TableRepository {
       final estimate = await _estimatedRowCount(table);
       if (estimate != null) return estimate;
     }
-    validateClauseSnippet(filter, kind: ClauseKind.filter);
+    validateClauseSnippet(
+      filter,
+      kind: ClauseKind.filter,
+      dialect: SqlDialect.ansi,
+    );
     final result = await _db.execute(
       'SELECT count(*) FROM ${table.qualifiedName}${whereClause(filter)}',
       timeout: _pageQueryTimeout,
@@ -59,7 +63,7 @@ class PostgresTableRepository implements TableRepository {
   /// exists (relation never analyzed, a view, or genuinely empty) — callers
   /// fall back to an exact `count(*)`.
   Future<int?> _estimatedRowCount(DbTable table) async {
-    final literal = literalSql(table.qualifiedName);
+    final literal = SqlDialect.ansi.literal(table.qualifiedName);
     try {
       final result = await _db.execute(
         'SELECT reltuples::bigint FROM pg_class '
@@ -88,9 +92,21 @@ class PostgresTableRepository implements TableRepository {
     String selectList = '*',
   }) async {
     final watch = Stopwatch()..start();
-    validateClauseSnippet(filter, kind: ClauseKind.filter);
-    validateClauseSnippet(orderBy, kind: ClauseKind.orderBy);
-    validateClauseSnippet(selectList, kind: ClauseKind.selectList);
+    validateClauseSnippet(
+      filter,
+      kind: ClauseKind.filter,
+      dialect: SqlDialect.ansi,
+    );
+    validateClauseSnippet(
+      orderBy,
+      kind: ClauseKind.orderBy,
+      dialect: SqlDialect.ansi,
+    );
+    validateClauseSnippet(
+      selectList,
+      kind: ClauseKind.selectList,
+      dialect: SqlDialect.ansi,
+    );
     final order = orderClause(orderBy);
     final withCtid = table.kind == DbRelationKind.table;
     // Aliased to the relation's own name, not to `t`. The alias exists so
@@ -98,7 +114,7 @@ class PostgresTableRepository implements TableRepository {
     // a clausebar filter written as `events.status = 'x'` failed on the
     // page fetch while working on the row count and the export, which
     // don't alias. Aliasing to `events` keeps both spellings valid.
-    final alias = withCtid ? quoteIdent(table.name) : null;
+    final alias = withCtid ? SqlDialect.ansi.quoteIdent(table.name) : null;
     final projection = _projection(selectList, alias: alias);
     final ctidPrefix = alias == null ? '' : '$alias.ctid::text AS __ctid, ';
     final fromClause = alias == null
@@ -166,9 +182,21 @@ class PostgresTableRepository implements TableRepository {
     String orderBy = '',
     String selectList = '*',
   }) async {
-    validateClauseSnippet(filter, kind: ClauseKind.filter);
-    validateClauseSnippet(orderBy, kind: ClauseKind.orderBy);
-    validateClauseSnippet(selectList, kind: ClauseKind.selectList);
+    validateClauseSnippet(
+      filter,
+      kind: ClauseKind.filter,
+      dialect: SqlDialect.ansi,
+    );
+    validateClauseSnippet(
+      orderBy,
+      kind: ClauseKind.orderBy,
+      dialect: SqlDialect.ansi,
+    );
+    validateClauseSnippet(
+      selectList,
+      kind: ClauseKind.selectList,
+      dialect: SqlDialect.ansi,
+    );
     final order = orderClause(orderBy);
     final watch = Stopwatch()..start();
     final projection = _projection(selectList);
@@ -198,7 +226,8 @@ class PostgresTableRepository implements TableRepository {
     // string literal — so a relation named `o'brien` closed the literal
     // early in all four DDL queries. Double the quotes as well, the way
     // `_estimatedRowCount` already does.
-    final regclass = '${literalSql(qualify(table.schema, table.name))}'
+    final regclass =
+        '${SqlDialect.ansi.literal(SqlDialect.ansi.qualify(table.schema, table.name))}'
         '::regclass';
 
     // pg_catalog columns of type `name` (OID 19) have no built-in codec in
@@ -245,7 +274,9 @@ class PostgresTableRepository implements TableRepository {
       timeout: _ddlQueryTimeout,
     );
 
-    final colNames = [for (final r in columns) quoteIdent(r[0] as String)];
+    final colNames = [
+      for (final r in columns) SqlDialect.ansi.quoteIdent(r[0] as String),
+    ];
     final colTypes = [for (final r in columns) r[1] as String];
     final nameWidth = colNames.fold<int>(
       0,
@@ -272,10 +303,10 @@ class PostgresTableRepository implements TableRepository {
 
     final constraintLines = <String>[
       for (final r in constraints)
-        '  CONSTRAINT ${quoteIdent(r[0] as String)} ${r[2] as String}',
+        '  CONSTRAINT ${SqlDialect.ansi.quoteIdent(r[0] as String)} ${r[2] as String}',
     ];
 
-    final qualified = qualify(table.schema, table.name);
+    final qualified = SqlDialect.ansi.qualify(table.schema, table.name);
     final buf = StringBuffer();
     buf.writeln('-- Table: $qualified');
     buf.writeln(
@@ -299,7 +330,7 @@ class PostgresTableRepository implements TableRepository {
       }
       final escaped = c.replaceAll("'", "''");
       buf.writeln(
-        'COMMENT ON COLUMN $qualified.${quoteIdent(columns[i][0] as String)} '
+        'COMMENT ON COLUMN $qualified.${SqlDialect.ansi.quoteIdent(columns[i][0] as String)} '
         "IS '$escaped';",
       );
     }
@@ -327,8 +358,8 @@ class PostgresTableRepository implements TableRepository {
   /// a materialized view's indexes and whether it has been populated. The
   /// table path above would rebuild a view as the table of its columns.
   Future<String> _viewDdl(DbTable table) async {
-    final qualified = qualify(table.schema, table.name);
-    final regclass = '${literalSql(qualified)}::regclass';
+    final qualified = SqlDialect.ansi.qualify(table.schema, table.name);
+    final regclass = '${SqlDialect.ansi.literal(qualified)}::regclass';
     final rows = await _db.execute(
       'SELECT pg_get_viewdef($regclass, true), '
       "obj_description($regclass, 'pg_class'), c.relispopulated "
@@ -361,7 +392,7 @@ class PostgresTableRepository implements TableRepository {
       buf.writeln();
       buf.writeln(
         'COMMENT ON ${materialized ? 'MATERIALIZED VIEW' : 'VIEW'} '
-        "$qualified IS ${literalSql(comment)};",
+        "$qualified IS ${SqlDialect.ansi.literal(comment)};",
       );
     }
     if (materialized) {

@@ -85,16 +85,21 @@ String _hex(Uint8List bytes, {required int? cap}) {
 
 /// Renders `"column" = value` (or `!=`, `IS NULL`, `IS NOT NULL`) suitable
 /// for splicing into a WHERE clause. Numerics and booleans go in
-/// unquoted; everything else flows through [formatCellValue] and gets its
-/// single quotes doubled. The column identifier is escaped via
-/// [quoteIdent] so a column literally named `weird"name` is handled.
-String equalityFragment(String column, Object? value, {bool not = false}) {
-  final ident = quoteIdent(column);
+/// unquoted; everything else flows through [formatCellValue] and becomes a
+/// [dialect] literal. The column identifier is quoted by [dialect] too, so
+/// a column literally named `weird"name` is handled.
+String equalityFragment(
+  String column,
+  Object? value, {
+  required SqlDialect dialect,
+  bool not = false,
+}) {
+  final ident = dialect.quoteIdent(column);
   if (value == null) return '$ident IS ${not ? 'NOT ' : ''}NULL';
   final op = not ? '!=' : '=';
   if (value is num || value is BigInt || value is bool) {
     return '$ident $op $value';
   }
   final text = formatCellValue(value) ?? '';
-  return "$ident $op '${text.replaceAll("'", "''")}'";
+  return '$ident $op ${dialect.literal(text)}';
 }

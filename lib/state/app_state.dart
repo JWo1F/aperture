@@ -432,7 +432,7 @@ class AppState {
     final tab = await tabsController.openTable(refTable);
     await tabsController.setTableFilter(
       tab,
-      equalityFragment(refColumn, value),
+      equalityFragment(refColumn, value, dialect: refTable.dialect),
     );
   }
 
@@ -445,7 +445,7 @@ class AppState {
     final tab = await tabsController.openTable(ref);
     await tabsController.setTableFilter(
       tab,
-      equalityFragment(fk.refColumn, value),
+      equalityFragment(fk.refColumn, value, dialect: ref.dialect),
     );
   }
 

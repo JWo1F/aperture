@@ -159,7 +159,7 @@ class TableView extends StatelessWidget {
   void _addFilter(String column, Object? value, bool not) {
     appState.tabsController.appendTableFilter(
       tab,
-      equalityFragment(column, value, not: not),
+      equalityFragment(column, value, dialect: tab.table.dialect, not: not),
     );
   }
 }

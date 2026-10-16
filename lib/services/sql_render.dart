@@ -5,32 +5,24 @@ import 'sql_statements.dart';
 
 /// Pure SQL-rendering helpers shared by the per-engine table repositories.
 ///
-/// Postgres and SQLite differ in row-identity tokens, transaction style, and
-/// a handful of literal escaping details for non-text types — but the
-/// quote-doubling for string literals, the `WHERE` prefix decision, and the
-/// `CellEditValue → SQL fragment` translation are identical. Centralising
-/// them here keeps the per-engine repository files focused on the parts that
-/// genuinely diverge.
-
-/// Renders a value as a SQL string literal. Strings stay untyped so the
-/// engine coerces them into the target column type; single quotes are
-/// doubled to neutralise injection.
-String literalSql(String? value) {
-  if (value == null) return 'NULL';
-  return "'${value.replaceAll("'", "''")}'";
-}
+/// The engines differ in row-identity tokens, transaction style, and how a
+/// [SqlDialect] spells identifiers and literals — but the `WHERE` prefix
+/// decision and the `CellEditValue → SQL fragment` translation are
+/// identical. Centralising them here keeps the per-engine repository files
+/// focused on the parts that genuinely diverge.
 
 /// Translates a [CellEditValue] into the SQL fragment that goes on the
 /// right-hand side of an assignment or VALUES tuple.
 ///
-/// `CellDefault` renders as the bare `DEFAULT` keyword. Postgres accepts it
-/// in both UPDATE assignments and VALUES lists; SQLite accepts it only in a
-/// VALUES list, and the SQLite repository filters DEFAULT-valued columns out
-/// of INSERTs and never builds an UPDATE with a CellDefault.
-String renderAssignment(CellEditValue value) => switch (value) {
-  CellLiteral(:final value) => literalSql(value),
-  CellDefault() => 'DEFAULT',
-};
+/// `CellDefault` renders as the bare `DEFAULT` keyword. Postgres and MySQL
+/// accept it in both UPDATE assignments and VALUES lists; SQLite accepts it
+/// only in a VALUES list, and the SQLite repository filters DEFAULT-valued
+/// columns out of INSERTs and never builds an UPDATE with a CellDefault.
+String renderAssignment(CellEditValue value, SqlDialect dialect) =>
+    switch (value) {
+      CellLiteral(:final value) => dialect.literal(value),
+      CellDefault() => 'DEFAULT',
+    };
 
 /// Renders the optional ` WHERE <filter>` tail. Empty / whitespace-only
 /// filters produce an empty string so the caller can concatenate
@@ -94,7 +86,16 @@ class ClauseSyntaxException implements Exception {
 ///
 /// The sentinel goes on its own line so a snippet ending in a `--`
 /// comment cannot swallow it and read as harmless.
-void validateClauseSnippet(String snippet, {required ClauseKind kind}) {
+///
+/// [dialect] decides what counts as a string: MySQL reads `\'` inside a
+/// literal as an escaped quote, so splitting its snippets the ANSI way
+/// would see a closed string where the server sees an open one, and wave
+/// through `x = 'a\'' ; DROP TABLE t; -- '`.
+void validateClauseSnippet(
+  String snippet, {
+  required ClauseKind kind,
+  required SqlDialect dialect,
+}) {
   final trimmed = snippet.trim();
   if (trimmed.isEmpty) return;
   final probe = switch (kind) {
@@ -102,7 +103,7 @@ void validateClauseSnippet(String snippet, {required ClauseKind kind}) {
     ClauseKind.orderBy => 'SELECT 1 FROM t ORDER BY $trimmed\nLIMIT 1',
     ClauseKind.selectList => 'SELECT $trimmed FROM t\nLIMIT 1',
   };
-  if (parseSqlStatements(probe).length > 1) {
+  if (parseSqlStatements(probe, dialect: dialect).length > 1) {
     throw ClauseSyntaxException(kind: kind, snippet: trimmed);
   }
 }
@@ -116,17 +117,18 @@ void validateClauseSnippet(String snippet, {required ClauseKind kind}) {
 ///
 /// - Row identity: Postgres rows are addressed by `ctid` (`WHERE ctid =
 ///   '(0,5)'::tid`), SQLite rows by the implicit integer `rowid`
-///   (`WHERE rowid = 7`, inlined — never bound).
-/// - DEFAULT in INSERT: Postgres accepts the bare `DEFAULT` keyword inside a
-///   VALUES tuple. SQLite has no per-column DEFAULT marker, so the column
-///   must be omitted entirely; the table default (or INTEGER PRIMARY KEY
-///   auto-assignment) then fills it. That's what makes Duplicate-row produce
-///   a fresh primary key on SQLite.
-/// - DEFAULT in UPDATE: Postgres accepts `SET col = DEFAULT`. SQLite rejects
-///   it, so `CellDefault` assignments are filtered out of the SET list. If
-///   every assignment in an UPDATE is `CellDefault` the statement collapses
-///   to a no-op and is dropped from the batch entirely — keep the dropped
-///   row-id out of the caller's stale-row tracking list.
+///   (`WHERE rowid = 7`, inlined — never bound). MySQL has neither, so its
+///   rows are addressed by their primary-key values.
+/// - DEFAULT in INSERT: Postgres and MySQL accept the bare `DEFAULT` keyword
+///   inside a VALUES tuple. SQLite has no per-column DEFAULT marker, so the
+///   column must be omitted entirely; the table default (or INTEGER PRIMARY
+///   KEY auto-assignment) then fills it. That's what makes Duplicate-row
+///   produce a fresh primary key on SQLite.
+/// - DEFAULT in UPDATE: Postgres and MySQL accept `SET col = DEFAULT`.
+///   SQLite rejects it, so `CellDefault` assignments are filtered out of the
+///   SET list. If every assignment in an UPDATE is `CellDefault` the
+///   statement collapses to a no-op and is dropped from the batch entirely —
+///   keep the dropped row-id out of the caller's stale-row tracking list.
 class EditPolicy {
   const EditPolicy({
     required this.rowIdPredicate,
@@ -180,7 +182,11 @@ String? _renderUpdate(
       ? assignments.entries.where((e) => e.value is! CellDefault)
       : assignments.entries;
   final lines = filtered
-      .map((e) => '  ${quoteIdent(e.key)} = ${renderAssignment(e.value)}')
+      .map(
+        (e) =>
+            '  ${table.dialect.quoteIdent(e.key)} = '
+            '${renderAssignment(e.value, table.dialect)}',
+      )
       .join(',\n');
   if (lines.isEmpty) return null;
   return 'UPDATE ${table.qualifiedName} SET\n'
@@ -199,11 +205,14 @@ String _renderInsert(DbTable table, PendingInsert insert, EditPolicy policy) {
         ]
       : insert.values.keys.toList(growable: false);
   if (cols.isEmpty) {
-    return 'INSERT INTO ${table.qualifiedName} DEFAULT VALUES';
+    return switch (table.dialect) {
+      SqlDialect.ansi => 'INSERT INTO ${table.qualifiedName} DEFAULT VALUES',
+      SqlDialect.mysql => 'INSERT INTO ${table.qualifiedName} () VALUES ()',
+    };
   }
-  final colList = cols.map(quoteIdent).join(', ');
+  final colList = cols.map(table.dialect.quoteIdent).join(', ');
   final valList = cols
-      .map((c) => renderAssignment(insert.values[c]!))
+      .map((c) => renderAssignment(insert.values[c]!, table.dialect))
       .join(', ');
   return 'INSERT INTO ${table.qualifiedName} ($colList)\n'
       'VALUES ($valList)';

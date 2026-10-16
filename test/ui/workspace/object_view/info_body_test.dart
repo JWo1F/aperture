@@ -1,6 +1,7 @@
 import 'package:aperture/models/db_object.dart';
 import 'package:aperture/services/db_service.dart';
 import 'package:aperture/services/keychain.dart';
+import 'package:aperture/services/sql_identifier.dart';
 import 'package:aperture/state/app_globals.dart';
 import 'package:aperture/state/app_state.dart';
 import 'package:aperture/theme/app_theme.dart';
@@ -13,12 +14,14 @@ final _customers = DbTable(
   schema: 'public',
   name: 'customers',
   kind: DbRelationKind.table,
+  dialect: SqlDialect.ansi,
 );
 final _orders = DbTable(
   oid: 2,
   schema: 'public',
   name: 'orders',
   kind: DbRelationKind.table,
+  dialect: SqlDialect.ansi,
   comment: 'Every order a customer placed.',
   rowEstimate: 1200000,
   sizeBytes: 240 * 1024 * 1024,

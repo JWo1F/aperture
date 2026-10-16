@@ -105,7 +105,10 @@ class _QueryEditorState extends State<QueryEditor> {
   }
 
   void _recomputeStatements() {
-    _statements = parseSqlStatements(_controller.text);
+    _statements = parseSqlStatements(
+      _controller.text,
+      dialect: appState.catalog.catalog.dialect,
+    );
   }
 
   void _recomputeCursorStmt() {
@@ -154,7 +157,10 @@ class _QueryEditorState extends State<QueryEditor> {
     final tabs = appState.tabsController;
     final stmts = _statements.isNotEmpty
         ? _statements
-        : parseSqlStatements(_controller.text);
+        : parseSqlStatements(
+            _controller.text,
+            dialect: appState.catalog.catalog.dialect,
+          );
 
     if (stmts.length <= 1) {
       await tabs.runQuery(widget.tab);

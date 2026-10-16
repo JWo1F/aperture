@@ -1,7 +1,7 @@
 import '../models/db_object.dart';
 import 'introspector.dart';
 import 'postgres_service.dart';
-import 'sql_render.dart';
+import 'sql_identifier.dart';
 
 /// Runs catalog-wide introspection queries against an open Postgres
 /// connection.
@@ -64,6 +64,7 @@ class PostgresIntrospector implements Introspector {
               schema: schema,
               name: name,
               kind: _kindFromRelkind(kind),
+              dialect: SqlDialect.ansi,
               comment: comment,
               rowEstimate: hasRowEstimate ? rowEst : null,
               sizeBytes: sizeBytes != null && sizeBytes > 0 ? sizeBytes : null,
@@ -364,6 +365,7 @@ class PostgresIntrospector implements Introspector {
               ? DbRoutineKind.procedure
               : DbRoutineKind.function,
           arguments: row[4] as String? ?? '',
+          dialect: SqlDialect.ansi,
           result: row[5] as String?,
         ),
     ];
@@ -448,7 +450,9 @@ class PostgresIntrospector implements Introspector {
 
   @override
   Future<String> loadEnumDdl(DbEnum type) async {
-    final labels = [for (final l in type.labels) '  ${literalSql(l)}'];
+    final labels = [
+      for (final l in type.labels) '  ${SqlDialect.ansi.literal(l)}',
+    ];
     return 'CREATE TYPE ${type.qualifiedName} AS ENUM (\n'
         '${labels.join(',\n')}\n'
         ');\n';
@@ -465,7 +469,7 @@ class PostgresIntrospector implements Introspector {
       '        FROM pg_constraint c '
       "        WHERE c.contypid = t.oid AND c.contype = 'c') "
       'FROM pg_type t '
-      'WHERE t.oid = ${literalSql(domain.qualifiedName)}::regtype',
+      'WHERE t.oid = ${SqlDialect.ansi.literal(domain.qualifiedName)}::regtype',
     );
     final r = result.first;
     final def = r[1] as String?;

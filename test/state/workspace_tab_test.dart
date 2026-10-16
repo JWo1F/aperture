@@ -1,6 +1,7 @@
 import 'package:aperture/models/db_object.dart';
 import 'package:aperture/models/query_result.dart';
 import 'package:aperture/models/schema_object.dart';
+import 'package:aperture/services/sql_identifier.dart';
 import 'package:aperture/state/workspace_tab.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -9,6 +10,7 @@ DbTable _table() => DbTable(
   schema: 'public',
   name: 't',
   kind: DbRelationKind.table,
+  dialect: SqlDialect.ansi,
 );
 
 QueryResult _page(List<String> rowIds) => QueryResult.rows(

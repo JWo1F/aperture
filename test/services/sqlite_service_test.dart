@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:aperture/models/cell_edit.dart';
 import 'package:aperture/models/connection_config.dart';
 import 'package:aperture/models/db_object.dart';
+import 'package:aperture/services/sql_identifier.dart';
 import 'package:aperture/services/sqlite_service.dart';
 import 'package:aperture/services/sqlite_table_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +16,7 @@ void main() {
       schema: 'main',
       name: 'events',
       kind: DbRelationKind.table,
+      dialect: SqlDialect.ansi,
     );
 
     test('renders one UPDATE per rowid targeting the rowid column', () {
@@ -194,6 +196,7 @@ void main() {
         schema: 'main',
         name: 'odd',
         kind: DbRelationKind.table,
+        dialect: SqlDialect.ansi,
       );
 
       final page = await svc.fetchTablePage(odd, limit: 10, offset: 0);
@@ -229,6 +232,7 @@ void main() {
           schema: 'main',
           name: 'odder',
           kind: DbRelationKind.table,
+          dialect: SqlDialect.ansi,
         ),
         limit: 10,
         offset: 0,

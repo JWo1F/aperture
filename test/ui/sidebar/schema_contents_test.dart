@@ -1,5 +1,6 @@
 import 'package:aperture/models/db_catalog.dart';
 import 'package:aperture/models/db_object.dart';
+import 'package:aperture/services/sql_identifier.dart';
 import 'package:aperture/ui/sidebar/schema_contents.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -14,11 +15,19 @@ DbTable _rel(
   schema: schema,
   name: name,
   kind: kind,
+  dialect: SqlDialect.ansi,
   partitioned: partitioned,
 );
 
 DbRoutine _fn(int oid, String schema, String name, DbRoutineKind kind) =>
-    DbRoutine(oid: oid, schema: schema, name: name, kind: kind, arguments: '');
+    DbRoutine(
+      oid: oid,
+      schema: schema,
+      name: name,
+      kind: kind,
+      arguments: '',
+      dialect: SqlDialect.ansi,
+    );
 
 DatabaseCatalog _catalog() => DatabaseCatalog.empty.copyWith(
   schemas: [

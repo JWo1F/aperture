@@ -1,4 +1,5 @@
 import 'package:aperture/models/db_object.dart';
+import 'package:aperture/services/sql_identifier.dart';
 import 'package:aperture/state/navigation_history.dart';
 import 'package:aperture/state/workspace_tab.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,7 @@ TableTab _tableTab(String id) => TableTab(
     schema: 'public',
     name: id,
     kind: DbRelationKind.table,
+    dialect: SqlDialect.ansi,
   ),
 );
 

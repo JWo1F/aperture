@@ -1,3 +1,4 @@
+import '../services/sql_identifier.dart';
 import 'db_object.dart';
 
 /// Immutable snapshot of everything we've introspected about a live database
@@ -19,6 +20,7 @@ class DatabaseCatalog {
     required this.routines,
     required this.sequences,
     required this.phases,
+    required this.dialect,
   });
 
   /// An empty catalog — placeholder used between disconnect and the first
@@ -35,6 +37,7 @@ class DatabaseCatalog {
     routines: const [],
     sequences: const [],
     phases: const {},
+    dialect: SqlDialect.ansi,
   );
 
   final List<DbSchema> schemas;
@@ -48,6 +51,10 @@ class DatabaseCatalog {
   final List<DbRoutine> routines;
   final List<DbSequence> sequences;
   final Set<CatalogPhase> phases;
+
+  /// How the connected engine spells SQL — read by the editor's statement
+  /// splitter and the autocomplete keyword lists.
+  final SqlDialect dialect;
 
   bool hasPhase(CatalogPhase phase) => phases.contains(phase);
 
@@ -144,6 +151,7 @@ class DatabaseCatalog {
     routines: routines,
     sequences: sequences,
     phases: {...phases, phase},
+    dialect: dialect,
   );
 
   DatabaseCatalog copyWith({
@@ -158,6 +166,7 @@ class DatabaseCatalog {
     List<DbRoutine>? routines,
     List<DbSequence>? sequences,
     Set<CatalogPhase>? phases,
+    SqlDialect? dialect,
   }) => DatabaseCatalog(
     schemas: schemas ?? this.schemas,
     relationsByOid: relationsByOid ?? this.relationsByOid,
@@ -170,6 +179,7 @@ class DatabaseCatalog {
     routines: routines ?? this.routines,
     sequences: sequences ?? this.sequences,
     phases: phases ?? this.phases,
+    dialect: dialect ?? this.dialect,
   );
 }
 

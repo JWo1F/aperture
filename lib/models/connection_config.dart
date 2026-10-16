@@ -1,3 +1,4 @@
+import '../services/sql_identifier.dart';
 import 'query_message.dart';
 import 'saved_query.dart';
 
@@ -39,8 +40,11 @@ enum DbEngine {
   postgres,
   sqlite;
 
-  static DbEngine fromName(String? raw) =>
-      raw == 'sqlite' ? sqlite : postgres;
+  static DbEngine fromName(String? raw) => raw == 'sqlite' ? sqlite : postgres;
+
+  SqlDialect get dialect => switch (this) {
+    postgres || sqlite => SqlDialect.ansi,
+  };
 }
 
 /// User-supplied details for one database connection — a Postgres endpoint

@@ -54,6 +54,7 @@ class SqliteIntrospector implements Introspector {
           kind: (row[2] as String) == 'view'
               ? DbRelationKind.view
               : DbRelationKind.table,
+          dialect: SqlDialect.ansi,
         ),
     ];
   }
@@ -62,7 +63,10 @@ class SqliteIntrospector implements Introspector {
     return _tableInfoCache.putIfAbsent(
       name,
       () => _db
-          .select('PRAGMA table_info(${quoteIdent(name)})', log: false)
+          .select(
+            'PRAGMA table_info(${SqlDialect.ansi.quoteIdent(name)})',
+            log: false,
+          )
           .rows
           .map((r) => r.toList())
           .toList(),
@@ -73,7 +77,10 @@ class SqliteIntrospector implements Introspector {
     return _indexListCache.putIfAbsent(
       name,
       () => _db
-          .select('PRAGMA index_list(${quoteIdent(name)})', log: false)
+          .select(
+            'PRAGMA index_list(${SqlDialect.ansi.quoteIdent(name)})',
+            log: false,
+          )
           .rows
           .map((r) => r.toList())
           .toList(),
@@ -84,7 +91,10 @@ class SqliteIntrospector implements Introspector {
     return _indexInfoCache.putIfAbsent(
       name,
       () => _db
-          .select('PRAGMA index_info(${quoteIdent(name)})', log: false)
+          .select(
+            'PRAGMA index_info(${SqlDialect.ansi.quoteIdent(name)})',
+            log: false,
+          )
           .rows
           .map((r) => r.toList())
           .toList(),
@@ -126,7 +136,7 @@ class SqliteIntrospector implements Introspector {
     for (final table in relations) {
       final rows = _db
           .select(
-            'PRAGMA foreign_key_list(${quoteIdent(table.name)})',
+            'PRAGMA foreign_key_list(${SqlDialect.ansi.quoteIdent(table.name)})',
             log: false,
           )
           .rows;
@@ -219,12 +229,13 @@ class SqliteIntrospector implements Introspector {
     // Verbatim `CREATE INDEX` text, keyed by index name. Auto-indexes
     // (PK/UNIQUE-backed) carry a null `sql` and so come back with empty def.
     final defByName = <String, String>{
-      for (final row in _db
-          .select(
-            "SELECT name, sql FROM sqlite_master WHERE type = 'index'",
-            log: false,
-          )
-          .rows)
+      for (final row
+          in _db
+              .select(
+                "SELECT name, sql FROM sqlite_master WHERE type = 'index'",
+                log: false,
+              )
+              .rows)
         if (row[1] != null) row[0] as String: row[1] as String,
     };
 

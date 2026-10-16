@@ -1,3 +1,5 @@
+import 'sql_identifier.dart';
+
 /// One SQL statement within a multi-statement script.
 class SqlStatement {
   SqlStatement({
@@ -19,7 +21,10 @@ class SqlStatement {
   final int startLine;
 }
 
-/// Splits [sql] into independent statements while respecting:
+/// Splits [sql] into independent statements while respecting what
+/// [dialect] reads as a string, identifier or comment.
+///
+/// [SqlDialect.ansi] (Postgres, SQLite):
 ///
 ///   - standard string literals (`'…'`, with doubled `''` for escaped quote)
 ///   - E-strings and U&'…' strings (`\` is an escape, so `\'` stays inside)
@@ -29,9 +34,27 @@ class SqlStatement {
 ///   - double-quoted identifiers (`"…"`, with `""` for escaped quote)
 ///   - line comments (`-- …`) and block comments (`/* … */`)
 ///
+/// [SqlDialect.mysql]:
+///
+///   - `'…'` and `"…"` are both strings, and `\` escapes inside either
+///   - backtick identifiers (`` `…` ``, with ``` `` ``` for escaped backtick)
+///   - `# …` line comments, and `-- ` only when whitespace follows the
+///     dashes — MySQL reads `1 --1` as `1 - -1`, so treating that as a
+///     comment would hide a `;` the server splits on
+///   - `/*! … */` and `/*+ … */` are executed by the server, so their body
+///     is scanned like ordinary text rather than skipped
+///   - the client-side `DELIMITER xyz` directive of the `mysql` CLI, so a
+///     `CREATE PROCEDURE` body full of `;` can be written the usual way. The
+///     directive is not a statement, and a custom delimiter is dropped from
+///     the statement text since the server would not understand it.
+///
 /// Empty / whitespace-only fragments are dropped. A trailing statement
-/// without `;` is included as the last entry.
-List<SqlStatement> parseSqlStatements(String sql) {
+/// without a delimiter is included as the last entry.
+List<SqlStatement> parseSqlStatements(
+  String sql, {
+  required SqlDialect dialect,
+}) {
+  final mysql = dialect == SqlDialect.mysql;
   final out = <SqlStatement>[];
   final length = sql.length;
 
@@ -39,73 +62,99 @@ List<SqlStatement> parseSqlStatements(String sql) {
   var currentStart = 0;
   var currentStartLine = 0;
   var line = 0;
+  var delimiter = ';';
+
+  void skipBlanks() {
+    while (i < length && _isBlank(sql.codeUnitAt(i))) {
+      if (sql.codeUnitAt(i) == 0x0A) line++;
+      i++;
+    }
+  }
+
+  // Skips a quoted run opening at [i]. [backslash] makes `\` escape the
+  // next character; a doubled closing quote is always an escape.
+  void skipQuoted(int quote, {required bool backslash}) {
+    i++;
+    while (i < length) {
+      final cc = sql.codeUnitAt(i);
+      if (backslash && cc == 0x5C && i + 1 < length) {
+        if (sql.codeUnitAt(i + 1) == 0x0A) line++;
+        i += 2;
+        continue;
+      }
+      if (cc == quote) {
+        if (i + 1 < length && sql.codeUnitAt(i + 1) == quote) {
+          i += 2;
+          continue;
+        }
+        i++;
+        return;
+      }
+      if (cc == 0x0A) line++;
+      i++;
+    }
+  }
+
+  void emit(int end, String text) {
+    if (_containsSql(text, mysql: mysql)) {
+      out.add(
+        SqlStatement(
+          text: text,
+          startOffset: currentStart,
+          endOffset: end,
+          startLine: currentStartLine,
+        ),
+      );
+    }
+  }
 
   // Skip leading whitespace so the first statement's startLine is correct.
-  while (i < length && _isBlank(sql.codeUnitAt(i))) {
-    if (sql.codeUnitAt(i) == 0x0A) line++;
-    i++;
-  }
+  skipBlanks();
   currentStart = i;
   currentStartLine = line;
 
   while (i < length) {
     final c = sql.codeUnitAt(i);
 
-    // Standard single-quoted string. Handle doubled '' as an escaped
-    // quote (not a new string).
-    if (c == 0x27) {
-      i++;
-      while (i < length) {
-        final cc = sql.codeUnitAt(i);
-        if (cc == 0x27) {
-          if (i + 1 < length && sql.codeUnitAt(i + 1) == 0x27) {
-            i += 2; // doubled quote — part of the literal
-            continue;
-          }
-          i++;
-          break;
-        }
-        if (cc == 0x0A) line++;
-        i++;
+    // A directive is only one when it opens the statement: comments may
+    // precede it, SQL may not.
+    if (mysql && (c == 0x44 || c == 0x64)) {
+      final directive = _delimiterDirective(sql, i);
+      if (directive != null &&
+          !_containsSql(sql.substring(currentStart, i), mysql: true)) {
+        delimiter = directive.delimiter;
+        i = directive.end;
+        skipBlanks();
+        currentStart = i;
+        currentStartLine = line;
+        continue;
       }
+    }
+
+    // Single-quoted string. ANSI doubles '' as an escaped quote; MySQL
+    // also honours backslash escapes.
+    if (c == 0x27) {
+      skipQuoted(0x27, backslash: mysql);
       continue;
     }
 
     // E'…' or U&'…' (and the lowercase variants): backslash is an escape,
     // so a backslash-apostrophe does NOT close the string. Doubled ''
     // remains an escape too.
-    if ((c == 0x45 || c == 0x65 || c == 0x55 || c == 0x75) &&
+    if (!mysql &&
+        (c == 0x45 || c == 0x65 || c == 0x55 || c == 0x75) &&
         _isEscapeStringStart(sql, i)) {
       // Skip the prefix to land on the opening quote.
       while (i < length && sql.codeUnitAt(i) != 0x27) {
         i++;
       }
       if (i >= length) break;
-      i++; // past opening '
-      while (i < length) {
-        final cc = sql.codeUnitAt(i);
-        if (cc == 0x5C && i + 1 < length) {
-          // backslash escapes the next char (including ')
-          if (sql.codeUnitAt(i + 1) == 0x0A) line++;
-          i += 2;
-          continue;
-        }
-        if (cc == 0x27) {
-          if (i + 1 < length && sql.codeUnitAt(i + 1) == 0x27) {
-            i += 2;
-            continue;
-          }
-          i++;
-          break;
-        }
-        if (cc == 0x0A) line++;
-        i++;
-      }
+      skipQuoted(0x27, backslash: true);
       continue;
     }
 
     // Dollar-quoted string $tag$ … $tag$ (or $$ … $$).
-    if (c == 0x24) {
+    if (!mysql && c == 0x24) {
       final tagEnd = _scanDollarTag(sql, i);
       if (tagEnd != -1) {
         final tag = sql.substring(i, tagEnd + 1);
@@ -125,27 +174,22 @@ List<SqlStatement> parseSqlStatements(String sql) {
       // Not a dollar tag — fall through to normal advance.
     }
 
-    // Double-quoted identifier with doubled "" escape.
+    // Double quotes: an identifier in ANSI, a string in MySQL.
     if (c == 0x22) {
-      i++;
-      while (i < length) {
-        final cc = sql.codeUnitAt(i);
-        if (cc == 0x22) {
-          if (i + 1 < length && sql.codeUnitAt(i + 1) == 0x22) {
-            i += 2;
-            continue;
-          }
-          i++;
-          break;
-        }
-        if (cc == 0x0A) line++;
-        i++;
-      }
+      skipQuoted(0x22, backslash: mysql);
       continue;
     }
 
-    // Line comment -- …
-    if (c == 0x2D && i + 1 < length && sql.codeUnitAt(i + 1) == 0x2D) {
+    // MySQL backtick identifier.
+    if (mysql && c == 0x60) {
+      skipQuoted(0x60, backslash: false);
+      continue;
+    }
+
+    // Line comment: `-- …` everywhere (MySQL wants a blank after the
+    // dashes), `# …` in MySQL.
+    if ((c == 0x2D && _isDashComment(sql, i, mysql: mysql)) ||
+        (mysql && c == 0x23)) {
       while (i < length && sql.codeUnitAt(i) != 0x0A) {
         i++;
       }
@@ -157,6 +201,14 @@ List<SqlStatement> parseSqlStatements(String sql) {
     // nested comment can look like it ends early), which is the safe
     // direction for a gate whose job is refusing smuggled statements.
     if (c == 0x2F && i + 1 < length && sql.codeUnitAt(i + 1) == 0x2A) {
+      if (mysql && i + 2 < length) {
+        final marker = sql.codeUnitAt(i + 2);
+        if (marker == 0x21 || marker == 0x2B) {
+          // `/*!` and `/*+` run on the server: scan the body as SQL.
+          i += 3;
+          continue;
+        }
+      }
       i += 2;
       while (i + 1 < length) {
         if (sql.codeUnitAt(i) == 0x2A && sql.codeUnitAt(i + 1) == 0x2F) {
@@ -169,25 +221,16 @@ List<SqlStatement> parseSqlStatements(String sql) {
       continue;
     }
 
-    // Statement separator.
-    if (c == 0x3B) {
-      i++;
-      final raw = sql.substring(currentStart, i);
-      final trimmed = raw.trim();
-      if (_containsSql(trimmed)) {
-        out.add(
-          SqlStatement(
-            text: trimmed,
-            startOffset: currentStart,
-            endOffset: i,
-            startLine: currentStartLine,
-          ),
-        );
-      }
-      while (i < length && _isBlank(sql.codeUnitAt(i))) {
-        if (sql.codeUnitAt(i) == 0x0A) line++;
-        i++;
-      }
+    // Statement separator. The `;` stays in the statement text; a custom
+    // MySQL delimiter does not.
+    if (delimiter == ';' ? c == 0x3B : sql.startsWith(delimiter, i)) {
+      final bodyEnd = i;
+      i += delimiter.length;
+      final text = delimiter == ';'
+          ? sql.substring(currentStart, i).trim()
+          : sql.substring(currentStart, bodyEnd).trim();
+      emit(i, text);
+      skipBlanks();
       currentStart = i;
       currentStartLine = line;
       continue;
@@ -197,23 +240,43 @@ List<SqlStatement> parseSqlStatements(String sql) {
     i++;
   }
 
-  // Tail (no trailing ;)
+  // Tail (no trailing delimiter).
   if (currentStart < length) {
-    final raw = sql.substring(currentStart);
-    final trimmed = raw.trim();
-    if (_containsSql(trimmed)) {
-      out.add(
-        SqlStatement(
-          text: trimmed,
-          startOffset: currentStart,
-          endOffset: length,
-          startLine: currentStartLine,
-        ),
-      );
-    }
+    emit(length, sql.substring(currentStart).trim());
   }
 
   return out;
+}
+
+/// A `DELIMITER xyz` line of the `mysql` CLI starting at [i]: the new
+/// delimiter and the offset just past the line. Null when [i] does not
+/// start one.
+({String delimiter, int end})? _delimiterDirective(String sql, int i) {
+  const word = 'delimiter';
+  if (i + word.length >= sql.length) return null;
+  if (sql.substring(i, i + word.length).toLowerCase() != word) return null;
+  var j = i + word.length;
+  final gap = sql.codeUnitAt(j);
+  if (gap != 0x20 && gap != 0x09) return null;
+  while (j < sql.length &&
+      (sql.codeUnitAt(j) == 0x20 || sql.codeUnitAt(j) == 0x09)) {
+    j++;
+  }
+  var lineEnd = sql.indexOf('\n', j);
+  if (lineEnd < 0) lineEnd = sql.length;
+  final value = sql.substring(j, lineEnd).trim();
+  if (value.isEmpty || value.contains(' ')) return null;
+  return (delimiter: value, end: lineEnd);
+}
+
+/// Whether the `-` at [i] opens a `--` comment. ANSI needs only the two
+/// dashes; MySQL also wants whitespace (or the end of input) after them.
+bool _isDashComment(String sql, int i, {required bool mysql}) {
+  if (i + 1 >= sql.length || sql.codeUnitAt(i + 1) != 0x2D) return false;
+  if (!mysql) return true;
+  if (i + 2 >= sql.length) return true;
+  final next = sql.codeUnitAt(i + 2);
+  return next <= 0x20;
 }
 
 /// True when [fragment] holds something an engine would actually execute,
@@ -223,7 +286,7 @@ List<SqlStatement> parseSqlStatements(String sql) {
 /// statement. The run-all loop executes every entry, and SQLite's
 /// `prepare` throws `Must contain an SQL statement` on a bare comment — so
 /// a perfectly good script reported itself as having failed.
-bool _containsSql(String fragment) {
+bool _containsSql(String fragment, {required bool mysql}) {
   var i = 0;
   while (i < fragment.length) {
     final c = fragment.codeUnitAt(i);
@@ -231,9 +294,8 @@ bool _containsSql(String fragment) {
       i++;
       continue;
     }
-    if (c == 0x2D &&
-        i + 1 < fragment.length &&
-        fragment.codeUnitAt(i + 1) == 0x2D) {
+    if ((c == 0x2D && _isDashComment(fragment, i, mysql: mysql)) ||
+        (mysql && c == 0x23)) {
       while (i < fragment.length && fragment.codeUnitAt(i) != 0x0A) {
         i++;
       }
@@ -241,7 +303,11 @@ bool _containsSql(String fragment) {
     }
     if (c == 0x2F &&
         i + 1 < fragment.length &&
-        fragment.codeUnitAt(i + 1) == 0x2A) {
+        fragment.codeUnitAt(i + 1) == 0x2A &&
+        !(mysql &&
+            i + 2 < fragment.length &&
+            (fragment.codeUnitAt(i + 2) == 0x21 ||
+                fragment.codeUnitAt(i + 2) == 0x2B))) {
       i += 2;
       while (i + 1 < fragment.length &&
           !(fragment.codeUnitAt(i) == 0x2A &&

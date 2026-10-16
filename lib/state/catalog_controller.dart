@@ -65,6 +65,7 @@ class CatalogController extends ChangeNotifier {
         schemas: schemas,
         relationsByOid: relationsByOid,
         phases: {CatalogPhase.schemas},
+        dialect: service.config.engine.dialect,
       );
       notifyListeners();
       return schemas;

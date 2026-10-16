@@ -239,8 +239,8 @@ Shared cross-engine helpers — do not duplicate:
 
 | Module | Surface |
 |---|---|
-| `sql_render.dart` | `whereClause`, `orderClause`, `literalSql`, `renderAssignment`, `buildEditStatements`, `EditPolicy`, `validateClauseSnippet`, `ClauseSyntaxException`, `ClauseKind` |
-| `sql_identifier.dart` | `quoteIdent`, `qualify` — the ONLY way to embed an identifier |
+| `sql_render.dart` | `whereClause`, `orderClause`, `renderAssignment`, `buildEditStatements`, `EditPolicy`, `validateClauseSnippet`, `ClauseSyntaxException`, `ClauseKind` |
+| `sql_identifier.dart` | `SqlDialect` (`quoteIdent`, `qualify`, `literal`) — the ONLY way to embed an identifier or string literal. `DbTable.dialect` / `DatabaseCatalog.dialect` carry the connection's |
 | `db_service.dart` | `versionTag`, `timedEdit` |
 | `driver_decoder.dart` | `decodeDriverRow` |
 | `sql_statements.dart` | `parseSqlStatements`, `statementAtOffset` |

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:aperture/models/connection_config.dart';
 import 'package:aperture/models/db_object.dart';
 import 'package:aperture/models/query_message.dart';
+import 'package:aperture/services/sql_identifier.dart';
 import 'package:aperture/services/store_database.dart';
 import 'package:aperture/state/app_store.dart';
 import 'package:aperture/theme/app_theme.dart';
@@ -32,6 +33,7 @@ DbTable _table(String schema, String name) {
     schema: schema,
     name: name,
     kind: DbRelationKind.table,
+    dialect: SqlDialect.ansi,
   );
 }
 

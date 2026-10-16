@@ -1,7 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:aperture/models/value_format.dart';
+import 'package:aperture/services/sql_identifier.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+String _ansiEq(String column, Object? value, {bool not = false}) =>
+    equalityFragment(column, value, dialect: SqlDialect.ansi, not: not);
 
 void main() {
   group('formatCellValue', () {
@@ -104,32 +108,32 @@ void main() {
 
   group('equalityFragment', () {
     test('null becomes IS NULL / IS NOT NULL', () {
-      expect(equalityFragment('id', null), '"id" IS NULL');
-      expect(equalityFragment('id', null, not: true), '"id" IS NOT NULL');
+      expect(_ansiEq('id', null), '"id" IS NULL');
+      expect(_ansiEq('id', null, not: true), '"id" IS NOT NULL');
     });
 
     test('numeric values render unquoted', () {
-      expect(equalityFragment('count', 42), '"count" = 42');
-      expect(equalityFragment('count', 42, not: true), '"count" != 42');
+      expect(_ansiEq('count', 42), '"count" = 42');
+      expect(_ansiEq('count', 42, not: true), '"count" != 42');
     });
 
     test('strings get single quotes doubled', () {
       expect(
-        equalityFragment('name', "O'Brien"),
+        _ansiEq('name', "O'Brien"),
         '"name" = \'O\'\'Brien\'',
       );
     });
 
     test('embedded double-quotes in column names are escaped', () {
       expect(
-        equalityFragment('weird"col', 1),
+        _ansiEq('weird"col', 1),
         '"weird""col" = 1',
       );
     });
 
     test('bool / BigInt go unquoted', () {
-      expect(equalityFragment('active', true), '"active" = true');
-      expect(equalityFragment('big', BigInt.from(9)), '"big" = 9');
+      expect(_ansiEq('active', true), '"active" = true');
+      expect(_ansiEq('big', BigInt.from(9)), '"big" = 9');
     });
   });
 

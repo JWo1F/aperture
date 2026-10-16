@@ -21,6 +21,7 @@ class DbTable {
     required this.schema,
     required this.name,
     required this.kind,
+    required this.dialect,
     this.comment,
     this.rowEstimate,
     this.sizeBytes,
@@ -36,6 +37,10 @@ class DbTable {
   final String schema;
   final String name;
   final DbRelationKind kind;
+
+  /// How the owning engine quotes this relation's name in SQL.
+  final SqlDialect dialect;
+
   final String? comment;
 
   /// Planner row estimate (`pg_class.reltuples`). Null when the engine
@@ -52,7 +57,7 @@ class DbTable {
   /// check that asks "is this a table?" means it too.
   final bool partitioned;
 
-  String get qualifiedName => qualify(schema, name);
+  String get qualifiedName => dialect.qualify(schema, name);
 
   /// Stable, unquoted identifier used as a key in persisted maps/sets
   /// (e.g. favorites). Distinct from `qualifiedName` which is SQL-safe.
@@ -178,7 +183,7 @@ class DbEnum {
   final String name;
   final List<String> labels;
 
-  String get qualifiedName => qualify(schema, name);
+  String get qualifiedName => SqlDialect.ansi.qualify(schema, name);
 
   String get qualifiedKey => '$schema.$name';
 }
@@ -197,7 +202,7 @@ class DbDomain {
   final String baseType;
   final bool notNull;
 
-  String get qualifiedName => qualify(schema, name);
+  String get qualifiedName => SqlDialect.ansi.qualify(schema, name);
 }
 
 enum DbRoutineKind { function, procedure }
@@ -211,6 +216,7 @@ class DbRoutine {
     required this.name,
     required this.kind,
     required this.arguments,
+    required this.dialect,
     this.result,
   });
 
@@ -222,10 +228,12 @@ class DbRoutine {
   /// Identity argument list without parentheses, e.g. `a integer, b text`.
   final String arguments;
 
-  /// Return type as Postgres prints it; null for procedures.
+  /// Return type as the engine prints it; null for procedures.
   final String? result;
 
-  String get qualifiedName => qualify(schema, name);
+  final SqlDialect dialect;
+
+  String get qualifiedName => dialect.qualify(schema, name);
 }
 
 /// A standalone sequence. Identity-column sequences are not listed — they
@@ -237,5 +245,5 @@ class DbSequence {
   final String schema;
   final String name;
 
-  String get qualifiedName => qualify(schema, name);
+  String get qualifiedName => SqlDialect.ansi.qualify(schema, name);
 }

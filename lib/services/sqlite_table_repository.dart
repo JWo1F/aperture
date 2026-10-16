@@ -3,6 +3,7 @@ import 'package:sqlite3/sqlite3.dart';
 import '../models/cell_edit.dart';
 import '../models/db_object.dart';
 import '../models/query_result.dart';
+import 'sql_identifier.dart';
 import 'sql_render.dart';
 import 'sqlite_service.dart';
 import 'table_repository.dart';
@@ -25,7 +26,11 @@ class SqliteTableRepository implements TableRepository {
 
   @override
   Future<int> countRows(DbTable table, {String filter = ''}) async {
-    validateClauseSnippet(filter, kind: ClauseKind.filter);
+    validateClauseSnippet(
+      filter,
+      kind: ClauseKind.filter,
+      dialect: SqlDialect.ansi,
+    );
     final rs = _db.select(
       'SELECT count(*) FROM ${table.qualifiedName}${whereClause(filter)}',
     );
@@ -47,9 +52,21 @@ class SqliteTableRepository implements TableRepository {
     String orderBy = '',
     String selectList = '*',
   }) async {
-    validateClauseSnippet(filter, kind: ClauseKind.filter);
-    validateClauseSnippet(orderBy, kind: ClauseKind.orderBy);
-    validateClauseSnippet(selectList, kind: ClauseKind.selectList);
+    validateClauseSnippet(
+      filter,
+      kind: ClauseKind.filter,
+      dialect: SqlDialect.ansi,
+    );
+    validateClauseSnippet(
+      orderBy,
+      kind: ClauseKind.orderBy,
+      dialect: SqlDialect.ansi,
+    );
+    validateClauseSnippet(
+      selectList,
+      kind: ClauseKind.selectList,
+      dialect: SqlDialect.ansi,
+    );
     final tail =
         '${whereClause(filter)}${orderClause(orderBy)} '
         'LIMIT $limit OFFSET $offset';
@@ -110,9 +127,7 @@ class SqliteTableRepository implements TableRepository {
       return QueryResult.rows(
         columns: columns,
         rows: [for (final r in rs.rows) List<Object?>.from(r)],
-        columnSchemas: [
-          for (final n in columns) ResultColumnSchema(name: n),
-        ],
+        columnSchemas: [for (final n in columns) ResultColumnSchema(name: n)],
         elapsed: elapsed,
       );
     }
@@ -141,9 +156,21 @@ class SqliteTableRepository implements TableRepository {
     String orderBy = '',
     String selectList = '*',
   }) async {
-    validateClauseSnippet(filter, kind: ClauseKind.filter);
-    validateClauseSnippet(orderBy, kind: ClauseKind.orderBy);
-    validateClauseSnippet(selectList, kind: ClauseKind.selectList);
+    validateClauseSnippet(
+      filter,
+      kind: ClauseKind.filter,
+      dialect: SqlDialect.ansi,
+    );
+    validateClauseSnippet(
+      orderBy,
+      kind: ClauseKind.orderBy,
+      dialect: SqlDialect.ansi,
+    );
+    validateClauseSnippet(
+      selectList,
+      kind: ClauseKind.selectList,
+      dialect: SqlDialect.ansi,
+    );
     final watch = Stopwatch()..start();
     final rs = _db.select(
       'SELECT ${_projection(selectList)} FROM ${table.qualifiedName}'
