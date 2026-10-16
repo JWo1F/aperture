@@ -62,6 +62,9 @@ void main() {
       'CREATE FUNCTION twice(n INT) RETURNS INT DETERMINISTIC RETURN n * 2',
       'CREATE PROCEDURE touch(IN who INT, OUT done INT) BEGIN '
           'SELECT who; SET done = 1; END',
+      'CREATE FUNCTION boom(n INT) RETURNS INT DETERMINISTIC BEGIN '
+          "IF n = 2 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'boom'; "
+          'END IF; RETURN n; END',
     ]) {
       await svc.execute(sql);
     }
@@ -117,15 +120,15 @@ void main() {
       );
 
       final routines = await intro.loadAllRoutines();
-      expect(routines.map((r) => r.name), ['touch', 'twice']);
+      expect(routines.map((r) => r.name), ['boom', 'touch', 'twice']);
       // MariaDB keeps the display width MySQL 8 dropped: `int(11)`.
       expect(
-        routines.first.arguments,
+        routines[1].arguments,
         matches(r'^IN who int(\(11\))?, OUT done int(\(11\))?$'),
       );
       expect(routines.last.result, startsWith('int'));
       expect(
-        await intro.loadRoutineDdl(routines.first),
+        await intro.loadRoutineDdl(routines[1]),
         allOf(startsWith('DELIMITER \$\$\nCREATE'), endsWith('DELIMITER ;\n')),
       );
     });
@@ -263,8 +266,19 @@ void main() {
       expect(r.error, startsWith("Unknown column 'nope'"));
     });
 
-    // MariaDB answers the kill with an error packet where the next row
-    // should be, which `mysql_dart` can't parse: the session drops.
+    // The server can end a statement with an error after rows have started;
+    // the vendored driver reports it instead of dropping the socket.
+    test('an error after the first row keeps the session', () async {
+      final r = await svc.runQuery(
+        'SELECT n, boom(n) AS v '
+        'FROM (SELECT 1 AS n UNION ALL SELECT 2) t ORDER BY n',
+      );
+      expect(r.error, 'boom');
+      expect((await svc.runQuery('SELECT 1')).rows.single.single, 1);
+    });
+
+    // MariaDB answers a kill with an error packet where the next row would
+    // be, MySQL only once rows are streaming.
     test('cancels a running statement and keeps the session', () async {
       final running = svc.runQuery('SELECT SLEEP(10)');
       await Future<void>.delayed(const Duration(milliseconds: 300));

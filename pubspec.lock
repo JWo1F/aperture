@@ -371,10 +371,9 @@ packages:
   mysql_dart:
     dependency: "direct main"
     description:
-      name: mysql_dart
-      sha256: "7796f958c1860014e28cc3bcb1490a6e08c11ff1e7e79945aacf753bffe464ba"
-      url: "https://pub.dev"
-    source: hosted
+      path: "third_party/mysql_dart"
+      relative: true
+    source: path
     version: "3.0.0"
   native_toolchain_c:
     dependency: transitive

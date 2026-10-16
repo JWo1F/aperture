@@ -76,7 +76,7 @@ pubspec bump for that commit). Then `--amend --no-edit` is acceptable.
 |---|---|
 | State | `ChangeNotifier` + a process-global `appState`. No `provider`. |
 | Postgres | `postgres: ^3.5.0` (extended query mode) |
-| MySQL / MariaDB | `mysql_dart: ^3.0.0` (pure Dart, text protocol) |
+| MySQL / MariaDB | `mysql_dart` 3.0.0, vendored in `third_party/mysql_dart` with one patch (see its README); pure Dart, text protocol |
 | SQLite | `sqlite3: ^3.6.0`, built as SQLite3MultipleCiphers (`hooks: user_defines: sqlite3: source: sqlite3mc`) |
 | SQL grammar | `highlight` / `flutter_highlight` (read-only views, `CodeField`); `re_highlight` inside `re_editor` |
 | Code editing | `re_editor` for multi-line (query editor, cell picker); own `CodeField` for the single-line clause bars |
@@ -314,6 +314,10 @@ is the single defense against `1=1; DROP TABLE x` style injection
 6. `SqlDialect.mysql` escapes `\` in literals and quotes with backticks;
    `parseSqlStatements` reads `#`, `-- `, backslash escapes, `/*! */`
    and `DELIMITER` the MySQL way. The clause gate depends on it.
+7. The driver is vendored (`third_party/mysql_dart`) for one fix: an
+   ERR packet after rows have started (a cancel, `max_execution_time`)
+   used to be decoded as a row and close the socket. Don't bump it to a
+   pub.dev release without checking that release handles that.
 
 ## UI layer
 
@@ -601,13 +605,6 @@ Real, deliberately unfixed. Don't rediscover them as new findings.
   reach it (`QueryTab.sql` doesn't notify), but a cell edit still
   re-derives the favourites and frequent lists and re-allocates a row
   widget per table. Its `ListenableBuilder` wants to be a `Selector`.
-- **A server error mid-row-stream drops a MySQL session.** When the
-  server ends a statement with an error after rows have started — a
-  cancel (`KILL QUERY`; always on MariaDB, mid-stream on MySQL), a
-  `max_execution_time`, a per-row evaluation error — `mysql_dart` reads
-  the ERR packet as a row ("Wrong first byte…") and closes the socket.
-  The keepalive then marks the session lost. The fix is in the driver's
-  row loop.
 - **`mysql_dart` decodes `BINARY` / `VARBINARY` as UTF-8**, lossily, so
   those cells don't round-trip and a binary primary key can't address a
   row (such tables page read-only).
