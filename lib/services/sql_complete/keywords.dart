@@ -3,6 +3,9 @@
 /// pick a list and the ranker scores it against the typed token.
 library;
 
+import '../../models/db_catalog.dart';
+import '../sql_identifier.dart';
+
 const List<String> statementKeywords = [
   'SELECT',
   'INSERT INTO',
@@ -275,6 +278,308 @@ const List<String> dropBehaviorKeywords = ['CASCADE', 'RESTRICT'];
 // Re-exported for the clause-bar in table_view (single-line inputs).
 const List<String> selectModifierKeywords = ['DISTINCT', 'AS', 'COUNT(*)'];
 
-const List<String> whereOperatorKeywords = whereKeywords;
+// --- Per-dialect sets ---------------------------------------------------
 
-const List<String> orderModifierKeywords = orderKeywords;
+/// The keyword sets one dialect offers. The completers read these through
+/// [DialectKeywords.keywords] rather than the top-level lists, which are
+/// the Postgres/SQLite ones.
+class SqlKeywords {
+  const SqlKeywords({
+    required this.statement,
+    required this.selectTail,
+    required this.where,
+    required this.order,
+    required this.deleteTail,
+    required this.mutationWhereTail,
+    required this.updateSetTail,
+    required this.valuesTail,
+    required this.insertAfterTable,
+    required this.insertAfterColumns,
+    required this.insertAfterValues,
+    required this.createObject,
+    required this.alterObject,
+    required this.dropObject,
+    required this.alterTableAction,
+    required this.alterColumnAction,
+    required this.columnConstraint,
+    required this.tableConstraint,
+    required this.tableConstraintStartWords,
+    required this.dataTypes,
+    required this.indexMethods,
+    required this.truncateOptions,
+  });
+
+  final List<String> statement;
+  final List<String> selectTail;
+  final List<String> where;
+  final List<String> order;
+  final List<String> deleteTail;
+
+  /// After the WHERE of an UPDATE or DELETE.
+  final List<String> mutationWhereTail;
+
+  /// After an assignment in an UPDATE's SET list.
+  final List<String> updateSetTail;
+
+  /// Inside a VALUES tuple of a plain DML statement.
+  final List<String> valuesTail;
+
+  final List<String> insertAfterTable;
+  final List<String> insertAfterColumns;
+
+  /// After an INSERT's VALUES tuples.
+  final List<String> insertAfterValues;
+
+  final List<String> createObject;
+  final List<String> alterObject;
+  final List<String> dropObject;
+  final List<String> alterTableAction;
+  final List<String> alterColumnAction;
+  final List<String> columnConstraint;
+  final List<String> tableConstraint;
+
+  /// Lowercased first words of [tableConstraint].
+  final Set<String> tableConstraintStartWords;
+
+  final List<String> dataTypes;
+  final List<String> indexMethods;
+  final List<String> truncateOptions;
+}
+
+const SqlKeywords _ansiKeywords = SqlKeywords(
+  statement: statementKeywords,
+  selectTail: selectTailKeywords,
+  where: whereKeywords,
+  order: orderKeywords,
+  deleteTail: deleteTailKeywords,
+  mutationWhereTail: ['RETURNING'],
+  updateSetTail: ['WHERE', 'FROM', 'RETURNING'],
+  valuesTail: ['DEFAULT', 'NULL', 'RETURNING'],
+  insertAfterTable: ['VALUES', 'SELECT', 'DEFAULT VALUES'],
+  insertAfterColumns: ['VALUES', 'SELECT', 'OVERRIDING SYSTEM VALUE'],
+  insertAfterValues: ['RETURNING', 'ON CONFLICT'],
+  createObject: createObjectKeywords,
+  alterObject: alterObjectKeywords,
+  dropObject: dropObjectKeywords,
+  alterTableAction: alterTableActionKeywords,
+  alterColumnAction: alterColumnActionKeywords,
+  columnConstraint: columnConstraintKeywords,
+  tableConstraint: tableConstraintKeywords,
+  tableConstraintStartWords: tableConstraintStartWords,
+  dataTypes: dataTypeKeywords,
+  indexMethods: indexMethodKeywords,
+  truncateOptions: truncateOptionKeywords,
+);
+
+/// MySQL 8 and MariaDB. No `ILIKE`, `NULLS FIRST`, `RETURNING` or
+/// `ON CONFLICT`; `REGEXP`, `ON DUPLICATE KEY UPDATE`, `MODIFY` and
+/// `AUTO_INCREMENT` instead.
+const SqlKeywords _mysqlKeywords = SqlKeywords(
+  statement: [
+    'SELECT',
+    'INSERT INTO',
+    'REPLACE INTO',
+    'UPDATE',
+    'DELETE FROM',
+    'WITH',
+    'CREATE',
+    'ALTER',
+    'DROP',
+    'TRUNCATE TABLE',
+    'EXPLAIN',
+    'SHOW',
+    'DESCRIBE',
+    'USE',
+    'CALL',
+  ],
+  selectTail: [
+    'WHERE',
+    'GROUP BY',
+    'ORDER BY',
+    'HAVING',
+    'LIMIT',
+    'OFFSET',
+    'JOIN',
+    'INNER JOIN',
+    'LEFT JOIN',
+    'RIGHT JOIN',
+    'CROSS JOIN',
+    'STRAIGHT_JOIN',
+    'UNION',
+    'INTERSECT',
+    'EXCEPT',
+  ],
+  where: [
+    'AND',
+    'OR',
+    'NOT',
+    'IS',
+    'IS NULL',
+    'IS NOT NULL',
+    'IN',
+    'BETWEEN',
+    'LIKE',
+    'REGEXP',
+    'EXISTS',
+    'ANY',
+    'ALL',
+    'NULL',
+    'TRUE',
+    'FALSE',
+    'CASE',
+    'WHEN',
+    'THEN',
+    'ELSE',
+    'END',
+  ],
+  order: ['ASC', 'DESC'],
+  deleteTail: ['WHERE', 'ORDER BY', 'LIMIT'],
+  mutationWhereTail: ['ORDER BY', 'LIMIT'],
+  updateSetTail: ['WHERE', 'ORDER BY', 'LIMIT'],
+  valuesTail: ['DEFAULT', 'NULL'],
+  insertAfterTable: ['VALUES', 'SELECT', 'SET'],
+  insertAfterColumns: ['VALUES', 'SELECT'],
+  insertAfterValues: ['ON DUPLICATE KEY UPDATE'],
+  createObject: [
+    'TABLE',
+    'TABLE IF NOT EXISTS',
+    'TEMPORARY TABLE',
+    'INDEX',
+    'UNIQUE INDEX',
+    'FULLTEXT INDEX',
+    'VIEW',
+    'OR REPLACE VIEW',
+    'DATABASE',
+    'PROCEDURE',
+    'FUNCTION',
+    'TRIGGER',
+    'EVENT',
+    'USER',
+  ],
+  alterObject: [
+    'TABLE',
+    'VIEW',
+    'DATABASE',
+    'PROCEDURE',
+    'FUNCTION',
+    'EVENT',
+    'USER',
+  ],
+  dropObject: [
+    'TABLE',
+    'TABLE IF EXISTS',
+    'INDEX',
+    'VIEW',
+    'DATABASE',
+    'PROCEDURE',
+    'FUNCTION',
+    'TRIGGER',
+    'EVENT',
+    'USER',
+  ],
+  alterTableAction: [
+    'ADD COLUMN',
+    'DROP COLUMN',
+    'MODIFY COLUMN',
+    'CHANGE COLUMN',
+    'ALTER COLUMN',
+    'RENAME COLUMN',
+    'RENAME TO',
+    'ADD CONSTRAINT',
+    'DROP CONSTRAINT',
+    'ADD PRIMARY KEY',
+    'DROP PRIMARY KEY',
+    'ADD FOREIGN KEY',
+    'DROP FOREIGN KEY',
+    'ADD UNIQUE',
+    'ADD INDEX',
+    'DROP INDEX',
+    'RENAME INDEX',
+    'ADD CHECK',
+    'ENGINE =',
+    'AUTO_INCREMENT =',
+    'CONVERT TO CHARACTER SET',
+  ],
+  alterColumnAction: [
+    'SET DEFAULT',
+    'DROP DEFAULT',
+    'SET VISIBLE',
+    'SET INVISIBLE',
+  ],
+  columnConstraint: [
+    'PRIMARY KEY',
+    'NOT NULL',
+    'NULL',
+    'UNIQUE',
+    'DEFAULT',
+    'AUTO_INCREMENT',
+    'UNSIGNED',
+    'REFERENCES',
+    'CHECK',
+    'COMMENT',
+    'COLLATE',
+    'ON UPDATE CURRENT_TIMESTAMP',
+    'GENERATED ALWAYS AS',
+  ],
+  tableConstraint: [
+    'PRIMARY KEY',
+    'FOREIGN KEY',
+    'UNIQUE',
+    'CHECK',
+    'CONSTRAINT',
+    'INDEX',
+    'KEY',
+    'FULLTEXT',
+  ],
+  tableConstraintStartWords: {
+    'primary',
+    'foreign',
+    'unique',
+    'check',
+    'constraint',
+    'index',
+    'key',
+    'fulltext',
+  },
+  dataTypes: [
+    'bigint',
+    'binary',
+    'bit',
+    'blob',
+    'boolean',
+    'char',
+    'date',
+    'datetime',
+    'decimal',
+    'double',
+    'enum',
+    'float',
+    'int',
+    'json',
+    'longblob',
+    'longtext',
+    'mediumint',
+    'mediumtext',
+    'set',
+    'smallint',
+    'text',
+    'time',
+    'timestamp',
+    'tinyint',
+    'varbinary',
+    'varchar',
+    'year',
+  ],
+  indexMethods: ['BTREE', 'HASH'],
+  truncateOptions: [],
+);
+
+SqlKeywords keywordsFor(SqlDialect dialect) => switch (dialect) {
+  SqlDialect.ansi => _ansiKeywords,
+  SqlDialect.mysql => _mysqlKeywords,
+};
+
+/// The keyword sets for the dialect of the connection a catalog came from.
+extension DialectKeywords on DatabaseCatalog {
+  SqlKeywords get keywords => keywordsFor(dialect);
+}

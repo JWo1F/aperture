@@ -127,9 +127,13 @@ Kind kindFor(Object? v, String? dataType) {
   return _kindForValue(v);
 }
 
+/// Reads Postgres and SQLite type names, and MySQL's `COLUMN_TYPE` — which
+/// carries a length or precision (`datetime(3)`, `decimal(10,2)`) and an
+/// `unsigned` suffix on numbers.
 Kind? _kindForDataType(String dt) {
   final hasTz = dt.contains('with time zone');
   if (dt == 'date') return _kDate;
+  if (dt.startsWith('datetime')) return _kDatetime;
   if (dt.startsWith('timestamp')) {
     return hasTz || dt == 'timestamptz' ? _kDatetimeTz : _kDatetime;
   }
@@ -138,10 +142,14 @@ Kind? _kindForDataType(String dt) {
   if (dt == 'json' || dt == 'jsonb') return _kJson;
   if (dt == 'array' || dt.endsWith('[]')) return _kArray;
   if (dt.contains('int') || dt == 'serial') return _kInt;
-  if (const {'numeric', 'decimal', 'real', 'double precision'}.contains(dt)) {
+  if (const {'numeric', 'decimal', 'real', 'double precision'}.contains(dt) ||
+      RegExp(r'^(decimal|numeric|double|float)\b').hasMatch(dt)) {
     return _kNumber;
   }
-  if (dt == 'bytea') return _kBytes;
+  if (dt == 'bytea' ||
+      RegExp(r'^(var)?binary\b|^(tiny|medium|long)?blob$').hasMatch(dt)) {
+    return _kBytes;
+  }
   return null;
 }
 

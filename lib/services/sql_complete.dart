@@ -17,7 +17,7 @@ library;
 
 export 'sql_complete/clause.dart' show SqlClause, detectClause;
 export 'sql_complete/keywords.dart'
-    show orderModifierKeywords, selectModifierKeywords, whereOperatorKeywords;
+    show SqlKeywords, keywordsFor, selectModifierKeywords;
 export 'sql_complete/query_completer.dart'
     show completeClause, completeQueryEditor;
 export 'sql_complete/scope.dart' show SqlScope, parseScope;

@@ -55,7 +55,7 @@ List<CodeSuggestion> completeSelectPool({
 
   switch (clause) {
     case SqlClause.statementStart:
-      pool.addAll(keywordsToSuggestions(statementKeywords));
+      pool.addAll(keywordsToSuggestions(catalog.keywords.statement));
     case SqlClause.selectList:
       final listHasContent = _selectListHasContent(stmtText, localCursor);
       if (!listHasContent) {
@@ -95,7 +95,7 @@ List<CodeSuggestion> completeSelectPool({
         ),
       );
       if (scope.tables.isNotEmpty) {
-        pool.addAll(keywordsToSuggestions(selectTailKeywords));
+        pool.addAll(keywordsToSuggestions(catalog.keywords.selectTail));
       }
     case SqlClause.from:
       // After `DELETE FROM t` only WHERE / USING / RETURNING are legal —
@@ -103,8 +103,8 @@ List<CodeSuggestion> completeSelectPool({
       pool.addAll(
         keywordsToSuggestions(
           kind == StatementKind.delete
-              ? deleteTailKeywords
-              : selectTailKeywords,
+              ? catalog.keywords.deleteTail
+              : catalog.keywords.selectTail,
         ),
       );
     case SqlClause.updateTable:
@@ -117,19 +117,19 @@ List<CodeSuggestion> completeSelectPool({
     case SqlClause.where:
     case SqlClause.having:
     case SqlClause.on:
-      pool.addAll(keywordsToSuggestions(whereKeywords));
+      pool.addAll(keywordsToSuggestions(catalog.keywords.where));
       // A WHERE in a DELETE / UPDATE ends the statement bar RETURNING;
       // only a SELECT's WHERE continues into GROUP BY / ORDER BY / JOIN.
       pool.addAll(
         keywordsToSuggestions(
           kind == StatementKind.delete || kind == StatementKind.update
-              ? const ['RETURNING']
-              : selectTailKeywords,
+              ? catalog.keywords.mutationWhereTail
+              : catalog.keywords.selectTail,
         ),
       );
     case SqlClause.orderBy:
     case SqlClause.groupBy:
-      pool.addAll(keywordsToSuggestions(orderKeywords));
+      pool.addAll(keywordsToSuggestions(catalog.keywords.order));
       pool.addAll(keywordsToSuggestions(['LIMIT', 'OFFSET', 'HAVING']));
     case SqlClause.limit:
       pool.addAll(keywordsToSuggestions(['OFFSET']));
@@ -137,9 +137,9 @@ List<CodeSuggestion> completeSelectPool({
       // Columns of the UPDATE target are already in scope via parseScope;
       // once an assignment is written the statement continues into
       // WHERE / FROM / RETURNING.
-      pool.addAll(keywordsToSuggestions(const ['WHERE', 'FROM', 'RETURNING']));
+      pool.addAll(keywordsToSuggestions(catalog.keywords.updateSetTail));
     case SqlClause.values_:
-      pool.addAll(keywordsToSuggestions(['DEFAULT', 'NULL', 'RETURNING']));
+      pool.addAll(keywordsToSuggestions(catalog.keywords.valuesTail));
     case SqlClause.returning:
       pool.add(
         const CodeSuggestion(
@@ -152,7 +152,7 @@ List<CodeSuggestion> completeSelectPool({
     case SqlClause.with_:
       pool.addAll(keywordsToSuggestions(['AS', 'RECURSIVE']));
     case SqlClause.unknown:
-      pool.addAll(keywordsToSuggestions(statementKeywords));
+      pool.addAll(keywordsToSuggestions(catalog.keywords.statement));
   }
 
   return pool;

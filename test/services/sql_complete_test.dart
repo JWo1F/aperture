@@ -809,4 +809,43 @@ void main() {
       expect(out.any((s) => s.label == 'JOIN'), isFalse);
     });
   });
+
+  group('completeQueryEditor — MySQL', () {
+    final orders = _t(1, 'shop', 'orders');
+    final cat = _catalog(
+      [orders],
+      columns: {
+        1: [_c('id', 'int', pk: true), _c('total', 'decimal(10,2)')],
+      },
+    ).copyWith(dialect: SqlDialect.mysql);
+
+    List<String> labels(String text) => [
+      for (final s in completeQueryEditor(
+        req: _req(text, manualTrigger: true),
+        catalog: cat,
+        stmtText: text,
+      ))
+        s.label,
+    ];
+
+    test('offers REGEXP, not ILIKE, in a WHERE', () {
+      expect(labels('SELECT * FROM orders WHERE total RE'), contains('REGEXP'));
+      expect(
+        labels('SELECT * FROM orders WHERE total IL'),
+        isNot(contains('ILIKE')),
+      );
+    });
+
+    test('offers ON DUPLICATE KEY UPDATE after VALUES, not ON CONFLICT', () {
+      final out = labels('INSERT INTO orders (id) VALUES (1) ');
+      expect(out, contains('ON DUPLICATE KEY UPDATE'));
+      expect(out, isNot(contains('ON CONFLICT')));
+    });
+
+    test('offers MySQL column types in CREATE TABLE', () {
+      final out = labels('CREATE TABLE t (id ');
+      expect(out, containsAll(['datetime', 'tinyint']));
+      expect(out, isNot(contains('jsonb')));
+    });
+  });
 }

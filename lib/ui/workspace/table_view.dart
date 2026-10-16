@@ -342,8 +342,8 @@ class _TableToolbarState extends State<_TableToolbar> {
       whereActive: whereActive,
       orderActive: orderActive,
       selectSuggest: clauseSuggest(selectModifierKeywords),
-      filterSuggest: clauseSuggest(whereOperatorKeywords),
-      orderSuggest: clauseSuggest(orderModifierKeywords),
+      filterSuggest: clauseSuggest(keywordsFor(tab.table.dialect).where),
+      orderSuggest: clauseSuggest(keywordsFor(tab.table.dialect).order),
     );
   }
 }

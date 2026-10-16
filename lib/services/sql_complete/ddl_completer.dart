@@ -56,7 +56,9 @@ List<CodeSuggestion>? _create(
   String ctx,
   DatabaseCatalog catalog,
 ) {
-  if (words.length == 1) return keywordsToSuggestions(createObjectKeywords);
+  if (words.length == 1) {
+    return keywordsToSuggestions(catalog.keywords.createObject);
+  }
 
   final prev = words.last;
   switch (prev) {
@@ -136,11 +138,13 @@ List<CodeSuggestion> _columnDef(String ctx, DatabaseCatalog catalog) {
     return ref == null ? const [] : columnsToSuggestions(catalog.columnsFor(ref));
   }
 
-  if (segWords.isEmpty) return keywordsToSuggestions(tableConstraintKeywords);
+  if (segWords.isEmpty) {
+    return keywordsToSuggestions(catalog.keywords.tableConstraint);
+  }
 
   // A line that opens with a table-constraint keyword is a constraint
   // definition, not a `<column> <type>` pair.
-  if (tableConstraintStartWords.contains(segWords.first)) {
+  if (catalog.keywords.tableConstraintStartWords.contains(segWords.first)) {
     if (segWords.first == 'like') return tableSuggestions(catalog);
     if (segWords.last == 'references') return tableSuggestions(catalog);
     if (segWords.length == 1 &&
@@ -153,7 +157,7 @@ List<CodeSuggestion> _columnDef(String ctx, DatabaseCatalog catalog) {
   if (segWords.length == 1) return _typeSuggestions(catalog);
   if (segWords.last == 'references') return tableSuggestions(catalog);
   if (segWords.last == 'default') return _defaultValueSuggestions();
-  return keywordsToSuggestions(columnConstraintKeywords);
+  return keywordsToSuggestions(catalog.keywords.columnConstraint);
 }
 
 List<CodeSuggestion> _createIndex(
@@ -167,11 +171,13 @@ List<CodeSuggestion> _createIndex(
       final t = _matchTable(_indexOnRe, ctx, catalog);
       return [
         if (t != null) ...columnsToSuggestions(catalog.columnsFor(t)),
-        ...keywordsToSuggestions(orderKeywords),
+        ...keywordsToSuggestions(catalog.keywords.order),
       ];
     }
     if (prev == 'on') return tableSuggestions(catalog);
-    if (prev == 'using') return keywordsToSuggestions(indexMethodKeywords);
+    if (prev == 'using') {
+      return keywordsToSuggestions(catalog.keywords.indexMethods);
+    }
     return keywordsToSuggestions(['USING']);
   }
   if (prev == 'index') {
@@ -198,7 +204,9 @@ List<CodeSuggestion>? _alter(
   String ctx,
   DatabaseCatalog catalog,
 ) {
-  if (words.length == 1) return keywordsToSuggestions(alterObjectKeywords);
+  if (words.length == 1) {
+    return keywordsToSuggestions(catalog.keywords.alterObject);
+  }
   if (words[1] == 'table') return _alterTable(words, ctx, catalog);
   return _alterOther(words, catalog);
 }
@@ -235,7 +243,9 @@ List<CodeSuggestion> _alterTableTail(
       ? const <CodeSuggestion>[]
       : columnsToSuggestions(catalog.columnsFor(target));
 
-  if (tail.isEmpty) return keywordsToSuggestions(alterTableActionKeywords);
+  if (tail.isEmpty) {
+    return keywordsToSuggestions(catalog.keywords.alterTableAction);
+  }
   if (tail.last == 'references') return tableSuggestions(catalog);
   if (tail.last == 'default') return _defaultValueSuggestions();
 
@@ -281,7 +291,7 @@ List<CodeSuggestion> _alterAdd(List<String> tail, DatabaseCatalog catalog) {
     final after = tail.length - 2; // words past `ADD COLUMN`
     if (after <= 0) return const []; // typing the new column name
     if (after == 1) return _typeSuggestions(catalog); // after the name
-    return keywordsToSuggestions(columnConstraintKeywords);
+    return keywordsToSuggestions(catalog.keywords.columnConstraint);
   }
   if (tail[1] == 'constraint') {
     return tail.length == 2
@@ -299,7 +309,7 @@ List<CodeSuggestion> _alterAdd(List<String> tail, DatabaseCatalog catalog) {
   // `ADD <name> <type> …` with the COLUMN keyword omitted.
   final after = tail.length - 1;
   if (after == 1) return _typeSuggestions(catalog);
-  return keywordsToSuggestions(columnConstraintKeywords);
+  return keywordsToSuggestions(catalog.keywords.columnConstraint);
 }
 
 List<CodeSuggestion> _alterDrop(
@@ -342,14 +352,22 @@ List<CodeSuggestion> _alterColumn(
         : [...keywordsToSuggestions(['COLUMN']), ...cols];
   }
   final actions = tail.sublist(colIdx + 1);
-  if (actions.isEmpty) return keywordsToSuggestions(alterColumnActionKeywords);
+  if (actions.isEmpty) {
+    return keywordsToSuggestions(catalog.keywords.alterColumnAction);
+  }
   if (actions.last == 'type') return _typeSuggestions(catalog);
-  if (_endsWith(actions, ['set', 'data'])) return keywordsToSuggestions(['TYPE']);
+  if (_endsWith(actions, ['set', 'data'])) {
+    return keywordsToSuggestions(['TYPE']);
+  }
   if (actions.last == 'set') {
-    return keywordsToSuggestions(['DEFAULT', 'NOT NULL', 'DATA TYPE', 'STATISTICS']);
+    return keywordsToSuggestions(
+      ['DEFAULT', 'NOT NULL', 'DATA TYPE', 'STATISTICS'],
+    );
   }
   if (actions.last == 'drop') {
-    return keywordsToSuggestions(['DEFAULT', 'NOT NULL', 'IDENTITY', 'EXPRESSION']);
+    return keywordsToSuggestions(
+      ['DEFAULT', 'NOT NULL', 'IDENTITY', 'EXPRESSION'],
+    );
   }
   return const [];
 }
@@ -445,7 +463,9 @@ const _dropStopWords = {
 };
 
 List<CodeSuggestion>? _drop(List<String> words, DatabaseCatalog catalog) {
-  if (words.length == 1) return keywordsToSuggestions(dropObjectKeywords);
+  if (words.length == 1) {
+    return keywordsToSuggestions(catalog.keywords.dropObject);
+  }
 
   final prev = words.last;
   if (prev == 'if') return keywordsToSuggestions(['EXISTS']);
@@ -512,7 +532,7 @@ List<CodeSuggestion>? _truncate(
     // After a table name — another table follows a comma, else an option.
     return lastNonSpaceCode(ctx) == 0x2C
         ? relationSuggestions(catalog, kinds: {DbRelationKind.table})
-        : keywordsToSuggestions(truncateOptionKeywords);
+        : keywordsToSuggestions(catalog.keywords.truncateOptions);
   }
   return const [];
 }
@@ -569,7 +589,7 @@ List<CodeSuggestion> _names(
 
 /// Built-in data types plus the catalog's user-defined enum / domain types.
 List<CodeSuggestion> _typeSuggestions(DatabaseCatalog catalog) => [
-  for (final t in dataTypeKeywords)
+  for (final t in catalog.keywords.dataTypes)
     CodeSuggestion(
       label: t,
       insertText: t,

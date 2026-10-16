@@ -1,6 +1,7 @@
 import '../../models/db_catalog.dart';
 import '../../models/db_object.dart';
 import '../../ui/widgets/code_editor.dart';
+import 'keywords.dart';
 import 'scope.dart';
 import 'suggestions.dart';
 import 'text_scan.dart';
@@ -51,8 +52,14 @@ List<CodeSuggestion>? completeInsertPool({
   if (_hasSeq(words, ['on', 'conflict'])) {
     return _onConflict(words, depth, cols);
   }
+  // MySQL: `ON DUPLICATE KEY UPDATE col = …` and `INSERT … SET col = …`
+  // both assign the target's columns.
+  if (_hasSeq(words, ['duplicate', 'key', 'update']) ||
+      words.contains('set')) {
+    return cols;
+  }
   if (_hasSeq(words, ['default', 'values'])) {
-    return keywordsToSuggestions(['RETURNING', 'ON CONFLICT']);
+    return keywordsToSuggestions(catalog.keywords.insertAfterValues);
   }
   if (words.contains('values')) {
     if (depth >= 1) {
@@ -61,16 +68,16 @@ List<CodeSuggestion>? completeInsertPool({
     // Between `VALUES` and a tuple, or just after a `,` separating tuples,
     // the user is about to type `(…)` — nothing to offer.
     if (prev == 'values' || lastNonSpaceCode(ctx) == 0x2C) return const [];
-    return keywordsToSuggestions(['RETURNING', 'ON CONFLICT']);
+    return keywordsToSuggestions(catalog.keywords.insertAfterValues);
   }
 
   // No VALUES / SELECT yet.
   if (depth >= 1) return cols; // inside the `(col, col, …)` list
   if (lastNonSpaceCode(ctx) == 0x29 /* ) */ ) {
-    return keywordsToSuggestions(['VALUES', 'SELECT', 'OVERRIDING SYSTEM VALUE']);
+    return keywordsToSuggestions(catalog.keywords.insertAfterColumns);
   }
   // Right after the table name.
-  return keywordsToSuggestions(['VALUES', 'SELECT', 'DEFAULT VALUES']);
+  return keywordsToSuggestions(catalog.keywords.insertAfterTable);
 }
 
 List<CodeSuggestion> _onConflict(
@@ -82,7 +89,9 @@ List<CodeSuggestion> _onConflict(
   if (_hasSeq(words, ['do', 'update', 'set'])) return cols;
   if (prev == 'do') return keywordsToSuggestions(['NOTHING', 'UPDATE SET']);
   if (prev == 'conflict') {
-    return keywordsToSuggestions(['DO NOTHING', 'DO UPDATE SET', 'ON CONSTRAINT']);
+    return keywordsToSuggestions(
+      ['DO NOTHING', 'DO UPDATE SET', 'ON CONSTRAINT'],
+    );
   }
   if (prev == 'constraint') return const []; // typing the constraint name
   if (depth >= 1) return cols; // the `ON CONFLICT (col, …)` target list
