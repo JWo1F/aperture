@@ -59,7 +59,7 @@ impl Base<'_> {
 
     fn document_title(&self) -> String {
         if self.title.is_empty() {
-            "Aperture — a native macOS client for PostgreSQL and SQLite".into()
+            "Aperture — a native macOS client for PostgreSQL, MySQL and SQLite".into()
         } else {
             format!("{} · Aperture", self.title)
         }

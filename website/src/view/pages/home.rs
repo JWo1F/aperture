@@ -39,7 +39,7 @@ impl Home<'_> {
 
     fn facts(&self) -> Vec<(&'static str, &'static str)> {
         vec![
-            ("engines", "PostgreSQL · SQLite"),
+            ("engines", "PostgreSQL · MySQL · SQLite"),
             ("platform", "macOS 12+"),
             ("store", "SQLCipher 4"),
             ("built in", "Flutter"),

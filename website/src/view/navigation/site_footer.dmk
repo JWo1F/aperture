@@ -9,7 +9,7 @@
         <ApertureMark class="size-5 text-accent"/>
         <span class="font-display font-semibold tracking-[-0.02em]">Aperture</span>
       </a>
-      <p class="max-w-sm text-[0.9rem] leading-relaxed text-ink-muted">A native macOS client for PostgreSQL and SQLite. Built in Flutter, for one power user — and whoever forks it.</p>
+      <p class="max-w-sm text-[0.9rem] leading-relaxed text-ink-muted">A native macOS client for PostgreSQL, MySQL, MariaDB and SQLite. Built in Flutter, for one power user — and whoever forks it.</p>
     </div>
     <div class="flex flex-wrap items-center gap-x-6 gap-y-3 text-[0.88rem] text-ink-soft">
       <a href={self.repo()} class="hover:text-ink">Source</a>

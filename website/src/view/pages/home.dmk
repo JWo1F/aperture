@@ -3,7 +3,7 @@
 {use crate::view::surfaces::{CodeBlock, Lang, Panel, Screenshot}}
 {use crate::view::content::{Feature, SectionHeader, ShortcutRow, Stat}}
 {use crate::view::marketing::{HeroIris, Showcase, SpecStrip, Spectrum}}
-<Page site={self.site} title="" description="Aperture is a native macOS client for PostgreSQL and SQLite: an editable data grid, a multi-statement SQL editor, EXPLAIN plans with advice, and a ⌘K palette.">
+<Page site={self.site} title="" description="Aperture is a native macOS client for PostgreSQL, MySQL, MariaDB and SQLite: an editable data grid, a multi-statement SQL editor, Postgres EXPLAIN plans with advice, and a ⌘K palette.">
 
   {# ── Hero ───────────────────────────────────────────────────────────── #}
   <section class="relative isolate overflow-hidden pt-14 md:pt-20">
@@ -12,8 +12,8 @@
     <Container class="relative">
       <div class="flex max-w-[40rem] flex-col items-start gap-7">
         <span class="animate-rise" style="--i:0"><Badge tone={Tone::Accent} dot>v{self.site.version()} · native on macOS</Badge></span>
-        <h1 class="animate-rise font-display text-[clamp(2.7rem,7.4vw,5.6rem)] font-semibold leading-[0.94] tracking-[-0.05em] text-balance" style="--i:1">A close look at <span class="bg-spectrum bg-clip-text text-transparent">PostgreSQL</span> and SQLite.</h1>
-        <p class="animate-rise max-w-[34rem] text-[1.12rem] leading-relaxed text-ink-soft text-pretty" style="--i:2">Aperture is a dense, keyboard-driven database client in a native window. Browse a schema, edit rows in place, read a query plan, and send it all in one transaction you reviewed first.</p>
+        <h1 class="animate-rise font-display text-[clamp(2.7rem,7.4vw,5.6rem)] font-semibold leading-[0.94] tracking-[-0.05em] text-balance" style="--i:1">A close look at <span class="bg-spectrum bg-clip-text text-transparent">PostgreSQL</span>, MySQL and SQLite.</h1>
+        <p class="animate-rise max-w-[34rem] text-[1.12rem] leading-relaxed text-ink-soft text-pretty" style="--i:2">Aperture is a dense, keyboard-driven database client in a native window. Browse a schema, edit rows in place, read a Postgres query plan, and send it all in one transaction you reviewed first.</p>
         <div class="animate-rise flex flex-wrap items-center gap-3" style="--i:3">
           <Button href="#install" icon="download-04">Download</Button>
           <Button href={self.repo().to_string()} variant={Variant::Secondary} icon="github-01">Read the code</Button>
@@ -41,7 +41,7 @@
       <Showcase site={self.site} slides={self.grid_slides()}/>
       <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
         <Feature icon="pencil-edit-02" title="Type-aware editors">Calendars for dates, HH:MM:SS segments for time and timetz, a toggle for bool, live-highlighted JSON. <code>NULL</code> and <code>DEFAULT</code> are one click, and greyed out where the schema forbids them.</Feature>
-        <Feature icon="shield-01" title="Exactly one row, or nothing">Rows are addressed by <code>ctid</code> on Postgres and <code>rowid</code> on SQLite. A statement that touches anything but one row rolls the whole batch back instead of guessing.</Feature>
+        <Feature icon="shield-01" title="Exactly one row, or nothing">Rows are addressed by <code>ctid</code> on Postgres, the primary key on MySQL and <code>rowid</code> on SQLite — a MySQL table without one is read-only. A statement that touches anything but one row rolls the whole batch back instead of guessing.</Feature>
         <Feature icon="link-square-02" title="Follow the keys">Foreign-key columns carry a ↗. Click through to the referenced row, filtered, and step back with ⌘[ — history covers every tab switch, filter and sort.</Feature>
         <Feature icon="filter" title="Clauses, not dialogs">One line each for <code>WHERE</code>, <code>SELECT</code> and <code>ORDER</code>, with SQL highlighting. Click headers for multi-column sorts. Filter by any cell's value from its menu.</Feature>
       </div>
@@ -75,6 +75,7 @@
         <div class="reveal flex flex-col gap-6">
           <h3 class="font-display text-[1.6rem] font-semibold leading-tight tracking-[-0.03em]">A splitter that reads Postgres the way Postgres does.</h3>
           <p class="text-[0.98rem] leading-relaxed text-ink-soft">Statements are split client-side, then sent one by one — so the extended-query protocol's “cannot insert multiple commands” never reaches you. Single- and double-quoted strings, <span class="font-mono text-[0.9em] text-ink">E'…'</span> escapes, <span class="font-mono text-[0.9em] text-ink">$$ … $$</span> and <span class="font-mono text-[0.9em] text-ink">$tag$ … $tag$</span> bodies, line and block comments: a semicolon inside any of them is just a character.</p>
+          <p class="text-[0.98rem] leading-relaxed text-ink-soft">On MySQL it reads MySQL instead: backslash escapes, <span class="font-mono text-[0.9em] text-ink">`backticks`</span>, <span class="font-mono text-[0.9em] text-ink">#</span> comments, and the <span class="font-mono text-[0.9em] text-ink">mysql</span> CLI's <span class="font-mono text-[0.9em] text-ink">DELIMITER</span> — a procedure body splits where the CLI would split it.</p>
           <ul class="flex flex-col gap-3 text-[0.94rem] text-ink-soft">
             <li class="flex gap-3"><Icon name="tick-02" class="mt-1 text-accent"/><span>A bare <span class="font-mono text-[0.9em]">SELECT</span> without <span class="font-mono text-[0.9em]">LIMIT</span> is capped at 10,000 rows, and the grid says when it was.</span></li>
             <li class="flex gap-3"><Icon name="tick-02" class="mt-1 text-accent"/><span>Every query autosaves to the connection and survives a restart in the sidebar.</span></li>
@@ -91,7 +92,7 @@
     <Container class="flex flex-col gap-14">
       <SectionHeader index="03" eyebrow="Query plans">
         EXPLAIN, <em>explained.</em>
-        <p slot="lede">The plan as a tree of cards, each with its share of the time as a bar. Then a rule pass reads it the way you would at 2 a.m. and says what it sees.</p>
+        <p slot="lede">The plan as a tree of cards, each with its share of the time as a bar. Then a rule pass reads it the way you would at 2 a.m. and says what it sees. PostgreSQL only.</p>
       </SectionHeader>
       {let (name, alt, w, h) = Self::shot("plan")}
       <div class="reveal"><Screenshot site={self.site} name={name} alt={alt} width={w} height={h}/></div>

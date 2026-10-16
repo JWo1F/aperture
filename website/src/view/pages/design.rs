@@ -93,7 +93,7 @@ impl Design<'_> {
             (
                 "body",
                 "text-[0.95rem] leading-relaxed text-ink-soft",
-                "Rows are addressed by ctid on Postgres and rowid on SQLite.",
+                "Rows are addressed by ctid on Postgres, the primary key on MySQL and rowid on SQLite.",
             ),
             ("label", "font-label text-[0.66rem] uppercase tracking-[0.16em] text-ink-muted", "Engraved label · 01"),
             ("mono", "font-mono text-[0.88rem]", "select * from orders where total > 25;"),
@@ -130,7 +130,7 @@ impl Design<'_> {
     }
 
     fn facts(&self) -> Vec<(&'static str, &'static str)> {
-        vec![("engines", "PostgreSQL · SQLite"), ("platform", "macOS 12+")]
+        vec![("engines", "PostgreSQL · MySQL · SQLite"), ("platform", "macOS 12+")]
     }
 
     fn keys(&self) -> Vec<(&'static str, &'static str)> {
