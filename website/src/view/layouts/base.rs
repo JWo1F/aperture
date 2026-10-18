@@ -40,8 +40,10 @@ impl Base<'_> {
 { "imports": { "galvani": "https://cdn.jsdelivr.net/npm/galvani@0.5.0/src/index.js" } }
 </script>"#;
 
-    /// Google Analytics. A constant for the same reason as [`Self::THEME_BOOT`].
-    const ANALYTICS: &'static str = r#"<script async src="https://www.googletagmanager.com/gtag/js?id=G-G3JDFCJ0M0"></script>
+    /// Google Analytics and the self-hosted counter. A constant for the same
+    /// reason as [`Self::THEME_BOOT`].
+    const ANALYTICS: &'static str = r#"<script defer src="https://analytics.ivashkin.dev/t.js" data-site="ff_rATvEX3FVCwNe2zWFF"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-G3JDFCJ0M0"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
